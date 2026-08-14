@@ -1,6 +1,5 @@
 import type { Diagram, NodeId, RegionId } from '../kernel/diagram/diagram'
 import { diagramToJson } from '../kernel/diagram/json'
-import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { spliceSubgraphMapped } from '../kernel/diagram/subgraph/splice'
 import {
@@ -37,7 +36,7 @@ export type CopyRefusal = {
 
 export type CopyPlan =
   | { readonly kind: 'edit'; readonly result: Diagram; readonly introduced: readonly NodeId[]; readonly at: Vec2 }
-  | { readonly kind: 'proof'; readonly action: ProofAction; readonly resultFingerprint: string }
+  | { readonly kind: 'proof'; readonly action: ProofAction }
 
 type CopyEvidence = {
   readonly sourceState: string
@@ -155,7 +154,7 @@ function planProof(
     target: destination.region,
   })
   try {
-    const result = applyAction(
+    applyAction(
       destination.diagram,
       action,
       destination.ctx,
@@ -164,7 +163,6 @@ function planProof(
     return finishPlan({
       kind: 'proof',
       action,
-      resultFingerprint: exploreForm(result),
     }, source, selection, destination)
   } catch (error) {
     return deny(

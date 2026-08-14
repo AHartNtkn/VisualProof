@@ -1,6 +1,6 @@
 import type { Diagram, WireId } from '../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
-import { exploreForm } from '../kernel/diagram/canonical/explore'
+import { sameDiagram } from '../kernel/diagram/canonical/iso'
 import { transportBoundary } from '../kernel/proof/step'
 import type { StepReceipt } from '../kernel/proof/step'
 import type { ProofContext } from '../kernel/proof/context'
@@ -284,8 +284,10 @@ export function redoBackward(s: ProofSession): ProofSession {
 
 export function meet(s: ProofSession): boolean {
   assertSession(s)
-  return exploreForm(currentSide(s, 'forward'), sideBoundary(s, 'forward'))
-    === exploreForm(currentSide(s, 'backward'), sideBoundary(s, 'backward'))
+  return sameDiagram(
+    currentSide(s, 'forward'), currentSide(s, 'backward'),
+    sideBoundary(s, 'forward'), sideBoundary(s, 'backward'),
+  )
 }
 
 /** Both halves AS RECORDED become the theorem (caller runs checkTheorem —

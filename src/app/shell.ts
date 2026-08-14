@@ -3,7 +3,7 @@ import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { derivedScope } from '../kernel/diagram/regions'
-import { exploreForm } from '../kernel/diagram/canonical/explore'
+import { diagramToJson } from '../kernel/diagram/json'
 import { applyFold, applyUnfold, definitionSig } from '../kernel/rules/fold'
 import { relationWireHues } from './proof-front'
 import type { ProofContext } from '../kernel/proof/context'
@@ -1974,11 +1974,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       theoryJson(): string {
         return JSON.stringify(theoryToJson(sessionTheory(ctx, { relations })))
       },
-      // The EDIT sheet's canonical form: a structural fingerprint (not a node
-      // count) an e2e uses to assert defining a relation leaves the sheet
-      // untouched — the spec's "no diagram changes when a relation is defined".
-      editForm(): string {
-        return exploreForm(editDiagram)
+      // The EDIT sheet's storage as JSON — an e2e compares snapshots to assert
+      // defining a relation leaves the sheet untouched (the spec's "no diagram
+      // changes when a relation is defined").
+      editJson(): string {
+        return JSON.stringify(diagramToJson(editDiagram))
       },
       dispose,
     }

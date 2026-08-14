@@ -5,7 +5,7 @@ import type {
   RegionId,
   WireId,
 } from '../kernel/diagram/diagram'
-import { exploreForm } from '../kernel/diagram/canonical/explore'
+import { sameDiagram } from '../kernel/diagram/canonical/iso'
 import { derivedScope } from '../kernel/diagram/regions'
 import { IOTA, relSig, type Sig } from '../kernel/diagram/sig'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
@@ -130,21 +130,18 @@ function completeRegionSelection(
   }
 }
 
-function selectedChildForm(
+function selectedChild(
   diagram: Diagram,
   parent: RegionId,
   child: RegionId,
-): string {
+): DiagramWithBoundary {
   const extracted = extractSubgraph(diagram, {
     region: parent,
     regions: [child],
     nodes: [],
     wires: [],
   })
-  return exploreForm(
-    extracted.pattern.diagram,
-    extracted.pattern.boundary,
-  )
+  return extracted.pattern
 }
 
 function copiedChild(
@@ -153,11 +150,16 @@ function copiedChild(
   sourceChild: RegionId,
   targetParent: RegionId,
 ): RegionId {
-  const expected = selectedChildForm(diagram, sourceParent, sourceChild)
+  const expected = selectedChild(diagram, sourceParent, sourceChild)
   return exactOne(
     directCuts(diagram, targetParent)
-      .filter((candidate) =>
-        selectedChildForm(diagram, targetParent, candidate) === expected),
+      .filter((candidate) => {
+        const probe = selectedChild(diagram, targetParent, candidate)
+        return sameDiagram(
+          probe.diagram, expected.diagram,
+          probe.boundary, expected.boundary,
+        )
+      }),
     'copied implication consequent',
   )
 }
