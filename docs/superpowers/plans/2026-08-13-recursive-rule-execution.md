@@ -140,7 +140,7 @@
 - Consumes: existing `Occurrence` for ordinary contextual rules and existing recursive contexts.
 - Produces: `NestedOccurrence selected before source` and its direct `replace` operation for iteration.
 
-- [ ] **Step 1: Reuse `Occurrence` for ordinary contextual rules**
+- [x] **Step 1: Reuse `Occurrence` for ordinary contextual rules**
 
   Do not introduce an ordinary-site wrapper. A contextual index stores:
 
@@ -156,7 +156,7 @@
 
   `Occurrence.host_iso` is source-location evidence, not rule evidence or a supplied target.
 
-- [ ] **Step 2: Define only the source half needed by nested iteration**
+- [x] **Step 2: Define only the source half needed by nested iteration**
 
   Define:
 
@@ -178,7 +178,7 @@
 
   Define `NestedOccurrence.replace occurrence after` by changing only `before` to `after` in that displayed recursive expression. It must be an ordinary computable definition and must not store or inspect a target.
 
-- [ ] **Step 3: Validate and commit**
+- [x] **Step 3: Validate and commit**
 
   ```bash
   lake env lean -DwarningAsError=true VisualProof/Diagram/NestedOccurrence.lean
