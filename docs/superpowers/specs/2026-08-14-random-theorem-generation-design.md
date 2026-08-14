@@ -229,6 +229,16 @@ All finitely enumerable. Selection construction reuses the pure helpers in
 wires, `deiterationStep`) rather than reimplementing them; the import is
 acyclic at file level.
 
+**Auto-pin bundling.** Deleting a quantified wire's last atom occurrence
+would strand the wire below the kernel's two-end floor
+(`ScopePreservationError`); the app's erase gesture resolves this by
+inserting a pin step within the same action, and the search models the same
+gesture: an erasure/deiteration candidate that raises the error gets the
+recorder-style pin step applied first and is retried, with pin + delete
+counted as **one move** (both steps appear in the reported step trail).
+Without this, no deletion-only proof can ever reach the blank sheet — the
+declaration pin is otherwise unremovable.
+
 **Algorithm: two phases.** The insertion-flavored moves (`atomSpawn`,
 `doubleCutIntro`, iteration-copy, vacuity-insert) give the full alphabet a
 branching factor of roughly 30 even on the smallest theorem, so exhaustively
