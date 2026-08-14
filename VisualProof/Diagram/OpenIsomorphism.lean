@@ -76,10 +76,14 @@ noncomputable def OpenDiagram.withBody_iso
     {before after : Region diagram.external}
     (beforeCanonical : before.Canonical)
     (afterCanonical : after.Canonical)
+    (beforeExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      diagram.boundaryWire before)
+    (afterExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      diagram.boundaryWire after)
     (body : RegionIso (WireEquiv.refl diagram.external) before after) :
     OpenDiagramIso
-      (diagram.withBody before beforeCanonical)
-      (diagram.withBody after afterCanonical) where
+      (diagram.withBody before beforeCanonical beforeExternalTwoEnded)
+      (diagram.withBody after afterCanonical afterExternalTwoEnded) where
   external := WireEquiv.refl diagram.external
   boundary_eq := fun _ => rfl
   body := body

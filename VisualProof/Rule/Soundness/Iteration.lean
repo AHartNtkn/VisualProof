@@ -52,7 +52,10 @@ theorem copyBlock_denotes
   apply (Region.denote_adjoinAt model targetEnv
     (freshPins selected freshening)
     (freshenedSelected selected freshening)).mpr
-  refine ⟨freshEnv, ItemSeq.pinWires_denotes _ _ _ _ _, ?_⟩
+  refine ⟨freshEnv, ?_, ?_⟩
+  · simp only [freshPins, denoteItemSeq_append]
+    exact ⟨ItemSeq.pinWires_denotes _ _ _ _ _,
+      ItemSeq.pinWires_denotes _ _ _ _ _⟩
   apply (denoteRegion_renameWires model freshening.wire
     (targetEnv.append freshEnv) selected).mpr
   rw [combinedEq]
@@ -155,8 +158,8 @@ theorem Iteration.sound
     (step : Rule.Iteration source target) :
     ∀ (model : Model) (args : Values model boundary),
       denoteOpen model source args → denoteOpen model target args := by
-  rcases step with ⟨occurrence, after, targetCanonical, targetIso,
-    localEvidence⟩
+  rcases step with ⟨occurrence, after, targetCanonical,
+    targetExternalTwoEnded, targetIso, localEvidence⟩
   intro model args sourceDenotes
   have localIff : ∀ env : Values model occurrence.interface.external,
       denoteRegion model env
@@ -175,7 +178,8 @@ theorem Iteration.sound
     (occurrence.source_iso.denoteOpen_iff model args).mp sourceDenotes
   have targetBody : denoteOpen model
       (occurrence.interface.withBody
-        (occurrence.targetBody after) targetCanonical) args :=
+        (occurrence.targetBody after) targetCanonical
+        targetExternalTwoEnded) args :=
     (OpenDiagram.denote_body_iff
       (diagram := occurrence.interface)
       (beforeCanonical := occurrence.sourceCanonical)

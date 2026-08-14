@@ -33,19 +33,26 @@ def freshenedSelected
       inherited) : Region (targetWires ++ freshWires) :=
   selected.renameWires freshening.wire
 
-/-- Direct identities that pin every newly allocated copy wire at the copied
-region root exactly when the copied material does not already do so. -/
+/-- Direct identities that complete every newly allocated copy wire. The
+primary batch handles every incidence set that is not already rooted with two
+ends; the extra batch gives an empty incidence set its second distinct unary
+pin. -/
 def freshPins
     (selected : Region sourceWires)
     (freshening : WireFreshening sourceWires targetWires freshWires
       inherited) : ItemSeq (targetWires ++ freshWires) :=
   let copied := freshenedSelected selected freshening
-  ItemSeq.pinWires freshWires
+  let primary := ItemSeq.pinWires freshWires
     ⟨fun wire => Var.appendRight targetWires wire⟩
     (fun wire =>
       let paths := copied.incidencePaths
         (targetWires.length + wire.index.val)
-      decide (¬(paths ≠ [] ∧ RegionPath.deepestCommonAncestor paths = [])))
+      decide (¬RegionPath.RootedTwo paths))
+  let extra := ItemSeq.pinWires freshWires
+    ⟨fun wire => Var.appendRight targetWires wire⟩
+    (fun wire => decide (copied.incidencePaths
+      (targetWires.length + wire.index.val) = []))
+  primary.append extra
 
 /-- The independently scoped copied block before it is conjoined with the
 descendant remainder. -/
@@ -118,8 +125,10 @@ def Iteration : Rule :=
     ∃ (occurrence : NestedOccurrence source)
       (after : Region occurrence.descendantWires)
       (targetCanonical : (occurrence.targetBody after).Canonical)
+      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+        occurrence.interface.boundaryWire (occurrence.targetBody after))
       (_targetIso : OpenDiagramIso target
-        (occurrence.replace after targetCanonical)),
+        (occurrence.replace after targetCanonical targetExternalTwoEnded)),
       symmetric (Iteration.Local occurrence.descendant occurrence.selected)
         occurrence.before after
 
@@ -129,9 +138,10 @@ theorem Iteration.iso
     (targetIso : OpenDiagramIso target target') :
     Iteration source' target' := by
   rcases step with ⟨occurrence, after, targetCanonical,
-    existingTargetIso, localEvidence⟩
+    targetExternalTwoEnded, existingTargetIso, localEvidence⟩
   exact ⟨occurrence.transportSource sourceIso.symm, after,
-    targetCanonical, targetIso.symm.trans existingTargetIso, localEvidence⟩
+    targetCanonical, targetExternalTwoEnded,
+    targetIso.symm.trans existingTargetIso, localEvidence⟩
 
 theorem Iteration.respectsTargetIso
     (step : Iteration source target)
@@ -150,7 +160,7 @@ theorem Iteration.backward_respectsTargetIso
 theorem Iteration.symm (step : Iteration source target) :
     Iteration target source := by
   rcases step with ⟨occurrence, after, targetCanonical,
-    targetIso, localEvidence⟩
+    targetExternalTwoEnded, targetIso, localEvidence⟩
   let reverseOccurrence : NestedOccurrence target := {
     ancestorWires := occurrence.ancestorWires
     anchorLocals := occurrence.anchorLocals
@@ -161,9 +171,11 @@ theorem Iteration.symm (step : Iteration source target) :
     outer := occurrence.outer
     descendant := occurrence.descendant
     sourceCanonical := targetCanonical
+    sourceExternalTwoEnded := targetExternalTwoEnded
     source_iso := targetIso
   }
   exact ⟨reverseOccurrence, occurrence.before, occurrence.sourceCanonical,
-    occurrence.source_iso, localEvidence.elim Or.inr Or.inl⟩
+    occurrence.sourceExternalTwoEnded, occurrence.source_iso,
+    localEvidence.elim Or.inr Or.inl⟩
 
 end VisualProof.Rule

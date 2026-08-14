@@ -86,7 +86,7 @@ theorem eraseAt_canonical
       change (∀ localIndex : Fin (hostLocals ++ addedLocals).length,
           let paths := (retained.append allPins).incidencePaths
             (outer.length + localIndex.val) 0
-          paths ≠ [] ∧ RegionPath.deepestCommonAncestor paths = []) ∧
+          RegionPath.RootedTwo paths) ∧
         (retained.append allPins).ChildrenCanonical
       constructor
       · intro localIndex
@@ -101,12 +101,14 @@ theorem eraseAt_canonical
           simpa [retainedPaths] using
             ItemSeq.incidencePaths_append retained allPins
               (outer.length + localIndex.val) 0
-        by_cases retainedCanonical : retainedPaths ≠ [] ∧
-            RegionPath.deepestCommonAncestor retainedPaths = []
+        by_cases retainedCanonical : RegionPath.RootedTwo retainedPaths
         · rw [pathsEq]
-          exact ⟨List.append_ne_nil_of_left_ne_nil retainedCanonical.1 _,
-            RegionPath.deepestCommonAncestor_append_eq_nil
-              retainedPaths _ retainedCanonical.1 retainedCanonical.2⟩
+          constructor
+          · simp only [List.length_append]
+            have retainedTwo := retainedCanonical.1
+            omega
+          · exact RegionPath.deepestCommonAncestor_append_eq_nil
+              retainedPaths _ retainedCanonical.nonempty retainedCanonical.2
         · have selected : ItemSeq.needsRootPin retained
               (Var.appendRight outer localWire) = true := by
             simp [ItemSeq.needsRootPin, retainedPaths, retainedCanonical,
@@ -134,8 +136,78 @@ theorem eraseAt_canonical
               allPins.incidencePaths
                 (outer.length + localIndex.val) retained.length :=
             List.mem_append_right retainedPaths pinContains
-          exact ⟨List.ne_nil_of_mem contains,
-            RegionPath.deepestCommonAncestor_eq_nil_of_mem_nil _ contains⟩
+          constructor
+          · by_cases retainedEmpty : retainedPaths = []
+            · have sourceLocalRooted := sourceCanonical.1 localIndex
+              change RegionPath.RootedTwo
+                ((retained.append removed).incidencePaths
+                  (outer.length + localIndex.val) 0) at sourceLocalRooted
+              have removedNonempty : removed.incidencePaths
+                  (outer.length + localIndex.val) retained.length ≠ [] := by
+                intro removedEmpty
+                apply sourceLocalRooted.nonempty
+                rw [ItemSeq.incidencePaths_append]
+                rw [show retained.incidencePaths
+                    (outer.length + localIndex.val) 0 = [] from
+                    retainedEmpty,
+                  show removed.incidencePaths
+                    (outer.length + localIndex.val) (0 + retained.length) = []
+                    by simpa using removedEmpty]
+                rfl
+              let sourceWire : Var
+                  (outer ++ (hostLocals ++ addedLocals))
+                  (hostLocals ++ addedLocals)[localIndex] :=
+                Var.appendRight outer localWire
+              have removedSelected : ItemSeq.usesWire removed sourceWire =
+                  true := by
+                have shifted : removed.incidencePaths
+                    sourceWire.index.val 0 ≠ [] := by
+                  intro emptyAtZero
+                  apply removedNonempty
+                  have emptyShifted :=
+                    (ItemSeq.incidencePaths_eq_nil_iff_itemIndex removed
+                      sourceWire.index.val retained.length 0).mpr emptyAtZero
+                  simpa [sourceWire, localWire] using emptyShifted
+                simp only [ItemSeq.usesWire, decide_eq_true_eq]
+                exact shifted
+              have removedPinContains : [] ∈ removedPins.incidencePaths
+                  (outer.length + localIndex.val) retained.length := by
+                have mappedIndex :
+                    (WireRenaming.id sourceWire).index.val =
+                      outer.length + localIndex.val := by
+                  simp [WireRenaming.id, sourceWire, localWire]
+                rw [← mappedIndex]
+                exact ItemSeq.pinWires_mem_nil _ _ _ sourceWire
+                  retained.length removedSelected
+              have removedPinsPositive : 0 <
+                  (removedPins.incidencePaths
+                    (outer.length + localIndex.val) retained.length).length :=
+                List.length_pos_iff.mpr
+                  (List.ne_nil_of_mem removedPinContains)
+              have localPinsPositive : 0 <
+                  (pins.incidencePaths (outer.length + localIndex.val)
+                    (retained.length + removedPins.length)).length :=
+                List.length_pos_iff.mpr
+                  (List.ne_nil_of_mem localPinContains)
+              rw [retainedEmpty]
+              simp only [List.nil_append]
+              change 2 ≤ (allPins.incidencePaths
+                (outer.length + localIndex.val) retained.length).length
+              rw [show allPins = removedPins.append pins by rfl,
+                ItemSeq.incidencePaths_append]
+              simp only [List.length_append]
+              omega
+            · have retainedPositive : 0 < retainedPaths.length :=
+                List.length_pos_iff.mpr retainedEmpty
+              have pinsPositive : 0 <
+                  (allPins.incidencePaths
+                    (outer.length + localIndex.val) retained.length).length :=
+                List.length_pos_iff.mpr
+                  (List.ne_nil_of_mem pinContains)
+              simp only [List.length_append]
+              omega
+          · exact RegionPath.deepestCommonAncestor_eq_nil_of_mem_nil _
+              contains
       · apply (ItemSeq.childrenCanonical_append retained allPins).mpr
         constructor
         · have sourceChildren := sourceCanonical.2
@@ -242,6 +314,52 @@ theorem occurrenceTargetCanonical
       (occurrence.context.holeCanonical _
         occurrence.sourceCanonical))
     (eraseAt_inherited_nonempty_iff hostLocals hostItems material wireMap)).1
+
+theorem occurrenceTargetExternalTwoEnded
+    (hostLocals : List Sig) (hostItems : ItemSeq (holeWires ++ hostLocals))
+    (material : Region materialWires)
+    (wireMap : WireRenaming materialWires (holeWires ++ hostLocals))
+    (occurrence : Occurrence
+      (Region.spliceAt hostLocals hostItems material wireMap) source) :
+    OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
+      (occurrence.context.fill
+        (eraseAt hostLocals hostItems material wireMap)) := by
+  let sourceDiagram := occurrence.interface.withBody
+    (occurrence.context.fill
+      (Region.spliceAt hostLocals hostItems material wireMap))
+    occurrence.sourceCanonical occurrence.sourceExternalTwoEnded
+  apply sourceDiagram.externalTwoEnded_of_nonempty_iff
+  exact (occurrence.context.replaceCanonical
+    (Region.spliceAt hostLocals hostItems material wireMap)
+    (eraseAt hostLocals hostItems material wireMap)
+    occurrence.sourceCanonical
+    (eraseAt_canonical hostLocals hostItems material wireMap
+      (occurrence.context.holeCanonical _ occurrence.sourceCanonical))
+    (eraseAt_inherited_nonempty_iff hostLocals hostItems material wireMap)).2
+
+theorem occurrenceInsertedExternalTwoEnded
+    (hostLocals : List Sig) (hostItems : ItemSeq (holeWires ++ hostLocals))
+    (material : Region materialWires)
+    (wireMap : WireRenaming materialWires (holeWires ++ hostLocals))
+    (occurrence : Occurrence
+      (eraseAt hostLocals hostItems material wireMap) source)
+    (targetCanonical : (occurrence.context.fill
+      (Region.spliceAt hostLocals hostItems material wireMap)).Canonical) :
+    OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
+      (occurrence.context.fill
+        (Region.spliceAt hostLocals hostItems material wireMap)) := by
+  let sourceDiagram := occurrence.interface.withBody
+    (occurrence.context.fill
+      (eraseAt hostLocals hostItems material wireMap))
+    occurrence.sourceCanonical occurrence.sourceExternalTwoEnded
+  apply sourceDiagram.externalTwoEnded_of_nonempty_iff
+  exact (occurrence.context.replaceCanonical
+    (eraseAt hostLocals hostItems material wireMap)
+    (Region.spliceAt hostLocals hostItems material wireMap)
+    occurrence.sourceCanonical
+    (occurrence.context.holeCanonical _ targetCanonical)
+    (fun wire => (eraseAt_inherited_nonempty_iff hostLocals hostItems
+      material wireMap wire).symm)).2
 
 inductive Local : LocalRule
   | erase

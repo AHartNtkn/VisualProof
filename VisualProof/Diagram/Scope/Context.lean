@@ -20,8 +20,10 @@ theorem holeCanonical
 
 /-- Replacing a canonical hole body by another canonical body preserves the
 whole recursive context exactly when every hole-interface wire preserves
-incidence nonemptiness. The result also exposes that same boundary fact to
-the enclosing caller. -/
+incidence nonemptiness. Unchanged incidences outside the hole combine with
+the replacement's nonempty incidence set to preserve both the two-incidence
+floor and the DCA. The result also exposes that same boundary fact to the
+enclosing caller. -/
 theorem replaceCanonical
     (context : DiagramContext outer holeWires)
     (before after : Region holeWires)
@@ -67,7 +69,7 @@ theorem replaceCanonical
               · exact False.elim ((childSameNonempty.mp sourceEmpty) targetEmpty)
           have sourceRoot := sourceCanonical.1 localIndex
           rw [ItemSeq.incidencePaths_frame] at sourceRoot ⊢
-          have transformed := (RegionPath.rooted_replace
+          have transformed := (RegionPath.rootedTwo_replace
             (leading.incidencePaths localWire.index.val 0)
             ((child.fill before).incidencePaths localWire.index.val)
             ((child.fill after).incidencePaths localWire.index.val)

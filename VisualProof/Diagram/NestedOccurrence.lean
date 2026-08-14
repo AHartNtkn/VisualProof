@@ -33,10 +33,13 @@ structure NestedOccurrence (source : OpenDiagram boundary) where
     descendantWires
   sourceCanonical :
     (nestedBody outer anchorLocals selected descendant before).Canonical
+  sourceExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+    interface.boundaryWire
+      (nestedBody outer anchorLocals selected descendant before)
   source_iso : OpenDiagramIso source
     (interface.withBody
       (nestedBody outer anchorLocals selected descendant before)
-      sourceCanonical)
+      sourceCanonical sourceExternalTwoEnded)
 
 namespace NestedOccurrence
 
@@ -51,9 +54,12 @@ def targetBody {boundary : List Sig} {source : OpenDiagram boundary}
 def replace {boundary : List Sig} {source : OpenDiagram boundary}
     (occurrence : NestedOccurrence source)
     (after : Region occurrence.descendantWires)
-    (targetCanonical : (occurrence.targetBody after).Canonical) :
+    (targetCanonical : (occurrence.targetBody after).Canonical)
+    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire (occurrence.targetBody after)) :
     OpenDiagram boundary :=
   occurrence.interface.withBody (occurrence.targetBody after) targetCanonical
+    targetExternalTwoEnded
 
 noncomputable def transportSource
     {boundary : List Sig} {source source' : OpenDiagram boundary}
@@ -69,6 +75,7 @@ noncomputable def transportSource
   outer := occurrence.outer
   descendant := occurrence.descendant
   sourceCanonical := occurrence.sourceCanonical
+  sourceExternalTwoEnded := occurrence.sourceExternalTwoEnded
   source_iso := sourceIso.trans occurrence.source_iso
 
 end NestedOccurrence

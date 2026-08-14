@@ -9,8 +9,11 @@ structure Occurrence
   interface : OpenDiagram boundary
   context : DiagramContext interface.external holeWires
   sourceCanonical : (context.fill pattern).Canonical
+  sourceExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+    interface.boundaryWire (context.fill pattern)
   host_iso : OpenDiagramIso host
-    (interface.withBody (context.fill pattern) sourceCanonical)
+    (interface.withBody (context.fill pattern) sourceCanonical
+      sourceExternalTwoEnded)
 
 namespace Occurrence
 
@@ -20,6 +23,7 @@ noncomputable def transportHost
   interface := occurrence.interface
   context := occurrence.context
   sourceCanonical := occurrence.sourceCanonical
+  sourceExternalTwoEnded := occurrence.sourceExternalTwoEnded
   host_iso := iso.symm.trans occurrence.host_iso
 
 end Occurrence

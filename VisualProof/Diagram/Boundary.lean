@@ -4,6 +4,18 @@ namespace VisualProof.Diagram
 
 open VisualProof.Theory
 
+namespace OpenDiagram
+
+/-- Every external wire has at least two combined boundary and body
+incidences. -/
+def ExternalTwoEnded (boundaryWire : Vars external boundary)
+    (body : Region external) : Prop :=
+  ∀ {signature} (wire : Var external signature),
+    2 ≤ boundaryWire.countIndex wire.index.val +
+      (body.incidencePaths wire.index.val).length
+
+end OpenDiagram
+
 /-- A recursively scoped open diagram with an ordered typed boundary. -/
 structure OpenDiagram (boundary : List Sig) where
   external : List Sig
@@ -13,19 +25,53 @@ structure OpenDiagram (boundary : List Sig) where
       (boundaryWire.get position).index = wire
   body : Region external
   canonical : body.Canonical
+  externalTwoEnded : OpenDiagram.ExternalTwoEnded boundaryWire body
 
 namespace OpenDiagram
 
 /-- Replace the body while preserving the typed interface. The replacement
 must independently establish canonical DCA placement. -/
 def withBody (diagram : OpenDiagram boundary)
-    (body : Region diagram.external) (canonical : body.Canonical) :
+    (body : Region diagram.external) (canonical : body.Canonical)
+    (externalTwoEnded : ExternalTwoEnded diagram.boundaryWire body) :
     OpenDiagram boundary where
   external := diagram.external
   boundaryWire := diagram.boundaryWire
   boundarySurjective := diagram.boundarySurjective
   body := body
   canonical := canonical
+  externalTwoEnded := externalTwoEnded
+
+theorem boundaryWire_countIndex_pos (diagram : OpenDiagram boundary)
+    (wire : Var diagram.external signature) :
+    0 < diagram.boundaryWire.countIndex wire.index.val := by
+  obtain ⟨position, maps⟩ := diagram.boundarySurjective wire.index
+  have positive := diagram.boundaryWire.countIndex_get_positive position
+  rw [maps] at positive
+  exact positive
+
+/-- Replacing the body by one with the same nonempty external-wire incidence
+sets preserves the external two-end invariant. -/
+theorem externalTwoEnded_of_nonempty_iff
+    (diagram : OpenDiagram boundary)
+    (body : Region diagram.external)
+    (sameNonempty : ∀ {signature} (wire : Var diagram.external signature),
+      diagram.body.incidencePaths wire.index.val ≠ [] ↔
+        body.incidencePaths wire.index.val ≠ []) :
+    ExternalTwoEnded diagram.boundaryWire body := by
+  intro signature wire
+  have boundaryPositive := diagram.boundaryWire_countIndex_pos wire
+  by_cases sourceEmpty : diagram.body.incidencePaths wire.index.val = []
+  · have targetEmpty : body.incidencePaths wire.index.val = [] := by
+      by_cases targetEmpty : body.incidencePaths wire.index.val = []
+      · exact targetEmpty
+      · exact False.elim ((sameNonempty wire).mpr targetEmpty sourceEmpty)
+    simpa [ExternalTwoEnded, sourceEmpty, targetEmpty] using
+      diagram.externalTwoEnded wire
+  · have targetNonempty := (sameNonempty wire).mp sourceEmpty
+    have targetPositive : 0 < (body.incidencePaths wire.index.val).length :=
+      List.length_pos_iff.mpr targetNonempty
+    omega
 
 /-- A wire identity is recursive: either an external boundary wire or a wire
 introduced at one exact region in the body. It stores identity, not scope. -/

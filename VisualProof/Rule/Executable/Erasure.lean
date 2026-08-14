@@ -56,15 +56,19 @@ def runForward (source : OpenDiagram boundary) :
   | .erase hostLocals hostItems material wireMap occurrence _ =>
       occurrence.interface.withBody
         (occurrence.context.fill
-          (eraseAt hostLocals hostItems material wireMap))
+        (eraseAt hostLocals hostItems material wireMap))
         (occurrenceTargetCanonical hostLocals hostItems material wireMap
           occurrence)
+        (occurrenceTargetExternalTwoEnded hostLocals hostItems material
+          wireMap occurrence)
   | .insert hostLocals hostItems material wireMap occurrence _
       targetCanonical =>
       occurrence.interface.withBody
         (occurrence.context.fill
           (Region.spliceAt hostLocals hostItems material wireMap))
         targetCanonical
+        (occurrenceInsertedExternalTwoEnded hostLocals hostItems material
+          wireMap occurrence targetCanonical)
 
 def runBackward (source : OpenDiagram boundary) :
     BackwardIndex source → OpenDiagram boundary
@@ -74,12 +78,16 @@ def runBackward (source : OpenDiagram boundary) :
         (occurrence.context.fill
           (Region.spliceAt hostLocals hostItems material wireMap))
         targetCanonical
+        (occurrenceInsertedExternalTwoEnded hostLocals hostItems material
+          wireMap occurrence targetCanonical)
   | .erase hostLocals hostItems material wireMap occurrence _ =>
       occurrence.interface.withBody
         (occurrence.context.fill
           (eraseAt hostLocals hostItems material wireMap))
         (occurrenceTargetCanonical hostLocals hostItems material wireMap
           occurrence)
+        (occurrenceTargetExternalTwoEnded hostLocals hostItems material
+          wireMap occurrence)
 
 theorem forward_exact (source target : OpenDiagram boundary) :
     (∃ index : ForwardIndex source,
@@ -93,17 +101,21 @@ theorem forward_exact (source target : OpenDiagram boundary) :
         refine ⟨_, _, _, occurrence,
           occurrenceTargetCanonical hostLocals hostItems material wireMap
             occurrence,
+          occurrenceTargetExternalTwoEnded hostLocals hostItems material
+            wireMap occurrence,
           OpenDiagramIso.refl _, ?_⟩
         rw [polarity]
         exact Local.erase hostLocals hostItems material wireMap
     | insert hostLocals hostItems material wireMap occurrence polarity
         targetCanonical =>
         refine ⟨_, _, _, occurrence, targetCanonical,
+          occurrenceInsertedExternalTwoEnded hostLocals hostItems material
+            wireMap occurrence targetCanonical,
           OpenDiagramIso.refl _, ?_⟩
         rw [polarity]
         exact Local.erase hostLocals hostItems material wireMap
-  · rintro ⟨wires, before, after, occurrence, targetCanonical, targetIso,
-      localEvidence⟩
+  · rintro ⟨wires, before, after, occurrence, targetCanonical,
+      targetExternalTwoEnded, targetIso, localEvidence⟩
     cases polarity : occurrence.context.polarity with
     | positive =>
         simp only [polarity, atPolarity] at localEvidence
@@ -133,13 +145,18 @@ theorem backward_exact (source target : OpenDiagram boundary) :
             (occurrence.interface.withBody
               (occurrence.context.fill
                 (Region.spliceAt hostLocals hostItems material wireMap))
-              targetCanonical) := {
+              targetCanonical
+              (occurrenceInsertedExternalTwoEnded hostLocals hostItems
+                material wireMap occurrence targetCanonical)) := {
           interface := occurrence.interface
           context := occurrence.context
           sourceCanonical := targetCanonical
+          sourceExternalTwoEnded := occurrenceInsertedExternalTwoEnded
+            hostLocals hostItems material wireMap occurrence targetCanonical
           host_iso := OpenDiagramIso.refl _
         }
         refine ⟨_, _, _, outputOccurrence, occurrence.sourceCanonical,
+          occurrence.sourceExternalTwoEnded,
           occurrence.host_iso, ?_⟩
         rw [polarity]
         exact Local.erase hostLocals hostItems material wireMap
@@ -151,18 +168,23 @@ theorem backward_exact (source target : OpenDiagram boundary) :
             (occurrence.interface.withBody
               (occurrence.context.fill
                 (eraseAt hostLocals hostItems material wireMap))
-              outputCanonical) := {
+              outputCanonical
+              (occurrenceTargetExternalTwoEnded hostLocals hostItems
+                material wireMap occurrence)) := {
           interface := occurrence.interface
           context := occurrence.context
           sourceCanonical := outputCanonical
+          sourceExternalTwoEnded := occurrenceTargetExternalTwoEnded
+            hostLocals hostItems material wireMap occurrence
           host_iso := OpenDiagramIso.refl _
         }
         refine ⟨_, _, _, outputOccurrence, occurrence.sourceCanonical,
+          occurrence.sourceExternalTwoEnded,
           occurrence.host_iso, ?_⟩
         rw [polarity]
         exact Local.erase hostLocals hostItems material wireMap
-  · rintro ⟨wires, before, after, occurrence, targetCanonical, sourceIso,
-      localEvidence⟩
+  · rintro ⟨wires, before, after, occurrence, targetCanonical,
+      targetExternalTwoEnded, sourceIso, localEvidence⟩
     cases polarity : occurrence.context.polarity with
     | positive =>
         simp only [polarity, atPolarity] at localEvidence
@@ -173,6 +195,7 @@ theorem backward_exact (source target : OpenDiagram boundary) :
               interface := occurrence.interface
               context := occurrence.context
               sourceCanonical := targetCanonical
+              sourceExternalTwoEnded := targetExternalTwoEnded
               host_iso := sourceIso
             }
             exact ⟨.insert hostLocals hostItems material wireMap
@@ -188,6 +211,7 @@ theorem backward_exact (source target : OpenDiagram boundary) :
               interface := occurrence.interface
               context := occurrence.context
               sourceCanonical := targetCanonical
+              sourceExternalTwoEnded := targetExternalTwoEnded
               host_iso := sourceIso
             }
             exact ⟨.erase hostLocals hostItems material wireMap

@@ -19,7 +19,11 @@ inductive ForwardIndex {boundary : List Sig}
         occurrence.descendant.outerWire)
       (targetCanonical :
         (occurrence.targetBody
-          (copied occurrence.selected occurrence.before freshening)).Canonical) :
+          (copied occurrence.selected occurrence.before freshening)).Canonical)
+      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+        occurrence.interface.boundaryWire
+          (occurrence.targetBody
+            (copied occurrence.selected occurrence.before freshening))) :
       ForwardIndex source
   | remove
       (occurrence : NestedOccurrence source)
@@ -33,7 +37,11 @@ inductive ForwardIndex {boundary : List Sig}
         copied occurrence.selected remainder freshening)
       (targetCanonical :
         (occurrence.targetBody
-          (uncopyResidue occurrence.selected remainder freshening)).Canonical) :
+          (uncopyResidue occurrence.selected remainder freshening)).Canonical)
+      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+        occurrence.interface.boundaryWire
+          (occurrence.targetBody
+            (uncopyResidue occurrence.selected remainder freshening))) :
       ForwardIndex source
   | undo
       (occurrence : NestedOccurrence source)
@@ -45,7 +53,9 @@ inductive ForwardIndex {boundary : List Sig}
         occurrence.descendant.outerWire)
       (current_eq : occurrence.before =
         copied occurrence.selected remainder freshening)
-      (targetCanonical : (occurrence.targetBody remainder).Canonical) :
+      (targetCanonical : (occurrence.targetBody remainder).Canonical)
+      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+        occurrence.interface.boundaryWire (occurrence.targetBody remainder)) :
       ForwardIndex source
   | restore
       (occurrence : NestedOccurrence source)
@@ -59,7 +69,11 @@ inductive ForwardIndex {boundary : List Sig}
         uncopyResidue occurrence.selected remainder freshening)
       (targetCanonical :
         (occurrence.targetBody
-          (copied occurrence.selected remainder freshening)).Canonical) :
+          (copied occurrence.selected remainder freshening)).Canonical)
+      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+        occurrence.interface.boundaryWire
+          (occurrence.targetBody
+            (copied occurrence.selected remainder freshening))) :
       ForwardIndex source
 
 /-- The rule is symmetric, so its backward computational choices are exactly
@@ -69,20 +83,23 @@ abbrev BackwardIndex {boundary : List Sig}
 
 def runForward (source : OpenDiagram boundary) :
     ForwardIndex source → OpenDiagram boundary
-  | .copy occurrence _ freshening targetCanonical =>
+  | .copy occurrence _ freshening targetCanonical targetExternalTwoEnded =>
       occurrence.replace
         (copied occurrence.selected occurrence.before freshening)
-        targetCanonical
-  | .remove occurrence remainder _ freshening _ targetCanonical =>
+        targetCanonical targetExternalTwoEnded
+  | .remove occurrence remainder _ freshening _ targetCanonical
+      targetExternalTwoEnded =>
       occurrence.replace
         (uncopyResidue occurrence.selected remainder freshening)
-        targetCanonical
-  | .undo occurrence remainder _ _ _ targetCanonical =>
-      occurrence.replace remainder targetCanonical
-  | .restore occurrence remainder _ freshening _ targetCanonical =>
+        targetCanonical targetExternalTwoEnded
+  | .undo occurrence remainder _ _ _ targetCanonical
+      targetExternalTwoEnded =>
+      occurrence.replace remainder targetCanonical targetExternalTwoEnded
+  | .restore occurrence remainder _ freshening _ targetCanonical
+      targetExternalTwoEnded =>
       occurrence.replace
         (copied occurrence.selected remainder freshening)
-        targetCanonical
+        targetCanonical targetExternalTwoEnded
 
 def runBackward (source : OpenDiagram boundary) :
     BackwardIndex source → OpenDiagram boundary :=
@@ -117,13 +134,14 @@ theorem forward_exact (source target : OpenDiagram boundary) :
   · rintro ⟨index, isomorphic⟩
     apply Rule.Iteration.respectsTargetIso (target' := target) ?_ isomorphic
     cases index with
-    | copy occurrence freshWires freshening targetCanonical =>
+    | copy occurrence freshWires freshening targetCanonical
+        targetExternalTwoEnded =>
         exact ⟨occurrence,
           copied occurrence.selected occurrence.before freshening,
-          targetCanonical, OpenDiagramIso.refl _,
+          targetCanonical, targetExternalTwoEnded, OpenDiagramIso.refl _,
           Or.inl (.copy occurrence.before freshWires freshening)⟩
     | remove occurrence remainder freshWires freshening current_eq
-        targetCanonical =>
+        targetCanonical targetExternalTwoEnded =>
         have localEvidence : Local occurrence.descendant occurrence.selected
             occurrence.before
             (uncopyResidue occurrence.selected remainder freshening) := by
@@ -131,17 +149,19 @@ theorem forward_exact (source target : OpenDiagram boundary) :
           exact .remove remainder freshWires freshening
         exact ⟨occurrence,
           uncopyResidue occurrence.selected remainder freshening,
-          targetCanonical, OpenDiagramIso.refl _, Or.inl localEvidence⟩
+          targetCanonical, targetExternalTwoEnded, OpenDiagramIso.refl _,
+          Or.inl localEvidence⟩
     | undo occurrence remainder freshWires freshening current_eq
-        targetCanonical =>
+        targetCanonical targetExternalTwoEnded =>
         have localEvidence : Local occurrence.descendant occurrence.selected
             remainder occurrence.before := by
           rw [current_eq]
           exact .copy remainder freshWires freshening
         exact ⟨occurrence, remainder, targetCanonical,
+          targetExternalTwoEnded,
           OpenDiagramIso.refl _, Or.inr localEvidence⟩
     | restore occurrence remainder freshWires freshening current_eq
-        targetCanonical =>
+        targetCanonical targetExternalTwoEnded =>
         have localEvidence : Local occurrence.descendant occurrence.selected
             (copied occurrence.selected remainder freshening)
             occurrence.before := by
@@ -149,29 +169,33 @@ theorem forward_exact (source target : OpenDiagram boundary) :
           exact .remove remainder freshWires freshening
         exact ⟨occurrence,
           copied occurrence.selected remainder freshening,
-          targetCanonical, OpenDiagramIso.refl _, Or.inr localEvidence⟩
-  · rintro ⟨occurrence, after, targetCanonical, targetIso,
-      localEvidence⟩
+          targetCanonical, targetExternalTwoEnded, OpenDiagramIso.refl _,
+          Or.inr localEvidence⟩
+  · rintro ⟨occurrence, after, targetCanonical,
+      targetExternalTwoEnded, targetIso, localEvidence⟩
     rcases localEvidence with forward | backward
     · rcases Local.view forward with
         ⟨remainder, freshWires, freshening, before_eq, after_eq⟩ |
         ⟨remainder, freshWires, freshening, before_eq, after_eq⟩
       · subst remainder
         subst after
-        exact ⟨.copy occurrence freshWires freshening targetCanonical,
+        exact ⟨.copy occurrence freshWires freshening targetCanonical
+          targetExternalTwoEnded,
           ⟨targetIso.symm⟩⟩
       · subst after
         exact ⟨.remove occurrence remainder freshWires freshening
-          before_eq targetCanonical, ⟨targetIso.symm⟩⟩
+          before_eq targetCanonical targetExternalTwoEnded,
+          ⟨targetIso.symm⟩⟩
     · rcases Local.view backward with
         ⟨remainder, freshWires, freshening, after_eq, before_eq⟩ |
         ⟨remainder, freshWires, freshening, after_eq, before_eq⟩
       · subst after
         exact ⟨.undo occurrence remainder freshWires freshening before_eq
-          targetCanonical, ⟨targetIso.symm⟩⟩
+          targetCanonical targetExternalTwoEnded, ⟨targetIso.symm⟩⟩
       · subst after
         exact ⟨.restore occurrence remainder freshWires freshening
-          before_eq targetCanonical, ⟨targetIso.symm⟩⟩
+          before_eq targetCanonical targetExternalTwoEnded,
+          ⟨targetIso.symm⟩⟩
 
 theorem backward_exact (source target : OpenDiagram boundary) :
     (∃ index : BackwardIndex source,

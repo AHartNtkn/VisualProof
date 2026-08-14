@@ -37,9 +37,12 @@ def Contextual («local» : LocalRule) : Rule :=
     ∃ (wires : List Sig) (before after : Region wires)
       (occurrence : Occurrence before source)
       (targetCanonical : (occurrence.context.fill after).Canonical)
+      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+        occurrence.interface.boundaryWire (occurrence.context.fill after))
       (_targetIso : OpenDiagramIso target
         (occurrence.interface.withBody
-          (occurrence.context.fill after) targetCanonical)),
+          (occurrence.context.fill after) targetCanonical
+          targetExternalTwoEnded)),
       atPolarity occurrence.context.polarity
         (@«local» wires) before after
 
@@ -49,8 +52,10 @@ theorem Contextual.iso
     (targetIso : OpenDiagramIso target target') :
     Contextual localRule source' target' := by
   rcases step with ⟨wires, before, after, occurrence,
-    targetCanonical, existingTargetIso, localEvidence⟩
+    targetCanonical, targetExternalTwoEnded, existingTargetIso,
+    localEvidence⟩
   exact ⟨wires, before, after, occurrence.transportHost sourceIso,
-    targetCanonical, targetIso.symm.trans existingTargetIso, localEvidence⟩
+    targetCanonical, targetExternalTwoEnded,
+    targetIso.symm.trans existingTargetIso, localEvidence⟩
 
 end VisualProof.Rule

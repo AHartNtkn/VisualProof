@@ -88,11 +88,17 @@ theorem OpenDiagram.denote_body
     {before after : Region diagram.external}
     {beforeCanonical : before.Canonical}
     {afterCanonical : after.Canonical}
+    {beforeExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      diagram.boundaryWire before}
+    {afterExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      diagram.boundaryWire after}
     {model : Model} {args : Values model boundary}
     (implication : ∀ env : Values model diagram.external,
       denoteRegion model env before → denoteRegion model env after) :
-    denoteOpen model (diagram.withBody before beforeCanonical) args →
-      denoteOpen model (diagram.withBody after afterCanonical) args := by
+    denoteOpen model (diagram.withBody before beforeCanonical
+      beforeExternalTwoEnded) args →
+      denoteOpen model (diagram.withBody after afterCanonical
+        afterExternalTwoEnded) args := by
   rintro ⟨externalEnv, boundaryEq, beforeDenotes⟩
   exact ⟨externalEnv, boundaryEq, implication externalEnv beforeDenotes⟩
 
@@ -101,11 +107,17 @@ theorem OpenDiagram.denote_body_iff
     {before after : Region diagram.external}
     {beforeCanonical : before.Canonical}
     {afterCanonical : after.Canonical}
+    {beforeExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      diagram.boundaryWire before}
+    {afterExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      diagram.boundaryWire after}
     {model : Model} {args : Values model boundary}
     (equivalence : ∀ env : Values model diagram.external,
       denoteRegion model env before ↔ denoteRegion model env after) :
-    denoteOpen model (diagram.withBody before beforeCanonical) args ↔
-      denoteOpen model (diagram.withBody after afterCanonical) args := by
+    denoteOpen model (diagram.withBody before beforeCanonical
+      beforeExternalTwoEnded) args ↔
+      denoteOpen model (diagram.withBody after afterCanonical
+        afterExternalTwoEnded) args := by
   constructor
   · exact OpenDiagram.denote_body fun env => (equivalence env).mp
   · exact OpenDiagram.denote_body fun env => (equivalence env).mpr

@@ -59,6 +59,21 @@ def deepestCommonAncestor : List RegionPath → RegionPath
   | [] => []
   | first :: rest => dcaFrom first rest
 
+/-- A local wire has at least two actual incidences and is rooted at the
+current region. -/
+def RootedTwo (paths : List RegionPath) : Prop :=
+  2 ≤ paths.length ∧ deepestCommonAncestor paths = []
+
+instance (paths : List RegionPath) : Decidable (RootedTwo paths) := by
+  unfold RootedTwo
+  infer_instance
+
+theorem RootedTwo.nonempty {paths : List RegionPath}
+    (rooted : RootedTwo paths) : paths ≠ [] := by
+  intro empty
+  rw [empty] at rooted
+  simp [RootedTwo] at rooted
+
 private theorem dcaFrom_nil (rest : List RegionPath) :
     dcaFrom [] rest = [] := by
   induction rest with
@@ -234,6 +249,61 @@ theorem rooted_replace
     nonempty_replace before source target after index sameEmpty,
     commonHead_replace before source target after index sameEmpty]
 
+private theorem rootedTwo_replaceForward
+    (before source target after : List RegionPath) (index : Nat)
+    (sameEmpty : source = [] ↔ target = [])
+    (sourceRooted :
+      RootedTwo (before ++ source.map (List.cons index) ++ after)) :
+    RootedTwo (before ++ target.map (List.cons index) ++ after) := by
+  have targetRooted := (rooted_replace before source target after index
+    sameEmpty).mp ⟨sourceRooted.nonempty, sourceRooted.2⟩
+  refine ⟨?_, targetRooted.2⟩
+  by_cases sourceEmpty : source = []
+  · have targetEmpty := sameEmpty.mp sourceEmpty
+    simpa [sourceEmpty, targetEmpty] using sourceRooted.1
+  · have targetNonempty : target ≠ [] := by
+      intro targetEmpty
+      exact sourceEmpty (sameEmpty.mpr targetEmpty)
+    by_cases beforeEmpty : before = []
+    · by_cases afterEmpty : after = []
+      · have mappedNonempty : source.map (List.cons index) ≠ [] := by
+          simpa [List.map_eq_nil_iff] using sourceEmpty
+        have mappedCommon : CommonHead (source.map (List.cons index)) := by
+          refine ⟨index, ?_⟩
+          intro path member
+          obtain ⟨sourcePath, _, rfl⟩ := List.mem_map.mp member
+          exact ⟨sourcePath, rfl⟩
+        have mappedDcaNonempty :=
+          (deepestCommonAncestor_ne_nil_iff_commonHead _ mappedNonempty).mpr
+            mappedCommon
+        rw [beforeEmpty, afterEmpty] at sourceRooted
+        simp only [List.nil_append, List.append_nil] at sourceRooted
+        exact False.elim (mappedDcaNonempty sourceRooted.2)
+      · have afterPositive : 0 < after.length :=
+          List.length_pos_iff.mpr afterEmpty
+        have targetPositive : 0 < target.length :=
+          List.length_pos_iff.mpr targetNonempty
+        simp only [List.length_append, List.length_map]
+        omega
+    · have beforePositive : 0 < before.length :=
+        List.length_pos_iff.mpr beforeEmpty
+      have targetPositive : 0 < target.length :=
+        List.length_pos_iff.mpr targetNonempty
+      simp only [List.length_append, List.length_map]
+      omega
+
+theorem rootedTwo_replace
+    (before source target after : List RegionPath) (index : Nat)
+    (sameEmpty : source = [] ↔ target = []) :
+    let sourcePaths := before ++ source.map (List.cons index) ++ after
+    let targetPaths := before ++ target.map (List.cons index) ++ after
+    RootedTwo sourcePaths ↔ RootedTwo targetPaths := by
+  dsimp only
+  constructor
+  · exact rootedTwo_replaceForward before source target after index sameEmpty
+  · exact rootedTwo_replaceForward before target source after index
+      sameEmpty.symm
+
 @[simp] theorem deepestCommonAncestor_cons_nil (rest : List RegionPath) :
     deepestCommonAncestor ([] :: rest) = [] := by
   simp only [deepestCommonAncestor]
@@ -384,13 +454,13 @@ theorem ItemSeq.incidencePaths_eq_nil_iff_itemIndex
     items wireIndex firstIndex secondIndex
 
 mutual
-  /-- Every local wire is used at this region's DCA, recursively. -/
+  /-- Every local wire has at least two actual incidences at this region's
+  DCA, recursively. -/
   def Region.Canonical : Region outer → Prop
     | .mk locals items =>
         (∀ localIndex : Fin locals.length,
           let paths := items.incidencePaths (outer.length + localIndex.val) 0
-          paths ≠ [] ∧
-            RegionPath.deepestCommonAncestor paths = []) ∧
+          RegionPath.RootedTwo paths) ∧
         items.ChildrenCanonical
 
   def Item.ChildrenCanonical : Item wires → Prop
@@ -499,7 +569,8 @@ mutual
     | mk locals items =>
         cases wire with
         | here wire =>
-            exact canonical.1 wire.index
+            have rooted := canonical.1 wire.index
+            exact ⟨rooted.nonempty, rooted.2⟩
         | nested wire =>
             exact wire.scope_spec_from canonical.2 0
 

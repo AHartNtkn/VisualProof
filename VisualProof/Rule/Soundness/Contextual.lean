@@ -19,17 +19,19 @@ theorem Contextual.sound
     ∀ (model : Model) (args : Values model boundary),
       denoteOpen model source args → denoteOpen model target args := by
   rcases step with ⟨wires, before, after, occurrence,
-    targetCanonical, targetIso, localStep⟩
+    targetCanonical, targetExternalTwoEnded, targetIso, localStep⟩
   intro model args sourceDenotes
   have filledSource :
       denoteOpen model
         (occurrence.interface.withBody
-          (occurrence.context.fill before) occurrence.sourceCanonical) args :=
+          (occurrence.context.fill before) occurrence.sourceCanonical
+          occurrence.sourceExternalTwoEnded) args :=
     (occurrence.host_iso.denoteOpen_iff model args).mp sourceDenotes
   have filledTarget :
       denoteOpen model
         (occurrence.interface.withBody
-          (occurrence.context.fill after) targetCanonical) args := by
+          (occurrence.context.fill after) targetCanonical
+          targetExternalTwoEnded) args := by
     apply OpenDiagram.denote_body (diagram := occurrence.interface)
     intro env
     cases polarityEq : occurrence.context.polarity with

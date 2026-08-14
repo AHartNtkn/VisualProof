@@ -28,11 +28,11 @@ def usesWire (items : ItemSeq wires) (wire : Var wires signature) : Bool :=
   decide (items.incidencePaths wire.index.val 0 ≠ [])
 
 /-- Whether a wire needs a direct unary identity for this item sequence to
-place it canonically at the current region root. -/
+give it at least two incidences at the current region root. -/
 def needsRootPin (items : ItemSeq wires)
     (wire : Var wires signature) : Bool :=
   let paths := items.incidencePaths wire.index.val 0
-  decide (¬(paths ≠ [] ∧ RegionPath.deepestCommonAncestor paths = []))
+  decide (¬RegionPath.RootedTwo paths)
 
 theorem pinWires_childrenCanonical
     (source : List Sig) (renameWires : WireRenaming source target)
