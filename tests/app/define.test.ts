@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { canonicalArgOrder, defineRelation, inferFoldArgs } from '../../src/app/define'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { sameDiagram } from '../../src/kernel/diagram/canonical/iso'
+import type { DiagramNode, RegionId, Wire } from '../../src/kernel/diagram/diagram'
+import { mkDiagram } from '../../src/kernel/diagram/diagram'
+import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { IOTA } from '../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../src/kernel/diagram/subgraph/match'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
@@ -50,6 +53,89 @@ function boundedIdentityFixture(swap: boolean) {
     wires: [],
   })
   return { diagram, cut, selection }
+}
+
+/** One "identity pair" component: an arity-2 identity whose two ports are
+ *  pinned by two separate arity-1 identities. Every component built with
+ *  this helper is structurally identical to every other (same content keys
+ *  throughout) and disconnected from them — no wire crosses between
+ *  components — so content-key filtering alone cannot tell them apart. */
+function addIdentityPairComponent(
+  nodes: Record<string, DiagramNode>,
+  wires: Record<string, Wire>,
+  region: RegionId,
+  tag: string,
+): void {
+  nodes[`j${tag}`] = { kind: 'identity', region, sig: IOTA, arity: 2 }
+  nodes[`pinA${tag}`] = { kind: 'identity', region, sig: IOTA, arity: 1 }
+  nodes[`pinB${tag}`] = { kind: 'identity', region, sig: IOTA, arity: 1 }
+  wires[`wA${tag}`] = {
+    sig: IOTA,
+    endpoints: [
+      { node: `j${tag}`, port: { kind: 'identity', index: 0 } },
+      { node: `pinA${tag}`, port: { kind: 'identity', index: 0 } },
+    ],
+  }
+  wires[`wB${tag}`] = {
+    sig: IOTA,
+    endpoints: [
+      { node: `j${tag}`, port: { kind: 'identity', index: 1 } },
+      { node: `pinB${tag}`, port: { kind: 'identity', index: 0 } },
+    ],
+  }
+}
+
+/**
+ * A fold body with two mutually disconnected, structurally identical
+ * "identity pair" components, matched against a host region holding six
+ * such components (the real fold target plus five decoy same-shape
+ * candidates). Nothing in propagation can split the pattern components'
+ * candidate sets — every host component looks equally viable to either
+ * pattern component until injectivity and the identity-port checks cut
+ * branches down during backtracking — so a bound derived from element
+ * counts alone (elements * host-region-node-count) undercounts the true,
+ * multiplicative cost. This is the shape the fuel formula in the previous
+ * revision of `inferFoldArgs` mis-refused.
+ */
+function disconnectedIdentityPairsFoldFixture() {
+  const bodyNodes: Record<string, DiagramNode> = {}
+  const bodyWires: Record<string, Wire> = {}
+  addIdentityPairComponent(bodyNodes, bodyWires, 'broot', '0')
+  addIdentityPairComponent(bodyNodes, bodyWires, 'broot', '1')
+  const body = mkDiagramWithBoundary(
+    {
+      root: 'broot',
+      regions: { broot: { kind: 'sheet' } },
+      nodes: bodyNodes,
+      wires: bodyWires,
+    },
+    [],
+  )
+
+  const hostNodes: Record<string, DiagramNode> = {}
+  const hostWires: Record<string, Wire> = {}
+  for (const tag of ['0', '1', '2', '3', '4', '5']) {
+    addIdentityPairComponent(hostNodes, hostWires, 'root', tag)
+  }
+  const diagram = mkDiagram({
+    root: 'root',
+    regions: { root: { kind: 'sheet' } },
+    nodes: hostNodes,
+    wires: hostWires,
+  })
+
+  // The real fold target: components '2' and '4', not the first two the
+  // search would try — the matcher must reject the other decoy pairings
+  // (and, per component, the losing half of the port-swap ambiguity) before
+  // landing on this exact selection.
+  const selection = mkSelection(diagram, {
+    region: diagram.root,
+    regions: [],
+    nodes: ['j2', 'pinA2', 'pinB2', 'j4', 'pinA4', 'pinB4'],
+    wires: ['wA2', 'wB2', 'wA4', 'wB4'],
+  })
+
+  return { body, diagram, selection }
 }
 
 describe('structural relation definition', () => {
@@ -177,6 +263,15 @@ describe('structural relation definition', () => {
       'ManualBinary',
       verifyTheory({ relations: [], theorems: [] }),
     )).toThrow(/manual boundary order is not supported/)
+  })
+
+  it('infers fold args for a body with disconnected, structurally identical substructures against extra same-shape host candidates', () => {
+    const { body, diagram, selection } = disconnectedIdentityPairsFoldFixture()
+    const ctx = extendRelations(
+      verifyTheory({ relations: [], theorems: [] }),
+      [['DisconnectedPair', body]],
+    )
+    expect(inferFoldArgs(diagram, selection, 'DisconnectedPair', ctx)).toEqual([])
   })
 
   it.each(['region', 'wire'] as const)(

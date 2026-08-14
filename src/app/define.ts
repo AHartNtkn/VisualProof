@@ -79,8 +79,17 @@ export function canonicalArgOrder(diagram: Diagram, sel: SubgraphSelection): Wir
  * order is already fixed, so which host wire plays which argument is exactly
  * an occurrence match of the body against the selection — no user picking.
  * When the body has symmetric arguments, any valid assignment folds to the
- * same diagram, so the first (canonical) occurrence is taken. Refusal is based
- * only on bounded exact graph matching.
+ * same diagram, so the first (canonical) occurrence is taken. Refusal is
+ * based only on exact graph matching, never a search budget: no
+ * `explorationFuel` is passed, so `findOccurrences`'s `spend()` never sees
+ * `remaining === 0` (an absent budget leaves `remaining` `undefined`
+ * forever) and `status` is always `'complete'` — the same decisive
+ * treatment `diagramIso` gives adversarial worst cases, with no fuel cap on
+ * a check that must be exact. (A bounded-by-size heuristic was tried and
+ * refuted: a body with disconnected structurally-identical substructures
+ * leaves their candidate sets unsplit by propagation, so the true cost is
+ * multiplicative in the substructure count, not additive in element count —
+ * no cheap size-derived bound is sound here.)
  */
 export function inferFoldArgs(
   diagram: Diagram,
@@ -93,25 +102,7 @@ export function inferFoldArgs(
   if (body === undefined) {
     throw new Error(`unknown relation '${defId}' (known: ${[...ctx.relations.keys()].join(', ') || 'none'})`)
   }
-  // findOccurrences spends one placement attempt (match.ts's spend(), fired
-  // once per tryAssign call) per pattern region/node/wire per candidate it
-  // is tried against. `inRegion` pins the root's candidate set to exactly
-  // `sel.region`, so the root-candidate loop probes one host region, not
-  // the whole diagram — the only remaining branching is how many host nodes
-  // inside that single region could match any one pattern node before
-  // propagation narrows it. bodyElementCount * regionNodeCount bounds that:
-  // every pattern element tried against every node in the region once. It
-  // is a generous ceiling (propagation typically collapses most candidate
-  // sets to singletons well before that, as the rigid-chain test above
-  // demonstrates), not a tuned constant.
-  const bodyElementCount = Object.keys(body.diagram.regions).length
-    + Object.keys(body.diagram.nodes).length
-    + Object.keys(body.diagram.wires).length
-  const regionNodeCount = Object.values(diagram.nodes).filter((node) => node.region === sel.region).length
-  const found = findOccurrences(diagram, body, {
-    explorationFuel: bodyElementCount * Math.max(regionNodeCount, 1),
-    inRegion: sel.region,
-  })
+  const found = findOccurrences(diagram, body, { inRegion: sel.region })
   const sameIds = (left: readonly string[], right: readonly string[]): boolean => {
     const a = [...left].sort()
     const b = [...right].sort()
@@ -125,9 +116,6 @@ export function inferFoldArgs(
       && sameIds(occurrence.nodes, sel.nodes)
       && sameIds(occurrence.wires, sel.wires)
     ) return [...occ.attachments]
-  }
-  if (found.status === 'exhausted') {
-    throw new Error(`graph exploration exhausted while matching definition '${defId}'`)
   }
   throw new Error(`the selection must match the definition exactly.`)
 }
