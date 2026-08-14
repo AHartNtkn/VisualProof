@@ -1,4 +1,5 @@
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram'
+import { endpointPositionKey } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
 import { derivedScope, derivedScopes, isAncestorOrEqual } from '../regions'
 import { sigEquals, sigKey } from '../sig'
@@ -18,23 +19,6 @@ export type OccurrenceCertificateCheck =
 
 function fail(reason: string): OccurrenceCertificateCheck {
   return { ok: false, reason }
-}
-
-/**
- * Semantic port position. Identity incidence indices are deliberately erased:
- * their incident-wire multiset is the structure certificates preserve.
- */
-function endpointPositionKey(diagram: Diagram, endpoint: Endpoint): string {
-  const node = diagram.nodes[endpoint.node]!
-  switch (node.kind) {
-    case 'atom':
-      if (endpoint.port.kind === 'head') return 'hd'
-      return endpoint.port.kind === 'arg' ? `a:${endpoint.port.index}` : '!invalid'
-    case 'ref':
-      return endpoint.port.kind === 'arg' ? `a:${endpoint.port.index}` : '!invalid'
-    case 'identity':
-      return endpoint.port.kind === 'identity' ? 'i' : '!invalid'
-  }
 }
 
 function endpointKey(diagram: Diagram, endpoint: Endpoint): string {

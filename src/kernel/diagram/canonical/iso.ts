@@ -1,5 +1,5 @@
-import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram'
-import { DiagramError } from '../diagram'
+import type { Diagram, NodeId, RegionId, WireId } from '../diagram'
+import { DiagramError, endpointPositionKey } from '../diagram'
 import { sigEquals } from '../sig'
 import { refineJointly, type Mark, type Sort, type SideColors } from './refine'
 
@@ -127,19 +127,6 @@ export function diagramIso(
       __isoCounters.failedCandidates++
     }
     return null
-  }
-}
-
-function endpointPositionKey(diagram: Diagram, endpoint: Endpoint): string {
-  const node = diagram.nodes[endpoint.node]!
-  switch (node.kind) {
-    case 'atom':
-      if (endpoint.port.kind === 'head') return 'hd'
-      return endpoint.port.kind === 'arg' ? `a:${endpoint.port.index}` : '!invalid'
-    case 'ref':
-      return endpoint.port.kind === 'arg' ? `a:${endpoint.port.index}` : '!invalid'
-    case 'identity':
-      return endpoint.port.kind === 'identity' ? 'i' : '!invalid'
   }
 }
 

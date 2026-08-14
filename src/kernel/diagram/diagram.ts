@@ -76,6 +76,25 @@ export function portKey(port: Port): string {
   }
 }
 
+/**
+ * Semantic port position of a wire endpoint. Identity incidence indices are
+ * deliberately erased: their incident-wire multiset, not their storage
+ * index, is the structure that identity carries — see `requiredPorts`'s
+ * `identity` case, whose ports are storage addresses only.
+ */
+export function endpointPositionKey(diagram: Diagram, endpoint: Endpoint): string {
+  const node = diagram.nodes[endpoint.node]!
+  switch (node.kind) {
+    case 'atom':
+      if (endpoint.port.kind === 'head') return 'hd'
+      return endpoint.port.kind === 'arg' ? `a:${endpoint.port.index}` : '!invalid'
+    case 'ref':
+      return endpoint.port.kind === 'arg' ? `a:${endpoint.port.index}` : '!invalid'
+    case 'identity':
+      return endpoint.port.kind === 'identity' ? 'i' : '!invalid'
+  }
+}
+
 /** The exact storage ports a node must have attached. */
 export function requiredPorts(node: DiagramNode): Port[] {
   switch (node.kind) {
