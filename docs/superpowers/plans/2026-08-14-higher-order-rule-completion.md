@@ -82,8 +82,14 @@
 - Modify: `VisualProof/Rule/Soundness/DoubleCut.lean`
 
 **Interfaces:**
-- Produces direct double-cut introduction/elimination over a selected `Region wires`.
-- Pass-through inherited wires receive explicit identity pins at the old selected region exactly when moving all of their incidences would change their DCA or violate the two-incidence floor.
+- Produces direct double-cut introduction/elimination from the selected site's
+  `hostLocals`, retained `hostItems`, and `selected : Region (outer ++ hostLocals)`.
+  Do not detach the selected body behind an arbitrary wire renaming: the site
+  split is required to compute the exact DCA-preserving endpoint.
+- Emit one pass-through identity exactly for each site-local wire used by the
+  selected material and unused by the retained site items. Ancestor wires,
+  locals owned inside the selected material, and site-local wires already used
+  by retained material receive no pin.
 
 - [ ] Define the typed double-cut wrapper and its pass-through pin block. Prove wrapper canonicality and inherited incidence/DCA preservation from the source body.
 - [ ] Define the contextual symmetric relation, isomorphism closure, and direct forward/backward indices and runners.
