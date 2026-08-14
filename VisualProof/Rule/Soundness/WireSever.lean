@@ -1,4 +1,5 @@
 import VisualProof.Rule.Soundness.Contextual
+import VisualProof.Diagram.Semantics.Algebra
 import VisualProof.Rule.WireSever
 
 namespace VisualProof.Rule
@@ -9,62 +10,42 @@ open Diagram
 namespace WireSever.Local
 
 theorem sound
-    {wires : Nat}
-    {rels : RelCtx}
-    {before after : Region wires rels}
+    {before after : Region wires}
     (step : WireSever.Local before after) :
-    ∀ (model : Model)
-      (env : Fin wires → model.Carrier)
-      (relEnv : RelEnv model.Carrier rels),
-      denoteRegion model env relEnv before →
-      denoteRegion model env relEnv after := by
+    ∀ (model : Model) (env : Values model wires),
+      denoteRegion model env before → denoteRegion model env after := by
   cases step
-  rename_i localWires joined joinedItems partition
-  intro model env relEnv
+  rename_i localWires signature joined joinedItems partition
+  intro model env
   rintro ⟨localEnv, joinedDenotes⟩
-  let separate := joinedItems.partitionOutput
-    (WireSever.collapseLocal wires localWires joined) partition
+  let collapse := WireSever.collapseLocal wires localWires joined
+  let separate := joinedItems.partitionOutput collapse partition
   have collapsedDenotes :
-          denoteItemSeq model
-            ((extendWireEnv env localEnv) ∘
-              WireSever.collapseLocal wires localWires joined)
-            relEnv separate :=
-        (denoteItemSeq_renameWires model
-          (WireSever.collapseLocal wires localWires joined)
-          (extendWireEnv env localEnv) relEnv separate).mp (by
-            simpa only [separate,
-              ItemSeq.partitionOutput_renameWires] using joinedDenotes)
-  let targetLocal : Fin (localWires + 1) → model.Carrier :=
-        fun localWire =>
-          extendWireEnv env localEnv
-            (WireSever.collapseLocal wires localWires joined
-              (Fin.natAdd wires localWire))
+      denoteItemSeq model
+        (Values.rename collapse (env.append localEnv)) separate :=
+    (denoteItemSeq_renameWires model collapse
+      (env.append localEnv) separate).mp (by
+        simpa only [separate, collapse,
+          ItemSeq.partitionOutput_renameWires] using joinedDenotes)
+  let targetLocal : Values model (localWires ++ [signature]) :=
+    Values.ofLookup fun wire =>
+      (env.append localEnv).lookup
+        (collapse (Var.appendRight wires wire))
   refine ⟨targetLocal, ?_⟩
-  have environmentEq :
-          extendWireEnv env targetLocal =
-            (extendWireEnv env localEnv) ∘
-              WireSever.collapseLocal wires localWires joined := by
-        funext wire
-        refine Fin.addCases (fun inherited => ?_) (fun localWire => ?_) wire
-        · have old : inherited.val < wires + localWires := by omega
-          have old' :
-              (Fin.castAdd (localWires + 1) inherited).val <
-                wires + localWires := by
-            simpa using old
-          simp only [extendWireEnv, Fin.addCases_left, Function.comp_apply]
-          change env inherited =
-            Fin.addCases env localEnv
-              (WireSever.collapseLocal wires localWires joined
-                (Fin.castAdd (localWires + 1) inherited))
-          rw [show WireSever.collapseLocal wires localWires joined
-              (Fin.castAdd (localWires + 1) inherited) =
-              Fin.castAdd localWires inherited by
-            unfold WireSever.collapseLocal
-            rw [dif_pos old']
-            rfl]
-          symm
-          apply Fin.addCases_left
-        · simp [extendWireEnv, targetLocal, Function.comp_apply]
+  have environmentEq : env.append targetLocal =
+      Values.rename collapse (env.append localEnv) := by
+    apply Values.ext
+    intro wireSignature wire
+    apply Var.appendCases
+      (motive := fun wire =>
+        (env.append targetLocal).lookup wire =
+          (Values.rename collapse (env.append localEnv)).lookup wire)
+    · intro inheritedSignature inherited
+      simp only [Values.lookup_append_left, Values.lookup_rename, collapse,
+        WireSever.collapseLocal_inherited]
+    · intro localSignature localWire
+      simp only [Values.lookup_append_right, Values.lookup_rename,
+        targetLocal, Values.lookup_ofLookup]
   rw [environmentEq]
   exact collapsedDenotes
 
@@ -73,67 +54,88 @@ end WireSever.Local
 namespace WireSever.Open
 
 theorem sound
-    {arity : Nat}
-    {source target : OpenDiagram arity}
+    {source target : OpenDiagram boundaryTypes}
     (step : WireSever.Open source target) :
-    ∀ (model : Model)
-      (args : Fin arity → model.Carrier),
-      denoteOpen model source args →
-      denoteOpen model target args := by
+    ∀ (model : Model) (args : Values model boundaryTypes),
+      denoteOpen model source args → denoteOpen model target args := by
   intro model args
-  rintro ⟨sourceAssignment, sourceArgs, sourceBody⟩
-  let representedClasses : Fin step.sourceWires → model.Carrier :=
-    sourceAssignment.classes ∘ step.sourceExternal.invFun
-  let targetAssignment : BoundaryAssignment target model.Carrier := {
-    args := sourceAssignment.args
-    classes := representedClasses ∘ step.collapse ∘
-      step.targetExternal.toFun
-    agrees := by
+  rintro ⟨sourceEnv, sourceArgs, sourceBody⟩
+  let representedEnv : Values model step.sourceWires :=
+    Values.rename step.sourceExternal.invRenaming sourceEnv
+  let separateEnv : Values model (step.sourceWires ++ [step.signature]) :=
+    Values.rename step.collapse representedEnv
+  let targetEnv : Values model target.external :=
+    Values.rename step.targetExternal.toRenaming separateEnv
+  refine ⟨targetEnv, ?_, ?_⟩
+  · rw [← sourceArgs]
+    have targetToPresented :
+        evaluateVars
+            (target.boundaryWire.map
+              (fun wire => step.targetExternal wire)) separateEnv =
+          evaluateVars target.boundaryWire targetEnv :=
+      evaluateVars_map_eq target.boundaryWire
+        step.targetExternal.toRenaming targetEnv separateEnv (by
+          intro wireSignature wire
+          simp only [targetEnv, Values.lookup_rename])
+    rw [← targetToPresented]
+    have presentedToCollapsed :
+        evaluateVars
+            ((target.boundaryWire.map
+              (fun wire => step.targetExternal wire)).map
+                (fun wire => step.collapse wire)) representedEnv =
+          evaluateVars
+            (target.boundaryWire.map
+              (fun wire => step.targetExternal wire)) separateEnv :=
+      evaluateVars_map_eq
+        (target.boundaryWire.map
+          (fun wire => step.targetExternal wire)) step.collapse
+        separateEnv representedEnv (by
+          intro wireSignature wire
+          simp only [separateEnv, Values.lookup_rename])
+    rw [← presentedToCollapsed]
+    have boundaryEq :
+        (target.boundaryWire.map
+          (fun wire => step.targetExternal wire)).map
+            (fun wire => step.collapse wire) =
+          source.boundaryWire.map
+            (fun wire => step.sourceExternal wire) := by
+      apply Vars.eq_of_get_eq
       intro position
-      change representedClasses
-          (step.collapse (step.targetExternal (target.boundary position))) =
-        sourceAssignment.args position
-      rw [step.boundary position]
-      change sourceAssignment.classes
-          (step.sourceExternal.invFun
-            (step.sourceExternal (source.boundary position))) = _
-      rw [step.sourceExternal.left_inv]
-      exact sourceAssignment.agrees position
-  }
-  refine ⟨targetAssignment, sourceArgs, ?_⟩
-  have representedBody :
-      denoteRegion (relCtx := []) model representedClasses PUnit.unit
-        step.sourceBody :=
-    (step.source_body.denotation model sourceAssignment.classes
-      representedClasses PUnit.unit (by
-        intro wire
-        change sourceAssignment.classes
-          (step.sourceExternal.invFun (step.sourceExternal wire)) = _
-        rw [step.sourceExternal.left_inv])).mp sourceBody
-  let separateBody := step.sourceBody.partitionOutput
-    step.collapse step.partition
-  have separatedBody :
-      denoteRegion (relCtx := []) model
-        (representedClasses ∘ step.collapse) PUnit.unit separateBody :=
-    (denoteRegion_renameWires (relCtx := []) model step.collapse
-      representedClasses PUnit.unit separateBody).mp (by
-        simpa only [separateBody,
-          Region.partitionOutput_renameWires] using representedBody)
-  exact (step.target_body.denotation model targetAssignment.classes
-    (representedClasses ∘ step.collapse) PUnit.unit (by
-      intro wire
-      rfl)).mpr separatedBody
+      simp only [Vars.get_map]
+      exact step.boundary position
+    rw [boundaryEq]
+    exact evaluateVars_map_eq source.boundaryWire
+      step.sourceExternal.toRenaming sourceEnv representedEnv (by
+        intro wireSignature wire
+        simp only [representedEnv, Values.lookup_rename]
+        exact congrArg sourceEnv.lookup
+          (step.sourceExternal.left_inv wire).symm)
+  · have representedBody :
+        denoteRegion model representedEnv step.sourceBody :=
+      (step.source_body.denotation model sourceEnv representedEnv (by
+        intro wireSignature wire
+        simp only [representedEnv, Values.lookup_rename]
+        exact congrArg sourceEnv.lookup
+          (step.sourceExternal.left_inv wire).symm)).mp sourceBody
+    let separateBody := step.sourceBody.partitionOutput
+      step.collapse step.partition
+    have separatedBody :
+        denoteRegion model separateEnv separateBody :=
+      (denoteRegion_renameWires model step.collapse representedEnv
+        separateBody).mp (by
+          simpa only [separateBody,
+            Region.partitionOutput_renameWires] using representedBody)
+    exact (step.target_body.denotation model targetEnv separateEnv (by
+      intro wireSignature wire
+      simp only [targetEnv, Values.lookup_rename])).mpr separatedBody
 
 end WireSever.Open
 
 theorem WireSever.sound
-    {arity : Nat}
-    {source target : OpenDiagram arity}
+    {source target : OpenDiagram boundary}
     (step : WireSever source target) :
-    ∀ (model : Model)
-      (args : Fin arity → model.Carrier),
-      denoteOpen model source args →
-      denoteOpen model target args := by
+    ∀ (model : Model) (args : Values model boundary),
+      denoteOpen model source args → denoteOpen model target args := by
   cases step with
   | inl localStep =>
       exact Contextual.sound WireSever.Local.sound localStep
