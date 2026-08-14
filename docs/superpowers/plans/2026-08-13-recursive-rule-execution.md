@@ -201,25 +201,25 @@
 **Interfaces:**
 - Produces: `Erasure.ForwardIndex`, `Erasure.BackwardIndex`, `runForward`, `runBackward`, `forward_exact`, `backward_exact`, and the two target-isomorphism closure theorems.
 
-- [ ] **Step 1: Define the asymmetric indices**
+- [x] **Step 1: Define the asymmetric indices**
 
   `ForwardIndex source` has an `erase` constructor containing the operands of `Erasure.Local.erase`, an `Occurrence` of the spliced body in `source`, and positive polarity; it also has an `insert` constructor containing the same operands, an occurrence of the smaller body, and negative polarity.
 
   `BackwardIndex source` reverses those source shapes and polarity obligations: it needs the full insertion description when the backward executor adds material. Neither index contains a target or `Rule.Erasure` evidence.
 
-- [ ] **Step 2: Define both runners**
+- [x] **Step 2: Define both runners**
 
   Each branch computes the opposite local body and fills its supplied occurrence. The definitions contain no recursion except `DiagramContext.fill`, no source inspection, and no branch that can fail.
 
-- [ ] **Step 3: Prove target-isomorphism closure**
+- [x] **Step 3: Prove target-isomorphism closure**
 
   Derive `Erasure.respectsTargetIso` and `Erasure.backward_respectsTargetIso` directly from `Erasure.iso` with a reflexive source isomorphism.
 
-- [ ] **Step 4: Prove exactness sequentially RED/GREEN**
+- [x] **Step 4: Prove exactness sequentially RED/GREEN**
 
   Prove the two global iff statements from the constraints section. In the executable-to-rule direction, build the contextual witness from the index. In the rule-to-executable direction, invert the contextual witness and its polarity, construct the corresponding index, and return its existing target isomorphism.
 
-- [ ] **Step 5: Validate and commit**
+- [x] **Step 5: Validate and commit**
 
   Strict-check the rule and executable modules, scan them for admissions and raised limits, run `git diff --check`, and commit as `execute erasure recursively`.
 

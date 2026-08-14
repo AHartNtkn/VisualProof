@@ -2,16 +2,16 @@ version: 1
 goal: recursive-rule-execution
 status: active
 plan: docs/superpowers/plans/2026-08-13-recursive-rule-execution.md
-active_task: execute-erasure
+active_task: execute-double-cut-and-vacuity
 tasks:
   - id: remove-obsolete-execution-closure
     status: done
   - id: define-nested-occurrence
     status: done
   - id: execute-erasure
-    status: active
+    status: done
   - id: execute-double-cut-and-vacuity
-    status: pending
+    status: active
   - id: execute-iteration
     status: pending
   - id: execute-wire-sever

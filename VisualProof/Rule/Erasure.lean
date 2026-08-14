@@ -31,4 +31,18 @@ theorem Erasure.iso
     Erasure source' target' := by
   exact Contextual.iso sourceIso step targetIso
 
+theorem Erasure.respectsTargetIso
+    (step : Erasure source target)
+    (isomorphic : OpenDiagram.Isomorphic target target') :
+    Erasure source target' := by
+  rcases isomorphic with ⟨targetIso⟩
+  exact Erasure.iso (OpenDiagramIso.refl source) step targetIso
+
+theorem Erasure.backward_respectsTargetIso
+    (step : Erasure target source)
+    (isomorphic : OpenDiagram.Isomorphic target target') :
+    Erasure target' source := by
+  rcases isomorphic with ⟨targetIso⟩
+  exact Erasure.iso targetIso step (OpenDiagramIso.refl source)
+
 end VisualProof.Rule
