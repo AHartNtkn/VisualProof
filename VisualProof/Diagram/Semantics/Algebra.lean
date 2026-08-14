@@ -157,6 +157,110 @@ private theorem adjoinMaterialValues
   · intro signature addedWire
     simp [Region.adjoinMaterialWire, localRightRenaming]
 
+private theorem conjoinRightValues
+    (outerEnv : Values model outer)
+    (combined : Values model (leftLocals ++ rightLocals)) :
+    Values.rename (Region.conjoinRightWire outer leftLocals rightLocals)
+        (outerEnv.append combined) =
+      outerEnv.append
+        (Values.rename (localRightRenaming leftLocals rightLocals)
+          combined) := by
+  apply Values.ext
+  intro signature wire
+  apply Var.appendCases
+    (motive := fun wire =>
+      (Values.rename
+        (Region.conjoinRightWire outer leftLocals rightLocals)
+        (outerEnv.append combined)).lookup wire =
+      (outerEnv.append
+        (Values.rename (localRightRenaming leftLocals rightLocals)
+          combined)).lookup wire)
+  · intro signature inherited
+    simp [Region.conjoinRightWire]
+  · intro signature localWire
+    simp [Region.conjoinRightWire, localRightRenaming]
+
+/-- Conjunction has exactly the semantics of both recursively scoped
+operands. The combined region owns the operands' local wires disjointly. -/
+theorem Region.denote_conjoin
+    (model : Model) (outerEnv : Values model outer)
+    (left right : Region outer) :
+    denoteRegion model outerEnv (left.conjoin right) ↔
+      denoteRegion model outerEnv left ∧
+        denoteRegion model outerEnv right := by
+  cases left with
+  | mk leftLocals leftItems =>
+      cases right with
+      | mk rightLocals rightItems =>
+          simp only [Region.conjoin, denoteRegion_mk,
+            denoteItemSeq_append]
+          constructor
+          · rintro ⟨combined, leftDenotes, rightDenotes⟩
+            let leftEnv := Values.rename
+              (localLeftRenaming leftLocals rightLocals) combined
+            let rightEnv := Values.rename
+              (localRightRenaming leftLocals rightLocals) combined
+            constructor
+            · refine ⟨leftEnv, ?_⟩
+              have := (denoteItemSeq_renameWires model
+                (Region.conjoinLeftWire outer leftLocals rightLocals)
+                (outerEnv.append combined) leftItems).mp leftDenotes
+              have valuesEq := adjoinHostValues
+                (outerEnv := outerEnv) (hostLocals := leftLocals)
+                (addedLocals := rightLocals) combined
+              change Values.rename
+                  (Region.conjoinLeftWire outer leftLocals rightLocals)
+                  (outerEnv.append combined) =
+                outerEnv.append (Values.rename
+                  (localLeftRenaming leftLocals rightLocals) combined)
+                at valuesEq
+              rw [valuesEq] at this
+              exact this
+            · refine ⟨rightEnv, ?_⟩
+              have := (denoteItemSeq_renameWires model
+                (Region.conjoinRightWire outer leftLocals rightLocals)
+                (outerEnv.append combined) rightItems).mp rightDenotes
+              simpa only [rightEnv, conjoinRightValues] using this
+          · rintro ⟨⟨leftEnv, leftDenotes⟩,
+                ⟨rightEnv, rightDenotes⟩⟩
+            let combined := leftEnv.append rightEnv
+            refine ⟨combined, ?_, ?_⟩
+            · apply (denoteItemSeq_renameWires model
+                (Region.conjoinLeftWire outer leftLocals rightLocals)
+                (outerEnv.append combined) leftItems).mpr
+              have valuesEq := adjoinHostValues
+                (outerEnv := outerEnv) (hostLocals := leftLocals)
+                (addedLocals := rightLocals) combined
+              change Values.rename
+                  (Region.conjoinLeftWire outer leftLocals rightLocals)
+                  (outerEnv.append combined) =
+                outerEnv.append (Values.rename
+                  (localLeftRenaming leftLocals rightLocals) combined)
+                at valuesEq
+              rw [valuesEq]
+              change denoteItemSeq model
+                (outerEnv.append (Values.rename
+                  (localLeftRenaming leftLocals rightLocals) combined))
+                leftItems
+              rw [show Values.rename
+                  (localLeftRenaming leftLocals rightLocals) combined =
+                    leftEnv by
+                exact renameLocalLeft_append leftEnv rightEnv]
+              exact leftDenotes
+            · apply (denoteItemSeq_renameWires model
+                (Region.conjoinRightWire outer leftLocals rightLocals)
+                (outerEnv.append combined) rightItems).mpr
+              rw [conjoinRightValues]
+              change denoteItemSeq model
+                (outerEnv.append (Values.rename
+                  (localRightRenaming leftLocals rightLocals) combined))
+                rightItems
+              rw [show Values.rename
+                  (localRightRenaming leftLocals rightLocals) combined =
+                    rightEnv by
+                exact renameLocalRight_append leftEnv rightEnv]
+              exact rightDenotes
+
 theorem Region.denote_adjoinAt
     (model : Model) (outerEnv : Values model outer)
     (hostItems : ItemSeq (outer ++ hostLocals))

@@ -7,163 +7,89 @@ open VisualProof.Theory
 
 namespace DiagramContext
 
-/-- Environments that can actually reach a context hole while evaluating its
-surrounding region.  Unlike an unconstrained hole valuation, inherited wire
-and relation values are tied to the outer valuation. -/
-def Reachable
-    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
-    (outerEnv : Fin outerWires → D) (outerRelEnv : RelEnv D outerRels)
-    (holeEnv : Fin holeWires → D) (holeRelEnv : RelEnv D holeRels) : Prop :=
-  match ctx with
-  | .hole => outerEnv = holeEnv ∧ outerRelEnv = holeRelEnv
-  | .cut localWires _ _ child =>
-      ∃ localEnv : Fin localWires → D,
-        child.Reachable (extendWireEnv outerEnv localEnv) outerRelEnv
-          holeEnv holeRelEnv
-  | .bubble localWires _ _ arity child =>
-      ∃ (localEnv : Fin localWires → D) (relation : Relation D arity),
-        child.Reachable (extendWireEnv outerEnv localEnv)
-          (relation, outerRelEnv) holeEnv holeRelEnv
+/-- Environments that arise at a recursive context hole from one enclosing
+environment. This is the semantic content of the context's inherited-wire
+renaming. -/
+def Reachable (context : DiagramContext outer holeWires)
+    (outerEnv : Values model outer) (holeEnv : Values model holeWires) : Prop :=
+  match context with
+  | .hole => outerEnv = holeEnv
+  | .cut locals _ _ child =>
+      ∃ localEnv : Values model locals,
+        child.Reachable (outerEnv.append localEnv) holeEnv
 
-/-- Every reachable hole valuation retains all outer wire values. -/
+/-- A reachable hole environment agrees with the enclosing environment on
+every inherited wire. -/
 theorem Reachable.outerWire
-    {ctx : DiagramContext  outerWires holeWires outerRels holeRels}
-    {outerEnv : Fin outerWires → D} {outerRelEnv : RelEnv D outerRels}
-    {holeEnv : Fin holeWires → D} {holeRelEnv : RelEnv D holeRels}
-    (reachable : ctx.Reachable outerEnv outerRelEnv holeEnv holeRelEnv) :
-    holeEnv ∘ ctx.outerWire = outerEnv := by
-  induction ctx with
+    {context : DiagramContext outer holeWires}
+    {outerEnv : Values model outer} {holeEnv : Values model holeWires}
+    (reachable : context.Reachable outerEnv holeEnv) :
+    Values.rename context.outerWire holeEnv = outerEnv := by
+  induction context with
   | hole =>
-      obtain ⟨rfl, _⟩ := reachable
-      rfl
-  | cut localWires before after child induction =>
+      rw [reachable]
+      apply Values.ext
+      intro signature wire
+      simp [DiagramContext.outerWire, WireRenaming.id]
+  | cut locals before after child induction =>
       obtain ⟨localEnv, childReachable⟩ := reachable
       have childOuter := induction childReachable
-      funext index
-      change holeEnv (child.outerWire (Fin.castAdd localWires index)) =
-        outerEnv index
-      rw [show holeEnv (child.outerWire (Fin.castAdd localWires index)) =
-          extendWireEnv outerEnv localEnv (Fin.castAdd localWires index) from
-        congrFun childOuter (Fin.castAdd localWires index)]
-      simp [extendWireEnv]
-  | bubble localWires before after arity child induction =>
-      obtain ⟨localEnv, relation, childReachable⟩ := reachable
-      have childOuter := induction childReachable
-      funext index
-      change holeEnv (child.outerWire (Fin.castAdd localWires index)) =
-        outerEnv index
-      rw [show holeEnv (child.outerWire (Fin.castAdd localWires index)) =
-          extendWireEnv outerEnv localEnv (Fin.castAdd localWires index) from
-        congrFun childOuter (Fin.castAdd localWires index)]
-      simp [extendWireEnv]
+      apply Values.ext
+      intro signature wire
+      simp only [DiagramContext.outerWire, Values.lookup_rename,
+        WireRenaming.comp]
+      rw [show holeEnv.lookup
+          (child.outerWire (wire.appendLeft locals)) =
+            (outerEnv.append localEnv).lookup (wire.appendLeft locals) by
+        simpa only [Values.lookup_rename] using
+          congrArg (fun values => values.lookup (wire.appendLeft locals))
+            childOuter]
+      exact Values.lookup_append_left outerEnv localEnv wire
 
-/-- Every reachable hole relation valuation retains all outer relations. -/
-theorem Reachable.outerRelation
-    {ctx : DiagramContext  outerWires holeWires outerRels holeRels}
-    {outerEnv : Fin outerWires → D} {outerRelEnv : RelEnv D outerRels}
-    {holeEnv : Fin holeWires → D} {holeRelEnv : RelEnv D holeRels}
-    (reachable : ctx.Reachable outerEnv outerRelEnv holeEnv holeRelEnv) :
-    RelEnv.Agrees ctx.outerRelation outerRelEnv holeRelEnv := by
-  induction ctx with
-  | hole =>
-      obtain ⟨_, rfl⟩ := reachable
-      intro arity relation
-      rfl
-  | cut localWires before after child induction =>
-      obtain ⟨localEnv, childReachable⟩ := reachable
-      exact induction childReachable
-  | bubble localWires before after arity child induction =>
-      obtain ⟨localEnv, relationValue, childReachable⟩ := reachable
-      have childAgrees := induction childReachable
-      intro relationArity relation
-      exact childAgrees relationArity
-        ⟨relation.index.succ, relation.hasArity⟩
-
-/-- A local equivalence need only hold at valuations that can actually reach
-the hole; it then lifts through the surrounding context. -/
+/-- A semantic equivalence that holds for every environment reachable at a
+context hole lifts through that context. -/
 theorem fill_equiv_of_reachable
-    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
-    (first second : Region  holeWires holeRels)
-    (model : Model)
-    (outerEnv : Fin outerWires → model.Carrier)
-    (outerRelEnv : RelEnv model.Carrier outerRels)
-    (holeEquiv : ∀ holeEnv holeRelEnv,
-      ctx.Reachable outerEnv outerRelEnv holeEnv holeRelEnv →
-        (denoteRegion model  holeEnv holeRelEnv first ↔
-          denoteRegion model  holeEnv holeRelEnv second)) :
-    denoteRegion model  outerEnv outerRelEnv (ctx.fill first) ↔
-      denoteRegion model  outerEnv outerRelEnv (ctx.fill second) := by
-  induction ctx with
-  | hole =>
-      exact holeEquiv outerEnv outerRelEnv ⟨rfl, rfl⟩
-  | cut localWires before after child induction =>
+    (context : DiagramContext outer holeWires)
+    (first second : Region holeWires)
+    (model : Model) (outerEnv : Values model outer)
+    (holeEquiv : ∀ holeEnv : Values model holeWires,
+      context.Reachable outerEnv holeEnv →
+        (denoteRegion model holeEnv first ↔
+          denoteRegion model holeEnv second)) :
+    denoteRegion model outerEnv (context.fill first) ↔
+      denoteRegion model outerEnv (context.fill second) := by
+  induction context with
+  | hole => exact holeEquiv outerEnv rfl
+  | cut locals before after child induction =>
       constructor
       · rintro ⟨localEnv, items⟩
         obtain ⟨beforeDenotes, childNot, afterDenotes⟩ :=
-          (denoteItemSeq_frame model
-            (extendWireEnv outerEnv localEnv) outerRelEnv before after
-            (.cut (child.fill first))).mp items
+          (denoteItemSeq_frame model (outerEnv.append localEnv)
+            before after (.cut (child.fill first))).mp items
         refine ⟨localEnv, (denoteItemSeq_frame model
-          (extendWireEnv outerEnv localEnv) outerRelEnv before after
+          (outerEnv.append localEnv) before after
           (.cut (child.fill second))).mpr
             ⟨beforeDenotes, ?_, afterDenotes⟩⟩
         intro secondDenotes
         apply childNot
-        exact (induction first second
-          (extendWireEnv outerEnv localEnv) outerRelEnv
-          (fun holeEnv holeRelEnv childReachable =>
-            holeEquiv holeEnv holeRelEnv ⟨localEnv, childReachable⟩)).mpr
+        exact (induction first second (outerEnv.append localEnv)
+          (fun holeEnv childReachable =>
+            holeEquiv holeEnv ⟨localEnv, childReachable⟩)).mpr
           secondDenotes
       · rintro ⟨localEnv, items⟩
         obtain ⟨beforeDenotes, childNot, afterDenotes⟩ :=
-          (denoteItemSeq_frame model
-            (extendWireEnv outerEnv localEnv) outerRelEnv before after
-            (.cut (child.fill second))).mp items
+          (denoteItemSeq_frame model (outerEnv.append localEnv)
+            before after (.cut (child.fill second))).mp items
         refine ⟨localEnv, (denoteItemSeq_frame model
-          (extendWireEnv outerEnv localEnv) outerRelEnv before after
+          (outerEnv.append localEnv) before after
           (.cut (child.fill first))).mpr
             ⟨beforeDenotes, ?_, afterDenotes⟩⟩
         intro firstDenotes
         apply childNot
-        exact (induction first second
-          (extendWireEnv outerEnv localEnv) outerRelEnv
-          (fun holeEnv holeRelEnv childReachable =>
-            holeEquiv holeEnv holeRelEnv ⟨localEnv, childReachable⟩)).mp
+        exact (induction first second (outerEnv.append localEnv)
+          (fun holeEnv childReachable =>
+            holeEquiv holeEnv ⟨localEnv, childReachable⟩)).mp
           firstDenotes
-  | bubble localWires before after arity child induction =>
-      constructor
-      · rintro ⟨localEnv, items⟩
-        obtain ⟨beforeDenotes, ⟨relationValue, childDenotes⟩,
-            afterDenotes⟩ :=
-          (denoteItemSeq_frame model
-            (extendWireEnv outerEnv localEnv) outerRelEnv before after
-            (.bubble arity (child.fill first))).mp items
-        refine ⟨localEnv, (denoteItemSeq_frame model
-          (extendWireEnv outerEnv localEnv) outerRelEnv before after
-          (.bubble arity (child.fill second))).mpr
-            ⟨beforeDenotes, ⟨relationValue, ?_⟩, afterDenotes⟩⟩
-        exact (induction first second
-          (extendWireEnv outerEnv localEnv)
-          (relationValue, outerRelEnv)
-          (fun holeEnv holeRelEnv childReachable =>
-            holeEquiv holeEnv holeRelEnv
-              ⟨localEnv, relationValue, childReachable⟩)).mp childDenotes
-      · rintro ⟨localEnv, items⟩
-        obtain ⟨beforeDenotes, ⟨relationValue, childDenotes⟩,
-            afterDenotes⟩ :=
-          (denoteItemSeq_frame model
-            (extendWireEnv outerEnv localEnv) outerRelEnv before after
-            (.bubble arity (child.fill second))).mp items
-        refine ⟨localEnv, (denoteItemSeq_frame model
-          (extendWireEnv outerEnv localEnv) outerRelEnv before after
-          (.bubble arity (child.fill first))).mpr
-            ⟨beforeDenotes, ⟨relationValue, ?_⟩, afterDenotes⟩⟩
-        exact (induction first second
-          (extendWireEnv outerEnv localEnv)
-          (relationValue, outerRelEnv)
-          (fun holeEnv holeRelEnv childReachable =>
-            holeEquiv holeEnv holeRelEnv
-              ⟨localEnv, relationValue, childReachable⟩)).mpr childDenotes
 
 end DiagramContext
 

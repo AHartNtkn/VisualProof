@@ -1,114 +1,187 @@
-import VisualProof.Rule.Iteration
-import VisualProof.Rule.Laws
+import VisualProof.Diagram.Semantics.ContextReachability
 import VisualProof.Diagram.Semantics.OpenIsomorphism
+import VisualProof.Diagram.Semantics.UnaryIdentity
+import VisualProof.Rule.Iteration
 
 namespace VisualProof.Rule
 
+open VisualProof
 open Theory
 open Diagram
 
-namespace Iteration.Local
+namespace Iteration
 
-theorem sound_iff
-    {arity : Nat}
-    {source target : OpenDiagram arity}
-    (replacement : NestedContextReplacement source target)
-    (evidence :
-      @Iteration.Local replacement.ancestorWires replacement.anchorLocal
-        replacement.descendantWires replacement.ancestorRels
-        replacement.descendantRels replacement.descendant
-        replacement.selected replacement.before replacement.after) :
-    ∀ (model : Model) (args : Fin arity → model.Carrier),
-      denoteOpen model source args ↔ denoteOpen model target args := by
-  intro model args
-  let copy : Region replacement.descendantWires
-      replacement.descendantRels :=
-    Region.adjoinAt evidence.copyLocal .nil
-      ((replacement.selected.renameWires
-        evidence.copyWires.wire).renameRelations
-        replacement.descendant.outerRelation)
-  have copied :
-      ∀ (ancestorEnv : Fin
-          (replacement.ancestorWires + replacement.anchorLocal) →
-            model.Carrier)
-        (ancestorRelEnv : RelEnv model.Carrier
-          replacement.ancestorRels),
-        denoteRegion model ancestorEnv ancestorRelEnv
-            replacement.selected →
-          ∀ (descendantEnv : Fin replacement.descendantWires →
-                model.Carrier)
-            (descendantRelEnv : RelEnv model.Carrier
-              replacement.descendantRels)
-            (reachable : replacement.descendant.Reachable ancestorEnv
-              ancestorRelEnv descendantEnv descendantRelEnv),
-            denoteRegion model descendantEnv descendantRelEnv copy := by
-    intro ancestorEnv ancestorRelEnv selectedDenotes
-      descendantEnv descendantRelEnv reachable
-    rw [show copy = Region.adjoinAt evidence.copyLocal .nil
-      ((replacement.selected.renameWires
-        evidence.copyWires.wire).renameRelations
-        replacement.descendant.outerRelation) from rfl,
-      Region.denote_adjoinAt]
-    obtain ⟨freshEnv, freshEnvEq⟩ :=
-      evidence.copyWires.env_eq ancestorEnv descendantEnv reachable.outerWire
-    refine ⟨freshEnv, trivial, ?_⟩
-    apply (denoteRegion_renameRelations model
-      replacement.descendant.outerRelation ancestorRelEnv descendantRelEnv
-      reachable.outerRelation (extendWireEnv descendantEnv freshEnv)
-      (replacement.selected.renameWires evidence.copyWires.wire)).mpr
-    apply (denoteRegion_renameWires model evidence.copyWires.wire
-      (extendWireEnv descendantEnv freshEnv) ancestorRelEnv
-      replacement.selected).mpr
-    rw [freshEnvEq]
-    exact selectedDenotes
-  have bodyEquiv :
-      ∀ env : Fin replacement.interface.externalClasses → model.Carrier,
-        denoteRegion (relCtx := []) model env
-            (PUnit.unit : RelEnv model.Carrier [])
-            (replacement.outer.fill
-              (Region.adjoinAt replacement.anchorLocal .nil
-                (replacement.selected.conjoin
-                  (replacement.descendant.fill replacement.before)))) ↔
-          denoteRegion (relCtx := []) model env
-            (PUnit.unit : RelEnv model.Carrier [])
-            (replacement.outer.fill
-              (Region.adjoinAt replacement.anchorLocal .nil
-                (replacement.selected.conjoin
-                  (replacement.descendant.fill replacement.after)))) := by
-    intro env
-    rw [evidence.after_eq]
-    apply replacement.outer.fill_equiv
-    intro holeEnv holeRelEnv
-    exact Region.adjoinAt_equiv model holeEnv holeRelEnv .nil _ _
-      (fun siteEnv =>
-        ancestorCopy_sound
-          (.hole : DiagramContext
-            (replacement.ancestorWires + replacement.anchorLocal)
-            (replacement.ancestorWires + replacement.anchorLocal)
-            replacement.ancestorRels replacement.ancestorRels)
-          replacement.descendant replacement.selected replacement.before
-          copy model siteEnv holeRelEnv copied)
-  exact (replacement.source_iso.denoteOpen_iff model args).trans
-    ((OpenDiagram.denote_body_iff
-      (diagram := replacement.interface) bodyEquiv).trans
-      (replacement.target_iso.denoteOpen_iff model args).symm)
+theorem WireFreshening.env_eq
+    (freshening : WireFreshening sourceWires targetWires freshWires inherited)
+    (model : Model) (sourceEnv : Values model sourceWires)
+    (targetEnv : Values model targetWires)
+    (inheritedEq : Values.rename inherited targetEnv = sourceEnv) :
+    ∃ freshEnv : Values model freshWires,
+      Values.rename freshening.wire (targetEnv.append freshEnv) = sourceEnv := by
+  classical
+  let freshEnv : Values model freshWires := Values.ofLookup fun fresh =>
+    sourceEnv.lookup (freshening.sourceOfFresh fresh)
+  refine ⟨freshEnv, Values.ext _ _ ?_⟩
+  intro signature wire
+  simp only [Values.lookup_rename]
+  by_cases fresh : ∃ freshWire : Var freshWires signature,
+      freshening.sourceOfFresh freshWire = wire
+  · obtain ⟨freshWire, equality⟩ := fresh
+    subst wire
+    rw [freshening.wire_fresh]
+    simp [freshEnv]
+  · rw [freshening.wire_inherited wire (by
+      intro freshWire equality
+      exact fresh ⟨freshWire, equality⟩)]
+    rw [Values.lookup_append_left]
+    have lookupEq := congrArg (fun values => values.lookup wire) inheritedEq
+    simpa only [Values.lookup_rename] using lookupEq
 
-end Iteration.Local
+theorem copyBlock_denotes
+    (descendant : DiagramContext sourceWires targetWires)
+    (selected : Region sourceWires)
+    (freshening : WireFreshening sourceWires targetWires freshWires
+      descendant.outerWire)
+    (model : Model) (sourceEnv : Values model sourceWires)
+    (targetEnv : Values model targetWires)
+    (reachable : descendant.Reachable sourceEnv targetEnv)
+    (selectedDenotes : denoteRegion model sourceEnv selected) :
+    denoteRegion model targetEnv (copyBlock selected freshening) := by
+  obtain ⟨freshEnv, combinedEq⟩ := freshening.env_eq model sourceEnv
+    targetEnv reachable.outerWire
+  apply (Region.denote_adjoinAt model targetEnv
+    (freshPins selected freshening)
+    (freshenedSelected selected freshening)).mpr
+  refine ⟨freshEnv, ItemSeq.pinWires_denotes _ _ _ _ _, ?_⟩
+  apply (denoteRegion_renameWires model freshening.wire
+    (targetEnv.append freshEnv) selected).mpr
+  rw [combinedEq]
+  exact selectedDenotes
 
+theorem uncopyResidue_denotes_iff
+    (selected : Region sourceWires) (remainder : Region targetWires)
+    (freshening : WireFreshening sourceWires targetWires freshWires inherited)
+    (model : Model) (env : Values model targetWires) :
+    denoteRegion model env
+        (uncopyResidue selected remainder freshening) ↔
+      denoteRegion model env remainder := by
+  cases remainder with
+  | mk locals items =>
+      simp only [uncopyResidue, denoteRegion_mk,
+        denoteItemSeq_append]
+      constructor
+      · rintro ⟨localEnv, _, itemsDenote⟩
+        exact ⟨localEnv, itemsDenote⟩
+      · rintro ⟨localEnv, itemsDenote⟩
+        refine ⟨localEnv, ?_, itemsDenote⟩
+        apply (denoteItemSeq_renameWires model
+          ⟨fun wire => wire.appendLeft locals⟩
+          (env.append localEnv)
+          (uncopyPins selected (.mk locals items) freshening)).mpr
+        exact ItemSeq.pinWires_denotes _ _ _ _ _
+
+theorem Local.denotes_iff
+    (descendant : DiagramContext sourceWires targetWires)
+    (selected : Region sourceWires) (before after : Region targetWires)
+    (evidence : Local descendant selected before after)
+    (model : Model) (sourceEnv : Values model sourceWires)
+    (targetEnv : Values model targetWires)
+    (reachable : descendant.Reachable sourceEnv targetEnv)
+    (selectedDenotes : denoteRegion model sourceEnv selected) :
+    denoteRegion model targetEnv before ↔
+      denoteRegion model targetEnv after := by
+  cases evidence with
+  | copy remainder freshWires freshening =>
+      have copyDenotes := copyBlock_denotes descendant selected freshening
+        model sourceEnv targetEnv reachable selectedDenotes
+      simp only [copied]
+      rw [Region.denote_conjoin]
+      exact ⟨fun remainderDenotes => ⟨copyDenotes, remainderDenotes⟩,
+        And.right⟩
+  | remove remainder freshWires freshening =>
+      have copyDenotes := copyBlock_denotes descendant selected freshening
+        model sourceEnv targetEnv reachable selectedDenotes
+      simp only [copied]
+      rw [Region.denote_conjoin,
+        uncopyResidue_denotes_iff selected remainder freshening model
+          targetEnv]
+      exact ⟨And.right, fun remainderDenotes =>
+        ⟨copyDenotes, remainderDenotes⟩⟩
+
+theorem Local.nested_denotes_iff
+    (outer : DiagramContext interfaceWires ancestorWires)
+    (anchorLocals : List Sig)
+    (selected : Region (ancestorWires ++ anchorLocals))
+    (descendant : DiagramContext (ancestorWires ++ anchorLocals)
+      descendantWires)
+    (before after : Region descendantWires)
+    (evidence : Local descendant selected before after)
+    (model : Model) (env : Values model interfaceWires) :
+    denoteRegion model env
+        (nestedBody outer anchorLocals selected descendant before) ↔
+      denoteRegion model env
+        (nestedBody outer anchorLocals selected descendant after) := by
+  apply DiagramContext.fill_equiv_of_reachable outer _ _ model env
+  intro ancestorEnv outerReachable
+  simp only [Region.denote_adjoinAt]
+  constructor
+  · rintro ⟨anchorEnv, _, combinedDenotes⟩
+    rw [Region.denote_conjoin] at combinedDenotes
+    refine ⟨anchorEnv, trivial, ?_⟩
+    rw [Region.denote_conjoin]
+    refine ⟨combinedDenotes.1, ?_⟩
+    apply (DiagramContext.fill_equiv_of_reachable descendant _ _ model
+      (ancestorEnv.append anchorEnv) ?_).mp combinedDenotes.2
+    intro descendantEnv reachable
+    exact Local.denotes_iff descendant selected before after evidence model
+      (ancestorEnv.append anchorEnv) descendantEnv reachable
+      combinedDenotes.1
+  · rintro ⟨anchorEnv, _, combinedDenotes⟩
+    rw [Region.denote_conjoin] at combinedDenotes
+    refine ⟨anchorEnv, trivial, ?_⟩
+    rw [Region.denote_conjoin]
+    refine ⟨combinedDenotes.1, ?_⟩
+    apply (DiagramContext.fill_equiv_of_reachable descendant _ _ model
+      (ancestorEnv.append anchorEnv) ?_).mpr combinedDenotes.2
+    intro descendantEnv reachable
+    exact Local.denotes_iff descendant selected before after evidence model
+      (ancestorEnv.append anchorEnv) descendantEnv reachable
+      combinedDenotes.1
+
+/-- Higher-order iteration and deiteration preserve denotation in either
+direction. -/
 theorem Iteration.sound
-    {arity : Nat}
-    {source target : OpenDiagram arity}
-    (step : Iteration source target) :
-    ∀ (model : Model) (args : Fin arity → model.Carrier),
+    {source target : OpenDiagram boundary}
+    (step : Rule.Iteration source target) :
+    ∀ (model : Model) (args : Values model boundary),
       denoteOpen model source args → denoteOpen model target args := by
-  cases step with
-  | inl forward =>
-      rcases forward with ⟨replacement, ⟨localEvidence⟩⟩
-      intro model args
-      exact (Iteration.Local.sound_iff replacement localEvidence model args).mp
-  | inr backward =>
-      rcases backward with ⟨replacement, ⟨localEvidence⟩⟩
-      intro model args
-      exact (Iteration.Local.sound_iff replacement localEvidence model args).mpr
+  rcases step with ⟨occurrence, after, targetCanonical, targetIso,
+    localEvidence⟩
+  intro model args sourceDenotes
+  have localIff : ∀ env : Values model occurrence.interface.external,
+      denoteRegion model env
+          (occurrence.targetBody occurrence.before) ↔
+        denoteRegion model env
+          (occurrence.targetBody after) := by
+    intro env
+    rcases localEvidence with forward | backward
+    · exact Local.nested_denotes_iff occurrence.outer
+        occurrence.anchorLocals occurrence.selected occurrence.descendant
+        occurrence.before after forward model env
+    · exact (Local.nested_denotes_iff occurrence.outer
+        occurrence.anchorLocals occurrence.selected occurrence.descendant
+        after occurrence.before backward model env).symm
+  have sourceBody :=
+    (occurrence.source_iso.denoteOpen_iff model args).mp sourceDenotes
+  have targetBody : denoteOpen model
+      (occurrence.interface.withBody
+        (occurrence.targetBody after) targetCanonical) args :=
+    (OpenDiagram.denote_body_iff
+      (diagram := occurrence.interface)
+      (beforeCanonical := occurrence.sourceCanonical)
+      (afterCanonical := targetCanonical) localIff).mp sourceBody
+  exact (targetIso.denoteOpen_iff model args).mpr targetBody
+
+end Iteration
 
 end VisualProof.Rule

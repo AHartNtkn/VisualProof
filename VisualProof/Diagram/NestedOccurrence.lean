@@ -18,12 +18,15 @@ def nestedBody
     (Region.adjoinAt anchorLocals .nil
       (selected.conjoin (descendant.fill body)))
 
-/-- A selected ancestor and descendant hole in one canonical source diagram.
-It contains only source evidence; replacement bodies are supplied directly. -/
-structure NestedOccurrence
-    (selected : Region (ancestorWires ++ anchorLocals))
-    (before : Region descendantWires)
-    (source : OpenDiagram boundary) where
+/-- One exact selected ancestor and descendant body in a canonical source.
+The current body is owned by the occurrence instead of indexing its type, so
+local rule elimination never transports the enclosing source evidence. -/
+structure NestedOccurrence (source : OpenDiagram boundary) where
+  ancestorWires : List Sig
+  anchorLocals : List Sig
+  descendantWires : List Sig
+  selected : Region (ancestorWires ++ anchorLocals)
+  before : Region descendantWires
   interface : OpenDiagram boundary
   outer : DiagramContext interface.external ancestorWires
   descendant : DiagramContext (ancestorWires ++ anchorLocals)
@@ -37,22 +40,36 @@ structure NestedOccurrence
 
 namespace NestedOccurrence
 
+def targetBody {boundary : List Sig} {source : OpenDiagram boundary}
+    (occurrence : NestedOccurrence source)
+    (after : Region occurrence.descendantWires) :
+    Region occurrence.interface.external :=
+  nestedBody occurrence.outer occurrence.anchorLocals occurrence.selected
+    occurrence.descendant after
+
 /-- Replace the selected descendant body without searching the source. -/
-def replace
-    {ancestorWires anchorLocals descendantWires boundary : List Sig}
-    {selected : Region (ancestorWires ++ anchorLocals)}
-    {before : Region descendantWires}
-    {source : OpenDiagram boundary}
-    (occurrence : NestedOccurrence selected before source)
-    (after : Region descendantWires)
-    (targetCanonical :
-      (nestedBody occurrence.outer anchorLocals selected
-        occurrence.descendant after).Canonical) :
+def replace {boundary : List Sig} {source : OpenDiagram boundary}
+    (occurrence : NestedOccurrence source)
+    (after : Region occurrence.descendantWires)
+    (targetCanonical : (occurrence.targetBody after).Canonical) :
     OpenDiagram boundary :=
-  occurrence.interface.withBody
-    (nestedBody occurrence.outer anchorLocals selected
-      occurrence.descendant after)
-    targetCanonical
+  occurrence.interface.withBody (occurrence.targetBody after) targetCanonical
+
+noncomputable def transportSource
+    {boundary : List Sig} {source source' : OpenDiagram boundary}
+    (occurrence : NestedOccurrence source)
+    (sourceIso : OpenDiagramIso source' source) :
+    NestedOccurrence source' where
+  ancestorWires := occurrence.ancestorWires
+  anchorLocals := occurrence.anchorLocals
+  descendantWires := occurrence.descendantWires
+  selected := occurrence.selected
+  before := occurrence.before
+  interface := occurrence.interface
+  outer := occurrence.outer
+  descendant := occurrence.descendant
+  sourceCanonical := occurrence.sourceCanonical
+  source_iso := sourceIso.trans occurrence.source_iso
 
 end NestedOccurrence
 

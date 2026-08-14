@@ -1,4 +1,5 @@
-import VisualProof.Diagram.Algebra
+import VisualProof.Diagram.NestedOccurrence
+import VisualProof.Diagram.UnaryIdentity
 import VisualProof.Rule.Relation
 
 namespace VisualProof.Rule
@@ -8,112 +9,129 @@ open Diagram
 
 namespace Iteration
 
-/-- A local copy may keep inherited wires or allocate one fresh descendant
-wire for a selected source wire. -/
+/-- A local copy may keep an inherited wire or allocate one fresh wire of the
+same signature for a selected source wire. -/
 structure WireFreshening
-    (sourceWires targetWires freshWires : Nat)
-    (inherited : Fin sourceWires → Fin targetWires) where
-  sourceOfFresh : Fin freshWires → Fin sourceWires
-  sourceOfFresh_injective : Function.Injective sourceOfFresh
-  wire : Fin sourceWires → Fin (targetWires + freshWires)
-  wire_fresh : ∀ fresh,
-    wire (sourceOfFresh fresh) = Fin.natAdd targetWires fresh
-  wire_inherited : ∀ source,
-    (∀ fresh, sourceOfFresh fresh ≠ source) →
-      wire source = Fin.castAdd freshWires (inherited source)
+    (sourceWires targetWires freshWires : List Sig)
+    (inherited : WireRenaming sourceWires targetWires) where
+  sourceOfFresh : WireRenaming freshWires sourceWires
+  sourceOfFresh_injective :
+    ∀ {signature} {left right : Var freshWires signature},
+      sourceOfFresh left = sourceOfFresh right → left = right
+  wire : WireRenaming sourceWires (targetWires ++ freshWires)
+  wire_fresh : ∀ {signature} (fresh : Var freshWires signature),
+    wire (sourceOfFresh fresh) = Var.appendRight targetWires fresh
+  wire_inherited : ∀ {signature} (source : Var sourceWires signature),
+    (∀ fresh : Var freshWires signature, sourceOfFresh fresh ≠ source) →
+      wire source = (inherited source).appendLeft freshWires
 
-theorem WireFreshening.env_eq
-    (freshening : WireFreshening sourceWires targetWires freshWires inherited)
-    (sourceEnv : Fin sourceWires → D)
-    (targetEnv : Fin targetWires → D)
-    (inheritedEq : targetEnv ∘ inherited = sourceEnv) :
-    ∃ freshEnv : Fin freshWires → D,
-      extendWireEnv targetEnv freshEnv ∘ freshening.wire = sourceEnv := by
-  refine ⟨fun fresh => sourceEnv (freshening.sourceOfFresh fresh), ?_⟩
-  funext source
-  by_cases sourceFresh : ∃ fresh, freshening.sourceOfFresh fresh = source
-  · rcases sourceFresh with ⟨fresh, sourceEq⟩
-    subst source
-    simp [extendWireEnv, freshening.wire_fresh]
-  · change extendWireEnv targetEnv
-      (fun fresh => sourceEnv (freshening.sourceOfFresh fresh))
-      (freshening.wire source) = sourceEnv source
-    rw [freshening.wire_inherited source (by
-      intro fresh sourceEq
-      exact sourceFresh ⟨fresh, sourceEq⟩)]
-    simpa [extendWireEnv] using congrFun inheritedEq source
+/-- The selected material after its inherited wires have been redirected and
+its chosen wires have been freshened. -/
+def freshenedSelected
+    (selected : Region sourceWires)
+    (freshening : WireFreshening sourceWires targetWires freshWires
+      inherited) : Region (targetWires ++ freshWires) :=
+  selected.renameWires freshening.wire
 
-/-- The local iteration law.  All source/target endpoint and context ownership
-lives in `NestedContextReplacement`; this record owns only the copied region
-and its source-derived wire freshening. -/
-structure Local
-    {ancestorWires anchorLocal descendantWires : Nat}
-    {ancestorRels descendantRels : RelCtx}
-    (descendant : DiagramContext (ancestorWires + anchorLocal)
-      descendantWires ancestorRels descendantRels)
-    (selected : Region (ancestorWires + anchorLocal) ancestorRels)
-    (before after : Region descendantWires descendantRels) where
-  copyLocal : Nat
-  copyWires : WireFreshening
-    (ancestorWires + anchorLocal) descendantWires copyLocal
-    descendant.outerWire
-  after_eq : after =
-    ((Region.adjoinAt copyLocal .nil
-      ((selected.renameWires copyWires.wire).renameRelations
-        descendant.outerRelation)).conjoin before)
+/-- Direct identities that pin every newly allocated copy wire at the copied
+region root exactly when the copied material does not already do so. -/
+def freshPins
+    (selected : Region sourceWires)
+    (freshening : WireFreshening sourceWires targetWires freshWires
+      inherited) : ItemSeq (targetWires ++ freshWires) :=
+  let copied := freshenedSelected selected freshening
+  ItemSeq.pinWires freshWires
+    ⟨fun wire => Var.appendRight targetWires wire⟩
+    (fun wire =>
+      let paths := copied.incidencePaths
+        (targetWires.length + wire.index.val)
+      decide (¬(paths ≠ [] ∧ RegionPath.deepestCommonAncestor paths = [])))
 
-def Local.copy
-    (descendant : DiagramContext (ancestorWires + anchorLocal)
-      descendantWires ancestorRels descendantRels)
-    (selected : Region (ancestorWires + anchorLocal) ancestorRels)
-    (remainder : Region descendantWires descendantRels)
-    (copyLocal : Nat)
-    (copyWires : WireFreshening
-      (ancestorWires + anchorLocal) descendantWires copyLocal
-      descendant.outerWire) :
-    Local descendant selected remainder
-      ((Region.adjoinAt copyLocal .nil
-        ((selected.renameWires copyWires.wire).renameRelations
-          descendant.outerRelation)).conjoin remainder) where
-  copyLocal := copyLocal
-  copyWires := copyWires
-  after_eq := rfl
+/-- The independently scoped copied block before it is conjoined with the
+descendant remainder. -/
+def copyBlock
+    (selected : Region sourceWires)
+    (freshening : WireFreshening sourceWires targetWires freshWires
+      inherited) : Region targetWires :=
+  Region.adjoinAt freshWires (freshPins selected freshening)
+    (freshenedSelected selected freshening)
 
+/-- Canonical iteration target: pinned copy followed by the remainder. -/
 def copied
-    (descendant : DiagramContext (ancestorWires + anchorLocal)
-      descendantWires ancestorRels descendantRels)
-    (selected : Region (ancestorWires + anchorLocal) ancestorRels)
-    (remainder : Region descendantWires descendantRels)
-    (copyLocal : Nat)
-    (copyWires : WireFreshening
-      (ancestorWires + anchorLocal) descendantWires copyLocal
-      descendant.outerWire) :
-    Region descendantWires descendantRels :=
-  ((Region.adjoinAt copyLocal .nil
-    ((selected.renameWires copyWires.wire).renameRelations
-      descendant.outerRelation)).conjoin remainder)
+    (selected : Region sourceWires) (remainder : Region targetWires)
+    (freshening : WireFreshening sourceWires targetWires freshWires
+      inherited) : Region targetWires :=
+  (copyBlock selected freshening).conjoin remainder
+
+/-- Direct inherited-wire identities required when removing the copy would
+otherwise remove the descendant hole's last incidence of that wire. -/
+def uncopyPins
+    (selected : Region sourceWires) (remainder : Region targetWires)
+    (freshening : WireFreshening sourceWires targetWires freshWires
+      inherited) : ItemSeq targetWires :=
+  let removed := copyBlock selected freshening
+  ItemSeq.pinWires targetWires WireRenaming.id
+    (fun wire => decide
+      (removed.incidencePaths wire.index.val ≠ [] ∧
+        remainder.incidencePaths wire.index.val = []))
+
+/-- Canonical deiteration target: the remainder plus exactly the inherited
+wire residue needed to preserve the descendant hole interface. -/
+def uncopyResidue
+    (selected : Region sourceWires) (remainder : Region targetWires)
+    (freshening : WireFreshening sourceWires targetWires freshWires
+      inherited) : Region targetWires :=
+  match remainder with
+  | .mk locals items =>
+      .mk locals
+        (((uncopyPins selected remainder freshening).renameWires
+          ⟨fun wire => wire.appendLeft locals⟩).append items)
+
+/-- The two primitive local equivalences. Symmetry supplies their converse
+directions without introducing a second rule presentation. -/
+inductive Local
+    (descendant : DiagramContext sourceWires targetWires)
+    (selected : Region sourceWires) :
+    Region targetWires → Region targetWires → Prop
+  | copy
+      (remainder : Region targetWires)
+      (copyLocals : List Sig)
+      (freshening : WireFreshening sourceWires targetWires copyLocals
+        descendant.outerWire) :
+      Local descendant selected remainder
+        (copied selected remainder freshening)
+  | remove
+      (remainder : Region targetWires)
+      (copyLocals : List Sig)
+      (freshening : WireFreshening sourceWires targetWires copyLocals
+        descendant.outerWire) :
+      Local descendant selected
+        (copied selected remainder freshening)
+        (uncopyResidue selected remainder freshening)
 
 end Iteration
 
+/-- Iteration and deiteration at one exact selected ancestor and descendant
+hole. Both endpoint bodies must be canonical recursive diagrams. -/
 def Iteration : Rule :=
-  symmetric (NestedContextual Iteration.Local)
+  fun {_boundary} source target =>
+    ∃ (occurrence : NestedOccurrence source)
+      (after : Region occurrence.descendantWires)
+      (targetCanonical : (occurrence.targetBody after).Canonical)
+      (_targetIso : OpenDiagramIso target
+        (occurrence.replace after targetCanonical)),
+      symmetric (Iteration.Local occurrence.descendant occurrence.selected)
+        occurrence.before after
 
 theorem Iteration.iso
-    {arity : Nat}
-    {source source' target target' : OpenDiagram arity}
     (sourceIso : OpenDiagramIso source source')
     (step : Iteration source target)
     (targetIso : OpenDiagramIso target target') :
     Iteration source' target' := by
-  cases step with
-  | inl forward =>
-      rcases forward with ⟨replacement, ⟨localEvidence⟩⟩
-      exact Or.inl ⟨replacement.iso sourceIso.symm targetIso,
-        ⟨localEvidence⟩⟩
-  | inr backward =>
-      rcases backward with ⟨replacement, ⟨localEvidence⟩⟩
-      exact Or.inr ⟨replacement.iso targetIso.symm sourceIso,
-        ⟨localEvidence⟩⟩
+  rcases step with ⟨occurrence, after, targetCanonical,
+    existingTargetIso, localEvidence⟩
+  exact ⟨occurrence.transportSource sourceIso.symm, after,
+    targetCanonical, targetIso.symm.trans existingTargetIso, localEvidence⟩
 
 theorem Iteration.respectsTargetIso
     (step : Iteration source target)
@@ -129,11 +147,23 @@ theorem Iteration.backward_respectsTargetIso
   rcases isomorphic with ⟨targetIso⟩
   exact Iteration.iso targetIso step (OpenDiagramIso.refl source)
 
-theorem Iteration.symm
-    {arity : Nat}
-    {source target : OpenDiagram arity}
-    (step : Iteration source target) :
+theorem Iteration.symm (step : Iteration source target) :
     Iteration target source := by
-  exact step.elim Or.inr Or.inl
+  rcases step with ⟨occurrence, after, targetCanonical,
+    targetIso, localEvidence⟩
+  let reverseOccurrence : NestedOccurrence target := {
+    ancestorWires := occurrence.ancestorWires
+    anchorLocals := occurrence.anchorLocals
+    descendantWires := occurrence.descendantWires
+    selected := occurrence.selected
+    before := after
+    interface := occurrence.interface
+    outer := occurrence.outer
+    descendant := occurrence.descendant
+    sourceCanonical := targetCanonical
+    source_iso := targetIso
+  }
+  exact ⟨reverseOccurrence, occurrence.before, occurrence.sourceCanonical,
+    occurrence.source_iso, localEvidence.elim Or.inr Or.inl⟩
 
 end VisualProof.Rule
