@@ -93,8 +93,23 @@ export function inferFoldArgs(
   if (body === undefined) {
     throw new Error(`unknown relation '${defId}' (known: ${[...ctx.relations.keys()].join(', ') || 'none'})`)
   }
+  // findOccurrences spends one placement attempt (match.ts's spend(), fired
+  // once per tryAssign call) per pattern region/node/wire per candidate it
+  // is tried against. `inRegion` pins the root's candidate set to exactly
+  // `sel.region`, so the root-candidate loop probes one host region, not
+  // the whole diagram — the only remaining branching is how many host nodes
+  // inside that single region could match any one pattern node before
+  // propagation narrows it. bodyElementCount * regionNodeCount bounds that:
+  // every pattern element tried against every node in the region once. It
+  // is a generous ceiling (propagation typically collapses most candidate
+  // sets to singletons well before that, as the rigid-chain test above
+  // demonstrates), not a tuned constant.
+  const bodyElementCount = Object.keys(body.diagram.regions).length
+    + Object.keys(body.diagram.nodes).length
+    + Object.keys(body.diagram.wires).length
+  const regionNodeCount = Object.values(diagram.nodes).filter((node) => node.region === sel.region).length
   const found = findOccurrences(diagram, body, {
-    explorationFuel: 64,
+    explorationFuel: bodyElementCount * Math.max(regionNodeCount, 1),
     inRegion: sel.region,
   })
   const sameIds = (left: readonly string[], right: readonly string[]): boolean => {

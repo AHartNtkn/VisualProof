@@ -209,6 +209,15 @@ function subtreeEvidence(
   return null
 }
 
+/**
+ * `explorationFuel` is a pure passthrough — there is no literal here to
+ * derive a bound for. Its callers split into two kinds: `moves.ts` forwards
+ * the same caller-supplied UI `fuel-input` policy documented at
+ * `cite.ts`'s `citationCandidates`, and the `theories/arithmetic-*.ts`
+ * call sites pass a fixed `65536`, which predates the propagation rewrite
+ * and is unexplained by this budget's derived-cost model — flagged as
+ * follow-up debt outside Task 9's file scope, not fixed here.
+ */
 export function findDeiterationEvidence(
   diagram: Diagram,
   selection: SubgraphSelection,

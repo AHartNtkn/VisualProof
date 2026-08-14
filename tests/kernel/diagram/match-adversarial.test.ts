@@ -1,8 +1,125 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { mkDiagram } from '../../../src/kernel/diagram/diagram'
+import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 import { bareWire } from '../../fixtures/pins'
+
+const rel2 = relSig([IOTA, IOTA])
+
+/** Host: chain ref d0 -(w0)- ref d1 -(w1)- ref d2, ends pinned. Distinct
+ *  defIds, so every ref has a unique content key. Copied from
+ *  match-propagation.test.ts's chainHost. */
+function chainHost() {
+  return mkDiagram({
+    root: 'root',
+    regions: { root: { kind: 'sheet' } },
+    nodes: {
+      r0: { kind: 'ref', region: 'root', defId: 'd0', sig: rel2 },
+      r1: { kind: 'ref', region: 'root', defId: 'd1', sig: rel2 },
+      r2: { kind: 'ref', region: 'root', defId: 'd2', sig: rel2 },
+      pL: { kind: 'identity', region: 'root', sig: IOTA, arity: 1 },
+      pR: { kind: 'identity', region: 'root', sig: IOTA, arity: 1 },
+    },
+    wires: {
+      end0: { sig: IOTA, endpoints: [
+        { node: 'r0', port: { kind: 'arg', index: 0 } },
+        { node: 'pL', port: { kind: 'identity', index: 0 } },
+      ] },
+      w0: { sig: IOTA, endpoints: [
+        { node: 'r0', port: { kind: 'arg', index: 1 } },
+        { node: 'r1', port: { kind: 'arg', index: 0 } },
+      ] },
+      w1: { sig: IOTA, endpoints: [
+        { node: 'r1', port: { kind: 'arg', index: 1 } },
+        { node: 'r2', port: { kind: 'arg', index: 0 } },
+      ] },
+      end1: { sig: IOTA, endpoints: [
+        { node: 'r2', port: { kind: 'arg', index: 1 } },
+        { node: 'pR', port: { kind: 'identity', index: 0 } },
+      ] },
+    },
+  })
+}
+
+/** Pattern: the same chain graph, ids prefixed `p`, with its two end wires
+ *  (still carrying their own pin nodes, exactly as in the host) exposed as
+ *  the boundary. */
+function chainPattern() {
+  return mkDiagramWithBoundary(
+    {
+      root: 'proot',
+      regions: { proot: { kind: 'sheet' } },
+      nodes: {
+        pr0: { kind: 'ref', region: 'proot', defId: 'd0', sig: rel2 },
+        pr1: { kind: 'ref', region: 'proot', defId: 'd1', sig: rel2 },
+        pr2: { kind: 'ref', region: 'proot', defId: 'd2', sig: rel2 },
+        ppL: { kind: 'identity', region: 'proot', sig: IOTA, arity: 1 },
+        ppR: { kind: 'identity', region: 'proot', sig: IOTA, arity: 1 },
+      },
+      wires: {
+        pend0: { sig: IOTA, endpoints: [
+          { node: 'pr0', port: { kind: 'arg', index: 0 } },
+          { node: 'ppL', port: { kind: 'identity', index: 0 } },
+        ] },
+        pw0: { sig: IOTA, endpoints: [
+          { node: 'pr0', port: { kind: 'arg', index: 1 } },
+          { node: 'pr1', port: { kind: 'arg', index: 0 } },
+        ] },
+        pw1: { sig: IOTA, endpoints: [
+          { node: 'pr1', port: { kind: 'arg', index: 1 } },
+          { node: 'pr2', port: { kind: 'arg', index: 0 } },
+        ] },
+        pend1: { sig: IOTA, endpoints: [
+          { node: 'pr2', port: { kind: 'arg', index: 1 } },
+          { node: 'ppR', port: { kind: 'identity', index: 0 } },
+        ] },
+      },
+    },
+    ['pend0', 'pend1'],
+  )
+}
+
+/** Host: one arity-2 identity `j` with each of its two ports pinned by its
+ *  own unary identity (`pinU` via wire `u`, `pinV` via wire `v`). Pattern:
+ *  an arity-2 identity with both ports exposed as bare boundary wires. */
+function symmetricHost() {
+  return mkDiagram({
+    root: 'root',
+    regions: { root: { kind: 'sheet' } },
+    nodes: {
+      j: { kind: 'identity', region: 'root', sig: IOTA, arity: 2 },
+      pinU: { kind: 'identity', region: 'root', sig: IOTA, arity: 1 },
+      pinV: { kind: 'identity', region: 'root', sig: IOTA, arity: 1 },
+    },
+    wires: {
+      u: { sig: IOTA, endpoints: [
+        { node: 'j', port: { kind: 'identity', index: 0 } },
+        { node: 'pinU', port: { kind: 'identity', index: 0 } },
+      ] },
+      v: { sig: IOTA, endpoints: [
+        { node: 'j', port: { kind: 'identity', index: 1 } },
+        { node: 'pinV', port: { kind: 'identity', index: 0 } },
+      ] },
+    },
+  })
+}
+
+function symmetricPattern() {
+  return mkDiagramWithBoundary(
+    {
+      root: 'proot',
+      regions: { proot: { kind: 'sheet' } },
+      nodes: { pj: { kind: 'identity', region: 'proot', sig: IOTA, arity: 2 } },
+      wires: {
+        x: { sig: IOTA, endpoints: [{ node: 'pj', port: { kind: 'identity', index: 0 } }] },
+        y: { sig: IOTA, endpoints: [{ node: 'pj', port: { kind: 'identity', index: 1 } }] },
+      },
+    },
+    ['x', 'y'],
+  )
+}
 
 describe('exact occurrence matching adversarial battery', () => {
   it('matches exact reference content with positional wiring intact', () => {
@@ -218,5 +335,46 @@ describe('exact occurrence matching adversarial battery', () => {
 
     expect(findOccurrences(host, pattern(1)).matches).toHaveLength(1)
     expect(findOccurrences(host, pattern(2)).matches).toHaveLength(0)
+  })
+})
+
+describe('propagation-driven matching does no blind search', () => {
+  it('a rigid chain is matched in exactly one placement per element', () => {
+    const host = chainHost()
+    const pattern = chainPattern()
+    const result = findOccurrences(host, pattern, {})
+    expect(result.status).toBe('complete')
+    expect(result.matches).toHaveLength(1)
+    // Derivation (from match.ts's spend(), called once per tryAssign, which
+    // fires once per pattern region/node/wire placement attempt):
+    //   - The pattern's elements: 1 region (proot) + 5 nodes (pr0, pr1, pr2,
+    //     ppL, ppR) + 4 wires (pend0, pw0, pw1, pend1) = 10.
+    //   - The host has exactly one region ('root'), so the root-candidate
+    //     loop (`for (const hostRoot of [...cands0.region.get(root)!])`)
+    //     probes it exactly once — that probe IS the region's placement
+    //     attempt, already counted above.
+    //   - Every ref has a globally distinct defId (d0/d1/d2), so content-key
+    //     filtering alone pins each pr_/pw_/pend_ candidate set to size 1
+    //     before propagation even runs the positional-port and wire-endpoint
+    //     arcs; identity-port arcs (family 4) then pin ppL/ppR to {pL}/{pR}
+    //     via their unique end wires. Every candidate set is a singleton by
+    //     the time it is picked, so `pickNext` never offers more than one
+    //     candidate per element: zero dead branches, one tryAssign call per
+    //     element, total spend = 10.
+    expect(result.explorationSteps).toBe(10)
+  })
+
+  it('symmetric boundary wires yield exactly the distinct attachment vectors', () => {
+    const host = symmetricHost()
+    const pattern = symmetricPattern()
+    const result = findOccurrences(host, pattern, {})
+    // Identity ports carry no positional identity (diagram.ts's
+    // endpointPositionKey / refine.ts's endpointKey both collapse every
+    // identity port to the single key 'i'), so wires x and y each keep {u, v}
+    // as their candidate set straight through propagation — the search must
+    // try both bindings for each, and identityMatches (the unordered
+    // incident-wire check) accepts exactly the two that pair x and y with
+    // distinct host wires.
+    expect(result.matches.map((m) => [...m.attachments]).sort()).toEqual([['u', 'v'], ['v', 'u']])
   })
 })
