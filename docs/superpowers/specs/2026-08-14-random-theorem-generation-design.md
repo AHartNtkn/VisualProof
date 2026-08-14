@@ -136,33 +136,42 @@ minimal whenever ψ is), nor positive-polarity same-region duplicates
 the copy as load-bearing; negative-region duplicates ARE already shrunk via
 ⊤-substitution). Both structures hand the player a free opening move — a
 double-cut elimination or an uninteresting same-area deiteration — so both
-families guarantee output free of doubled negations AND same-region
-duplicate conjuncts, by repair, not rejection. The duplicate scope is
-same-region only: copy and justifier with no cut boundary between them.
-Cut-crossing deiterations are proof content (deiterating the inner P of
-¬(P∧¬P) IS the proof) and are never normalized:
+families guarantee output free of doubled negations AND deiteration
+redexes, by repair, not rejection. The deiteration scope is FULL
+deiterate-to-fixpoint (user ruling): an occurrence is removable when an
+identical copy exists disjointly in the same or any enclosing area — a cut
+never justifies removals inside itself. Fixed points are exactly the
+theorems whose backward proof cannot open with a free deiteration; shallow
+theorems whose validity is locally witnessed (¬(P∧¬P) normalizes to ⊤)
+collapse and are resampled, which is correct grading, while nontrivial
+theorems such as the distribution law
+¬(¬(A∧¬(B∧C)) ∧ ¬(¬(A∧¬B)∧¬(A∧¬C))) are fixed points, untouched:
 
-- `simplify` includes the rewrite ¬¬ψ → ψ alongside the constant
-  identities, and ∧-idempotence: each ∧-chain is flattened and structural
-  duplicates are removed (first occurrence kept). Both rewrites preserve
-  minimality and must live in `simplify` rather than the sampler because
-  its own rewrites create fresh redexes (¬(⊤ ∧ ¬P) → ¬¬P; collapsing
-  ¬¬A beside an A creates a duplicate). By induction `simplify`'s output
-  has no ¬¬ and no duplicate ∧-siblings, so family A's cores are clean by
-  construction; a survivor is a bug and throws loudly.
+- Family A: `simplify` includes ¬¬ψ → ψ alongside the constant
+  identities, and a deiteration-normalization pass removes every conjunct
+  with a disjoint identical copy in its own or an enclosing area
+  (context-carrying top-down traversal; the cut being descended into is
+  excluded from its own context). Pass + simplify loop to a fixpoint, run
+  jointly with `shrinkToCore` (each exposes the other's redexes), and the
+  existing bars (size, minimality, atom use) then decide — a collapsed
+  candidate resamples. The rewrites live here rather than the sampler
+  because they create each other's redexes (¬(⊤ ∧ ¬P) → ¬¬P; collapsing
+  ¬¬A beside an A creates a duplicate). Normalized output provably carries
+  no redex; a survivor is a bug and throws loudly.
 - Family B normalizes the walked diagram: after the wire cleanup, a joint
   fixpoint of two recorded forward rewrites — `doubleCutElim` for every
   empty-annulus double-cut pair strictly inside the body, and `deiteration`
-  for same-region duplicates (two atoms heading the same wire in one
-  region; two sibling cuts reading to the same formula over the same
-  wires). Each rewrite can expose the other's redex, hence the joint
+  for every atomic selection at-or-below the body with justifying evidence
+  (`findDeiterationEvidence` supplies ancestor justifiers and disjointness
+  natively). Each rewrite can expose the other's redex, hence the joint
   fixpoint. Both are ungated equivalences, so the derivation still
-  certifies. The shell's own cuts are excluded: the ∀ shell's inner cut
-  plus a ¬-headed body form the one intrinsic pair, and removing it is
-  part of unwrapping the quantifier. A ¬¬ or duplicate surviving in the
-  read formula is then possible only when the applier rightly refuses the
-  rewrite (a pin inside the pair's annulus; a scope-preservation refusal),
-  so family B rejects that rare walk rather than treating it as a bug.
+  certifies. The shell's own cuts are excluded from double-cut
+  elimination: the ∀ shell's inner cut plus a ¬-headed body form the one
+  intrinsic pair, and removing it is part of unwrapping the quantifier. A
+  redex surviving in the read formula is then possible only when the
+  applier rightly refuses the rewrite (a pin inside a pair's annulus; a
+  scope-preservation refusal), so family B rejects that rare walk rather
+  than treating it as a bug.
 
 This is a syntactic definition, not a tuned heuristic.
 
