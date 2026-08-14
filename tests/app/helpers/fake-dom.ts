@@ -10,6 +10,8 @@ export class TestElement extends EventTarget {
   type = ''
   id = ''
   htmlFor = ''
+  min = ''
+  step = ''
   required = false
   isConnected = true
   focusCalls = 0
@@ -33,6 +35,12 @@ export class TestElement extends EventTarget {
     const index = this.parentElement.children.indexOf(this)
     if (index >= 0) this.parentElement.children.splice(index, 1)
     this.parentElement = null
+  }
+
+  replaceChildren(...nodes: TestElement[]): void {
+    for (const child of this.children) child.parentElement = null
+    this.children.length = 0
+    this.append(...nodes)
   }
 
   focus(): void {
