@@ -241,16 +241,28 @@ structure FrameFocusResult
     targetOuter targetLocal targetBinders).compile?
       (host.val.removeRaw selection domains)
       (Diagram.removeRaw_wellFormed host selection domains) = some targetBody
-  holeWires : Nat
-  holeWire : FiniteEquiv (Fin holeWires)
+  endpointSurvives : domains.regions.survives endpointCall.origin = true
+  endpointOuter : WireContext (host.val.removeRaw selection domains)
+  endpointLocal : WireContext (host.val.removeRaw selection domains)
+  endpointBinders : BinderContext
+    (host.val.removeRaw selection domains) endpointCall.rels
+  endpointBody : CompiledRegion (host.val.removeRaw selection domains)
+    (domains.targetCall endpointCall endpointSurvives endpointOuter
+      endpointLocal endpointBinders)
+  endpointCompiled : (domains.targetCall endpointCall endpointSurvives
+    endpointOuter endpointLocal endpointBinders).compile?
+      (host.val.removeRaw selection domains)
+      (Diagram.removeRaw_wellFormed host selection domains) = some endpointBody
+  holeWire : FiniteEquiv (Fin endpointOuter.length)
     (Fin endpointCall.outerContext.length)
-  targetSite : Region holeWires endpointCall.rels
-  targetContext : DiagramContext targetOuter.length holeWires
+  targetContext : DiagramContext targetOuter.length endpointOuter.length
     sourceCall.rels endpointCall.rels
   alignment : DiagramContextIso
     frame.outerWire holeWire sourceCall.rels endpointCall.rels
     targetContext focus.intrinsic.context
-  targetRebuild : targetContext.fill targetSite =
+  targetRebuild : targetContext.fill
+      (domains.targetErase endpointCall endpointSurvives endpointOuter
+        endpointLocal endpointBinders endpointBody) =
     domains.targetErase sourceCall frame.originSurvives targetOuter targetLocal
       targetBinders targetBody
 
@@ -318,9 +330,13 @@ theorem compileAlongFocus
         refine ⟨{
           targetBody := result.body
           targetCompiled := result.compiled
-          holeWires := targetOuter.length
+          endpointSurvives := frame.originSurvives
+          endpointOuter := targetOuter
+          endpointLocal := targetLocal
+          endpointBinders := targetBinders
+          endpointBody := result.body
+          endpointCompiled := result.compiled
           holeWire := frame.outerWire
-          targetSite := result.body.erase
           targetContext := .hole
           alignment := .hole frame.outerWire
           targetRebuild := ?_
@@ -334,9 +350,13 @@ theorem compileAlongFocus
         refine ⟨{
           targetBody := result.body
           targetCompiled := result.compiled
-          holeWires := targetOuter.length
+          endpointSurvives := frame.originSurvives
+          endpointOuter := targetOuter
+          endpointLocal := targetLocal
+          endpointBinders := targetBinders
+          endpointBody := result.body
+          endpointCompiled := result.compiled
           holeWire := frame.outerWire
-          targetSite := result.body.erase
           targetContext := .hole
           alignment := .hole frame.outerWire
           targetRebuild := ?_
@@ -745,7 +765,10 @@ theorem compileAlongFocus
             FiniteEquiv.finCast, extendWireEquiv]
           exact outerLength) split
     have childRebuild : childResult.targetContext.fill
-        childResult.targetSite = childResult.targetBody.erase := by
+        (domains.targetErase endpointCall childResult.endpointSurvives
+          childResult.endpointOuter childResult.endpointLocal
+          childResult.endpointBinders childResult.endpointBody) =
+          childResult.targetBody.erase := by
       simpa only using childResult.targetRebuild
     have targetBodyEq : domains.targetErase sourceCall frame.originSurvives
         targetOuter targetLocal targetBinders targetBody =
@@ -762,15 +785,22 @@ theorem compileAlongFocus
       sourceSplit targetSplit before.erase suffix.erase targetBefore.erase
       targetSuffix.erase nested.intrinsic.context childResult.targetContext
       childFrame.outerWire fullWireAgreement childResult.alignment blocks.frame
-      childResult.targetSite childResult.targetBody.erase childRebuild
+      (domains.targetErase endpointCall childResult.endpointSurvives
+        childResult.endpointOuter childResult.endpointLocal
+        childResult.endpointBinders childResult.endpointBody)
+      childResult.targetBody.erase childRebuild
       (domains.targetErase sourceCall frame.originSurvives targetOuter
         targetLocal targetBinders targetBody) targetBodyEq
     exact ⟨{
       targetBody := targetBody
       targetCompiled := targetCompiled
-      holeWires := childResult.holeWires
+      endpointSurvives := childResult.endpointSurvives
+      endpointOuter := childResult.endpointOuter
+      endpointLocal := childResult.endpointLocal
+      endpointBinders := childResult.endpointBinders
+      endpointBody := childResult.endpointBody
+      endpointCompiled := childResult.endpointCompiled
       holeWire := childResult.holeWire
-      targetSite := childResult.targetSite
       targetContext := assembled.targetContext
       alignment := by
         simpa only [CompiledItemsZipper.intrinsic,
@@ -1199,7 +1229,10 @@ theorem compileAlongFocus
             FiniteEquiv.finCast, extendWireEquiv]
           exact outerLength) split
     have childRebuild : childResult.targetContext.fill
-        childResult.targetSite = childResult.targetBody.erase := by
+        (domains.targetErase endpointCall childResult.endpointSurvives
+          childResult.endpointOuter childResult.endpointLocal
+          childResult.endpointBinders childResult.endpointBody) =
+          childResult.targetBody.erase := by
       simpa only using childResult.targetRebuild
     have targetBodyEq : domains.targetErase sourceCall frame.originSurvives
         targetOuter targetLocal targetBinders targetBody =
@@ -1216,15 +1249,22 @@ theorem compileAlongFocus
       sourceSplit targetSplit before.erase suffix.erase targetBefore.erase
       targetSuffix.erase nested.intrinsic.context childResult.targetContext
       childFrame.outerWire fullWireAgreement childResult.alignment blocks.frame
-      childResult.targetSite childResult.targetBody.erase childRebuild
+      (domains.targetErase endpointCall childResult.endpointSurvives
+        childResult.endpointOuter childResult.endpointLocal
+        childResult.endpointBinders childResult.endpointBody)
+      childResult.targetBody.erase childRebuild
       (domains.targetErase sourceCall frame.originSurvives targetOuter
         targetLocal targetBinders targetBody) targetBodyEq
     exact ⟨{
       targetBody := targetBody
       targetCompiled := targetCompiled
-      holeWires := childResult.holeWires
+      endpointSurvives := childResult.endpointSurvives
+      endpointOuter := childResult.endpointOuter
+      endpointLocal := childResult.endpointLocal
+      endpointBinders := childResult.endpointBinders
+      endpointBody := childResult.endpointBody
+      endpointCompiled := childResult.endpointCompiled
       holeWire := childResult.holeWire
-      targetSite := childResult.targetSite
       targetContext := assembled.targetContext
       alignment := by
         simpa only [CompiledItemsZipper.intrinsic,
@@ -1246,14 +1286,32 @@ structure FrameRootResult
     (Diagram.removeRaw_wellFormed source.diagram selection domains)
     (domains.mapWireContext source.checked.val.exposedWires)
     (domains.mapWireContext source.checked.val.hiddenWires) = some body
-  holeWires : Nat
-  holeWire : FiniteEquiv (Fin holeWires)
+  endpointSurvives : domains.regions.survives
+    (CompiledSite.endpointCall source selection.val.anchor).origin = true
+  endpointOuter : WireContext
+    (source.checked.val.diagram.removeRaw selection domains)
+  endpointLocal : WireContext
+    (source.checked.val.diagram.removeRaw selection domains)
+  endpointBinders : BinderContext
+    (source.checked.val.diagram.removeRaw selection domains)
+    (CompiledSite.endpointCall source selection.val.anchor).rels
+  endpointBody : CompiledRegion
+    (source.checked.val.diagram.removeRaw selection domains)
+    (domains.targetCall
+      (CompiledSite.endpointCall source selection.val.anchor)
+      endpointSurvives endpointOuter endpointLocal endpointBinders)
+  endpointCompiled : (domains.targetCall
+      (CompiledSite.endpointCall source selection.val.anchor)
+      endpointSurvives endpointOuter endpointLocal endpointBinders).compile?
+    (source.checked.val.diagram.removeRaw selection domains)
+    (Diagram.removeRaw_wellFormed source.diagram selection domains) =
+      some endpointBody
+  holeWire : FiniteEquiv (Fin endpointOuter.length)
     (Fin (CompiledSite.endpointCall source selection.val.anchor
       ).outerContext.length)
-  targetSite : Region holeWires
-    (CompiledSite.endpointCall source selection.val.anchor).rels
   targetContext : DiagramContext
-    (domains.mapWireContext source.checked.val.exposedWires).length holeWires
+    (domains.mapWireContext source.checked.val.exposedWires).length
+    endpointOuter.length
     [] (CompiledSite.endpointCall source selection.val.anchor).rels
   externalWire : FiniteEquiv
     (Fin (domains.mapWireContext source.checked.val.exposedWires).length)
@@ -1261,7 +1319,11 @@ structure FrameRootResult
   alignment : DiagramContextIso externalWire holeWire []
     (CompiledSite.endpointCall source selection.val.anchor).rels targetContext
     (CompiledSite.context source selection.val.anchor)
-  rebuild : targetContext.fill targetSite = body.erase
+  rebuild : targetContext.fill
+      (domains.targetErase
+        (CompiledSite.endpointCall source selection.val.anchor)
+        endpointSurvives endpointOuter endpointLocal endpointBinders
+        endpointBody) = body.erase
 
 theorem compileRootFrame
     (source : State arity)
@@ -1304,9 +1366,13 @@ theorem compileRootFrame
   refine ⟨{
     body := result.targetBody
     compiled := ?_
-    holeWires := result.holeWires
+    endpointSurvives := result.endpointSurvives
+    endpointOuter := result.endpointOuter
+    endpointLocal := result.endpointLocal
+    endpointBinders := result.endpointBinders
+    endpointBody := result.endpointBody
+    endpointCompiled := result.endpointCompiled
     holeWire := result.holeWire
-    targetSite := result.targetSite
     targetContext := result.targetContext
     externalWire := frame.outerWire
     alignment := result.alignment
