@@ -159,7 +159,11 @@ for fuel budget review (§7).
 Engine: constraint propagation over refinement colors, then
 most-constrained-first search.
 
-- Host is refined once (unseeded; colors are invariants of the host).
+- The host-side invariant computed once is the nested-cut subtree
+  fingerprint (censuses of children, nodes, and scoped wires, recursively);
+  whole-host refinement colors are not fragment-comparable — a
+  boundary-adjacent pattern element's image color depends on host context
+  outside the occurrence — so they are deliberately not used as filters.
 - Every pattern element (region, node, wire) gets a candidate set of host
   elements, initialized by local content: node kind/sig/arity/defId, wire
   signature, region kind; regions additionally by `inRegion`, boundary
