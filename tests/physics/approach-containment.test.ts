@@ -30,6 +30,32 @@ function foreignCuts(e: Engine, region: RegionId): RegionId[] {
   return [...e.regions.keys()].filter((rid) => !ancestors.has(rid) && e.d.regions[rid]!.kind !== 'sheet')
 }
 
+/** Deepest circle-circle penetration between drawn cuts where neither contains
+    the other (ancestor pairs nest by construction; every other pair of cut
+    circles must be disjoint — an intersection CHANGES WHAT THE DIAGRAM MEANS). */
+function worstCutIntersection(e: Engine): number {
+  const parentOf = (rid: RegionId): RegionId | null => {
+    const reg = e.d.regions[rid]!
+    return reg.kind === 'sheet' ? null : reg.parent
+  }
+  const isAncestor = (a: RegionId, b: RegionId): boolean => {
+    for (let r = parentOf(b); r !== null; r = parentOf(r)) if (r === a) return true
+    return false
+  }
+  const drawn = [...e.regions.keys()].filter((rid) => e.d.regions[rid]!.kind !== 'sheet')
+  let worst = -Infinity
+  for (let i = 0; i < drawn.length; i++) {
+    for (let j = i + 1; j < drawn.length; j++) {
+      const aId = drawn[i]!, bId = drawn[j]!
+      if (isAncestor(aId, bId) || isAncestor(bId, aId)) continue
+      const a = e.regions.get(aId)!, b = e.regions.get(bId)!
+      const dist = Math.hypot(a.center.x - b.center.x, a.center.y - b.center.y)
+      worst = Math.max(worst, a.radius + b.radius - dist)
+    }
+  }
+  return worst
+}
+
 describe('the presentation approach never violates semantic containment', () => {
   it('a node approaching a best on the far side of a foreign cut goes AROUND it', () => {
     const b = new DiagramBuilder()
@@ -100,5 +126,118 @@ describe('the presentation approach never violates semantic containment', () => 
       Math.hypot(m.x - target.x, m.y - target.y),
       'the approach must still REACH the best — around the cut, not through it',
     ).toBeLessThan(2)
+  })
+
+  it('a cut approaching a best on the far side of a sibling cut stays DISJOINT from it', () => {
+    const b = new DiagramBuilder()
+    const cutA = b.cut(b.root)
+    b.ref(cutA, 'A', UNARY)
+    b.ref(cutA, 'B', UNARY)
+    const cutB = b.cut(b.root)
+    b.ref(cutB, 'C', UNARY)
+    b.ref(b.root, 'D', UNARY)
+    const e = mkEngine(b.build(), [])
+    // Every ref also carries a wire-owned dot body in its region, so regions
+    // are seeded WHOLE: each region's bodies in a compact grid around its
+    // intended centre. Cut A (two nodes + dots, so its derived circle has real
+    // extent) starts due WEST of the single-node cut B; the root nodes sit far
+    // north-east, widening the fixed frame so the journey and a corridor
+    // around B both fit inside it.
+    const byRegion = new Map<RegionId, string[]>()
+    for (const [id, body] of e.bodies) {
+      const list = byRegion.get(body.region) ?? []
+      list.push(id)
+      byRegion.set(body.region, list)
+    }
+    const place = (ids: readonly string[], cx: number, cy: number): void => {
+      const rows = Math.ceil(ids.length / 2)
+      ids.forEach((id, i) => {
+        const col = i % 2, row = Math.floor(i / 2)
+        e.bodies.get(id)!.pos = {
+          x: cx + (ids.length === 1 ? 0 : col === 0 ? -9 : 9),
+          y: cy + (row - (rows - 1) / 2) * 18,
+        }
+      })
+    }
+    place(byRegion.get(cutA)!, -55, 0)
+    place(byRegion.get(cutB)!, 0, 0)
+    place(byRegion.get(e.d.root)!, 70, 45)
+    recomputeRegions(e)
+    seedProject(e)
+    recomputeRegions(e)
+
+    const gA0 = e.regions.get(cutA)!
+    const gB0 = e.regions.get(cutB)!
+    const f = e.frame!
+    // cut A must be able to pass AROUND cut B: room for its whole circle
+    // between B's circle and the frame wall on at least one side
+    const passNeed = gB0.radius + 2 * gA0.radius
+    expect(
+      f.half - Math.abs(gB0.center.y - f.center.y) - passNeed,
+      'fixture sanity: a legal corridor around the sibling cut exists inside the frame',
+    ).toBeGreaterThan(2)
+
+    // the best puts cut A fully EAST of cut B (mirrored across it, pulled in
+    // if the frame is tighter than the mirror), so the straight approach would
+    // sweep A's circle through B's
+    const targetCx = Math.min(
+      2 * gB0.center.x - gA0.center.x,
+      f.center.x + f.half - gA0.radius - 3,
+    )
+    expect(
+      targetCx - gB0.center.x,
+      'fixture sanity: the best pose puts cut A fully clear of cut B',
+    ).toBeGreaterThan(gA0.radius + gB0.radius + 2)
+    const shift = { x: targetCx - gA0.center.x, y: gB0.center.y - gA0.center.y }
+    for (const id of byRegion.get(e.d.root)!) {
+      const rb = e.bodies.get(id)!
+      expect(
+        Math.hypot(rb.pos.x - targetCx, rb.pos.y - gB0.center.y)
+          - (gA0.radius + rb.discR * e.scale),
+        'fixture sanity: the best pose keeps cut A clear of the root nodes',
+      ).toBeGreaterThan(2)
+    }
+
+    const live = layoutScore(e)
+    const snap = layoutSnapshot(e, 0)
+    const poses = new Map([...snap.poses].map(([id, p]) => [id, { pos: { ...p.pos }, theta: p.theta }]))
+    const targets = new Map<string, { x: number; y: number }>()
+    for (const id of byRegion.get(cutA)!) {
+      const p = poses.get(id)!
+      const t = { x: p.pos.x + shift.x, y: p.pos.y + shift.y }
+      targets.set(id, t)
+      poses.set(id, { pos: t, theta: p.theta })
+    }
+    const best: LayoutBest = { score: live * 0.5 - 1, poses, nets: snap.nets }
+    const search: LayoutSearch = {
+      sync: () => {},
+      best: () => best,
+      adoptLive: () => {},
+      searching: true,
+    }
+    attachLayoutSearch(e, search)
+
+    let worst = -Infinity
+    for (let i = 0; i < 2500; i++) {
+      settleStep(e)
+      worst = Math.max(worst, worstCutIntersection(e))
+      const reached = [...targets].every(([id, t]) => {
+        const p = e.bodies.get(id)!.pos
+        return Math.hypot(p.x - t.x, p.y - t.y) < 0.5
+      })
+      if (reached) break
+    }
+
+    expect(
+      worst,
+      `two cut circles intersected ${worst.toFixed(2)} wu deep during the approach — semantics changed transiently`,
+    ).toBeLessThanOrEqual(0)
+    for (const [id, t] of targets) {
+      const p = e.bodies.get(id)!.pos
+      expect(
+        Math.hypot(p.x - t.x, p.y - t.y),
+        'the approach must still REACH the best — around the sibling cut, not through it',
+      ).toBeLessThan(2)
+    }
   })
 })

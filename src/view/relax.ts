@@ -1,6 +1,6 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
-import type { Body, Engine, StoredFrame, WireSpaces, WireView } from './engine'
+import type { Body, Engine, RegionCircle, StoredFrame, WireSpaces, WireView } from './engine'
 import { DISC_R, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, drawnObstacles, routeBounds, wireRouteSpaces, frameSlots, FRAME_MARGIN, isBodyObstacle } from './engine'
 import { mkFreeSpace, route } from './route/freespace'
 import type { Disc as RouteDisc, Bounds, FreeSpace } from './route/freespace'
@@ -12,6 +12,11 @@ import { layoutScore } from './optimize'
 import { mkScoreState, applyMove } from './score-delta'
 import type { ScoreState } from './score-delta'
 import type { LayoutBest } from './optimize'
+// The presentation approach and the drag share ONE semantic frontier, so the
+// two modules reference each other. The import cycle is inert: neither module
+// evaluates anything of the other's at load time (both are definitions only,
+// every cross-reference happens inside a call).
+import { commitBodyPositions, projectDragToSemanticFrontier } from './constraints'
 
 /** Live-build marker for serving-path verification (2026-07-23). */
 export const PHYSICS_REV = 'hobby-anneal@2026-07-25'
@@ -196,6 +201,47 @@ function minimalEnclosingCircle(discs: readonly Disc[]): { center: Vec2; radius:
   return { ...best, support: support.length > 0 ? support : [...discs] }
 }
 
+/** The ONE definition of a region's circle: the minimal enclosing circle of its
+    direct member discs and its child circles (each inflated by the nesting pad),
+    padded and floored at the empty-region radius. Region circles are DERIVED,
+    never stored state, so the derivation is parameterized by where the content
+    IS — the live body positions (`recomputeRegions`) or a candidate pose set
+    (`regionCirclesAt`) — and by the child circles derived under that same
+    lookup. */
+function deriveRegionCircle(
+  e: Engine,
+  rid: RegionId,
+  posOf: (mid: string) => Vec2,
+  circleOf: (child: RegionId) => RegionCircle,
+): RegionCircle {
+  const discs: Disc[] = []
+  for (const mid of e.membersOf.get(rid)!) discs.push({ c: posOf(mid), r: e.bodies.get(mid)!.discR * e.scale, mid })
+  for (const c of e.childrenOf.get(rid)!) {
+    const g = circleOf(c)
+    discs.push({ c: g.center, r: g.radius + REGION_PAD * 0.8 * e.scale, sub: c })
+  }
+  // only a contentless sheet reaches here (empty leaf regions carry an anchor body)
+  if (discs.length === 0) return { center: { x: 0, y: 0 }, radius: 10 * e.scale, support: [] }
+  const mec = minimalEnclosingCircle(discs)
+  return {
+    center: mec.center,
+    radius: Math.max(mec.radius + REGION_PAD * e.scale, 10 * e.scale),
+    support: mec.support.map((m) => (m.mid !== undefined ? { mid: m.mid } : { sub: m.sub! })),
+  }
+}
+
+/** The region circles a candidate pose set WOULD produce, derived bottom-up
+    without touching live state. */
+function regionCirclesAt(e: Engine, posOf: (mid: string) => Vec2): Map<RegionId, RegionCircle> {
+  const out = new Map<RegionId, RegionCircle>()
+  const visit = (rid: RegionId): void => {
+    for (const c of e.childrenOf.get(rid)!) visit(c)
+    out.set(rid, deriveRegionCircle(e, rid, posOf, (c) => out.get(c)!))
+  }
+  visit(e.d.root)
+  return out
+}
+
 export function recomputeRegions(e: Engine, dirty: ReadonlySet<RegionId> | null = null): void {
   const order: RegionId[] = []
   const visit = (rid: RegionId): void => { for (const c of e.childrenOf.get(rid)!) visit(c); order.push(rid) }
@@ -214,24 +260,7 @@ export function recomputeRegions(e: Engine, dirty: ReadonlySet<RegionId> | null 
   }
   for (const rid of order) {
     if (affected !== null && !affected.has(rid)) continue
-    const discs: Disc[] = []
-    for (const mid of e.membersOf.get(rid)!) {
-      const b = e.bodies.get(mid)!
-      discs.push({ c: b.pos, r: b.discR * e.scale, mid })
-    }
-    for (const c of e.childrenOf.get(rid)!) discs.push({ c: e.regions.get(c)!.center, r: e.regions.get(c)!.radius + REGION_PAD * 0.8 * e.scale, sub: c })
-    if (discs.length === 0) {
-      // only a contentless sheet reaches here (empty leaf regions carry an
-      // anchor body)
-      e.regions.set(rid, { center: { x: 0, y: 0 }, radius: 10 * e.scale, support: [] })
-      continue
-    }
-    const mec = minimalEnclosingCircle(discs)
-    e.regions.set(rid, {
-      center: mec.center,
-      radius: Math.max(mec.radius + REGION_PAD * e.scale, 10 * e.scale),
-      support: mec.support.map((m) => (m.mid !== undefined ? { mid: m.mid } : { sub: m.sub! })),
-    })
+    e.regions.set(rid, deriveRegionCircle(e, rid, (mid) => e.bodies.get(mid)!.pos, (c) => e.regions.get(c)!))
   }
 }
 
@@ -1708,9 +1737,8 @@ export function containedPath(e: Engine, b: Body, target: Vec2): readonly Vec2[]
   return route(mkFreeSpace(discs, routeBounds(e)), b.pos, target).pts
 }
 
-/** One bounded step from a body toward `target` along `containedPath`. */
-function stepAroundForeignCuts(e: Engine, b: Body, target: Vec2, st: number): Vec2 {
-  const pts = containedPath(e, b, target)
+/** The point `st` of arclength along a polyline (its end once `st` covers it). */
+function advanceAlong(pts: readonly Vec2[], st: number): Vec2 {
   let remaining = st
   for (let i = 1; i < pts.length; i++) {
     const a = pts[i - 1]!, q = pts[i]!
@@ -1721,7 +1749,108 @@ function stepAroundForeignCuts(e: Engine, b: Body, target: Vec2, st: number): Ve
     }
     remaining -= seg
   }
-  return { x: target.x, y: target.y }
+  return { ...pts[pts.length - 1]! }
+}
+
+/** One bounded step from a body toward `target` along `containedPath`. */
+function stepAroundForeignCuts(e: Engine, b: Body, target: Vec2, st: number): Vec2 {
+  return advanceAlong(containedPath(e, b, target), st)
+}
+
+/** One bounded step of a whole region's CIRCLE toward `target`, as the
+    translation to apply to its subtree.
+
+    The circle is routed as a DISC among its in-parent sibling circles (each
+    inflated to the clearance below, shrunk a hair so a region resting ON that
+    clearance routes from a feasible point), inside the frame bounds — the same
+    soft-cost routing `containedPath` gives a body, lifted to the group and
+    clamped back onto that clearance. Choosing the way around ONCE per region is
+    what a per-body route cannot express: a region circle is a property of its
+    whole subtree, so members that round a sibling circle on OPPOSITE sides
+    sweep the derived circle straight across it however clear each member
+    itself stays. */
+function regionEnvelopeStep(e: Engine, parent: RegionId, rid: RegionId, target: Vec2, st: number): Vec2 {
+  const live = e.regions.get(rid)!
+  // The clearance this travel KEEPS around each in-parent sibling: the aesthetic
+  // gap, but never more than the destination itself keeps (a best that parks the
+  // region closer must stay reachable) and never more than the region already
+  // has (this layer preserves clearance; healing a violation is the settle's
+  // job, and a healing push would break the presentation travel bound). The
+  // semantic floor underneath is the frontier gate's, not this layer's.
+  const clear: { readonly c: Vec2; readonly need: number }[] = []
+  for (const sid of e.childrenOf.get(parent)!) {
+    if (sid === rid) continue
+    const g = e.regions.get(sid)!
+    const want = live.radius + g.radius + PACE.sibGap * e.scale
+    const held = Math.hypot(live.center.x - g.center.x, live.center.y - g.center.y)
+    const dest = Math.hypot(target.x - g.center.x, target.y - g.center.y)
+    clear.push({ c: g.center, need: Math.min(want, held, dest) })
+  }
+  const discs: RouteDisc[] = clear.map(({ c, need }) => ({ c, r: need - 1e-3 }))
+  const walked = advanceAlong(route(mkFreeSpace(discs, routeBounds(e)), live.center, target).pts, st)
+  let px = walked.x, py = walked.y
+  // Ride that clearance boundary EXACTLY. A routed hug is polylined into chords
+  // that fall inside the circle they hug, so a walker following them drifts in;
+  // re-routing from the drifted centre then shrinks the clearance again, and
+  // once the centre is INSIDE a disc the tangent detour ceases to exist at all
+  // and the route degenerates to the straight segment THROUGH the sibling
+  // (measured: the travel abandons its arc mid-journey and drives at the cut).
+  // Projecting the stepped centre back onto the boundary holds the homotopy the
+  // route chose, for the same reason the drag clamps every path point.
+  for (const { c, need } of clear) {
+    const dx = px - c.x, dy = py - c.y, d = Math.hypot(dx, dy)
+    if (d >= need) continue
+    const ux = d < 1e-9 ? 1 : dx / d, uy = d < 1e-9 ? 0 : dy / d
+    px = c.x + ux * need; py = c.y + uy * need
+  }
+  return { x: px - live.center.x, y: py - live.center.y }
+}
+
+/** This frame's per-body target positions for the interior of `rid`, at the one
+    presentation `bound`.
+
+    Direct members step individually along their contained paths. A child region
+    whose BEST circle sits elsewhere TRAVELS: its circle takes one envelope step
+    and the whole subtree rides it RIGIDLY (a translated disc set has the
+    translated minimal enclosing circle, so the region's derived circle follows
+    the routed homotopy exactly). Only once a traveling region has ARRIVED does
+    its interior refine, by this same scheme one level down — its members toward
+    their best poses, its own traveling children as envelopes against their
+    in-region siblings. Arrival is exact: steps are min(distance, bound), so the
+    last one lands on the target centre. */
+function approachTargets(
+  e: Engine,
+  rid: RegionId,
+  best: LayoutBest,
+  bestCircles: ReadonlyMap<RegionId, RegionCircle>,
+  bound: number,
+  pinned: ReadonlySet<string> | null,
+  out: Map<string, Vec2>,
+): void {
+  for (const mid of e.membersOf.get(rid)!) {
+    if (pinned !== null && pinned.has(mid)) continue
+    const b = e.bodies.get(mid)!
+    const t = best.poses.get(mid)
+    if (t === undefined) continue
+    const d = Math.hypot(t.pos.x - b.pos.x, t.pos.y - b.pos.y)
+    if (d <= 1e-9) continue
+    out.set(mid, stepAroundForeignCuts(e, b, t.pos, Math.min(d, bound)))
+  }
+  for (const cid of e.childrenOf.get(rid)!) {
+    const live = e.regions.get(cid)!
+    const goal = bestCircles.get(cid)!.center
+    const d = Math.hypot(goal.x - live.center.x, goal.y - live.center.y)
+    if (d <= 1e-9) {
+      approachTargets(e, cid, best, bestCircles, bound, pinned, out)
+      continue
+    }
+    const step = regionEnvelopeStep(e, rid, cid, goal, Math.min(d, bound))
+    for (const mid of subtreeCarriers(e, cid)) {
+      if (pinned !== null && pinned.has(mid)) continue
+      const b = e.bodies.get(mid)!
+      out.set(mid, { x: b.pos.x + step.x, y: b.pos.y + step.y })
+    }
+  }
 }
 
 /** PRESENTATION pace (USER ruling 2026-07-25): the visible settling should
@@ -1743,22 +1872,32 @@ export const PRESENT_SLOW = 5
     on one wire is the measured approach-vs-descent tug-of-war). */
 function approachStep(e: Engine, best: LayoutBest, pinned: ReadonlySet<string> | null): Set<WireId> {
   const bound = (WIREP.travelCap / PRESENT_SLOW) * e.scale
+  // HARD SEMANTIC CONTAINMENT (USER LAW, restated 2026-07-30 for the approach):
+  // the animation toward a searched best obeys exactly the law a drag does — no
+  // node enters a cut it is not part of, no two cut circles meet, not even
+  // transiently. The approach therefore composes the SAME three layers the drag
+  // frontier does, with the routing layer lifted to whole regions
+  // (`approachTargets`) because the derived circle a region draws is a property
+  // of its subtree, not of any one member. The frontier then walks the joint
+  // candidate back to the last position set that introduces or deepens NO
+  // semantic conflict, so a frame that would cross a bound simply moves less.
+  // Every circle read while the targets are built — the foreign circles in each
+  // member's `containedPath`, the live and sibling circles in each envelope
+  // step — is read BEFORE any position is written, so the whole frame's targets
+  // are derived from one consistent scene. Writing bodies as they are decided
+  // would make each later body clamp against a circle the earlier ones have
+  // already invalidated.
+  const targets = new Map<string, Vec2>()
+  approachTargets(
+    e, e.d.root, best,
+    regionCirclesAt(e, (mid) => best.poses.get(mid)?.pos ?? e.bodies.get(mid)!.pos),
+    bound, pinned, targets,
+  )
+  commitBodyPositions(e, projectDragToSemanticFrontier(e, targets).positions)
   for (const [id, b] of e.bodies) {
     if (pinned !== null && pinned.has(id)) continue
     const t = best.poses.get(id)
     if (t === undefined) continue
-    const d = Math.hypot(t.pos.x - b.pos.x, t.pos.y - b.pos.y)
-    if (d > 1e-9) {
-      // HARD SEMANTIC CONTAINMENT (USER LAW, restated 2026-07-30 for the
-      // approach): a node never enters a cut it is not part of, not even
-      // transiently. A straight step clamped by the drag projection STALLS
-      // when the target lies radially behind a circle (no tangential
-      // component), so the step instead follows the shortest FEASIBLE path:
-      // the same deterministic route() the wires use, over the body's
-      // semantic obstacle circles. The drag clamp remains the hard backstop
-      // (frame wall, derived-circle fit).
-      b.pos = clampDragToFeasible(e, b, stepAroundForeignCuts(e, b, t.pos, Math.min(d, bound)))
-    }
     const dth = Math.atan2(Math.sin(t.theta - b.theta), Math.cos(t.theta - b.theta))
     const thBound = bound / Math.max(b.discR * e.scale, 1e-6)
     if (Math.abs(dth) > 1e-9) b.theta += Math.sign(dth) * Math.min(Math.abs(dth), thBound)
