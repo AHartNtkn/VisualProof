@@ -76,8 +76,8 @@
     | [] => PUnit
     | signature :: rest => Var context signature × Vars context rest
 
-  abbrev WireRenaming (source target : List Sig) :=
-    {signature : Sig} → Var source signature → Var target signature
+  structure WireRenaming (source target : List Sig) where
+    apply : {signature : Sig} → Var source signature → Var target signature
   ```
 
   Add `Vars.get`, `Vars.map`, append-left/right embeddings, identity/composition laws, and `Sig.denote`/typed value declarations only when required by Task 3. Do not introduce numeric aliases for typed wires.

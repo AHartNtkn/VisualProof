@@ -2,365 +2,223 @@ import VisualProof.Diagram.Boundary
 
 namespace VisualProof.Diagram
 
-open VisualProof
-open Theory
-
-abbrev RelationRenaming (source target : RelCtx) :=
-  {arity : Nat} -> RelVar source arity -> RelVar target arity
-
-def RelationRenaming.weaken (head : Nat) :
-    RelationRenaming rels (head :: rels) :=
-  fun relation => ⟨relation.index.succ, relation.hasArity⟩
-
-def RelationRenaming.empty :
-    RelationRenaming [] rels :=
-  fun relation => Fin.elim0 relation.index
-
-def extendWireRenaming (rho : Fin source -> Fin target) (localWires : Nat) :
-    Fin (source + localWires) -> Fin (target + localWires) :=
-  Fin.addCases
-    (fun i => Fin.castAdd localWires (rho i))
-    (fun i => Fin.natAdd target i)
-
-@[simp] theorem extendWireRenaming_zero
-    (rename : Fin sourceWires → Fin targetWires) :
-    extendWireRenaming rename 0 = rename := by
-  funext wire
-  refine Fin.addCases (fun inherited => ?_)
-    (fun localIndex => Fin.elim0 localIndex) wire
-  change extendWireRenaming rename 0 (Fin.castAdd 0 inherited) =
-    rename inherited
-  simp only [extendWireRenaming, Fin.addCases_left]
-  apply Fin.ext
-  rfl
-
-theorem extendWireRenaming_id (localWires : Nat) :
-    extendWireRenaming (source := source) id localWires = id := by
-  funext i
-  refine Fin.addCases (fun j => ?_) (fun j => ?_) i <;>
-    simp [extendWireRenaming]
-
-theorem extendWireRenaming_comp
-    (rho : Fin source -> Fin middle) (tau : Fin middle -> Fin target)
-    (localWires : Nat) :
-    extendWireRenaming tau localWires ∘ extendWireRenaming rho localWires =
-      extendWireRenaming (tau ∘ rho) localWires := by
-  funext i
-  refine Fin.addCases (fun j => ?_) (fun j => ?_) i <;>
-    simp [extendWireRenaming]
-
-def RelationRenaming.lift (rho : RelationRenaming source target)
-    (head : Nat) : RelationRenaming (head :: source) (head :: target) :=
-  fun {arity} relation =>
-    match relation with
-    | ⟨index, hasArity⟩ =>
-      Fin.cases
-        (motive := fun i =>
-          (head :: source).get i = arity -> RelVar (head :: target) arity)
-        (fun h => ⟨0, h⟩)
-        (fun i h =>
-          let renamed := rho (arity := arity) (⟨i, h⟩ : RelVar source arity)
-          ⟨renamed.index.succ, renamed.hasArity⟩)
-        index hasArity
-
-theorem RelationRenaming.lift_id
-    (relation : RelVar (head :: source) arity) :
-    RelationRenaming.lift (fun r => r) head relation = relation := by
-  rcases relation with ⟨index, hasArity⟩
-  revert hasArity
-  refine Fin.cases ?_ (fun _ => ?_) index <;> intro hasArity <;> rfl
-
-theorem RelationRenaming.lift_comp
-    (rho : RelationRenaming source middle)
-    (tau : RelationRenaming middle target)
-    (relation : RelVar (head :: source) arity) :
-    RelationRenaming.lift tau head (RelationRenaming.lift rho head relation) =
-      RelationRenaming.lift (fun r => tau (rho r)) head relation := by
-  rcases relation with ⟨index, hasArity⟩
-  revert hasArity
-  refine Fin.cases ?_ (fun _ => ?_) index <;> intro hasArity <;> rfl
-
-theorem RelationRenaming.lift_id_fun (head : Nat) :
-    (RelationRenaming.lift (source := source) (fun r => r) head :
-      RelationRenaming (head :: source) (head :: source)) =
-      (fun {_} r => r) := by
-  apply @funext
-  intro arity
-  funext relation
-  exact RelationRenaming.lift_id relation
-
-theorem RelationRenaming.lift_comp_fun
-    (rho : RelationRenaming source middle)
-    (tau : RelationRenaming middle target) (head : Nat) :
-    ((fun {arity} (r : RelVar (head :: source) arity) =>
-      RelationRenaming.lift tau head (RelationRenaming.lift rho head r)) :
-      RelationRenaming (head :: source) (head :: target)) =
-      (RelationRenaming.lift (fun r => tau (rho r)) head :
-        RelationRenaming (head :: source) (head :: target)) := by
-  apply @funext
-  intro arity
-  funext relation
-  exact RelationRenaming.lift_comp rho tau relation
+open VisualProof.Theory
 
 mutual
-  def Region.renameWires (rho : Fin source -> Fin target) :
-      Region  source rels -> Region  target rels
-    | .mk localWires items =>
-        .mk localWires (items.renameWires (extendWireRenaming rho localWires))
+  def Region.renameWires (rename : WireRenaming source target) :
+      Region source → Region target
+    | .mk locals items =>
+        .mk locals (items.renameWires (rename.appendRight locals))
 
-  def Item.renameWires (rho : Fin source -> Fin target) :
-      Item  source rels -> Item  target rels
-    | .atom relation arguments => .atom relation (rho ∘ arguments)
-    | .identity arity arguments => .identity arity (rho ∘ arguments)
-    | .cut body => .cut (body.renameWires rho)
-    | .bubble arity body => .bubble arity (body.renameWires rho)
+  def Item.renameWires (rename : WireRenaming source target) :
+      Item source → Item target
+    | .atom head ports =>
+        .atom (rename head) (ports.map (fun wire => rename wire))
+    | .identity signature arity ports =>
+        .identity signature arity (fun index => rename (ports index))
+    | .cut body => .cut (body.renameWires rename)
 
-  def ItemSeq.renameWires (rho : Fin source -> Fin target) :
-      ItemSeq  source rels -> ItemSeq  target rels
+  def ItemSeq.renameWires (rename : WireRenaming source target) :
+      ItemSeq source → ItemSeq target
     | .nil => .nil
-    | .cons item tail => .cons (item.renameWires rho) (tail.renameWires rho)
+    | .cons head tail =>
+        .cons (head.renameWires rename) (tail.renameWires rename)
 end
 
-mutual
-  def Region.renameRelations (rho : RelationRenaming source target) :
-      Region  wires source -> Region  wires target
-    | .mk localWires items => .mk localWires (items.renameRelations rho)
+@[simp] theorem vars_map_id (variables : Vars context signatures) :
+    variables.map (fun wire => wire) = variables := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      exact congrArg (Vars.cons head) induction
 
-  def Item.renameRelations (rho : RelationRenaming source target) :
-      Item  wires source -> Item  wires target
-    | .atom relation arguments => .atom (rho relation) arguments
-    | .identity arity arguments => .identity arity arguments
-    | .cut body => .cut (body.renameRelations rho)
-    | .bubble arity body =>
-        .bubble arity (body.renameRelations (RelationRenaming.lift rho arity))
+theorem vars_map_comp
+    (variables : Vars source signatures)
+    (first : WireRenaming source middle)
+    (second : WireRenaming middle target) :
+    (variables.map (fun wire => first wire)).map (fun wire => second wire) =
+      variables.map (fun wire => second (first wire)) := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      exact congrArg (Vars.cons (second (first head))) induction
 
-  def ItemSeq.renameRelations (rho : RelationRenaming source target) :
-      ItemSeq  wires source -> ItemSeq  wires target
-    | .nil => .nil
-    | .cons item tail =>
-        .cons (item.renameRelations rho) (tail.renameRelations rho)
-end
+private abbrev RegionRenameIdMotive
+    (wires : List Sig) (region : Region wires) :=
+  region.renameWires WireRenaming.id = region
 
-theorem Region.renameWires_id (region : Region  wires rels) :
-    region.renameWires id = region := by
-  apply Region.rec
-    (motive_1 := fun _ _ region => region.renameWires id = region)
-    (motive_2 := fun _ _ item => item.renameWires id = item)
-    (motive_3 := fun _ _ items => items.renameWires id = items)
-  · intro _ _ localWires items ih
-    simp only [Region.renameWires, extendWireRenaming_id]
-    exact congrArg (Region.mk localWires) ih
-  · intro _ _ _ relation arguments
-    simp [Item.renameWires, Function.comp_def]
-  · intro _ _ arity arguments
-    simp [Item.renameWires, Function.comp_def]
-  · intro _ _ body ih
-    exact congrArg Item.cut ih
-  · intro _ _ arity body ih
-    exact congrArg (Item.bubble arity) ih
-  · intro _ _
-    rfl
-  · intro _ _ item tail ihItem ihTail
-    simp only [ItemSeq.renameWires]
-    rw [ihItem, ihTail]
+private abbrev ItemRenameIdMotive
+    (wires : List Sig) (item : Item wires) :=
+  item.renameWires WireRenaming.id = item
 
-theorem Item.renameWires_id (item : Item  wires rels) :
-    item.renameWires id = item := by
-  have h := Region.renameWires_id
-    (Region.mk 0 (ItemSeq.cons item ItemSeq.nil))
-  simp only [Region.renameWires, extendWireRenaming_id,
-    ItemSeq.renameWires] at h
-  have hseq : ItemSeq.cons (item.renameWires id) ItemSeq.nil =
-      ItemSeq.cons item ItemSeq.nil := eq_of_heq (Region.mk.inj h).2
-  exact (ItemSeq.cons.inj hseq).1
+private abbrev ItemsRenameIdMotive
+    (wires : List Sig) (items : ItemSeq wires) :=
+  items.renameWires WireRenaming.id = items
 
-theorem ItemSeq.renameWires_id (items : ItemSeq  wires rels) :
-    items.renameWires id = items := by
-  have h := Region.renameWires_id (Region.mk 0 items)
-  simp only [Region.renameWires, extendWireRenaming_id] at h
-  exact eq_of_heq (Region.mk.inj h).2
+private def renameIdMkCase
+    (locals : List Sig) (items : ItemSeq (outer ++ locals))
+    (itemsIH : ItemsRenameIdMotive (outer ++ locals) items) :
+    RegionRenameIdMotive outer (.mk locals items) := by
+  simp only [RegionRenameIdMotive, Region.renameWires]
+  have renameEq :
+      (WireRenaming.appendRight WireRenaming.id locals :
+        WireRenaming (outer ++ locals) (outer ++ locals)) =
+        WireRenaming.id := by
+    apply WireRenaming.ext
+    intro signature wire
+    exact WireRenaming.appendRight_id_apply locals wire
+  rw [renameEq, itemsIH]
 
-mutual
-  theorem Region.renameWires_comp (region : Region  source rels)
-      (rho : Fin source -> Fin middle) (tau : Fin middle -> Fin target) :
-      (region.renameWires rho).renameWires tau =
-        region.renameWires (tau ∘ rho) := by
-    cases region with
-    | mk localWires items =>
-        simp only [Region.renameWires]
-        apply congrArg (Region.mk localWires)
-        calc
-          _ = items.renameWires
-                (extendWireRenaming tau localWires ∘
-                  extendWireRenaming rho localWires) :=
-            ItemSeq.renameWires_comp items _ _
-          _ = _ := congrArg (fun f => items.renameWires f)
-            (extendWireRenaming_comp rho tau localWires)
+private def renameIdAtomCase
+    (head : Var wires (.rel arguments)) (ports : Vars wires arguments) :
+    ItemRenameIdMotive wires (.atom head ports) := by
+  simp [ItemRenameIdMotive, Item.renameWires, WireRenaming.id]
 
-  theorem Item.renameWires_comp (item : Item  source rels)
-      (rho : Fin source -> Fin middle) (tau : Fin middle -> Fin target) :
-      (item.renameWires rho).renameWires tau =
-        item.renameWires (tau ∘ rho) := by
-    cases item with
-    | atom relation arguments => rfl
-    | identity arity arguments => rfl
-    | cut body =>
-        exact congrArg Item.cut (Region.renameWires_comp body rho tau)
-    | bubble arity body =>
-        exact congrArg (Item.bubble arity)
-          (Region.renameWires_comp body rho tau)
-
-  theorem ItemSeq.renameWires_comp (items : ItemSeq  source rels)
-      (rho : Fin source -> Fin middle) (tau : Fin middle -> Fin target) :
-      (items.renameWires rho).renameWires tau =
-        items.renameWires (tau ∘ rho) := by
-    cases items with
-    | nil => rfl
-    | cons item tail =>
-        simp only [ItemSeq.renameWires]
-        rw [Item.renameWires_comp, ItemSeq.renameWires_comp]
-end
-
-theorem Region.renameRelations_id (region : Region  wires rels) :
-    region.renameRelations (fun r => r) = region := by
-  apply Region.rec
-    (motive_1 := fun _ _ region =>
-      region.renameRelations (fun r => r) = region)
-    (motive_2 := fun _ _ item =>
-      item.renameRelations (fun r => r) = item)
-    (motive_3 := fun _ _ items =>
-      items.renameRelations (fun r => r) = items)
-  · intro _ _ localWires items ih
-    exact congrArg (Region.mk localWires) ih
-  · intro _ _ _ relation arguments
-    rfl
-  · intro _ _ arity arguments
-    rfl
-  · intro _ _ body ih
-    exact congrArg Item.cut ih
-  · intro _ _ arity body ih
-    simp only [Item.renameRelations]
-    rw [RelationRenaming.lift_id_fun]
-    exact congrArg (Item.bubble arity) ih
-  · intro _ _
-    rfl
-  · intro _ _ item tail ihItem ihTail
-    simp only [ItemSeq.renameRelations]
-    rw [ihItem, ihTail]
-
-theorem Item.renameRelations_id (item : Item  wires rels) :
-    item.renameRelations (fun r => r) = item := by
-  have h := Region.renameRelations_id
-    (Region.mk 0 (ItemSeq.cons item ItemSeq.nil))
-  simp only [Region.renameRelations, ItemSeq.renameRelations] at h
-  have hseq : ItemSeq.cons (item.renameRelations (fun r => r)) ItemSeq.nil =
-      ItemSeq.cons item ItemSeq.nil := eq_of_heq (Region.mk.inj h).2
-  exact (ItemSeq.cons.inj hseq).1
-
-theorem ItemSeq.renameRelations_id (items : ItemSeq  wires rels) :
-    items.renameRelations (fun r => r) = items := by
-  have h := Region.renameRelations_id (Region.mk 0 items)
-  simp only [Region.renameRelations] at h
-  exact eq_of_heq (Region.mk.inj h).2
-
-theorem Region.renameRelations_comp (region : Region  wires source)
-    (rho : RelationRenaming source middle)
-    (tau : RelationRenaming middle target) :
-    (region.renameRelations rho).renameRelations tau =
-      region.renameRelations (fun r => tau (rho r)) := by
-  apply Region.rec
-    (motive_1 := fun _ rels region =>
-      forall {middle target} (rho : RelationRenaming rels middle)
-        (tau : RelationRenaming middle target),
-        (region.renameRelations rho).renameRelations tau =
-          region.renameRelations (fun r => tau (rho r)))
-    (motive_2 := fun _ rels item =>
-      forall {middle target} (rho : RelationRenaming rels middle)
-        (tau : RelationRenaming middle target),
-        (item.renameRelations rho).renameRelations tau =
-          item.renameRelations (fun r => tau (rho r)))
-    (motive_3 := fun _ rels items =>
-      forall {middle target} (rho : RelationRenaming rels middle)
-        (tau : RelationRenaming middle target),
-        (items.renameRelations rho).renameRelations tau =
-          items.renameRelations (fun r => tau (rho r)))
-  · intro _ _ localWires items ih _ _ rho tau
-    exact congrArg (Region.mk localWires) (ih rho tau)
-  · intro _ _ _ relation arguments _ _ rho tau
-    rfl
-  · intro _ _ arity arguments _ _ rho tau
-    rfl
-  · intro _ _ body ih _ _ rho tau
-    exact congrArg Item.cut (ih rho tau)
-  · intro _ _ arity body ih _ _ rho tau
-    simp only [Item.renameRelations]
-    rw [ih (RelationRenaming.lift rho arity)
-      (RelationRenaming.lift tau arity)]
-    rw [RelationRenaming.lift_comp_fun]
-  · intro _ _ _ _ rho tau
-    rfl
-  · intro _ _ item tail ihItem ihTail _ _ rho tau
-    simp only [ItemSeq.renameRelations]
-    rw [ihItem rho tau, ihTail rho tau]
-
-theorem Item.renameRelations_comp (item : Item  wires source)
-    (rho : RelationRenaming source middle)
-    (tau : RelationRenaming middle target) :
-    (item.renameRelations rho).renameRelations tau =
-      item.renameRelations (fun r => tau (rho r)) := by
-  have h := Region.renameRelations_comp
-    (Region.mk 0 (ItemSeq.cons item ItemSeq.nil)) rho tau
-  simp only [Region.renameRelations, ItemSeq.renameRelations] at h
-  have hseq := eq_of_heq (Region.mk.inj h).2
-  exact (ItemSeq.cons.inj hseq).1
-
-theorem ItemSeq.renameRelations_comp (items : ItemSeq  wires source)
-    (rho : RelationRenaming source middle)
-    (tau : RelationRenaming middle target) :
-    (items.renameRelations rho).renameRelations tau =
-      items.renameRelations (fun r => tau (rho r)) := by
-  have h := Region.renameRelations_comp (Region.mk 0 items) rho tau
-  simp only [Region.renameRelations] at h
-  exact eq_of_heq (Region.mk.inj h).2
-
-def BoundaryAssignment.map (assignment : BoundaryAssignment d D)
-    (f : D -> E) : BoundaryAssignment d E where
-  args := f ∘ assignment.args
-  classes := f ∘ assignment.classes
-  agrees := fun i => congrArg f (assignment.agrees i)
-
-theorem BoundaryAssignment.map_id (assignment : BoundaryAssignment d D) :
-    assignment.map id = assignment := by
-  cases assignment
+private def renameIdIdentityCase
+    (signature : Sig) (arity : Nat)
+    (ports : Fin arity → Var wires signature) :
+    ItemRenameIdMotive wires (.identity signature arity ports) := by
   rfl
 
-theorem BoundaryAssignment.map_comp (assignment : BoundaryAssignment d D)
-    (f : D -> E) (g : E -> F) :
-    (assignment.map f).map g = assignment.map (g ∘ f) := by
-  cases assignment
+private def renameIdCutCase
+    (body : Region wires) (bodyIH : RegionRenameIdMotive wires body) :
+    ItemRenameIdMotive wires (.cut body) :=
+  congrArg Item.cut bodyIH
+
+private def renameIdNilCase :
+    ItemsRenameIdMotive wires ItemSeq.nil := rfl
+
+private def renameIdConsCase
+    (head : Item wires) (tail : ItemSeq wires)
+    (headIH : ItemRenameIdMotive wires head)
+    (tailIH : ItemsRenameIdMotive wires tail) :
+    ItemsRenameIdMotive wires (.cons head tail) := by
+  simp only [ItemsRenameIdMotive, ItemSeq.renameWires]
+  rw [headIH, tailIH]
+
+theorem Region.renameWires_id (region : Region wires) :
+    region.renameWires WireRenaming.id = region :=
+  Region.rec renameIdMkCase renameIdAtomCase renameIdIdentityCase
+    renameIdCutCase renameIdNilCase renameIdConsCase region
+
+theorem Item.renameWires_id (item : Item wires) :
+    item.renameWires WireRenaming.id = item :=
+  Item.rec renameIdMkCase renameIdAtomCase renameIdIdentityCase
+    renameIdCutCase renameIdNilCase renameIdConsCase item
+
+theorem ItemSeq.renameWires_id (items : ItemSeq wires) :
+    items.renameWires WireRenaming.id = items :=
+  ItemSeq.rec renameIdMkCase renameIdAtomCase renameIdIdentityCase
+    renameIdCutCase renameIdNilCase renameIdConsCase items
+
+private abbrev RegionRenameCompMotive
+    (source : List Sig) (region : Region source) :=
+  ∀ {middle target : List Sig}
+    (first : WireRenaming source middle)
+    (second : WireRenaming middle target),
+    (region.renameWires first).renameWires second =
+      region.renameWires (WireRenaming.comp second first)
+
+private abbrev ItemRenameCompMotive
+    (source : List Sig) (item : Item source) :=
+  ∀ {middle target : List Sig}
+    (first : WireRenaming source middle)
+    (second : WireRenaming middle target),
+    (item.renameWires first).renameWires second =
+      item.renameWires (WireRenaming.comp second first)
+
+private abbrev ItemsRenameCompMotive
+    (source : List Sig) (items : ItemSeq source) :=
+  ∀ {middle target : List Sig}
+    (first : WireRenaming source middle)
+    (second : WireRenaming middle target),
+    (items.renameWires first).renameWires second =
+      items.renameWires (WireRenaming.comp second first)
+
+private def renameCompMkCase
+    (locals : List Sig) (items : ItemSeq (source ++ locals))
+    (itemsIH : ItemsRenameCompMotive (source ++ locals) items) :
+    RegionRenameCompMotive source (.mk locals items) := by
+  intro middle target first second
+  simp only [Region.renameWires]
+  apply congrArg (Region.mk locals)
+  calc
+    _ = items.renameWires
+        (WireRenaming.comp
+          (second.appendRight locals) (first.appendRight locals)) :=
+      itemsIH _ _
+    _ = _ := by
+      congr 1
+      apply WireRenaming.ext
+      intro signature wire
+      exact WireRenaming.appendRight_comp_apply first second locals wire
+
+private def renameCompAtomCase
+    (head : Var source (.rel arguments)) (ports : Vars source arguments) :
+    ItemRenameCompMotive source (.atom head ports) := by
+  intro middle target first second
+  simp only [Item.renameWires]
+  rw [vars_map_comp]
   rfl
 
-def OpenDiagram.identityBoundaryAssignment (d : OpenDiagram  arity) :
-    BoundaryAssignment d (Fin d.externalClasses) where
-  args := d.boundary
-  classes := id
-  agrees := fun _ => rfl
+private def renameCompIdentityCase
+    (signature : Sig) (arity : Nat)
+    (ports : Fin arity → Var source signature) :
+    ItemRenameCompMotive source (.identity signature arity ports) := by
+  intro middle target first second
+  rfl
 
-def OpenDiagram.substituteBoundary (d : OpenDiagram  arity)
-    (assignment : BoundaryAssignment d (Fin wires)) :
-    Region  wires [] :=
-  d.body.renameWires assignment.classes
+private def renameCompCutCase
+    (body : Region source) (bodyIH : RegionRenameCompMotive source body) :
+    ItemRenameCompMotive source (.cut body) := by
+  intro middle target first second
+  exact congrArg Item.cut (bodyIH first second)
 
-theorem OpenDiagram.substituteBoundary_id (d : OpenDiagram  arity) :
-    d.substituteBoundary d.identityBoundaryAssignment = d.body := by
-  exact Region.renameWires_id d.body
+private def renameCompNilCase :
+    ItemsRenameCompMotive source ItemSeq.nil := by
+  intro middle target first second
+  rfl
 
-theorem OpenDiagram.substituteBoundary_comp
-    (d : OpenDiagram  arity)
-    (assignment : BoundaryAssignment d (Fin source))
-    (rho : Fin source -> Fin target) :
-    (d.substituteBoundary assignment).renameWires rho =
-      d.substituteBoundary (assignment.map rho) := by
-  exact Region.renameWires_comp d.body assignment.classes rho
+private def renameCompConsCase
+    (head : Item source) (tail : ItemSeq source)
+    (headIH : ItemRenameCompMotive source head)
+    (tailIH : ItemsRenameCompMotive source tail) :
+    ItemsRenameCompMotive source (.cons head tail) := by
+  intro middle target first second
+  simp only [ItemSeq.renameWires]
+  rw [headIH first second, tailIH first second]
+
+theorem Region.renameWires_comp (region : Region source)
+    (first : WireRenaming source middle)
+    (second : WireRenaming middle target) :
+    (region.renameWires first).renameWires second =
+      region.renameWires (WireRenaming.comp second first) :=
+  Region.rec (motive_1 := RegionRenameCompMotive)
+    (motive_2 := ItemRenameCompMotive)
+    (motive_3 := ItemsRenameCompMotive)
+    renameCompMkCase renameCompAtomCase renameCompIdentityCase
+    renameCompCutCase renameCompNilCase renameCompConsCase region first second
+
+theorem Item.renameWires_comp (item : Item source)
+    (first : WireRenaming source middle)
+    (second : WireRenaming middle target) :
+    (item.renameWires first).renameWires second =
+      item.renameWires (WireRenaming.comp second first) :=
+  Item.rec (motive_1 := RegionRenameCompMotive)
+    (motive_2 := ItemRenameCompMotive)
+    (motive_3 := ItemsRenameCompMotive)
+    renameCompMkCase renameCompAtomCase renameCompIdentityCase
+    renameCompCutCase renameCompNilCase renameCompConsCase item first second
+
+theorem ItemSeq.renameWires_comp (items : ItemSeq source)
+    (first : WireRenaming source middle)
+    (second : WireRenaming middle target) :
+    (items.renameWires first).renameWires second =
+      items.renameWires (WireRenaming.comp second first) :=
+  ItemSeq.rec (motive_1 := RegionRenameCompMotive)
+    (motive_2 := ItemRenameCompMotive)
+    (motive_3 := ItemsRenameCompMotive)
+    renameCompMkCase renameCompAtomCase renameCompIdentityCase
+    renameCompCutCase renameCompNilCase renameCompConsCase items first second
 
 end VisualProof.Diagram

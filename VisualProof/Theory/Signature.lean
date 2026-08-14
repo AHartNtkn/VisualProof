@@ -133,23 +133,66 @@ theorem countIndex_get_positive
 end Vars
 
 /-- A signature-preserving map between typed wire contexts. -/
-abbrev WireRenaming (source target : List Sig) :=
-  ∀ {signature}, Var source signature → Var target signature
+structure WireRenaming (source target : List Sig) where
+  apply : ∀ {signature}, Var source signature → Var target signature
+
+instance : CoeFun (WireRenaming source target)
+    (fun _ => ∀ {signature}, Var source signature → Var target signature) :=
+  ⟨WireRenaming.apply⟩
 
 namespace WireRenaming
 
-def id : WireRenaming context context := fun wire => wire
+@[ext] theorem ext
+    (left right : WireRenaming source target)
+    (applyEq : ∀ {signature} (wire : Var source signature),
+      left wire = right wire) : left = right := by
+  cases left with
+  | mk left =>
+      cases right with
+      | mk right =>
+          congr
+          apply @funext
+          intro signature
+          funext wire
+          exact applyEq wire
+
+def id : WireRenaming context context := ⟨fun wire => wire⟩
 
 def comp (second : WireRenaming middle target)
     (first : WireRenaming source middle) : WireRenaming source target :=
-  fun wire => second (first wire)
+  ⟨fun wire => second (first wire)⟩
 
 /-- Extend a renaming across locally bound wires, preserving those locals. -/
 def appendRight (rename : WireRenaming source target)
     (locals : List Sig) : WireRenaming (source ++ locals) (target ++ locals) :=
-  Var.appendMap
+  ⟨Var.appendMap
     (fun wire => (rename wire).appendLeft locals)
-    (fun wire => Var.appendRight target wire)
+    (fun wire => Var.appendRight target wire)⟩
+
+theorem appendRight_id_apply (locals : List Sig)
+    (wire : Var (source ++ locals) signature) :
+    appendRight id locals wire = wire := by
+  apply Var.appendCases
+    (motive := fun wire => appendRight id locals wire = wire)
+  · intro signature inherited
+    simp [appendRight, id]
+  · intro signature localWire
+    simp [appendRight]
+
+theorem appendRight_comp_apply
+    (first : WireRenaming source middle)
+    (second : WireRenaming middle target) (locals : List Sig)
+    (wire : Var (source ++ locals) signature) :
+    appendRight second locals (appendRight first locals wire) =
+      appendRight (comp second first) locals wire := by
+  apply Var.appendCases
+    (motive := fun wire =>
+      appendRight second locals (appendRight first locals wire) =
+        appendRight (comp second first) locals wire)
+  · intro signature inherited
+    simp [appendRight, comp]
+  · intro signature localWire
+    simp [appendRight]
 
 end WireRenaming
 
