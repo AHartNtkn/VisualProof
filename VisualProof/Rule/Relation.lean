@@ -1,17 +1,16 @@
-import VisualProof.Diagram.Replacement
+import VisualProof.Diagram.Occurrence
 
 namespace VisualProof.Rule
 
-open Theory
 open Diagram
+open Theory
 
 abbrev LocalRule : Type :=
-  ∀ {wires : Nat} {rels : RelCtx},
-    Region wires rels → Region wires rels → Prop
+  ∀ {wires : List Sig}, Region wires → Region wires → Prop
 
 abbrev Rule : Type :=
-  ∀ {arity : Nat},
-    OpenDiagram arity → OpenDiagram arity → Prop
+  ∀ {boundary : List Sig},
+    OpenDiagram boundary → OpenDiagram boundary → Prop
 
 def converse (relation : α → α → Prop) : α → α → Prop :=
   fun before after => relation after before
@@ -25,8 +24,6 @@ def atPolarity (polarity : Polarity)
   | .positive => relation
   | .negative => converse relation
 
-/-- A symmetric local relation accepts forward evidence at either contextual
-polarity. -/
 theorem atPolarity_symmetric_of
     (polarity : Polarity) (evidence : relation before after) :
     atPolarity polarity (symmetric relation) before after := by
@@ -34,74 +31,26 @@ theorem atPolarity_symmetric_of
   | positive => exact Or.inl evidence
   | negative => exact Or.inr evidence
 
+/-- A local relation lifted through one exact recursive context. -/
 def Contextual («local» : LocalRule) : Rule :=
-  fun {_arity} source target =>
-    ∃ (wires : Nat) (rels : RelCtx)
-      (before after : Region wires rels)
+  fun {_boundary} source target =>
+    ∃ (wires : List Sig) (before after : Region wires)
       (occurrence : Occurrence before source)
+      (targetCanonical : (occurrence.context.fill after).Canonical)
       (_targetIso : OpenDiagramIso target
         (occurrence.interface.withBody
-          (occurrence.context.fill after))),
+          (occurrence.context.fill after) targetCanonical)),
       atPolarity occurrence.context.polarity
-        (@«local» wires rels) before after
-
-/-- A local rule whose redex is selected at an ancestor and whose replacement
-occurs in one descendant context. -/
-abbrev NestedLocalRule : Type 1 :=
-  ∀ {ancestorWires anchorLocal descendantWires : Nat}
-    {ancestorRels descendantRels : RelCtx},
-    DiagramContext (ancestorWires + anchorLocal) descendantWires
-      ancestorRels descendantRels →
-    Region (ancestorWires + anchorLocal) ancestorRels →
-    Region descendantWires descendantRels →
-    Region descendantWires descendantRels → Type
-
-def NestedContextual («local» : NestedLocalRule) : Rule :=
-  fun {_arity} source target =>
-    ∃ replacement : NestedContextReplacement source target,
-      Nonempty (@«local» replacement.ancestorWires
-        replacement.anchorLocal replacement.descendantWires
-        replacement.ancestorRels replacement.descendantRels
-        replacement.descendant replacement.selected replacement.before
-        replacement.after)
+        (@«local» wires) before after
 
 theorem Contextual.iso
     (sourceIso : OpenDiagramIso source source')
     (step : Contextual localRule source target)
     (targetIso : OpenDiagramIso target target') :
     Contextual localRule source' target' := by
-  rcases step with ⟨wires, rels, before, after, occurrence,
-    existingTargetIso, localEvidence⟩
-  exact ⟨wires, rels, before, after,
-    occurrence.transportHost sourceIso,
-    targetIso.symm.trans existingTargetIso,
-    localEvidence⟩
+  rcases step with ⟨wires, before, after, occurrence,
+    targetCanonical, existingTargetIso, localEvidence⟩
+  exact ⟨wires, before, after, occurrence.transportHost sourceIso,
+    targetCanonical, targetIso.symm.trans existingTargetIso, localEvidence⟩
 
 end VisualProof.Rule
-
-namespace VisualProof.Diagram
-
-open VisualProof.Rule
-
-theorem ContextReplacement.lift
-    (replacement : ContextReplacement source target holeWires holeRels)
-    (localEvidence :
-      atPolarity replacement.context.polarity
-        (@localRule holeWires holeRels)
-        replacement.before replacement.after) :
-    Contextual localRule source target := by
-  exact ⟨holeWires, holeRels,
-    replacement.before, replacement.after, replacement.occurrence,
-    replacement.target_iso, localEvidence⟩
-
-theorem NestedContextReplacement.lift
-    (replacement : NestedContextReplacement source target)
-    (localEvidence :
-      @localRule replacement.ancestorWires replacement.anchorLocal
-        replacement.descendantWires replacement.ancestorRels
-        replacement.descendantRels replacement.descendant
-        replacement.selected replacement.before replacement.after) :
-    NestedContextual localRule source target := by
-  exact ⟨replacement, ⟨localEvidence⟩⟩
-
-end VisualProof.Diagram

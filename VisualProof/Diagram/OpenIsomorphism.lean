@@ -2,153 +2,86 @@ import VisualProof.Diagram.Isomorphism
 
 namespace VisualProof.Diagram
 
+open VisualProof.Theory
+
 structure OpenDiagramIso
-    (source target : OpenDiagram  arity) where
-  external : FiniteEquiv (Fin source.externalClasses)
-    (Fin target.externalClasses)
-  boundary : forall i, external (source.boundary i) = target.boundary i
-  body : RegionIso  external [] source.body target.body
+    (source target : OpenDiagram boundaryTypes) where
+  external : WireEquiv source.external target.external
+  boundary_eq : ∀ position : Fin boundaryTypes.length,
+    external (source.boundaryWire.get position) =
+      target.boundaryWire.get position
+  body : RegionIso external source.body target.body
 
 namespace OpenDiagramIso
 
-noncomputable def castArity
-    {source target : OpenDiagram sourceArity}
-    (iso : OpenDiagramIso source target)
-    (arityEq : sourceArity = targetArity) :
-    OpenDiagramIso (source.castArity arityEq)
-      (target.castArity arityEq) := by
-  subst targetArity
-  exact iso
-
-/-- Build an ordered open isomorphism across propositionally equal arities. -/
-def ofArityEq {sourceArity targetArity : Nat}
-    {source : OpenDiagram  sourceArity}
-    {target : OpenDiagram  targetArity}
-    (arityEq : sourceArity = targetArity)
-    (external : FiniteEquiv (Fin source.externalClasses)
-      (Fin target.externalClasses))
-    (boundary : forall position,
-      external (source.boundary position) =
-        target.boundary (Fin.cast arityEq position))
-    (body : RegionIso  external [] source.body target.body) :
-    OpenDiagramIso source (target.castArity arityEq.symm) := by
-  subst targetArity
-  exact {
-    external := external
-    boundary := boundary
-    body := body
-  }
-
-noncomputable def refl (diagram : OpenDiagram  arity) :
+noncomputable def refl (diagram : OpenDiagram boundaryTypes) :
     OpenDiagramIso diagram diagram where
-  external := FiniteEquiv.refl (Fin diagram.externalClasses)
-  boundary := fun _ => rfl
+  external := WireEquiv.refl diagram.external
+  boundary_eq := fun _ => rfl
   body := RegionIso.refl diagram.body
 
-noncomputable def symm {source target : OpenDiagram  arity}
+noncomputable def symm {source target : OpenDiagram boundaryTypes}
     (iso : OpenDiagramIso source target) : OpenDiagramIso target source where
   external := iso.external.symm
-  boundary := by
-    intro i
-    calc
-      iso.external.symm (target.boundary i) =
-          iso.external.symm (iso.external (source.boundary i)) := by
-            rw [iso.boundary i]
-      _ = source.boundary i := iso.external.left_inv _
+  boundary_eq := by
+    intro position
+    change iso.external.invRenaming (target.boundaryWire.get position) =
+      source.boundaryWire.get position
+    rw [← iso.boundary_eq position]
+    exact iso.external.left_inv _
   body := iso.body.symm
 
-noncomputable def trans {source middle target : OpenDiagram  arity}
+noncomputable def trans {source middle target : OpenDiagram boundaryTypes}
     (first : OpenDiagramIso source middle)
-    (second : OpenDiagramIso middle target) : OpenDiagramIso source target where
+    (second : OpenDiagramIso middle target) :
+    OpenDiagramIso source target where
   external := first.external.trans second.external
-  boundary := by
-    intro i
-    calc
-      (first.external.trans second.external) (source.boundary i) =
-          second.external (first.external (source.boundary i)) := rfl
-      _ = second.external (middle.boundary i) :=
-        congrArg second.external (first.boundary i)
-      _ = target.boundary i := second.boundary i
+  boundary_eq := by
+    intro position
+    change second.external (first.external
+      (source.boundaryWire.get position)) =
+        target.boundaryWire.get position
+    rw [first.boundary_eq position, second.boundary_eq position]
   body := first.body.trans second.body
-
-def transportAssignment {source target : OpenDiagram  arity}
-    (iso : OpenDiagramIso source target)
-    (assignment : BoundaryAssignment source D) : BoundaryAssignment target D where
-  args := assignment.args
-  classes := assignment.classes ∘ iso.external.invFun
-  agrees := by
-    intro i
-    change assignment.classes (iso.external.invFun (target.boundary i)) =
-      assignment.args i
-    rw [← iso.boundary i, iso.external.left_inv]
-    exact assignment.agrees i
-
-@[simp] theorem transportAssignment_args
-    {source target : OpenDiagram  arity}
-    (iso : OpenDiagramIso source target)
-    (assignment : BoundaryAssignment source D) :
-    (iso.transportAssignment assignment).args = assignment.args :=
-  rfl
-
-@[simp] theorem transportAssignment_classes
-    {source target : OpenDiagram  arity}
-    (iso : OpenDiagramIso source target)
-    (assignment : BoundaryAssignment source D)
-    (targetClass : Fin target.externalClasses) :
-    (iso.transportAssignment assignment).classes targetClass =
-      assignment.classes (iso.external.invFun targetClass) :=
-  rfl
-
-theorem aliasConsistent_iff {source target : OpenDiagram  arity}
-    (iso : OpenDiagramIso source target) (args : Fin arity -> D) :
-    AliasConsistent source args <-> AliasConsistent target args := by
-  constructor
-  · intro sourceConsistent i j targetEqual
-    apply sourceConsistent i j
-    have pulledBack := congrArg iso.external.invFun targetEqual
-    simpa only [← iso.boundary i, ← iso.boundary j,
-      iso.external.left_inv] using pulledBack
-  · intro targetConsistent i j sourceEqual
-    apply targetConsistent i j
-    rw [← iso.boundary i, ← iso.boundary j, sourceEqual]
 
 end OpenDiagramIso
 
 namespace OpenDiagram
 
-def Isomorphic (source target : OpenDiagram arity) : Prop :=
+def Isomorphic (source target : OpenDiagram boundaryTypes) : Prop :=
   Nonempty (OpenDiagramIso source target)
 
 namespace Isomorphic
 
-theorem refl (diagram : OpenDiagram arity) : Isomorphic diagram diagram :=
+theorem refl (diagram : OpenDiagram boundaryTypes) : Isomorphic diagram diagram :=
   ⟨OpenDiagramIso.refl diagram⟩
 
-theorem symm {source target : OpenDiagram arity}
+theorem symm {source target : OpenDiagram boundaryTypes}
     (isomorphic : Isomorphic source target) : Isomorphic target source := by
   rcases isomorphic with ⟨iso⟩
   exact ⟨iso.symm⟩
 
-theorem trans {source middle target : OpenDiagram arity}
-    (first : Isomorphic source middle)
-    (second : Isomorphic middle target) : Isomorphic source target := by
+theorem trans {source middle target : OpenDiagram boundaryTypes}
+    (first : Isomorphic source middle) (second : Isomorphic middle target) :
+    Isomorphic source target := by
   rcases first with ⟨firstIso⟩
   rcases second with ⟨secondIso⟩
   exact ⟨firstIso.trans secondIso⟩
 
 end Isomorphic
-
 end OpenDiagram
 
 noncomputable def OpenDiagram.withBody_iso
-    {diagram : OpenDiagram arity}
-    {before after : Region diagram.externalClasses []}
-    (body : RegionIso (FiniteEquiv.refl (Fin diagram.externalClasses)) []
-      before after) :
+    {diagram : OpenDiagram boundaryTypes}
+    {before after : Region diagram.external}
+    (beforeCanonical : before.Canonical)
+    (afterCanonical : after.Canonical)
+    (body : RegionIso (WireEquiv.refl diagram.external) before after) :
     OpenDiagramIso
-      (diagram.withBody before)
-      (diagram.withBody after) where
-  external := FiniteEquiv.refl (Fin diagram.externalClasses)
-  boundary := fun _ => rfl
+      (diagram.withBody before beforeCanonical)
+      (diagram.withBody after afterCanonical) where
+  external := WireEquiv.refl diagram.external
+  boundary_eq := fun _ => rfl
   body := body
+
 end VisualProof.Diagram
