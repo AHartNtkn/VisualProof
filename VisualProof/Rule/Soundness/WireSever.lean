@@ -19,9 +19,11 @@ theorem sound
       denoteRegion model env relEnv before →
       denoteRegion model env relEnv after := by
   cases step
-  rename_i localWires joined separate
+  rename_i localWires joined joinedItems partition
   intro model env relEnv
-  rintro ⟨localEnv, separateDenotes⟩
+  rintro ⟨localEnv, joinedDenotes⟩
+  let separate := joinedItems.partitionOutput
+    (WireSever.collapseLocal wires localWires joined) partition
   have collapsedDenotes :
           denoteItemSeq model
             ((extendWireEnv env localEnv) ∘
@@ -29,7 +31,9 @@ theorem sound
             relEnv separate :=
         (denoteItemSeq_renameWires model
           (WireSever.collapseLocal wires localWires joined)
-          (extendWireEnv env localEnv) relEnv separate).mp separateDenotes
+          (extendWireEnv env localEnv) relEnv separate).mp (by
+            simpa only [separate,
+              ItemSeq.partitionOutput_renameWires] using joinedDenotes)
   let targetLocal : Fin (localWires + 1) → model.Carrier :=
         fun localWire =>
           extendWireEnv env localEnv
@@ -78,25 +82,47 @@ theorem sound
       denoteOpen model target args := by
   intro model args
   rintro ⟨sourceAssignment, sourceArgs, sourceBody⟩
+  let representedClasses : Fin step.sourceWires → model.Carrier :=
+    sourceAssignment.classes ∘ step.sourceExternal.invFun
   let targetAssignment : BoundaryAssignment target model.Carrier := {
     args := sourceAssignment.args
-    classes := sourceAssignment.classes ∘ step.collapse
+    classes := representedClasses ∘ step.collapse ∘
+      step.targetExternal.toFun
     agrees := by
       intro position
-      change sourceAssignment.classes
-          (step.collapse (target.boundary position)) =
+      change representedClasses
+          (step.collapse (step.targetExternal (target.boundary position))) =
         sourceAssignment.args position
       rw [step.boundary position]
+      change sourceAssignment.classes
+          (step.sourceExternal.invFun
+            (step.sourceExternal (source.boundary position))) = _
+      rw [step.sourceExternal.left_inv]
       exact sourceAssignment.agrees position
   }
   refine ⟨targetAssignment, sourceArgs, ?_⟩
-  have renamedBody :
-      denoteRegion (relCtx := []) model sourceAssignment.classes PUnit.unit
-        (target.body.renameWires step.collapse) :=
-    (iso_denotation (rels := []) ⟨step.body⟩ model sourceAssignment.classes
-      PUnit.unit).mp sourceBody
-  exact (denoteRegion_renameWires (relCtx := []) model step.collapse
-    sourceAssignment.classes PUnit.unit target.body).mp renamedBody
+  have representedBody :
+      denoteRegion (relCtx := []) model representedClasses PUnit.unit
+        step.sourceBody :=
+    (step.source_body.denotation model sourceAssignment.classes
+      representedClasses PUnit.unit (by
+        intro wire
+        change sourceAssignment.classes
+          (step.sourceExternal.invFun (step.sourceExternal wire)) = _
+        rw [step.sourceExternal.left_inv])).mp sourceBody
+  let separateBody := step.sourceBody.partitionOutput
+    step.collapse step.partition
+  have separatedBody :
+      denoteRegion (relCtx := []) model
+        (representedClasses ∘ step.collapse) PUnit.unit separateBody :=
+    (denoteRegion_renameWires (relCtx := []) model step.collapse
+      representedClasses PUnit.unit separateBody).mp (by
+        simpa only [separateBody,
+          Region.partitionOutput_renameWires] using representedBody)
+  exact (step.target_body.denotation model targetAssignment.classes
+    (representedClasses ∘ step.collapse) PUnit.unit (by
+      intro wire
+      rfl)).mpr separatedBody
 
 end WireSever.Open
 

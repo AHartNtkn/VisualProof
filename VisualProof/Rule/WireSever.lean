@@ -1,4 +1,4 @@
-import VisualProof.Diagram.RenamingIsomorphism
+import VisualProof.Diagram.PortPartition
 import VisualProof.Rule.Relation
 
 namespace VisualProof.Rule
@@ -23,92 +23,65 @@ def collapseLocal
 inductive Local : LocalRule
   | sever
       (joined : Fin (wires + localWires))
-      (separate :
-        ItemSeq (wires + (localWires + 1)) rels) :
+      (joinedItems : ItemSeq (wires + localWires) rels)
+      (partition : ItemSeq.PortPartition
+        (collapseLocal wires localWires joined) joinedItems) :
       Local
-        (.mk localWires
-          (separate.renameWires
-            (collapseLocal wires localWires joined)))
-        (.mk (localWires + 1) separate)
+        (.mk localWires joinedItems)
+        (.mk (localWires + 1)
+          (joinedItems.partitionOutput
+            (collapseLocal wires localWires joined) partition))
 
 structure Open
     (source target : OpenDiagram arity) where
+  sourceWires : Nat
+  targetWires : Nat
+  sourceExternal :
+    FiniteEquiv (Fin source.externalClasses) (Fin sourceWires)
+  targetExternal :
+    FiniteEquiv (Fin target.externalClasses) (Fin targetWires)
+  sourceBody : Region sourceWires []
+  source_body : RegionIso sourceExternal [] source.body sourceBody
   one_more :
-    target.externalClasses = source.externalClasses + 1
+    targetWires = sourceWires + 1
   collapse :
-    Fin target.externalClasses →
-      Fin source.externalClasses
+    Fin targetWires → Fin sourceWires
   collapse_surjective :
     Function.Surjective collapse
   boundary :
     ∀ position,
-      collapse (target.boundary position) =
-        source.boundary position
-  body :
-    RegionIso (FiniteEquiv.refl (Fin source.externalClasses)) [] source.body
-      (target.body.renameWires collapse)
+      collapse (targetExternal (target.boundary position)) =
+        sourceExternal (source.boundary position)
+  partition : Region.PortPartition collapse sourceBody
+  target_body : RegionIso targetExternal [] target.body
+    (sourceBody.partitionOutput collapse partition)
 
 noncomputable def Open.iso
     (sourceIso : OpenDiagramIso source source')
     (step : Open source target)
     (targetIso : OpenDiagramIso target target') :
     Open source' target' := by
-  let collapse : Fin target'.externalClasses →
-      Fin source'.externalClasses :=
-    fun wire => sourceIso.external
-      (step.collapse (targetIso.external.invFun wire))
-  have source_count : source.externalClasses = source'.externalClasses := by
-    apply Nat.le_antisymm
-    · exact fin_card_le_of_injective sourceIso.external
-        sourceIso.external.injective
-    · exact fin_card_le_of_injective sourceIso.external.symm
-        sourceIso.external.symm.injective
-  have target_count : target.externalClasses = target'.externalClasses := by
-    apply Nat.le_antisymm
-    · exact fin_card_le_of_injective targetIso.external
-        targetIso.external.injective
-    · exact fin_card_le_of_injective targetIso.external.symm
-        targetIso.external.symm.injective
   refine {
-    one_more := by
-      rw [← target_count, ← source_count]
-      exact step.one_more
-    collapse := collapse
-    collapse_surjective := ?_
+    sourceWires := step.sourceWires
+    targetWires := step.targetWires
+    sourceExternal := sourceIso.external.symm.trans step.sourceExternal
+    targetExternal := targetIso.external.symm.trans step.targetExternal
+    sourceBody := step.sourceBody
+    source_body := sourceIso.body.symm.trans step.source_body
+    one_more := step.one_more
+    collapse := step.collapse
+    collapse_surjective := step.collapse_surjective
     boundary := ?_
-    body := ?_
+    partition := step.partition
+    target_body := targetIso.body.symm.trans step.target_body
   }
-  · intro sourceWire
-    let oldSource := sourceIso.external.invFun sourceWire
-    obtain ⟨oldTarget, collapsed⟩ :=
-      step.collapse_surjective oldSource
-    refine ⟨targetIso.external oldTarget, ?_⟩
-    simp only [collapse, targetIso.external.left_inv, collapsed]
-    exact sourceIso.external.right_inv sourceWire
-  · intro position
-    simp only [collapse, ← targetIso.boundary position,
-      targetIso.external.left_inv, step.boundary position,
-      sourceIso.boundary position]
-  · have commutes :
-        sourceIso.external.toFun ∘ step.collapse =
-          collapse ∘ targetIso.external.toFun := by
-      funext wire
-      simp only [Function.comp_apply, collapse,
-        targetIso.external.left_inv]
-    have renamedTarget := targetIso.body.renameWires_commuting
-      step.collapse collapse sourceIso.external commutes
-    have transported := sourceIso.body.symm.trans
-      (step.body.trans renamedTarget)
-    have wire_eq :
-        sourceIso.external.symm.trans
-            ((FiniteEquiv.refl (Fin source.externalClasses)).trans
-              sourceIso.external) =
-          FiniteEquiv.refl (Fin source'.externalClasses) := by
-      apply FiniteEquiv.ext
-      intro wire
-      exact sourceIso.external.right_inv wire
-    rw [wire_eq] at transported
-    exact transported
+  intro position
+  simp only [FiniteEquiv.trans_apply]
+  rw [← targetIso.boundary position,
+    FiniteEquiv.symm_apply_apply,
+    ← sourceIso.boundary position,
+    FiniteEquiv.symm_apply_apply]
+  exact step.boundary position
 
 end WireSever
 
