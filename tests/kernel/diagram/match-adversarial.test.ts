@@ -378,3 +378,96 @@ describe('propagation-driven matching does no blind search', () => {
     expect(result.matches.map((m) => [...m.attachments]).sort()).toEqual([['u', 'v'], ['v', 'u']])
   })
 })
+
+/** One "identity pair" component: an arity-2 identity whose two ports are
+ *  pinned by two separate arity-1 identities, all closed (no boundary). Every
+ *  component built with this helper is structurally identical to every
+ *  other — same content keys throughout — so content-key filtering alone
+ *  cannot tell them apart. */
+function identityPairComponent(region: string, tag: string) {
+  const nodes: Record<string, { kind: 'identity'; region: string; sig: typeof IOTA; arity: number }> = {
+    [`j${tag}`]: { kind: 'identity', region, sig: IOTA, arity: 2 },
+    [`u${tag}`]: { kind: 'identity', region, sig: IOTA, arity: 1 },
+    [`v${tag}`]: { kind: 'identity', region, sig: IOTA, arity: 1 },
+  }
+  const wires: Record<string, { sig: typeof IOTA; endpoints: { node: string; port: { kind: 'identity'; index: number } }[] }> = {
+    [`wu${tag}`]: { sig: IOTA, endpoints: [
+      { node: `j${tag}`, port: { kind: 'identity', index: 0 } },
+      { node: `u${tag}`, port: { kind: 'identity', index: 0 } },
+    ] },
+    [`wv${tag}`]: { sig: IOTA, endpoints: [
+      { node: `j${tag}`, port: { kind: 'identity', index: 1 } },
+      { node: `v${tag}`, port: { kind: 'identity', index: 0 } },
+    ] },
+  }
+  return { nodes, wires }
+}
+
+describe('selection-restricted occurrence search (images option)', () => {
+  it('restricts matches to a supplied host image set, excluding a disjoint identical copy', () => {
+    const pattern = mkDiagramWithBoundary(
+      {
+        root: 'proot',
+        regions: { proot: { kind: 'sheet' } },
+        nodes: identityPairComponent('proot', 'p').nodes,
+        wires: identityPairComponent('proot', 'p').wires,
+      },
+      [],
+    )
+
+    const c0 = identityPairComponent('root', '0')
+    const c1 = identityPairComponent('root', '1')
+    const host = mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' } },
+      nodes: { ...c0.nodes, ...c1.nodes },
+      wires: { ...c0.wires, ...c1.wires },
+    })
+
+    const unrestricted = findOccurrences(host, pattern)
+    expect(unrestricted.matches).toHaveLength(2)
+
+    const restricted = findOccurrences(host, pattern, {
+      images: { regions: [], nodes: Object.keys(c0.nodes), wires: Object.keys(c0.wires) },
+    })
+    expect(restricted.matches).toHaveLength(1)
+    expect([...restricted.matches[0]!.nodeMap.values()].sort())
+      .toEqual(Object.keys(c0.nodes).sort())
+
+    const restrictedToOther = findOccurrences(host, pattern, {
+      images: { regions: [], nodes: Object.keys(c1.nodes), wires: Object.keys(c1.wires) },
+    })
+    expect(restrictedToOther.matches).toHaveLength(1)
+    expect([...restrictedToOther.matches[0]!.nodeMap.values()].sort())
+      .toEqual(Object.keys(c1.nodes).sort())
+  })
+
+  it('rejects an unknown id in any images set, mirroring the attachments existence check', () => {
+    const pattern = mkDiagramWithBoundary(
+      {
+        root: 'proot',
+        regions: { proot: { kind: 'sheet' } },
+        nodes: identityPairComponent('proot', 'p').nodes,
+        wires: identityPairComponent('proot', 'p').wires,
+      },
+      [],
+    )
+    const c0 = identityPairComponent('root', '0')
+    const host = mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' } },
+      nodes: c0.nodes,
+      wires: c0.wires,
+    })
+
+    expect(() => findOccurrences(host, pattern, {
+      images: { regions: [], nodes: ['nope'], wires: [] },
+    })).toThrowError(/image node 'nope' does not exist/)
+    expect(() => findOccurrences(host, pattern, {
+      images: { regions: [], nodes: [], wires: ['nope'] },
+    })).toThrowError(/image wire 'nope' does not exist/)
+    expect(() => findOccurrences(host, pattern, {
+      images: { regions: ['nope'], nodes: [], wires: [] },
+    })).toThrowError(/image region 'nope' does not exist/)
+  })
+})

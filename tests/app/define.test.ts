@@ -138,6 +138,43 @@ function disconnectedIdentityPairsFoldFixture() {
   return { body, diagram, selection }
 }
 
+/**
+ * Generalizes `disconnectedIdentityPairsFoldFixture` to `m` pattern
+ * components matched against `k` host components (`m` real targets plus
+ * `k - m` same-shape decoys), targeting the LAST `m` host tags — the worst
+ * case, where the search must reject every earlier decoy component first.
+ */
+function identityPairScalingFixture(m: number, k: number) {
+  const bodyNodes: Record<string, DiagramNode> = {}
+  const bodyWires: Record<string, Wire> = {}
+  for (let i = 0; i < m; i++) addIdentityPairComponent(bodyNodes, bodyWires, 'broot', String(i))
+  const body = mkDiagramWithBoundary(
+    { root: 'broot', regions: { broot: { kind: 'sheet' } }, nodes: bodyNodes, wires: bodyWires },
+    [],
+  )
+
+  const hostNodes: Record<string, DiagramNode> = {}
+  const hostWires: Record<string, Wire> = {}
+  const tags: string[] = []
+  for (let i = 0; i < k; i++) {
+    const tag = String(i)
+    tags.push(tag)
+    addIdentityPairComponent(hostNodes, hostWires, 'root', tag)
+  }
+  const diagram = mkDiagram({
+    root: 'root', regions: { root: { kind: 'sheet' } }, nodes: hostNodes, wires: hostWires,
+  })
+
+  const targetTags = tags.slice(k - m)
+  const selNodes: string[] = []
+  const selWires: string[] = []
+  for (const tag of targetTags) {
+    selNodes.push(`j${tag}`, `pinA${tag}`, `pinB${tag}`)
+    selWires.push(`wA${tag}`, `wB${tag}`)
+  }
+  return { body, diagram, selNodes, selWires }
+}
+
 describe('structural relation definition', () => {
   it('registers and persists bounded identities independent of incidence indices', () => {
     const runs = [false, true].map((swap, index) => {
@@ -312,4 +349,88 @@ describe('structural relation definition', () => {
       )).toThrow('the selection must match the definition exactly.')
     },
   )
+})
+
+describe('inferFoldArgs search is bounded by the selection, not the host', () => {
+  it('restricts findOccurrences to the selection: derived exact step count, unaffected by decoy count', () => {
+    // m=3 pattern components against k=8 host components (5 decoys) is the
+    // size at which the UNRESTRICTED search previously exploded.
+    const m = 3
+    const { body, diagram, selNodes, selWires } = identityPairScalingFixture(m, 8)
+
+    const unrestricted = findOccurrences(diagram, body, { inRegion: diagram.root })
+    expect(unrestricted.explorationSteps).toBe(16569)
+
+    const restricted = findOccurrences(diagram, body, {
+      inRegion: diagram.root,
+      images: { regions: [], nodes: selNodes, wires: selWires },
+    })
+    // Derivation, traced exactly against match.ts's tryAssign/pickNext (the
+    // trace was checked by instrumenting a print of every tryAssign call for
+    // m=1, m=3, and m=4 and confirming each against the recursion below):
+    //
+    // With `images` restricted to precisely this selection's m components,
+    // every candidate set is drawn from EXACTLY those 3m nodes and 2m wires
+    // — no decoy ever enters any candidate set. The root region is a
+    // singleton (`inRegion`), 1 step.
+    //
+    // Every pattern `j`-node's raw candidate set has size m (one host `j`
+    // per component, sharing one content key, never arc-narrowed — only
+    // rejected at usage time), UNLESS a component's own elements have
+    // already narrowed below m via propagation, which happens only once
+    // that component's `j` is actually committed. Since m=3 > 2, a
+    // committed component's residual elements (size 2, see below) always
+    // rank below an unstarted component's `j` (size 3) in pickNext's
+    // smallest-candidate-set order, so each component resolves FULLY, one
+    // at a time, before the next component's `j` is ever tried. (This
+    // ordering fails for m=2, where the tie between size 2 and size 2 falls
+    // to id order instead — m=3 is the smallest case where the clean
+    // recursion below holds.)
+    //
+    // Once a `j` commits to a free host component c (1 step), propagation
+    // immediately narrows that component's wA/wB/pinA/pinB candidates from
+    // 2m/2m down to {c's own 2 wires}/{c's own 2 pins} (size 2 each) —
+    // no other component is affected. pickNext then picks pinA (node rank
+    // beats wire rank): the search tries BOTH of pinA's 2 candidates in
+    // full (backtracking explores every candidate, not just the first
+    // success) — each commits wA (now a singleton, always free, 1 step),
+    // then tries BOTH of pinB's 2 candidates (exactly one always collides
+    // with pinA's choice and is rejected in 1 step; the other succeeds and
+    // commits wB, a singleton, always free, 1 step), then recurses into
+    // the remaining components. So one successful `j` commit costs:
+    //   1 (j) + 2 branches * (1 pinA + 1 wA + 2 pinB attempts + 1 wB + recurse)
+    //   = 1 + 2 * (5 + recurse)
+    // Writing R(k) for the total cost of resolving k of the m components
+    // still unassigned (a not-yet-tried `j` always has raw candidate size
+    // m, so m - k of its m candidates are already-used rejects):
+    //   R(0) = 0
+    //   R(k) = (m - k) * 1 + k * (1 + 2 * (5 + R(k - 1)))
+    //        = (m - k) + k * (11 + 2 * R(k - 1))
+    // For m = 3:
+    //   R(1) = 2 + 1 * (11 + 2*0)  = 13
+    //   R(2) = 1 + 2 * (11 + 2*13) = 1 + 74  = 75
+    //   R(3) = 0 + 3 * (11 + 2*75) = 3 * 161 = 483
+    // Total = 1 (root) + R(3) = 484 — independent of the host's decoy
+    // count k, since `images` removes every decoy from candidacy entirely.
+    expect(restricted.explorationSteps).toBe(484)
+    expect(restricted.matches).toHaveLength(1)
+
+    // Confirms the independence from k directly: the same selection size m,
+    // matched against fewer decoys, costs the identical number of steps.
+    const fewerDecoys = identityPairScalingFixture(m, 6)
+    const restrictedFewerDecoys = findOccurrences(fewerDecoys.diagram, fewerDecoys.body, {
+      inRegion: fewerDecoys.diagram.root,
+      images: { regions: [], nodes: fewerDecoys.selNodes, wires: fewerDecoys.selWires },
+    })
+    expect(restrictedFewerDecoys.explorationSteps).toBe(484)
+  })
+
+  it('still infers the correct fold args for the disconnected-pairs regression fixture', () => {
+    const { body, diagram, selection } = disconnectedIdentityPairsFoldFixture()
+    const ctx = extendRelations(
+      verifyTheory({ relations: [], theorems: [] }),
+      [['DisconnectedPair', body]],
+    )
+    expect(inferFoldArgs(diagram, selection, 'DisconnectedPair', ctx)).toEqual([])
+  })
 })

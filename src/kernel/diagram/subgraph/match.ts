@@ -22,6 +22,23 @@ export type MatchResult = {
 }
 
 /**
+ * A caller-supplied restriction on which host elements an occurrence may map
+ * onto: every occurrence's region images, node images, and INTERNAL-wire
+ * images must lie within these sets. Boundary-wire images (attachments) are
+ * unrestricted — they are the seam to the surrounding diagram, not occurrence
+ * content, so the caller's "images" describe the occurrence body only. Sound
+ * as a necessary condition whenever the caller only accepts occurrences whose
+ * images equal these very sets (e.g. `inferFoldArgs`'s exact-selection gate):
+ * any occurrence violating the restriction would fail that gate anyway, so
+ * narrowing candidates to it up front loses no genuine result.
+ */
+export type MatchImages = {
+  readonly regions: readonly RegionId[]
+  readonly nodes: readonly NodeId[]
+  readonly wires: readonly WireId[]
+}
+
+/**
  * Exact structural occurrence search: candidate sets are narrowed by the
  * propagation seam below, then a most-constrained-element-first backtracking
  * search assigns each pattern region/node/wire to a host image, verifying
@@ -36,6 +53,7 @@ export function findOccurrences(
     readonly explorationFuel?: number
     readonly inRegion?: RegionId
     readonly attachments?: readonly WireId[]
+    readonly images?: MatchImages
   } = {},
 ): MatchResult {
   if (
@@ -51,6 +69,23 @@ export function findOccurrences(
   }
   if (opts.inRegion !== undefined && host.regions[opts.inRegion] === undefined) {
     throw new DiagramError(`unknown region '${opts.inRegion}'`)
+  }
+  if (opts.images !== undefined) {
+    for (const regionId of opts.images.regions) {
+      if (host.regions[regionId] === undefined) {
+        throw new DiagramError(`image region '${regionId}' does not exist in the host`)
+      }
+    }
+    for (const nodeId of opts.images.nodes) {
+      if (host.nodes[nodeId] === undefined) {
+        throw new DiagramError(`image node '${nodeId}' does not exist in the host`)
+      }
+    }
+    for (const wireId of opts.images.wires) {
+      if (host.wires[wireId] === undefined) {
+        throw new DiagramError(`image wire '${wireId}' does not exist in the host`)
+      }
+    }
   }
 
   const patternDiagram = pattern.diagram
@@ -355,7 +390,11 @@ export function findOccurrences(
 export type PropagationContext = {
   readonly host: Diagram
   readonly pattern: DiagramWithBoundary
-  readonly opts: { readonly inRegion?: RegionId; readonly attachments?: readonly WireId[] }
+  readonly opts: {
+    readonly inRegion?: RegionId
+    readonly attachments?: readonly WireId[]
+    readonly images?: MatchImages
+  }
   readonly hostIdx: RefineIndex
   readonly patternIdx: RefineIndex
   readonly patternScopes: ReadonlyMap<WireId, RegionId>
@@ -395,7 +434,11 @@ function subtreeFingerprints(
 export function __makePropagationContext(
   host: Diagram,
   pattern: DiagramWithBoundary,
-  opts: { readonly inRegion?: RegionId; readonly attachments?: readonly WireId[] },
+  opts: {
+    readonly inRegion?: RegionId
+    readonly attachments?: readonly WireId[]
+    readonly images?: MatchImages
+  },
 ): PropagationContext {
   const hostIdx = buildRefineIndex(host, [])
   const patternIdx = buildRefineIndex(pattern.diagram, pattern.boundary)
@@ -425,11 +468,31 @@ export type CandidateSets = {
  * Content-only candidate initialization: any pattern element left with an
  * empty candidate set means no occurrence exists anywhere, so the whole
  * result collapses to `null`.
+ *
+ * When `opts.images` is supplied, every pattern element that maps DIRECTLY
+ * onto a member of the restriction (regions and internal wires scoped at the
+ * pattern's own root/container, and nodes directly in the pattern's own
+ * root/container) is additionally intersected with the matching images set
+ * here. Pattern elements nested inside pattern cuts are deliberately left
+ * unrestricted at this seam: the cut/parent arcs (family 1) and the
+ * node/region and wire-scope arcs (families 2 and 5) already propagate the
+ * restriction down to them transitively, once their containing top-level cut
+ * is pinned to the restriction — restricting them here directly, against a
+ * flat id list that only ever names top-level selection members, would
+ * empty a nested element's candidate set and silently lose genuine
+ * occurrences.
  */
 export function __initCandidates(ctx: PropagationContext): CandidateSets | null {
-  const { host, pattern, opts, hostIdx, patternIdx, hostFingerprint, patternFingerprint, boundarySet } = ctx
+  const {
+    host, pattern, opts, hostIdx, patternIdx, patternScopes,
+    hostFingerprint, patternFingerprint, boundarySet,
+  } = ctx
   const patternRoot = pattern.diagram.root
   let allNonEmpty = true
+
+  const imageRegions = opts.images !== undefined ? new Set(opts.images.regions) : null
+  const imageNodes = opts.images !== undefined ? new Set(opts.images.nodes) : null
+  const imageWires = opts.images !== undefined ? new Set(opts.images.wires) : null
 
   const region = new Map<RegionId, Set<RegionId>>()
   for (const id of patternIdx.regionIds) {
@@ -438,9 +501,12 @@ export function __initCandidates(ctx: PropagationContext): CandidateSets | null 
       candidates = opts.inRegion !== undefined ? [opts.inRegion] : [...hostIdx.regionIds].sort()
     } else {
       const fp = patternFingerprint.get(id)!
-      candidates = hostIdx.regionIds
+      let list = hostIdx.regionIds
         .filter((hid) => hostIdx.regionKindKey.get(hid) === 'cut' && hostFingerprint.get(hid) === fp)
-        .sort()
+      if (imageRegions !== null && patternIdx.parentOf.get(id) === patternRoot) {
+        list = list.filter((hid) => imageRegions.has(hid))
+      }
+      candidates = list.sort()
     }
     if (candidates.length === 0) allNonEmpty = false
     region.set(id, new Set(candidates))
@@ -449,7 +515,11 @@ export function __initCandidates(ctx: PropagationContext): CandidateSets | null 
   const node = new Map<NodeId, Set<NodeId>>()
   for (const id of patternIdx.nodeIds) {
     const key = patternIdx.nodeContentKey.get(id)!
-    const candidates = hostIdx.nodeIds.filter((hid) => hostIdx.nodeContentKey.get(hid) === key).sort()
+    let list = hostIdx.nodeIds.filter((hid) => hostIdx.nodeContentKey.get(hid) === key)
+    if (imageNodes !== null && patternIdx.nodeRegion.get(id) === patternRoot) {
+      list = list.filter((hid) => imageNodes.has(hid))
+    }
+    const candidates = list.sort()
     if (candidates.length === 0) allNonEmpty = false
     node.set(id, new Set(candidates))
   }
@@ -462,9 +532,12 @@ export function __initCandidates(ctx: PropagationContext): CandidateSets | null 
       hostIdx.wireSigKey.get(hid) === patternIdx.wireSigKey.get(id)!
     let candidates: WireId[]
     if (!isBoundary) {
-      candidates = hostIdx.wireIds
+      let list = hostIdx.wireIds
         .filter((hid) => sigMatches(hid) && host.wires[hid]!.endpoints.length === patternWire.endpoints.length)
-        .sort()
+      if (imageWires !== null && patternScopes.get(id) === patternRoot) {
+        list = list.filter((hid) => imageWires.has(hid))
+      }
+      candidates = list.sort()
     } else if (opts.attachments !== undefined) {
       const positions = pattern.boundary
         .map((wireId, index) => (wireId === id ? index : -1))

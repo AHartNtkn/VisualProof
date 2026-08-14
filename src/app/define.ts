@@ -85,11 +85,19 @@ export function canonicalArgOrder(diagram: Diagram, sel: SubgraphSelection): Wir
  * `remaining === 0` (an absent budget leaves `remaining` `undefined`
  * forever) and `status` is always `'complete'` — the same decisive
  * treatment `diagramIso` gives adversarial worst cases, with no fuel cap on
- * a check that must be exact. (A bounded-by-size heuristic was tried and
- * refuted: a body with disconnected structurally-identical substructures
- * leaves their candidate sets unsplit by propagation, so the true cost is
- * multiplicative in the substructure count, not additive in element count —
- * no cheap size-derived bound is sound here.)
+ * a check that must be exact.
+ *
+ * The search is also selection-scaled: `images` restricts every occurrence's
+ * region/node/internal-wire images to `sel`'s own elements, so the matcher
+ * never explores host structure outside the selection. This is sound, not a
+ * heuristic — the loop below only accepts an occurrence whose image sets are
+ * EXACTLY `sel`'s (the `sameIds` checks), so any occurrence `images` prunes
+ * would have been rejected anyway. Without it, disconnected
+ * structurally-identical decoy components elsewhere in `sel.region` leave
+ * their candidate sets unsplit by content-only propagation, making the true
+ * cost multiplicative in the decoy count rather than additive in element
+ * count — restricting to `sel`'s own elements removes the decoys from the
+ * search entirely instead of bounding a search that still considers them.
  */
 export function inferFoldArgs(
   diagram: Diagram,
@@ -102,7 +110,10 @@ export function inferFoldArgs(
   if (body === undefined) {
     throw new Error(`unknown relation '${defId}' (known: ${[...ctx.relations.keys()].join(', ') || 'none'})`)
   }
-  const found = findOccurrences(diagram, body, { inRegion: sel.region })
+  const found = findOccurrences(diagram, body, {
+    inRegion: sel.region,
+    images: { regions: sel.regions, nodes: sel.nodes, wires: sel.wires },
+  })
   const sameIds = (left: readonly string[], right: readonly string[]): boolean => {
     const a = [...left].sort()
     const b = [...right].sort()
