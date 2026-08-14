@@ -1,5 +1,6 @@
 import type { Diagram } from '../kernel/diagram/diagram'
 import { propShrinkFamily } from './prop/family'
+import { propWalkFamily } from './walk/family'
 
 export type KnobSpec = {
   readonly id: string
@@ -45,4 +46,4 @@ export function readKnobs(
   return values
 }
 
-export const GENERATOR_FAMILIES: readonly GeneratorFamily[] = [propShrinkFamily]
+export const GENERATOR_FAMILIES: readonly GeneratorFamily[] = [propShrinkFamily, propWalkFamily]
