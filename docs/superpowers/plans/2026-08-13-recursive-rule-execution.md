@@ -235,19 +235,19 @@
 - Modify: `VisualProof/Rule/DoubleCut.lean`
 - Modify: `VisualProof/Rule/Vacuity.lean`
 
-- [ ] **Step 1: Define direct introduction and elimination data**
+- [x] **Step 1: Define direct introduction and elimination data**
 
   For each rule and direction, define constructors that either identify an unwrapped occurrence and carry the data needed to construct the wrapper, or identify the wrapped occurrence and carry the data needed to remove it. Vacuity introduction additionally carries the binder arity. Keep distinct public forward and backward index types even when their constructors are structurally similar.
 
-- [ ] **Step 2: Define the four runners**
+- [x] **Step 2: Define the four runners**
 
   Each runner performs one `wrap`/unwrap local computation and fills the supplied `Occurrence`. It performs no traversal or recognition of wrapper syntax outside data already present in the index.
 
-- [ ] **Step 3: Prove closure and exactness**
+- [x] **Step 3: Prove closure and exactness**
 
   For each rule, derive the two target-isomorphism closure laws from its existing `.iso` theorem. Prove forward exactness GREEN before entering backward exactness. Use the existing symmetric local relation only in proofs, not as a runtime direction abstraction.
 
-- [ ] **Step 4: Validate and commit separately**
+- [x] **Step 4: Validate and commit separately**
 
   Strict-check both executable modules, scan for admissions/raised limits, run their focused builds, and commit each independently.
 

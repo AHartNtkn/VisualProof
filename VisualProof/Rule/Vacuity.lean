@@ -46,6 +46,20 @@ theorem Vacuity.iso
     Vacuity source' target' :=
   Contextual.iso sourceIso step targetIso
 
+theorem Vacuity.respectsTargetIso
+    (step : Vacuity source target)
+    (isomorphic : OpenDiagram.Isomorphic target target') :
+    Vacuity source target' := by
+  rcases isomorphic with ⟨targetIso⟩
+  exact Vacuity.iso (OpenDiagramIso.refl source) step targetIso
+
+theorem Vacuity.backward_respectsTargetIso
+    (step : Vacuity target source)
+    (isomorphic : OpenDiagram.Isomorphic target target') :
+    Vacuity target' source := by
+  rcases isomorphic with ⟨targetIso⟩
+  exact Vacuity.iso targetIso step (OpenDiagramIso.refl source)
+
 theorem Vacuity.symm
     {arity : Nat}
     {source target : OpenDiagram arity}
