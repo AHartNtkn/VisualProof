@@ -54,7 +54,6 @@
 - Modify: `VisualProof/Diagram/Core.lean`
 - Create: `VisualProof/Diagram/Scope.lean`
 - Modify: `VisualProof/Diagram/Boundary.lean`
-- Modify: `VisualProof/Diagram.lean`
 
 **Interfaces:**
 - Produces `Sig`, `Var`, `Vars`, `WireRenaming`, recursive typed diagram syntax, recursive port paths, `Region.Canonical`, hierarchical wire identities, and computed `OpenDiagram.scopePath`.
@@ -183,8 +182,7 @@
 
   ```bash
   git add VisualProof/Theory/Signature.lean VisualProof/Diagram/Core.lean \
-    VisualProof/Diagram/Scope.lean VisualProof/Diagram/Boundary.lean \
-    VisualProof/Diagram.lean
+    VisualProof/Diagram/Scope.lean VisualProof/Diagram/Boundary.lean
   git commit -m "replace relation bubbles with canonical typed wires"
   ```
 

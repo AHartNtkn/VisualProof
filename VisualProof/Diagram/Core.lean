@@ -1,77 +1,66 @@
-import VisualProof.Theory.Relation
+import VisualProof.Theory.Signature
 
 namespace VisualProof.Diagram
 
-open VisualProof
-open Theory
+open VisualProof.Theory
 
 mutual
-  inductive Region : Nat -> RelCtx -> Type
-    | mk {wires : Nat} {rels : RelCtx} (localWires : Nat)
-        (items : ItemSeq (wires + localWires) rels) :
-        Region wires rels
+  /-- A recursive region with an inherited wire interface and locally bound
+  signature-indexed wires. -/
+  inductive Region : List Sig → Type
+    | mk {outer : List Sig} (locals : List Sig)
+        (items : ItemSeq (outer ++ locals)) : Region outer
 
-  inductive Item : Nat -> RelCtx -> Type
-    | atom : RelVar rels arity -> (Fin arity -> Fin wires) ->
-        Item wires rels
-    | identity : (arity : Nat) -> (Fin arity -> Fin wires) ->
-        Item wires rels
-    | cut : Region wires rels -> Item wires rels
-    | bubble : (arity : Nat) -> Region wires (arity :: rels) ->
-        Item wires rels
+  /-- Direct recursive diagram content. Quantification is carried by typed
+  regional wires rather than a second syntactic binder. -/
+  inductive Item : List Sig → Type
+    | atom {wires arguments : List Sig}
+        (head : Var wires (.rel arguments))
+        (ports : Vars wires arguments) : Item wires
+    | identity {wires : List Sig} (signature : Sig) (arity : Nat)
+        (ports : Fin arity → Var wires signature) : Item wires
+    | cut {wires : List Sig} (body : Region wires) : Item wires
 
-  inductive ItemSeq : Nat -> RelCtx -> Type
-    | nil : ItemSeq wires rels
-    | cons : Item wires rels -> ItemSeq wires rels -> ItemSeq wires rels
+  inductive ItemSeq : List Sig → Type
+    | nil : ItemSeq wires
+    | cons : Item wires → ItemSeq wires → ItemSeq wires
 end
 
-def Region.localCount : Region wires rels -> Nat
-  | .mk localWires _ => localWires
+namespace Region
 
-def Region.items (region : Region wires rels) :
-    ItemSeq (wires + region.localCount) rels :=
+def locals : Region outer → List Sig
+  | .mk locals _ => locals
+
+def items (region : Region outer) : ItemSeq (outer ++ region.locals) :=
   match region with
   | .mk _ items => items
 
-def Region.itemsCast (region : Region wires rels)
-    (localEq : region.localCount = localWires) :
-    ItemSeq (wires + localWires) rels :=
-  Eq.mp (congrArg (fun count => ItemSeq (wires + count) rels) localEq)
-    region.items
-
-theorem Region.itemsCast_eq_of_mk_eq
-    (items : ItemSeq (wires + localWires) rels)
-    (region : Region wires rels)
-    (equality : Region.mk localWires items = region) :
-    region.itemsCast (congrArg Region.localCount equality).symm = items := by
-  cases equality
-  rfl
+end Region
 
 namespace ItemSeq
 
-def length : ItemSeq wires rels -> Nat
+def length : ItemSeq wires → Nat
   | .nil => 0
   | .cons _ tail => Nat.succ tail.length
 
-def get : (items : ItemSeq wires rels) ->
-    Fin items.length -> Item wires rels
+def get : (items : ItemSeq wires) → Fin items.length → Item wires
   | .nil, index => Fin.elim0 index
   | .cons head tail, index => Fin.cases head tail.get index
 
-def append : ItemSeq wires rels -> ItemSeq wires rels -> ItemSeq wires rels
+def append : ItemSeq wires → ItemSeq wires → ItemSeq wires
   | .nil, suffix => suffix
   | .cons item initial, suffix => .cons item (append initial suffix)
 
-@[simp] theorem nil_append (items : ItemSeq wires rels) :
+@[simp] theorem nil_append (items : ItemSeq wires) :
     append .nil items = items := rfl
 
-@[simp] theorem append_nil : (items : ItemSeq wires rels) ->
+@[simp] theorem append_nil : (items : ItemSeq wires) →
     append items .nil = items
   | .nil => rfl
   | .cons item tail => congrArg (ItemSeq.cons item) (append_nil tail)
 
 @[simp] theorem append_assoc :
-    (first second third : ItemSeq wires rels) ->
+    (first second third : ItemSeq wires) →
     append (append first second) third = append first (append second third)
   | .nil, _, _ => rfl
   | .cons item tail, second, third =>
