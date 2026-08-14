@@ -131,13 +131,28 @@ is intentionally omitted — at puzzle sizes the full check is already
 instant, so the prefilter buys nothing.
 
 Minimality under weakening does NOT exclude doubled negations (¬¬ψ is
-minimal whenever ψ is), so both families additionally reject any candidate
-whose formula contains `not(not(_))` — a doubled negation is always
-trivially removable structure and would hand the player a free opening
-move. This is a syntactic definition, not a tuned heuristic. The one
-eliminable double-cut pair that remains is intrinsic: the ∀ shell's inner
-cut plus a ¬-headed body form a real pair in almost every theorem of this
-fragment, and removing it is part of unwrapping the quantifier.
+minimal whenever ψ is), and a doubled negation hands the player a free
+opening move, so both families guarantee ¬¬-free output — by repair, not
+rejection:
+
+- `simplify` includes the rewrite ¬¬ψ → ψ alongside the constant
+  identities. The collapse preserves minimality (¬¬ preserves polarity, so
+  ψ's weakenings embed into ¬¬ψ's), and it must live in `simplify` rather
+  than the sampler because constant elimination itself can create doubled
+  negations (¬(⊤ ∧ ¬P) → ¬¬P). By induction `simplify`'s output is
+  ¬¬-free, so family A's cores are ¬¬-free by construction; a survivor is
+  a bug and throws loudly.
+- Family B normalizes the walked diagram: after the wire cleanup, recorded
+  forward `doubleCutElim` steps eliminate every empty-annulus double-cut
+  pair strictly inside the body (the derivation still certifies —
+  double-cut elimination is an ungated equivalence). The shell's own cuts
+  are excluded: the ∀ shell's inner cut plus a ¬-headed body form the one
+  intrinsic pair, and removing it is part of unwrapping the quantifier. A
+  ¬¬ surviving in the read formula is then possible only when a pin sits
+  inside the pair's annulus (the applier rightly refuses such pairs), so
+  family B rejects that rare walk rather than treating it as a bug.
+
+This is a syntactic definition, not a tuned heuristic.
 
 **Accept/reject loop.** Knobs: atom count (min 1, default 3), sample size in
 connectives (min 1, default 12 — the size formulas are sampled at, before
