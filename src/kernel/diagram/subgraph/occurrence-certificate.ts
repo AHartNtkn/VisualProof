@@ -25,6 +25,16 @@ function endpointKey(diagram: Diagram, endpoint: Endpoint): string {
   return JSON.stringify([endpoint.node, endpointPositionKey(diagram, endpoint)])
 }
 
+/**
+ * Domain-completeness check only: `map`'s key set must equal `expected`
+ * exactly. Unlike `checkBijection` in `canonical/iso.ts`, this checks
+ * nothing about the map's values — no codomain, no injectivity, no onto
+ * requirement — because a certificate map is an injective embedding of a
+ * pattern into a generally larger host, not a bijection between equal-sized
+ * sides; injectivity here is instead checked inline, per element, by the
+ * `regionImages`/`nodeImages`/`internalImages` sets below, interleaved with
+ * each element's other structural checks in the same pass.
+ */
 function exactDomain<K>(
   map: ReadonlyMap<K, unknown>,
   expected: ReadonlySet<K>,

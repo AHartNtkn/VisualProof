@@ -108,7 +108,7 @@ export function diagramIso(
         else wires.set(aId, bId)
       }
       const iso: DiagramIso = { regions, nodes, wires }
-      const reason = verifyIso(a, b, aPins, bPins, iso)
+      const reason = __verifyIso(a, b, aPins, bPins, iso)
       if (reason !== null) {
         throw new DiagramError(`diagramIso: discrete census-matched witness failed verification: ${reason}`)
       }
@@ -131,6 +131,18 @@ export function diagramIso(
   }
 }
 
+/**
+ * Full bijection check: `map`'s key set must equal `domain` exactly and its
+ * value set must equal `codomain` exactly (injective AND onto), as required
+ * for a whole-diagram isomorphism where every element on both sides must
+ * correspond. Injectivity is checked directly (a repeated image is rejected
+ * on sight) rather than inferred from `image.size === codomain.size`, which
+ * only detects collisions when `domain.size === codomain.size` — compare
+ * `exactDomain` in `occurrence-certificate.ts`, which checks domain
+ * completeness only (no codomain, no onto requirement), because an
+ * occurrence certificate is an injective embedding of a pattern into a
+ * generally larger host, not a bijection between two equal-sized sides.
+ */
 function checkBijection<K, V>(
   map: ReadonlyMap<K, V>, domain: ReadonlySet<K>, codomain: ReadonlySet<V>, label: string,
 ): string | null {
@@ -139,14 +151,19 @@ function checkBijection<K, V>(
   for (const [k, v] of map) {
     if (!domain.has(k)) return `${label} map has unexpected key '${String(k)}'`
     if (!codomain.has(v)) return `${label} map targets unknown '${String(v)}'`
+    if (image.has(v)) return `${label} map is not injective: '${String(v)}' has more than one preimage`
     image.add(v)
   }
   if (image.size !== codomain.size) return `${label} map is not onto its codomain`
   return null
 }
 
-/** Linear structural transport check; returns a reason or null. */
-function verifyIso(
+/** Linear structural transport check; returns a reason or null. Exported
+ *  under the file's `__`-prefixed test-seam convention (see `__isoCounters`)
+ *  because every rejection branch here is unreachable through the public
+ *  `diagramIso`/`sameDiagram` API on genuine engine inputs — see the module
+ *  doc comment — and must be exercised by direct tests instead. */
+export function __verifyIso(
   a: Diagram, b: Diagram,
   aPins: readonly WireId[], bPins: readonly WireId[],
   iso: DiagramIso,
