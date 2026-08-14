@@ -154,6 +154,10 @@ function planProof(
     target: destination.region,
   })
   try {
+    // The result is discarded: this call exists solely for its validation/
+    // throw behavior — a dry run confirming `action` applies cleanly at
+    // `destination` before the plan is offered. The actual application
+    // happens later, when the caller commits the returned plan.
     applyAction(
       destination.diagram,
       action,

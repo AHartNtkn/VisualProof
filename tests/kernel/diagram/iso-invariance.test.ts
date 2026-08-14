@@ -54,7 +54,7 @@ function namedGraph(
   })
 }
 
-describe('canonical graph exploration', () => {
+describe('diagramIso and sameDiagram invariance', () => {
   it('is invariant under IDs and insertion order', () => {
     const first = namedGraph({
       root: 'r0',

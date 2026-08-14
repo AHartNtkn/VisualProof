@@ -1974,9 +1974,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       theoryJson(): string {
         return JSON.stringify(theoryToJson(sessionTheory(ctx, { relations })))
       },
-      // The EDIT sheet's storage as JSON — an e2e compares snapshots to assert
-      // defining a relation leaves the sheet untouched (the spec's "no diagram
-      // changes when a relation is defined").
+      // The EDIT sheet's storage as JSON — e2e/interaction.spec.ts's
+      // "plain and Shift drags are selection-only..." test compares
+      // snapshots across drags to assert selection-only gestures never
+      // touch body geometry or semantics.
       editJson(): string {
         return JSON.stringify(diagramToJson(editDiagram))
       },

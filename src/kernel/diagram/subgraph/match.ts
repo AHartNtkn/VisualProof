@@ -11,7 +11,7 @@ import {
 export type { OccurrenceCertificate } from './occurrence-certificate'
 
 /** Production-neutral counters retained for focused exploration benchmarks. */
-export const __benchCounter = { n: 0, permutations: 0 }
+export const __benchCounter = { n: 0 }
 
 export type Occurrence = OccurrenceCertificate
 
@@ -351,7 +351,6 @@ export function findOccurrences(
   }
 
   function recordOccurrence(hostRoot: RegionId): void {
-    __benchCounter.permutations++
     const attachments = pattern.boundary.map((wireId) => wireMap.get(wireId)!)
     const footprint = JSON.stringify([
       [...regionMap.values()].sort(),
