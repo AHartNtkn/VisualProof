@@ -260,18 +260,25 @@ proving "no shorter proof exists" over the full alphabet is infeasible
 (≈ 30^d states to close depth d). The search therefore runs in two phases:
 
 - **Phase 1 — deletion-only, complete.** Alphabet: `erasure` (negative),
-  `deiteration`, `doubleCutElim`, vacuity bare-wire delete. Every one of
-  these strictly shrinks the diagram (regions + nodes + wires), so the
-  reachable state space is finite and small. A breadth-first search with
-  isomorphism deduplication explores it **completely** — no fuel needed. If
-  the blank sheet is reached, the minimal deletion-only proof length is
-  exact; if the whole space is exhausted without reaching it, the problem
-  **provably requires insertion** — the notes' strongest difficulty signal,
-  established as a theorem rather than a fuel-limited guess.
+  `deiteration`, `doubleCutElim`, vacuity bare-wire delete, with auto-pin
+  bundling (below). Every move strictly shrinks the diagram (pins aside),
+  so the reachable state space is finite and small. A breadth-first search
+  with isomorphism deduplication explores it **completely** — no fuel
+  needed. If the blank sheet is reached, the minimal deletion-only proof
+  length is exact; if the whole space is exhausted without reaching it, the
+  problem **provably has no deletion-only proof** — established as a
+  theorem rather than a fuel-limited guess. Note the direction subtlety:
+  read forward, this backward alphabet is {double-cut intro, insertion into
+  negative areas, iteration, vacuity-insert} — backward erasure in a
+  negative region IS forward insertion — so classic "requires insertion"
+  theorems (Peirce's law) are still deletion-only solvable for the backward
+  player, and phase 1 may solve everything this fragment generates.
 - **Phase 2 — full alphabet, fuel-bounded.** Runs only when phase 1 proves
-  insertion is required. Iterative-deepening DFS over the full alphabet
-  under an explicit expanded-state fuel budget, reporting a solve or the
-  deepest fully-exhausted depth as an honest bound.
+  no deletion-only proof exists (possibly never for generated tautologies;
+  it remains the honest fallback, and non-theorem inputs exercise it).
+  Iterative-deepening DFS over the full alphabet under an explicit
+  expanded-state fuel budget, reporting a solve or the deepest
+  fully-exhausted depth as an honest bound.
 
 Deterministic; no RNG. Memoization/deduplication in both phases: states are
 bucketed by an iso-invariant digest (multisets of region depths, node kinds
@@ -367,9 +374,15 @@ Tests land as each piece is built. All generator tests use fixed seeds.
   vacuity-delete the bare wire, double-cut-elim the shell) and its inner
   cut can only be emptied by deiteration, so phase 1 must report length 5
   requiring the iteration class, insertion proven unnecessary. Peirce's law
-  in ¬/∧ form (∀P Q:o. ¬(¬(¬(P∧¬Q)∧¬P)∧¬P)) is the classic case with no
-  deletion-only proof: phase 1 must prove that and phase 2 takes over,
-  returning a solve or an honest fuel bound. Integration
+  in ¬/∧ form (∀P Q:o. ¬(¬(¬(P∧¬Q)∧¬P)∧¬P)) solves deletion-only in 8
+  moves once auto-pin bundling widens the alphabet — its first move is
+  exactly a pin-bundled cut erasure, making it the regression pin for that
+  fix; the forward-reading note in the search section explains why the
+  "requires insertion" folklore does not transfer to the backward mirror.
+  The exhausted/honest-bound path is exercised with a non-theorem input
+  (e.g. ∀P:o. P): soundness makes the blank sheet unreachable, so phase 1
+  completes with a proof of no-deletion-only-proof and phase 2 must burn
+  its fuel and report the honest bound. Integration
   property: for default knobs, both families' outputs run through the
   search without error, returning either a solve or an honest bound —
   exact-solve assertions are reserved for small hand-chosen cases that
