@@ -109,6 +109,39 @@ audit_implementation() {
   done < <(rg -n '^import VisualProof\.(Model|Diagram\.Semantics($|\.)|Rule\.Soundness($|\.)|Concrete($|\.)|Refinement($|\.)|Proof($|\.))' \
     "$root" "$umbrella" || true)
 
+  local rule file declaration
+  for rule in Erasure WireSever Iteration DoubleCut Vacuity; do
+    file="$root/$rule.lean"
+    if [[ ! -f $file ]]; then
+      printf 'missing executable rule module: %s\n' "$rule"
+      violations=$((violations + 1))
+      continue
+    fi
+    for declaration in ForwardIndex BackwardIndex runForward runBackward \
+        forward_exact backward_exact; do
+      if ! rg -q "^(inductive|def|theorem) $declaration\\b" "$file"; then
+        printf 'missing executable declaration: %s.%s\n' "$rule" "$declaration"
+        violations=$((violations + 1))
+      fi
+    done
+
+    local relation="$repo_root/VisualProof/Rule/$rule.lean"
+    for declaration in respectsTargetIso backward_respectsTargetIso; do
+      if ! rg -q "^theorem $rule\\.$declaration\\b" "$relation"; then
+        printf 'missing relation closure theorem: %s.%s\n' \
+          "$rule" "$declaration"
+        violations=$((violations + 1))
+      fi
+    done
+  done
+
+  while IFS= read -r match; do
+    [[ -n $match ]] || continue
+    printf 'forbidden executable abstraction or limit override: %s\n' "$match"
+    violations=$((violations + 1))
+  done < <(rg -n '\b(Program|ExecutableFamily|Functional|Direction)\b|set_option (maxHeartbeats|maxRecDepth)' \
+    "$root" "$umbrella" || true)
+
   if (( violations > 0 )); then
     printf 'implementation: %d violation(s)\n' "$violations" >&2
     return 1

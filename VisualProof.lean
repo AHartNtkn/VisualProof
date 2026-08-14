@@ -1,2 +1,2 @@
 import VisualProof.Rule.Soundness
-import VisualProof.Diagram.NestedOccurrence
+import VisualProof.Rule.Executable

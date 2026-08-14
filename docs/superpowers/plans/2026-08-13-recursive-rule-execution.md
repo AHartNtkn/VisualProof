@@ -324,19 +324,19 @@
 - Modify: `scripts/audit-lean-authority.sh`
 - Modify: `VisualProof.lean`
 
-- [ ] **Step 1: Add an import-only umbrella**
+- [x] **Step 1: Add an import-only umbrella**
 
   `VisualProof/Rule/Executable.lean` imports the five executable modules and declares nothing.
 
-- [ ] **Step 2: Validate code generation for the ten runners**
+- [x] **Step 2: Validate code generation for the ten runners**
 
   In `VisualProof/ComputabilityAudit.lean`, use Lean's test-only `Lean.compileDecls` command on the ten runner names. This asks Lean's code generator to compile those definitions and fails if their computational dependency closure contains a noncomputable definition. It creates no runtime API and imposes no restriction on theorem proofs.
 
-- [ ] **Step 3: Validate the public theorem roster**
+- [x] **Step 3: Validate the public theorem roster**
 
   Require exactly these declarations for each rule: `ForwardIndex`, `BackwardIndex`, `runForward`, `runBackward`, `forward_exact`, `backward_exact`, `respectsTargetIso`, and `backward_respectsTargetIso`. Reject aggregate executors, direction switches, replay/program types, target fields, rule-evidence fields, and imports from executable modules into mathematical rule or soundness modules.
 
-- [ ] **Step 4: Run final validation**
+- [x] **Step 4: Run final validation**
 
   ```bash
   lake env lean -DwarningAsError=true VisualProof/Diagram/NestedOccurrence.lean
@@ -354,11 +354,11 @@
   git diff --check
   ```
 
-- [ ] **Step 5: Perform the architecture-compensation review**
+- [x] **Step 5: Perform the architecture-compensation review**
 
   Confirm that every runner merely pattern-matches its index, constructs one local counterpart, and fills the supplied occurrence; no runner traverses the source to discover anything. Confirm that proof code has not introduced a second navigation authority, target reconstruction layer, or raised elaboration limits. Backtrack the owning task if either check fails.
 
-- [ ] **Step 6: Commit validation authority**
+- [x] **Step 6: Commit validation authority**
 
   Commit the umbrella and audits as `audit recursive rule execution`.
 
