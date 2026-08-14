@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import {
   applyAction,
@@ -29,15 +29,18 @@ describe('proof actions', () => {
       wire: first,
     }
 
-    expect(exploreForm(applyAction(
-      diagram,
-      singleStepAction('spawn atom', step),
-      EMPTY_PROOF_CONTEXT,
-    ))).toBe(exploreForm(applyStep(
-      diagram,
-      step,
-      EMPTY_PROOF_CONTEXT,
-    )))
+    expect(sameDiagram(
+      applyAction(
+        diagram,
+        singleStepAction('spawn atom', step),
+        EMPTY_PROOF_CONTEXT,
+      ),
+      applyStep(
+        diagram,
+        step,
+        EMPTY_PROOF_CONTEXT,
+      ),
+    )).toBe(true)
   })
 
   it('reports one action unit while replaying constituent steps in order', () => {

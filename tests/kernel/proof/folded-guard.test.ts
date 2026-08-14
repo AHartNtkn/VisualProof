@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { boundaryForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { singleStepAction } from '../../../src/kernel/proof/action'
@@ -95,10 +95,10 @@ describe('folded-guard integration proof', () => {
       remainingRef,
       definitions,
     )
-    expect(boundaryForm(mkDiagramWithBoundary(
-      fullyUnfolded,
-      lhs.boundary,
-    ))).not.toBe(boundaryForm(rhs))
+    expect(sameDiagram(
+      fullyUnfolded, rhs.diagram,
+      lhs.boundary, rhs.boundary,
+    )).toBe(false)
     expect(Object.values(fullyUnfolded.nodes).some((node) =>
       node.kind === 'ref')).toBe(false)
   })

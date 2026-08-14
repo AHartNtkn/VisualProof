@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
@@ -175,7 +175,7 @@ describe('exact applyDeiteration evidence', () => {
       wires: [],
     })
 
-    expect(exploreForm(deiterate(iterated, copySelection))).toBe(exploreForm(diagram))
+    expect(sameDiagram(deiterate(iterated, copySelection), diagram)).toBe(true)
   })
 
   it('rejects removal with no disjoint exact justifier', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { exploreForm, IOTA, relSig } from '../../src/kernel/diagram'
+import { sameDiagram, IOTA, relSig } from '../../src/kernel/diagram'
 import { derivedScope } from '../../src/kernel/diagram/regions'
 import { identityGeometry } from '../../src/view/bend'
 import { mkEngine, pkey, worldBindAnchor } from '../../src/view/engine'
@@ -61,8 +61,10 @@ describe('formulaToDiagram', () => {
   })
 
   it('is structurally equivalent to an independently constructed universal implication', () => {
-    expect(exploreForm(formulaToDiagram('∀ P : i → o. ∀ x. P(x) ⇒ P(x)')))
-      .toBe(exploreForm(manuallyBuiltUniversalImplication()))
+    expect(sameDiagram(
+      formulaToDiagram('∀ P : i → o. ∀ x. P(x) ⇒ P(x)'),
+      manuallyBuiltUniversalImplication(),
+    )).toBe(true)
   })
 
   it('restores an outer binding after a shadowing quantifier', () => {

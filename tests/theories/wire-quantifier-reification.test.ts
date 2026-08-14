@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../src/kernel/diagram/canonical/iso'
 import type {
   Diagram,
   NodeId,
@@ -318,8 +318,10 @@ describe('strongest-form relation reification construction', () => {
     const theorem = conjunctionClosureTheorem()
     const context = verifyTheory({ relations: [], theorems: [] })
     const blank = finishDiagramWithBoundary(emptyGraph(), [])
-    expect(exploreForm(theorem.lhs.diagram, theorem.lhs.boundary))
-      .toBe(exploreForm(blank.diagram, blank.boundary))
+    expect(sameDiagram(
+      theorem.lhs.diagram, blank.diagram,
+      theorem.lhs.boundary, blank.boundary,
+    )).toBe(true)
     expect(() => checkTheorem(theorem, context)).not.toThrow()
     const severActions = theorem.actions.filter((action) =>
       action.steps.some((step) =>

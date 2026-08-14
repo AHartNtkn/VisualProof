@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../src/kernel/diagram/canonical/iso'
 import type {
   Diagram,
   RegionId,
@@ -785,7 +785,7 @@ function assertStructuralProvenanceChain(
   const backwardMeeting = traces.at(-1)!.after
   if (
     forwardMeeting !== undefined
-    && exploreForm(backwardMeeting) !== exploreForm(forwardMeeting)
+    && !sameDiagram(backwardMeeting, forwardMeeting)
   ) {
     throw new Error(`${premise} proof halves do not share a meeting state`)
   }
@@ -978,8 +978,7 @@ describe('relational Frege arithmetic proofs', () => {
       ])
       expect(Object.keys(theorem!.lhs.diagram.nodes)).toEqual([])
       expect(Object.keys(theorem!.lhs.diagram.wires)).toEqual([])
-      expect(exploreForm(theorem!.rhs.diagram))
-        .toBe(exploreForm(statements[name].diagram))
+      expect(sameDiagram(theorem!.rhs.diagram, statements[name].diagram)).toBe(true)
 
       const actions = [
         ...theorem!.actions,
@@ -1499,9 +1498,7 @@ describe('relational Frege arithmetic proofs', () => {
       const support = theory.theorems[supportIndex]!
       expect(support.lhs.boundary).toEqual([])
       expect(support.rhs.boundary).toEqual([])
-      expect(exploreForm(support.rhs.diagram)).toBe(
-        exploreForm(statements[supportName].diagram),
-      )
+      expect(sameDiagram(support.rhs.diagram, statements[supportName].diagram)).toBe(true)
       expect(support.actions.length + (support.backActions?.length ?? 0))
         .toBeGreaterThan(0)
       const citations = [
@@ -1746,7 +1743,7 @@ describe('relational Frege arithmetic proofs', () => {
         undefined,
         'backward',
       )
-      expect(exploreForm(forward)).toBe(exploreForm(backward))
+      expect(sameDiagram(forward, backward)).toBe(true)
       context = registerTheorem(context, theorem)
     }
   })

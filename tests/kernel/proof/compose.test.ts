@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import type { DiagramIso } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
+import type { DiagramIso } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { replayActions, type ProofAction } from '../../../src/kernel/proof/action'
@@ -59,15 +59,18 @@ describe('composeActions', () => {
       rule: 'doubleCutIntro',
       sel: { nodes: [copies.targetAtom] },
     })
-    expect(exploreForm(replayActions(
-      copies.target,
-      composed,
-      EMPTY_PROOF_CONTEXT,
-    ))).toBe(exploreForm(replayActions(
-      copies.source,
-      tail,
-      EMPTY_PROOF_CONTEXT,
-    )))
+    expect(sameDiagram(
+      replayActions(
+        copies.target,
+        composed,
+        EMPTY_PROOF_CONTEXT,
+      ),
+      replayActions(
+        copies.source,
+        tail,
+        EMPTY_PROOF_CONTEXT,
+      ),
+    )).toBe(true)
   })
 
   it('re-derives ids created by an earlier step in the same action', () => {
@@ -104,11 +107,14 @@ describe('composeActions', () => {
       EMPTY_PROOF_CONTEXT,
     )
 
-    expect(exploreForm(replayActions(
+    expect(sameDiagram(
+      replayActions(
+        copies.target,
+        composed,
+        EMPTY_PROOF_CONTEXT,
+      ),
       copies.target,
-      composed,
-      EMPTY_PROOF_CONTEXT,
-    ))).toBe(exploreForm(copies.target))
+    )).toBe(true)
   })
 
   it('preserves action allocation exclusions', () => {

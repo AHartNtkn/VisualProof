@@ -7,7 +7,7 @@ import {
   sigFromJson,
   sigToJson,
 } from '../../../src/kernel/diagram/json'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { applyIdentification } from '../../../src/kernel/rules/identity-rules'
 
@@ -60,7 +60,7 @@ describe('diagram JSON', () => {
     const decoded = diagramFromJson(JSON.parse(JSON.stringify(encoded)))
 
     expect(decoded).toEqual(diagram)
-    expect(exploreForm(decoded)).toBe(exploreForm(diagram))
+    expect(sameDiagram(decoded, diagram)).toBe(true)
     expect(diagramToJson(decoded)).toEqual(encoded)
   })
 

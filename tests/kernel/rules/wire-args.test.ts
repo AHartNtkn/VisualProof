@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { contentEndpoints } from '../../fixtures/pins'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
@@ -61,7 +61,7 @@ describe('arity shift / unshift', () => {
     expect(contentEndpoints(shifted, locals[0]!)).toHaveLength(1)
 
     const restored = applyArityUnshift(shifted, fresh, 2)
-    expect(exploreForm(restored)).toEqual(exploreForm(diagram))
+    expect(sameDiagram(restored, diagram)).toBe(true)
   })
 
   it('refuses unshift when the position wire is shared or outer-scoped', () => {
@@ -99,7 +99,7 @@ describe('argument permute / duplicate / contract', () => {
     expect(argWires).toEqual([second, first])
 
     const inverted = applyArgPermute(permuted, fresh, [1, 0])
-    expect(exploreForm(inverted)).toEqual(exploreForm(diagram))
+    expect(sameDiagram(inverted, diagram)).toBe(true)
   })
 
   it('duplicates a position onto the same wire and contracts back', () => {
@@ -112,7 +112,7 @@ describe('argument permute / duplicate / contract', () => {
     expect(duplicated.wires[fresh]!.sig).toEqual(relSig([IOTA, IOTA, IOTA]))
 
     const contracted = applyArgContract(duplicated, fresh, 0)
-    expect(exploreForm(contracted)).toEqual(exploreForm(diagram))
+    expect(sameDiagram(contracted, diagram)).toBe(true)
   })
 
   it('refuses contracting positions on different wires', () => {
@@ -168,7 +168,7 @@ describe('argument drop / extend', () => {
       new Map([[end.node, dropped_]]),
       'backward',
     )
-    expect(exploreForm(extended)).toEqual(exploreForm(diagram))
+    expect(sameDiagram(extended, diagram)).toBe(true)
   })
 
   it('gates drop on the wire scope polarity for per-end-varying attachments', () => {
@@ -281,7 +281,7 @@ describe('apply-formal / abstract-formal', () => {
       scope,
       'backward',
     )
-    expect(exploreForm(restored)).toEqual(exploreForm(diagram))
+    expect(sameDiagram(restored, diagram)).toBe(true)
   })
 
   it('refuses apply-formal when the position sig does not match the rest', () => {
@@ -323,7 +323,7 @@ describe('identity leaf / abstract', () => {
       scope,
       'backward',
     )
-    expect(exploreForm(restored)).toEqual(exploreForm(diagram))
+    expect(sameDiagram(restored, diagram)).toBe(true)
   })
 
   it('gates every directional argument rule on the governing scope polarity', () => {
@@ -441,7 +441,7 @@ describe('ref leaf / abstract', () => {
     ])
 
     const restored = applyRefAbstract(leafed, [referenceId], scope, 'backward')
-    expect(exploreForm(restored)).toEqual(exploreForm(diagram))
+    expect(sameDiagram(restored, diagram)).toBe(true)
   })
 
   it('gates both directions on the governing scope polarity', () => {

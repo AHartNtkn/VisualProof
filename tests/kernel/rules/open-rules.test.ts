@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import {
@@ -49,7 +49,7 @@ describe('open relational iteration and deiteration', () => {
 
     expect(iterated.wires[argument]!.endpoints.some((endpoint) => endpoint.node === copy))
       .toBe(true)
-    expect(exploreForm(restored)).toBe(exploreForm(diagram))
+    expect(sameDiagram(restored, diagram)).toBe(true)
   })
 
   it('rejects iteration to a region outside the source', () => {

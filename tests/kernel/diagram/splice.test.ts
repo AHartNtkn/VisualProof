@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagram, type Region } from '../../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { applyIdentification } from '../../../src/kernel/rules/identity-rules'
@@ -99,7 +99,7 @@ describe('subgraph removal and splice', () => {
       extraction.attachments,
     )
 
-    expect(exploreForm(spliced.diagram)).toBe(exploreForm(value.diagram))
+    expect(sameDiagram(spliced.diagram, value.diagram)).toBe(true)
     expect(spliced.wireMap.get(extraction.pattern.boundary[0]!)).toBe(value.shared)
   })
 

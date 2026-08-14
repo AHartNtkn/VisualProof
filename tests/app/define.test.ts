@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { canonicalArgOrder, defineRelation, inferFoldArgs } from '../../src/app/define'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../src/kernel/diagram/canonical/iso'
 import { IOTA } from '../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../src/kernel/diagram/subgraph/match'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
@@ -78,11 +78,14 @@ describe('structural relation definition', () => {
       return {
         fixture,
         relation,
-        form: exploreForm(reloaded.diagram, reloaded.boundary),
+        reloaded,
       }
     })
 
-    expect(runs[1]!.form).toBe(runs[0]!.form)
+    expect(sameDiagram(
+      runs[1]!.reloaded.diagram, runs[0]!.reloaded.diagram,
+      runs[1]!.reloaded.boundary, runs[0]!.reloaded.boundary,
+    )).toBe(true)
     expect(findOccurrences(
       runs[1]!.fixture.diagram,
       runs[0]!.relation,

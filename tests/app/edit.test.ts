@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram, IdentityDiagramNode, NodeId } from '../../src/kernel/diagram/diagram'
-import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../src/kernel/diagram/canonical/iso'
+import { diagramFromJson, diagramToJson } from '../../src/kernel/diagram/json'
 import { IOTA } from '../../src/kernel/diagram/sig'
 import { derivedScope } from '../../src/kernel/diagram/regions'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
@@ -204,11 +205,11 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     const individual = bareWire(builder, builder.root)
     const relation = bareWire(builder, builder.root, UNARY)
     const diagram = builder.build()
-    const before = exploreForm(diagram)
+    const before = diagramFromJson(diagramToJson(diagram))
 
     expect(() => joinWires(diagram, [individual, relation]))
       .toThrow(/same signature/)
-    expect(exploreForm(diagram)).toBe(before)
+    expect(sameDiagram(diagram, before)).toBe(true)
     expect(diagram.wires[individual]).toBeDefined()
     expect(diagram.wires[relation]).toBeDefined()
   })

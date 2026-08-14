@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { dwbFromJson, dwbToJson } from '../../../src/kernel/diagram/json'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
@@ -421,10 +421,13 @@ describe('diagram-with-boundary JSON', () => {
         sig: IOTA,
         arity: 2,
       })
-      return exploreForm(result.diagram, result.boundary)
+      return result
     })
 
-    expect(decoded[1]).toBe(decoded[0])
+    expect(sameDiagram(
+      decoded[1]!.diagram, decoded[0]!.diagram,
+      decoded[1]!.boundary, decoded[0]!.boundary,
+    )).toBe(true)
   })
 
   it('round-trips repeated boundary positions without collapsing arity', () => {

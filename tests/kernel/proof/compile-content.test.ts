@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import type { Diagram, WireId } from '../../../src/kernel/diagram/diagram'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import {
@@ -162,7 +162,7 @@ describe('compileRelationJoin against hand-built expectations', () => {
       attach(builder, params.paramQ, siteQ, { kind: 'head' })
       attach(builder, y, siteQ, { kind: 'arg', index: 0 })
     })
-    expect(exploreForm(compiled)).toEqual(exploreForm(expected))
+    expect(sameDiagram(compiled, expected)).toBe(true)
   })
 
   it('compiles an applied formal', () => {
@@ -193,7 +193,7 @@ describe('compileRelationJoin against hand-built expectations', () => {
       attach(builder, applied!, site, { kind: 'head' })
       attach(builder, x!, site, { kind: 'arg', index: 0 })
     })
-    expect(exploreForm(compiled)).toEqual(exploreForm(expected))
+    expect(sameDiagram(compiled, expected)).toBe(true)
   })
 
   it('compiles negated identity content', () => {
@@ -229,7 +229,7 @@ describe('compileRelationJoin against hand-built expectations', () => {
       builder.pin(first!, cut)
       builder.pin(second!, cut)
     })
-    expect(exploreForm(compiled)).toEqual(exploreForm(expected))
+    expect(sameDiagram(compiled, expected)).toBe(true)
   })
 
   it('compiles ref content against a loaded definition', () => {
@@ -263,7 +263,7 @@ describe('compileRelationJoin against hand-built expectations', () => {
       const site = builder.ref(cut, 'D', UNARY)
       attach(builder, x!, site, { kind: 'arg', index: 0 })
     })
-    expect(exploreForm(compiled)).toEqual(exploreForm(expected))
+    expect(sameDiagram(compiled, expected)).toBe(true)
   })
 
   it('compiles empty content', () => {
@@ -287,7 +287,7 @@ describe('compileRelationJoin against hand-built expectations', () => {
     const expected = expectedHost(UNARY, (builder, cut, [x]) => {
       builder.pin(x!, cut)
     })
-    expect(exploreForm(compiled)).toEqual(exploreForm(expected))
+    expect(sameDiagram(compiled, expected)).toBe(true)
   })
 
   it('compiles a relation sever as the inverse plan', () => {
@@ -345,7 +345,7 @@ describe('compileRelationJoin against hand-built expectations', () => {
       attach(expected, head, node, { kind: 'head' })
       attach(expected, expectedShared, node, { kind: 'arg', index: 0 })
     }
-    expect(exploreForm(compiled)).toEqual(exploreForm(expected.build()))
+    expect(sameDiagram(compiled, expected.build())).toBe(true)
   })
 
   it('compiles repeated formals through duplication', () => {
@@ -377,6 +377,6 @@ describe('compileRelationJoin against hand-built expectations', () => {
       attach(builder, x!, site, { kind: 'arg', index: 0 })
       attach(builder, x!, site, { kind: 'arg', index: 1 })
     })
-    expect(exploreForm(compiled)).toEqual(exploreForm(expected))
+    expect(sameDiagram(compiled, expected)).toBe(true)
   })
 })

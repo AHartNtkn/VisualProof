@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
-import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../src/kernel/diagram/canonical/iso'
 import type {
   Diagram,
   NodeId,
@@ -620,10 +620,14 @@ describe('recorded general relation reification', () => {
       const expectedRhs = testCase.rhs()
 
       expect(theorem.name).toBe(testCase.name)
-      expect(exploreForm(theorem.lhs.diagram, theorem.lhs.boundary))
-        .toBe(exploreForm(expectedLhs.diagram, expectedLhs.boundary))
-      expect(exploreForm(theorem.rhs.diagram, theorem.rhs.boundary))
-        .toBe(exploreForm(expectedRhs.diagram, expectedRhs.boundary))
+      expect(sameDiagram(
+        theorem.lhs.diagram, expectedLhs.diagram,
+        theorem.lhs.boundary, expectedLhs.boundary,
+      )).toBe(true)
+      expect(sameDiagram(
+        theorem.rhs.diagram, expectedRhs.diagram,
+        theorem.rhs.boundary, expectedRhs.boundary,
+      )).toBe(true)
       expect(theorem.lhs.boundary.map((wire) =>
         sigKey(theorem.lhs.diagram.wires[wire]!.sig)))
         .toEqual(testCase.captureSignatures.map(sigKey))
