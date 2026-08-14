@@ -219,29 +219,59 @@ All finitely enumerable. Selection construction reuses the pure helpers in
 wires, `deiterationStep`) rather than reimplementing them; the import is
 acyclic at file level.
 
-**Algorithm.** Iterative-deepening DFS under an explicit expanded-state fuel
-budget. Deterministic; no RNG. Memoization: states are bucketed by an
-iso-invariant digest (multisets of region depths, node kinds per depth, wire
-signatures with endpoint counts — all preserved by diagram isomorphism);
-within a bucket, identity is confirmed by `sameDiagram` against stored
-representatives, so pruning is exact, never hash-optimistic. A state is
-pruned when an isomorphic state was already visited with at least as much
-remaining depth budget.
+**Algorithm: two phases.** The insertion-flavored moves (`atomSpawn`,
+`doubleCutIntro`, iteration-copy, vacuity-insert) give the full alphabet a
+branching factor of roughly 30 even on the smallest theorem, so exhaustively
+proving "no shorter proof exists" over the full alphabet is infeasible
+(≈ 30^d states to close depth d). The search therefore runs in two phases:
+
+- **Phase 1 — deletion-only, complete.** Alphabet: `erasure` (negative),
+  `deiteration`, `doubleCutElim`, vacuity bare-wire delete. Every one of
+  these strictly shrinks the diagram (regions + nodes + wires), so the
+  reachable state space is finite and small. A breadth-first search with
+  isomorphism deduplication explores it **completely** — no fuel needed. If
+  the blank sheet is reached, the minimal deletion-only proof length is
+  exact; if the whole space is exhausted without reaching it, the problem
+  **provably requires insertion** — the notes' strongest difficulty signal,
+  established as a theorem rather than a fuel-limited guess.
+- **Phase 2 — full alphabet, fuel-bounded.** Runs only when phase 1 proves
+  insertion is required. Iterative-deepening DFS over the full alphabet
+  under an explicit expanded-state fuel budget, reporting a solve or the
+  deepest fully-exhausted depth as an honest bound.
+
+Deterministic; no RNG. Memoization/deduplication in both phases: states are
+bucketed by an iso-invariant digest (multisets of region depths, node kinds
+per depth, wire signatures with endpoint counts — all preserved by diagram
+isomorphism); within a bucket, identity is confirmed by `sameDiagram`
+against stored representatives, so pruning is exact, never hash-optimistic.
+In phase 2 a state is pruned when an isomorphic state was already visited
+with at least as much remaining depth budget.
+
+The reported length is minimal **within the phase that produced it**
+(deletion-only alphabet for phase 1, full atomic alphabet for phase 2), and
+the label says which. A phase-1 length is an upper bound on the full-system
+minimum; the alternative — closing the full alphabet exhaustively — is the
+infeasible computation above.
 
 **Outputs, honestly labeled.**
 
-- All depths < k fully exhausted and a proof found at depth k →
-  **minimal proof length = k**, labeled as minimal over this atomic move
-  alphabet (an upper bound relative to coarser selections).
+- Phase 1 solves at depth k → **minimal deletion-only proof length = k**
+  (labeled as such — an upper bound on the full-system minimum), plus the
+  proven fact that insertion is NOT required.
+- Phase 1 proves unsolvable → **"requires insertion"**, proven. If phase 2
+  then solves at depth k with all shallower depths fully exhausted →
+  **minimal proof length = k** over the full atomic alphabet.
 - **"Requires rule class C"** is computed by definition, not inspection:
-  rerun the depth-k search with class C removed from the alphabet; if no
+  rerun the solving phase at the found depth with class C removed; if no
   proof exists, every minimal proof uses C. Classes checked: insertion
-  (`atomSpawn`), iteration/deiteration, double-cut. Memoization keeps the
-  reruns cheap.
-- Fuel exhausted → report only the bound actually established ("no proof
-  within d moves" for the deepest fully-exhausted depth d), plus
-  `walkUpperBound` when the problem came from family B. Never a fabricated
-  number.
+  (`atomSpawn`; free — it is phase 1's verdict), iteration/deiteration,
+  double-cut. In phase 2 a probe that exhausts its fuel leaves the
+  requirement unproven and it is omitted — `requires` only ever lists
+  proven requirements.
+- Phase 2 fuel exhausted → report only the bound actually established ("no
+  proof within d moves" for the deepest fully-exhausted depth d) together
+  with the proven "requires insertion", plus `walkUpperBound` when the
+  problem came from family B. Never a fabricated number.
 
 The search returns a plain result object; the UI renders it as the
 difficulty line.
@@ -295,17 +325,20 @@ Tests land as each piece is built. All generator tests use fixed seeds.
   diagrams. Completeness spot-checks: hand-built positions where a specific
   move (a deiteration, an empty-annulus elim) must be offered.
 - **Search.** Tiny theorems with hand-computed minimal lengths verified
-  exactly — e.g. ∀P:o. ¬(P∧¬P) has the 5-step backward proof (deiterate
-  inner P, erase outer P, double-cut-elim the body pair, vacuity-delete the
-  bare wire, double-cut-elim the shell) and its inner cut can only be
-  emptied by deiteration, so the search must report length 5 requiring the
-  iteration class and not requiring insertion. Fuel-exhaustion path returns
-  the honest bound. Integration property: for default knobs, both families'
-  outputs run through the search without error, returning either a solve or
-  an honest bound — exact-solve assertions are reserved for small
-  hand-chosen knob cases that finish inside the ordinary suite's 5-second
-  test timeout. Default search fuel is sized so those small cases solve and
-  a default-knob run returns promptly with at worst an honest bound.
+  exactly — e.g. ∀P:o. ¬(P∧¬P) has the 5-step deletion-only backward proof
+  (deiterate inner P, erase outer P, double-cut-elim the body pair,
+  vacuity-delete the bare wire, double-cut-elim the shell) and its inner
+  cut can only be emptied by deiteration, so phase 1 must report length 5
+  requiring the iteration class, insertion proven unnecessary. Peirce's law
+  in ¬/∧ form (∀P Q:o. ¬(¬(¬(P∧¬Q)∧¬P)∧¬P)) is the classic
+  insertion-requiring case: phase 1 must prove it unsolvable and phase 2
+  takes over, returning a solve or an honest fuel bound. Integration
+  property: for default knobs, both families' outputs run through the
+  search without error, returning either a solve or an honest bound —
+  exact-solve assertions are reserved for small hand-chosen cases that
+  finish inside the ordinary suite's 5-second test timeout. Default phase-2
+  fuel is sized so a default-knob run returns promptly with at worst an
+  honest bound.
 - **UI.** `tests/app/` unit tests mirroring the formula-entry tests
   (open/close/escape, knob rendering per family, error surfacing); one
   Playwright spec in `e2e/`: open Random…, generate, create diagram, enter
