@@ -98,7 +98,10 @@ export function flattenAnd(formula: PropFormula): readonly PropFormula[] {
 /** True when some ∧-chain anywhere in the formula holds two structurally
  *  identical conjuncts (after flattening — the duplicate need not be
  *  syntactically adjacent, e.g. A ∧ B ∧ A) — trivially removable structure
- *  (a free same-region deiteration) the generators must never ship. */
+ *  (a free same-region deiteration) the generators must never ship. This is
+ *  the SAME-AREA-ONLY special case of the (opt-in) `containsDeiterationRedex`
+ *  (prop/shrink.ts): it backs the `fullDeiteration`-off backstop, matching
+ *  what `simplify`'s always-on idempotence dedup actually guarantees. */
 export function containsDuplicateConjunct(formula: PropFormula): boolean {
   switch (formula.kind) {
     case 'atom':

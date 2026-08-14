@@ -27,11 +27,19 @@ function fromParsed(formula: Formula): PropFormula {
 
 describe('readKnobs', () => {
   it('applies defaults, enforces minima and integrality, rejects unknown keys', () => {
-    expect(readKnobs(propShrinkFamily, {})).toEqual({ atoms: 3, sampleSize: 12, minSize: 6, attempts: 10_000 })
+    expect(readKnobs(propShrinkFamily, {})).toEqual({
+      atoms: 3, sampleSize: 12, minSize: 6, attempts: 10_000, fullDeiteration: 0,
+    })
     expect(readKnobs(propShrinkFamily, { atoms: 2 }).atoms).toBe(2)
     expect(() => readKnobs(propShrinkFamily, { atoms: 0 })).toThrow(/atoms/)
     expect(() => readKnobs(propShrinkFamily, { atoms: 2.5 })).toThrow(/integer/)
     expect(() => readKnobs(propShrinkFamily, { bogus: 1 })).toThrow(/bogus/)
+  })
+  it('validates flag knobs as exactly 0 or 1', () => {
+    expect(readKnobs(propShrinkFamily, { fullDeiteration: 1 }).fullDeiteration).toBe(1)
+    expect(readKnobs(propShrinkFamily, { fullDeiteration: 0 }).fullDeiteration).toBe(0)
+    expect(() => readKnobs(propShrinkFamily, { fullDeiteration: 2 })).toThrow(/fullDeiteration.*0 or 1/)
+    expect(() => readKnobs(propShrinkFamily, { fullDeiteration: -1 })).toThrow(/fullDeiteration.*0 or 1/)
   })
 })
 
@@ -39,7 +47,7 @@ describe('propShrinkFamily', () => {
   it('is registered first', () => {
     expect(GENERATOR_FAMILIES[0]?.id).toBe('prop-shrink')
   })
-  it('generates minimal tautologies meeting the size knob, statement parseable and drawable', () => {
+  it('generates minimal tautologies meeting the size knob, statement parseable and drawable (fullDeiteration off, default)', () => {
     const rng = seededRng(11)
     for (let round = 0; round < 3; round += 1) {
       const problem = propShrinkFamily.generate({ atoms: 2, sampleSize: 9, minSize: 3, attempts: 10_000 }, rng)
@@ -61,4 +69,19 @@ describe('propShrinkFamily', () => {
     expect(() => propShrinkFamily.generate({ atoms: 1, sampleSize: 1, minSize: 5, attempts: 50 }, seededRng(1)))
       .toThrow(/50 attempts/)
   })
+  it(
+    'fullDeiteration:1 at a small attempt cap throws the honest attempt-cap error — the measured 100%-collapse reality',
+    () => {
+      // Deliberately NOT testing a flag-on success: normalizeToFixpoint's
+      // fixed points are nearly unsamplable (measured: 100% collapse to ⊤
+      // across 18 knob configurations, atoms 2-4, sample sizes 10-800 — see
+      // shrinkToCore's docstring and the design doc). Hunting for a lucky
+      // seed that happens to succeed would misrepresent that reality; this
+      // test documents it truthfully instead.
+      expect(() => propShrinkFamily.generate(
+        { atoms: 2, sampleSize: 9, minSize: 3, attempts: 50, fullDeiteration: 1 },
+        seededRng(11),
+      )).toThrow(/50 attempts/)
+    },
+  )
 })

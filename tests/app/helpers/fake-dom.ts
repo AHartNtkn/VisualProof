@@ -8,6 +8,7 @@ export class TestElement extends EventTarget {
   hidden = false
   value = ''
   type = ''
+  checked = false
   id = ''
   htmlFor = ''
   min = ''

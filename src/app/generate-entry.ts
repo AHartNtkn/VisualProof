@@ -138,11 +138,16 @@ export function mountGenerateEntry(
       label.htmlFor = `generate-knob-${knob.id}`
       label.textContent = knob.label
       const input = document.createElement('input')
-      input.type = 'number'
       input.id = `generate-knob-${knob.id}`
-      input.min = String(knob.min)
-      input.step = '1'
-      input.value = String(knob.default)
+      if (knob.kind === 'flag') {
+        input.type = 'checkbox'
+        input.checked = knob.default === 1
+      } else {
+        input.type = 'number'
+        input.min = String(knob.min)
+        input.step = '1'
+        input.value = String(knob.default)
+      }
       wrap.append(label, input)
       rows.push(wrap)
       knobInputs.set(knob.id, input)
@@ -163,7 +168,11 @@ export function mountGenerateEntry(
   const onGenerate = (): void => {
     try {
       const params: Record<string, number> = {}
-      for (const [id, input] of knobInputs) params[id] = Number(input.value)
+      for (const [id, input] of knobInputs) {
+        const knob = currentFamily.knobs.find((candidate) => candidate.id === id)
+        if (knob === undefined) throw new Error(`mountGenerateEntry: knob input '${id}' has no matching KnobSpec`)
+        params[id] = knob.kind === 'flag' ? (input.checked ? 1 : 0) : Number(input.value)
+      }
       const knobs = readKnobs(currentFamily, params)
       const rng = options.rng ?? freshCryptoRng()
       const problem = currentFamily.generate(knobs, rng)

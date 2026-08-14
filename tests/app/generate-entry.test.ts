@@ -65,8 +65,14 @@ describe('mountGenerateEntry', () => {
       const input = row.querySelector('input') as unknown as TestElement
       expect(label.textContent).toBe(knob.label)
       expect(label.htmlFor).toBe(input.id)
-      expect(input.value).toBe(String(knob.default))
-      expect(input.min).toBe(String(knob.min))
+      if (knob.kind === 'flag') {
+        expect(input.type).toBe('checkbox')
+        expect(input.checked).toBe(knob.default === 1)
+      } else {
+        expect(input.type).toBe('number')
+        expect(input.value).toBe(String(knob.default))
+        expect(input.min).toBe(String(knob.min))
+      }
     })
 
     expect(fuelInput.value).toBe(String(DEFAULT_SEARCH_FUEL))
@@ -85,8 +91,13 @@ describe('mountGenerateEntry', () => {
       const label = row.querySelector('label') as unknown as TestElement
       const input = row.querySelector('input') as unknown as TestElement
       expect(label.textContent).toBe(knob.label)
-      expect(input.value).toBe(String(knob.default))
-      expect(input.min).toBe(String(knob.min))
+      if (knob.kind === 'flag') {
+        expect(input.type).toBe('checkbox')
+        expect(input.checked).toBe(knob.default === 1)
+      } else {
+        expect(input.value).toBe(String(knob.default))
+        expect(input.min).toBe(String(knob.min))
+      }
     })
   })
 
@@ -159,6 +170,30 @@ describe('mountGenerateEntry', () => {
     },
     10_000,
   )
+
+  it("a flag knob's checked state reaches generate() as 1/0", () => {
+    // Toggling 'Full deiteration normalization' on, at a small attempt cap,
+    // must hit the honest attempt-cap error (the measured near-total
+    // collapse — see prop-family.test.ts/walk-family.test.ts) rather than
+    // the unknown-knob or invalid-value errors a flag value NOT reaching
+    // generate() correctly would produce. This is the cheapest deterministic
+    // way to observe the checkbox's `checked` state actually flowing through
+    // readKnobs into generate(), without hunting for a lucky success seed.
+    const { entry, opener, knobsContainer, error, generateBtn } =
+      mounted(vi.fn<(diagram: Diagram) => void>(), { rng: seededRng(11) })
+
+    entry.open(opener as unknown as HTMLElement)
+    knobInput(knobsContainer, 'Sample connectives').value = '9'
+    knobInput(knobsContainer, 'Minimum core connectives').value = '3'
+    knobInput(knobsContainer, 'Attempt cap').value = '50'
+    const flagInput = knobInput(knobsContainer, 'Full deiteration normalization')
+    expect(flagInput.type).toBe('checkbox')
+    expect(flagInput.checked).toBe(false)
+    flagInput.checked = true
+    generateBtn.dispatchEvent(new Event('click'))
+
+    expect(error.textContent).toMatch(/50 attempts/)
+  })
 
   it('Create diagram before any generation reports an error instead of committing', () => {
     const commit = vi.fn<(diagram: Diagram) => void>()

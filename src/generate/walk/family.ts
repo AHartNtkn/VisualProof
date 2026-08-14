@@ -3,6 +3,7 @@ import { isAncestorOrEqual, mkDiagramWithBoundary } from '../../kernel/diagram'
 import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { relSig } from '../../kernel/diagram/sig'
+import type { ProofStep } from '../../kernel/proof/step'
 import { bareWireAssembly, bareWireDescription, RuleError } from '../../kernel/rules'
 import { emptyGraph, finishDiagramWithBoundary } from '../../theories/graph'
 import { PrimitiveStepRecorder, onlyNewCut } from '../../theories/record'
@@ -17,7 +18,7 @@ import {
   sameFormula,
   usedAtoms,
 } from '../prop/formula'
-import { isMinimalTautology } from '../prop/shrink'
+import { containsDeiterationRedex, isMinimalTautology } from '../prop/shrink'
 import { propWireIndex, readPropRegion, readPropTheorem } from '../prop/read'
 import { enumerateMoves, type CandidateMove, type MoveClass } from '../moves'
 
@@ -55,14 +56,20 @@ export const propWalkFamily: GeneratorFamily = {
   // affect the cost (measured equal at length 6 for atoms 1 vs 2), so it
   // keeps its original default.
   knobs: [
-    { id: 'atoms', label: 'Atoms (max)', min: 1, default: 2 },
-    { id: 'length', label: 'Walk length', min: 1, default: 8 },
-    { id: 'attempts', label: 'Attempt cap', min: 1, default: 1_000 },
+    { id: 'atoms', label: 'Atoms (max)', kind: 'count', min: 1, default: 2 },
+    { id: 'length', label: 'Walk length', kind: 'count', min: 1, default: 8 },
+    { id: 'attempts', label: 'Attempt cap', kind: 'count', min: 1, default: 1_000 },
+    // Opt-in, default off (user ruling) — same measured basis as family A's
+    // knob of the same id: normalizeToFixpoint/findDeiterationRedex's fixed
+    // points are nearly unsamplable. With it off, the walk still repairs ¬¬
+    // and same-region duplicates (always-on, via findDuplicateToNormalize).
+    { id: 'fullDeiteration', label: 'Full deiteration normalization', kind: 'flag', min: 0, default: 0 },
   ],
   generate(params, rng): GeneratedProblem {
     const knobs = readKnobs(propWalkFamily, params)
+    const fullDeiteration = knobs.fullDeiteration === 1
     for (let attempt = 0; attempt < knobs.attempts!; attempt += 1) {
-      const problem = tryWalk(knobs.atoms!, knobs.length!, rng)
+      const problem = tryWalk(knobs.atoms!, knobs.length!, fullDeiteration, rng)
       if (problem !== null) return problem
     }
     throw new Error(
@@ -72,7 +79,7 @@ export const propWalkFamily: GeneratorFamily = {
   },
 }
 
-function tryWalk(atoms: number, length: number, rng: () => number): GeneratedProblem | null {
+function tryWalk(atoms: number, length: number, fullDeiteration: boolean, rng: () => number): GeneratedProblem | null {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
   const recorder = new PrimitiveStepRecorder(lhs, EMPTY_PROOF_CONTEXT, 'forward')
   // Prelude: the ∀ shell — an empty double cut, then one bare proposition
@@ -113,23 +120,59 @@ function tryWalk(atoms: number, length: number, rng: () => number): GeneratedPro
   }
   // Normalization: a JOINT fixpoint of two ungated-equivalence rewrites,
   // repeated until neither finder fires. Each rewrite strictly shrinks the
-  // diagram (doubleCutElim removes two cut regions; a duplicate deiteration
+  // diagram (doubleCutElim removes two cut regions; a deiteration redex
   // removes at least one node or region), and the diagram's (regions +
   // nodes + wires) count is bounded below by zero, so the loop terminates.
   // Interleaving matters: eliminating an empty-annulus double-cut pair
-  // beside an occurrence can splice a fresh same-region duplicate up into
-  // the parent region (e.g. A ∧ ¬¬A′, A′=A: removing the ¬¬ promotes A′
-  // up beside A, exposing A ∧ A), so each pass re-checks double-cut first.
+  // beside an occurrence can splice a fresh redex up into the parent area
+  // (e.g. A ∧ ¬¬A′, A′=A: removing the ¬¬ promotes A′ up beside A, exposing
+  // A ∧ A — a same-area case of the same general rule below), so each pass
+  // re-checks double-cut first.
+  //
+  // `fullDeiteration` (opt-in, default off — see the family's knobs)
+  // chooses which finder backs the second rewrite: `findDuplicateToNormalize`
+  // (same-region only, always-on regardless of the flag — Task 13) when
+  // off, or `findDeiterationRedex` (relaxed: ancestor-justified too) when
+  // on. Only the relaxed finder needs the refusal-tracking below:
+  // `findDeiterationRedex`'s ancestor search includes candidates found via
+  // `findDeiterationEvidence`'s subtree fast path (kernel/rules/
+  // iteration.ts), which does NOT run the general path's full `evidenceGate`
+  // (ancestor-or-equal, attachments-match, disjointness) at FIND time — only
+  // `applyDeiteration` runs it, at APPLY time. So unlike same-region
+  // duplicates (found exclusively via the general matcher path, which does
+  // gate at find time, and so is always removable — recorder.record's
+  // auto-pin already rescues every ScopePreservationError universally), a
+  // genuinely-found ancestor redex can still be legitimately refused here —
+  // the same class of finder/applier gap as `findDoubleCutToNormalize`'s
+  // pin-in-annulus exclusion above, just surfacing as an apply-time
+  // RuleError instead of a find-time exclusion. `refusedRedex` records
+  // whether that happened, so the post-read check below can tell a genuine
+  // leftover (bug, throw) from an unfixable one (legitimate, reject).
+  let refusedRedex = false
   for (;;) {
     const doubleCut = findDoubleCutToNormalize(recorder.diagram, inner)
     if (doubleCut !== null) {
       recorder.record('normalize double cut', { rule: 'doubleCutElim', region: doubleCut })
       continue
     }
-    const duplicate = findDuplicateToNormalize(recorder.diagram, inner)
-    if (duplicate !== null) {
-      recorder.record('normalize duplicate', deiterationStep(recorder.diagram, duplicate))
-      continue
+    if (fullDeiteration) {
+      const redex = findDeiterationRedex(recorder.diagram, inner)
+      if (redex !== null) {
+        try {
+          recorder.record('normalize deiteration redex', redex.step)
+        } catch (error) {
+          if (!(error instanceof RuleError)) throw error
+          refusedRedex = true
+          break
+        }
+        continue
+      }
+    } else {
+      const duplicate = findDuplicateToNormalize(recorder.diagram, inner)
+      if (duplicate !== null) {
+        recorder.record('normalize duplicate', deiterationStep(recorder.diagram, duplicate))
+        continue
+      }
     }
     break
   }
@@ -165,17 +208,36 @@ function tryWalk(atoms: number, length: number, rng: () => number): GeneratedPro
   // since erasing it would strand the pin below the two-end floor) — a
   // rare legitimate rejection of this walk, not a bug.
   if (containsDoubleNegation(reading.formula)) return null
-  // Unlike the ¬¬ case above, this is a BUG backstop, not a legitimate
-  // rejection: findDoubleCutToNormalize structurally excludes pin-holding
-  // annuli from its own candidates (doubleCutElim would destroy the pin —
-  // no rescue is possible), but findDuplicateToNormalize excludes nothing
-  // on pin grounds, and every step recorder.record applies (including the
-  // 'deiteration' this loop records) already auto-pins through
-  // ScopePreservationError universally (#recordAction, src/theories/
-  // record.ts — not specific to erasure/vacuity). A genuine same-region
-  // duplicate the finder reports is therefore always removable; surviving
-  // to here means the finder or the joint loop above missed a fixpoint.
-  if (containsDuplicateConjunct(reading.formula)) {
+  // Backstop covers exactly the active rewrites' redexes, split by flag —
+  // same-region only (`containsDuplicateConjunct`) when off, matching what
+  // `findDuplicateToNormalize` alone guarantees; ancestor-justified too
+  // (`containsDeiterationRedex`) when on, matching `findDeiterationRedex`.
+  if (fullDeiteration) {
+    // Split further by WHY a redex could have survived. `refusedRedex`
+    // records the applier-refusal class explained above (real and rare,
+    // same shape as the ¬¬ pin-in-annulus case): if set, a surviving redex
+    // is the EXPECTED consequence and this walk is a legitimate rejection —
+    // this is also exactly the "empty cut left behind, unfixable without a
+    // ⊥-propagation move the diagram-level alphabet doesn't have" shape
+    // (see the "cascade" test in walk-family.test.ts); the `containsConstant`
+    // check inside `isMinimalTautology` above already turns THAT specific
+    // shape into a rejection before this line is ever reached, so this flag
+    // covers the applier-refusal case specifically. If NOT set — nothing was
+    // ever refused — a surviving redex means the finder or the joint loop
+    // itself missed a fixpoint, which is a bug.
+    if (containsDeiterationRedex(reading.formula)) {
+      if (refusedRedex) return null
+      throw new Error(
+        'prop-walk: internal error — a deiteration redex survived normalization to fixpoint with no '
+        + 'applier refusal recorded; findDeiterationRedex or the joint normalization loop is broken',
+      )
+    }
+  } else if (containsDuplicateConjunct(reading.formula)) {
+    // findDuplicateToNormalize's candidates go exclusively through the
+    // general matcher path (gated at find time — see findDeiterationRedex's
+    // docstring), so recorder.record's universal auto-pin always rescues
+    // them; a survivor here is unconditionally a bug, never a legitimate
+    // rejection.
     throw new Error(
       'prop-walk: internal error — a same-region duplicate conjunct survived normalization to '
       + 'fixpoint; findDuplicateToNormalize or the joint normalization loop is broken',
@@ -207,7 +269,9 @@ export function findDoubleCutToNormalize(diagram: Diagram, inner: RegionId): Reg
  * pair of siblings in one region that are exactly the same content, with no
  * cut boundary between them — a free, uninteresting deiteration for the
  * backward player (a positive-polarity analogue of the ¬¬ repair above; see
- * the design doc's idempotence-repair motivation). Two shapes qualify:
+ * the design doc's idempotence-repair motivation). This is the always-on
+ * finder (Task 13); `findDeiterationRedex` below is the strictly more
+ * general, opt-in relaxation. Two shapes qualify:
  *
  *   (a) two atom nodes in the same region heading the SAME wire;
  *   (b) two child cuts of the same region whose content — read via
@@ -242,6 +306,36 @@ export function findDuplicateToNormalize(diagram: Diagram, inner: RegionId): Sub
       }
       seenCutFormulas.push({ formula })
     }
+  }
+  return null
+}
+
+/**
+ * Find a deiteration redex at-or-below `inner` (the body): an atomic
+ * selection (a single atom node, or a single cut with its whole subtree)
+ * with a structurally identical copy available DISJOINTLY in its own area
+ * or ANY enclosing area — Peirce's existential-graph deiteration
+ * containment rule, crossing any number of cut boundaries in either
+ * direction (unlike erasure/insertion, deiteration is not polarity-gated).
+ * This subsumes same-region duplicates (Task 13) as the special case where
+ * the justifier sits in the SAME area rather than an enclosing one.
+ *
+ * Reuses `enumerateMoves`'s `iteration` class rather than reimplementing
+ * the atomic-selection enumeration and `findDeiterationEvidence` probing:
+ * that class already tries `deiterationStep` (catching `RuleError` = no
+ * justifying occurrence) for every atomic selection at-or-below `inner`,
+ * with ancestor-justifier search and disjointness handled natively by the
+ * kernel's own occurrence matcher — filtering its output for the
+ * `deiteration` rule (discarding the interleaved iteration-copy
+ * candidates) is both correct and avoids duplicating that logic.
+ */
+export function findDeiterationRedex(
+  diagram: Diagram,
+  inner: RegionId,
+): { readonly step: Extract<ProofStep, { rule: 'deiteration' }> } | null {
+  const candidates = enumerateMoves(diagram, 'forward', new Set(['iteration']), inner)
+  for (const candidate of candidates) {
+    if (candidate.step.rule === 'deiteration') return { step: candidate.step }
   }
   return null
 }
