@@ -620,6 +620,54 @@ function buildArcs(ctx: ArcContext): Arc[] {
   const { hostIdx, patternIdx, patternScopes, boundarySet, hostScopes } = ctx
   const arcs: Arc[] = []
 
+  // Reverse indexes, each built once per context (not per arc firing) so
+  // every forward-direction compute below intersects from the dependency's
+  // CURRENT candidate set instead of rescanning a full host id list.
+
+  /** wire id -> host nodes carrying that wire at port key `pk` (non-identity
+   *  nodes only; identity ports never populate `nodePortWire`). */
+  const portWireIndex = new Map<string, Map<WireId, NodeId[]>>()
+  for (const h of hostIdx.nodeIds) {
+    const ports = hostIdx.nodePortWire.get(h)
+    if (ports === undefined) continue
+    for (const [pk, wireId] of ports) {
+      let byWire = portWireIndex.get(pk)
+      if (byWire === undefined) {
+        byWire = new Map()
+        portWireIndex.set(pk, byWire)
+      }
+      const list = byWire.get(wireId)
+      if (list === undefined) byWire.set(wireId, [h])
+      else list.push(h)
+    }
+  }
+
+  /** node id -> host wires with an endpoint at that node whose position key
+   *  is `pk` (identity endpoints all share position key 'i', so several
+   *  wires can share one entry). */
+  const endpointIndex = new Map<NodeId, Map<string, WireId[]>>()
+  for (const hw of hostIdx.wireIds) {
+    for (const ep of hostIdx.wireEndpoints.get(hw)!) {
+      let byPk = endpointIndex.get(ep.node)
+      if (byPk === undefined) {
+        byPk = new Map()
+        endpointIndex.set(ep.node, byPk)
+      }
+      const list = byPk.get(ep.pkey)
+      if (list === undefined) byPk.set(ep.pkey, [hw])
+      else list.push(hw)
+    }
+  }
+
+  /** region id -> host wires scoped there. */
+  const hostWiresByScope = new Map<RegionId, WireId[]>()
+  for (const hw of hostIdx.wireIds) {
+    const scope = hostScopes.get(hw)!
+    const list = hostWiresByScope.get(scope)
+    if (list === undefined) hostWiresByScope.set(scope, [hw])
+    else list.push(hw)
+  }
+
   // 1. Cut/parent, both directions.
   for (const c of patternIdx.regionIds) {
     if (patternIdx.regionKindKey.get(c) !== 'cut') continue
@@ -629,12 +677,11 @@ function buildArcs(ctx: ArcContext): Arc[] {
       dep: { sort: 'region', id: p },
       compute: (cands) => {
         const parentCands = candidateSet(cands, { sort: 'region', id: p })
-        return new Set(
-          hostIdx.regionIds.filter((h) => {
-            const parent = hostIdx.parentOf.get(h)
-            return parent != null && parentCands.has(parent)
-          }),
-        )
+        const allowed = new Set<RegionId>()
+        for (const parent of parentCands) {
+          for (const child of hostIdx.childrenOf.get(parent) ?? []) allowed.add(child)
+        }
+        return allowed
       },
     })
     arcs.push({
@@ -660,7 +707,11 @@ function buildArcs(ctx: ArcContext): Arc[] {
       dep: { sort: 'region', id: r },
       compute: (cands) => {
         const regionCands = candidateSet(cands, { sort: 'region', id: r })
-        return new Set(hostIdx.nodeIds.filter((h) => regionCands.has(hostIdx.nodeRegion.get(h)!)))
+        const allowed = new Set<NodeId>()
+        for (const region of regionCands) {
+          for (const node of hostIdx.nodesIn.get(region) ?? []) allowed.add(node)
+        }
+        return allowed
       },
     })
     arcs.push({
@@ -685,12 +736,14 @@ function buildArcs(ctx: ArcContext): Arc[] {
         dep: { sort: 'wire', id: w },
         compute: (cands) => {
           const wireCands = candidateSet(cands, { sort: 'wire', id: w })
-          return new Set(
-            hostIdx.nodeIds.filter((h) => {
-              const image = hostIdx.nodePortWire.get(h)?.get(pk)
-              return image !== undefined && wireCands.has(image)
-            }),
-          )
+          const byWire = portWireIndex.get(pk)
+          const allowed = new Set<NodeId>()
+          if (byWire !== undefined) {
+            for (const wireId of wireCands) {
+              for (const node of byWire.get(wireId) ?? []) allowed.add(node)
+            }
+          }
+          return allowed
         },
       })
       arcs.push({
@@ -717,11 +770,11 @@ function buildArcs(ctx: ArcContext): Arc[] {
         dep: { sort: 'node', id: n },
         compute: (cands) => {
           const nodeCands = candidateSet(cands, { sort: 'node', id: n })
-          return new Set(
-            hostIdx.wireIds.filter((hw) =>
-              hostIdx.wireEndpoints.get(hw)!.some((ep) => ep.pkey === pkey && nodeCands.has(ep.node)),
-            ),
-          )
+          const allowed = new Set<WireId>()
+          for (const node of nodeCands) {
+            for (const hw of endpointIndex.get(node)?.get(pkey) ?? []) allowed.add(hw)
+          }
+          return allowed
         },
       })
       arcs.push({
@@ -750,7 +803,11 @@ function buildArcs(ctx: ArcContext): Arc[] {
       dep: { sort: 'region', id: s },
       compute: (cands) => {
         const scopeCands = candidateSet(cands, { sort: 'region', id: s })
-        return new Set(hostIdx.wireIds.filter((hw) => scopeCands.has(hostScopes.get(hw)!)))
+        const allowed = new Set<WireId>()
+        for (const region of scopeCands) {
+          for (const hw of hostWiresByScope.get(region) ?? []) allowed.add(hw)
+        }
+        return allowed
       },
     })
   }
