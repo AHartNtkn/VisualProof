@@ -41,6 +41,15 @@ def appendLeft (wire : Var left signature) (right : List Sig) :
   | .here => .here
   | .there tail => .there (tail.appendLeft right)
 
+@[simp] theorem index_appendLeft
+    (wire : Var left signature) (right : List Sig) :
+    (wire.appendLeft right).index.val = wire.index.val := by
+  induction wire with
+  | here => rfl
+  | there tail induction =>
+      simp only [appendLeft, index, Fin.val_succ]
+      rw [induction]
+
 /-- Embed a wire from the right side of an appended context. -/
 def appendRight (left : List Sig) (wire : Var right signature) :
     Var (left ++ right) signature :=

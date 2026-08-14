@@ -36,6 +36,12 @@ end
 
 namespace RegionPath
 
+def StartsWith (index : Nat) (path : RegionPath) : Prop :=
+  ∃ tail, path = index :: tail
+
+def CommonHead (paths : List RegionPath) : Prop :=
+  ∃ index, ∀ path ∈ paths, StartsWith index path
+
 /-- Longest common prefix of two region paths. -/
 def commonPrefix : RegionPath → RegionPath → RegionPath
   | left :: leftTail, right :: rightTail =>
@@ -60,6 +66,173 @@ private theorem dcaFrom_nil (rest : List RegionPath) :
   | cons next rest induction =>
       simp only [dcaFrom, commonPrefix]
       exact induction
+
+private theorem commonPrefix_starts
+    (left right : RegionPath) (index : Nat)
+    (starts : StartsWith index (left.commonPrefix right)) :
+    StartsWith index left ∧ StartsWith index right := by
+  cases left with
+  | nil => simp [StartsWith, commonPrefix] at starts
+  | cons leftHead leftTail =>
+      cases right with
+      | nil => simp [StartsWith, commonPrefix] at starts
+      | cons rightHead rightTail =>
+          simp only [commonPrefix] at starts
+          split at starts
+          · rcases starts with ⟨tail, equality⟩
+            injection equality with headEq
+            subst index
+            subst rightHead
+            exact ⟨⟨leftTail, rfl⟩, ⟨rightTail, rfl⟩⟩
+          · simp [StartsWith] at starts
+
+private theorem dcaFrom_starts
+    (first : RegionPath) (rest : List RegionPath) (index : Nat)
+    (firstStarts : StartsWith index first)
+    (restStarts : ∀ path ∈ rest, StartsWith index path) :
+    StartsWith index (dcaFrom first rest) := by
+  induction rest generalizing first with
+  | nil => exact firstStarts
+  | cons next tail induction =>
+      simp only [dcaFrom]
+      apply induction
+      · rcases firstStarts with ⟨firstTail, rfl⟩
+        rcases restStarts next (by simp) with ⟨nextTail, nextEq⟩
+        subst next
+        exact ⟨RegionPath.commonPrefix firstTail nextTail, by
+          simp [RegionPath.commonPrefix]⟩
+      · intro path member
+        exact restStarts path (by simp [member])
+
+private theorem dcaFrom_ne_nil_commonHead
+    (first : RegionPath) (rest : List RegionPath)
+    (nonempty : dcaFrom first rest ≠ []) :
+    ∃ index, StartsWith index first ∧
+      ∀ path ∈ rest, StartsWith index path := by
+  induction rest generalizing first with
+  | nil =>
+      cases first with
+      | nil => exact False.elim (nonempty rfl)
+      | cons index tail => exact ⟨index, ⟨tail, rfl⟩, by simp⟩
+  | cons next tail induction =>
+      simp only [dcaFrom] at nonempty
+      obtain ⟨index, commonStarts, tailStarts⟩ := induction
+        (first := first.commonPrefix next) nonempty
+      have bothStarts := commonPrefix_starts first next index commonStarts
+      exact ⟨index, bothStarts.1, by
+        intro path member
+        rcases List.mem_cons.mp member with rfl | member
+        · exact bothStarts.2
+        · exact tailStarts path member⟩
+
+theorem deepestCommonAncestor_ne_nil_iff_commonHead
+    (paths : List RegionPath) (nonempty : paths ≠ []) :
+    deepestCommonAncestor paths ≠ [] ↔ CommonHead paths := by
+  cases paths with
+  | nil => exact False.elim (nonempty rfl)
+  | cons first rest =>
+      simp only [deepestCommonAncestor, CommonHead]
+      constructor
+      · intro dcaNonempty
+        obtain ⟨index, firstStarts, restStarts⟩ :=
+          dcaFrom_ne_nil_commonHead first rest dcaNonempty
+        exact ⟨index, by
+          intro path member
+          rcases List.mem_cons.mp member with rfl | member
+          · exact firstStarts
+          · exact restStarts path member⟩
+      · rintro ⟨index, allStart⟩
+        have resultStarts := dcaFrom_starts first rest index
+          (allStart first (by simp))
+          (by intro path member; exact allStart path (by simp [member]))
+        rcases resultStarts with ⟨tail, equality⟩
+        rw [equality]
+        simp
+
+theorem rooted_iff_not_commonHead (paths : List RegionPath) :
+    (paths ≠ [] ∧ deepestCommonAncestor paths = []) ↔
+      (paths ≠ [] ∧ ¬CommonHead paths) := by
+  constructor
+  · rintro ⟨nonempty, dcaEq⟩
+    refine ⟨nonempty, ?_⟩
+    intro common
+    exact (deepestCommonAncestor_ne_nil_iff_commonHead paths nonempty).mpr
+      common dcaEq
+  · rintro ⟨nonempty, noCommon⟩
+    refine ⟨nonempty, ?_⟩
+    by_cases dcaEq : deepestCommonAncestor paths = []
+    · exact dcaEq
+    · exact False.elim (noCommon
+        ((deepestCommonAncestor_ne_nil_iff_commonHead paths nonempty).mp
+          dcaEq))
+
+private theorem commonHead_replaceForward
+    (before source target after : List RegionPath) (index : Nat)
+    (sameEmpty : source = [] ↔ target = []) :
+    CommonHead (before ++ source.map (List.cons index) ++ after) →
+      CommonHead (before ++ target.map (List.cons index) ++ after) := by
+  intro sourceCommon
+  by_cases targetEmpty : target = []
+  · have sourceEmpty := sameEmpty.mpr targetEmpty
+    simpa [sourceEmpty, targetEmpty] using sourceCommon
+  · have sourceNonempty : source ≠ [] := by
+      intro sourceEmpty
+      exact targetEmpty (sameEmpty.mp sourceEmpty)
+    obtain ⟨commonIndex, allStart⟩ := sourceCommon
+    obtain ⟨sourcePath, sourceMember⟩ :=
+      List.exists_mem_of_ne_nil source sourceNonempty
+    have mappedMember : index :: sourcePath ∈
+        before ++ source.map (List.cons index) ++ after := by
+      simp [sourceMember]
+    obtain ⟨tail, equality⟩ := allStart _ mappedMember
+    have commonEq : commonIndex = index := by
+      injection equality with headEq
+      exact headEq.symm
+    subst commonIndex
+    refine ⟨index, ?_⟩
+    intro path member
+    rcases List.mem_append.mp member with beforeOrTarget | afterMember
+    · rcases List.mem_append.mp beforeOrTarget with beforeMember | targetMember
+      · exact allStart path (List.mem_append_left _
+          (List.mem_append_left _ beforeMember))
+      · rcases List.mem_map.mp targetMember with ⟨targetPath, _, rfl⟩
+        exact ⟨targetPath, rfl⟩
+    · exact allStart path (List.mem_append_right _ afterMember)
+
+theorem commonHead_replace
+    (before source target after : List RegionPath) (index : Nat)
+    (sameEmpty : source = [] ↔ target = []) :
+    CommonHead (before ++ source.map (List.cons index) ++ after) ↔
+      CommonHead (before ++ target.map (List.cons index) ++ after) := by
+  constructor
+  · exact commonHead_replaceForward before source target after index sameEmpty
+  · exact commonHead_replaceForward before target source after index
+      sameEmpty.symm
+
+theorem nonempty_replace
+    (before source target after : List RegionPath) (index : Nat)
+    (sameEmpty : source = [] ↔ target = []) :
+    before ++ source.map (List.cons index) ++ after ≠ [] ↔
+      before ++ target.map (List.cons index) ++ after ≠ [] := by
+  by_cases beforeEmpty : before = []
+  · by_cases afterEmpty : after = []
+    · simp [beforeEmpty, afterEmpty, List.map_eq_nil_iff, sameEmpty]
+    · simp [afterEmpty]
+  · constructor <;> intro _ <;>
+      exact List.append_ne_nil_of_left_ne_nil
+        (List.append_ne_nil_of_left_ne_nil beforeEmpty _) _
+
+theorem rooted_replace
+    (before source target after : List RegionPath) (index : Nat)
+    (sameEmpty : source = [] ↔ target = []) :
+    let sourcePaths := before ++ source.map (List.cons index) ++ after
+    let targetPaths := before ++ target.map (List.cons index) ++ after
+    (sourcePaths ≠ [] ∧ deepestCommonAncestor sourcePaths = []) ↔
+      (targetPaths ≠ [] ∧ deepestCommonAncestor targetPaths = []) := by
+  dsimp only
+  rw [rooted_iff_not_commonHead, rooted_iff_not_commonHead,
+    nonempty_replace before source target after index sameEmpty,
+    commonHead_replace before source target after index sameEmpty]
 
 @[simp] theorem deepestCommonAncestor_cons_nil (rest : List RegionPath) :
     deepestCommonAncestor ([] :: rest) = [] := by
@@ -167,6 +340,48 @@ theorem ItemSeq.incidencePaths_append
       congr 2
       simp [Nat.add_assoc, Nat.add_comm])
     first second wireIndex itemIndex
+
+theorem ItemSeq.incidencePaths_frame
+    (before after : ItemSeq wires) (body : Region wires)
+    (wireIndex itemIndex : Nat) :
+    (before.append (.cons (.cut body) after)).incidencePaths
+        wireIndex itemIndex =
+      before.incidencePaths wireIndex itemIndex ++
+        (body.incidencePaths wireIndex).map
+          (List.cons (itemIndex + before.length)) ++
+        after.incidencePaths wireIndex
+          (itemIndex + before.length + 1) := by
+  rw [ItemSeq.incidencePaths_append]
+  simp [ItemSeq.incidencePaths, Item.incidencePaths, Nat.add_assoc]
+
+theorem ItemSeq.incidencePaths_eq_nil_iff_itemIndex
+    (items : ItemSeq wires) (wireIndex firstIndex secondIndex : Nat) :
+    items.incidencePaths wireIndex firstIndex = [] ↔
+      items.incidencePaths wireIndex secondIndex = [] := by
+  let regionMotive : ∀ context, Region context → Prop := fun _ _ => True
+  let itemMotive := fun (context : List Sig) (item : Item context) =>
+    ∀ (wireIndex firstIndex secondIndex : Nat),
+      item.incidencePaths wireIndex firstIndex = [] ↔
+        item.incidencePaths wireIndex secondIndex = []
+  let itemsMotive := fun (context : List Sig) (items : ItemSeq context) =>
+    ∀ (wireIndex firstIndex secondIndex : Nat),
+      items.incidencePaths wireIndex firstIndex = [] ↔
+        items.incidencePaths wireIndex secondIndex = []
+  exact ItemSeq.rec (motive_1 := regionMotive) (motive_2 := itemMotive)
+    (motive_3 := itemsMotive)
+    (fun _ _ _ => True.intro)
+    (by intro _ _ _ _ _ _ _; rfl)
+    (by intro _ _ _ _ _ _ _; rfl)
+    (by
+      intro _ body _ wireIndex firstIndex secondIndex
+      simp [Item.incidencePaths, List.map_eq_nil_iff])
+    (by intro _ _ _ _; rfl)
+    (by
+      intro _ head tail headIH tailIH wireIndex firstIndex secondIndex
+      simp only [ItemSeq.incidencePaths, List.append_eq_nil_iff]
+      rw [headIH wireIndex firstIndex secondIndex,
+        tailIH wireIndex (firstIndex + 1) (secondIndex + 1)])
+    items wireIndex firstIndex secondIndex
 
 mutual
   /-- Every local wire is used at this region's DCA, recursively. -/
