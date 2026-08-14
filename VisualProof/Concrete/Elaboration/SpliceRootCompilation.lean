@@ -139,7 +139,7 @@ private theorem canonicalOuterWire_boundaryClass
       congrArg wire candidateEq.symm
     _ = sourceOpen.boundaryClass position := wire.apply_symm_apply _
 
-private noncomputable def mappedLocalWire
+noncomputable def mappedLocalWire
     (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
     (targetLocal : WireContext layout.plugRaw)
     (localEq : targetLocal =
@@ -149,7 +149,7 @@ private noncomputable def mappedLocalWire
   FiniteEquiv.finCast ((congrArg List.length localEq).trans
     (List.length_map layout.frameWireMap))
 
-private noncomputable def mappedFullWire
+noncomputable def mappedFullWire
     (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
     (targetOuter targetLocal : WireContext layout.plugRaw)
     (outerEq : targetOuter =
@@ -164,7 +164,7 @@ private noncomputable def mappedFullWire
       (layout.canonicalOuterWire sourceCall targetOuter outerEq)
       (layout.mappedLocalWire sourceCall targetLocal localEq))
 
-private theorem mappedLocalWire_get
+theorem mappedLocalWire_get
     (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
     (targetLocal : WireContext layout.plugRaw)
     (localEq : targetLocal =
@@ -176,7 +176,7 @@ private theorem mappedLocalWire_get
   rw [List.get_of_eq localEq]
   exact List.getElem_map layout.frameWireMap
 
-private theorem mappedFullWire_get
+theorem mappedFullWire_get
     (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
     (targetOuter targetLocal : WireContext layout.plugRaw)
     (outerEq : targetOuter =
@@ -336,87 +336,81 @@ private structure EndpointGraftInput
 
 structure AwayBlockResult
     (layout : PlugLayout input) (targetWf : layout.plugRaw.WellFormed)
-    {sourceCall : CompilerCall input.frame.val}
-    (targetOuter targetLocal : WireContext layout.plugRaw)
-    (targetBinders : BinderContext layout.plugRaw sourceCall.rels)
-    (outerEq : targetOuter =
-      sourceCall.outerContext.map layout.frameWireMap)
-    (localEq : targetLocal =
-      sourceCall.localContext.map layout.frameWireMap)
-    (parentAway : sourceCall.origin ≠ input.site)
-    (source : CompiledItems input.frame.val sourceCall.fullContext
-      sourceCall.rels sourceCall.binders) where
+    (sourceParent : Fin input.frame.val.regionCount)
+    (sourceContext : WireContext input.frame.val)
+    (sourceBinders : BinderContext input.frame.val rels)
+    (targetContext : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw rels)
+    (wire : FiniteEquiv (Fin targetContext.length)
+      (Fin sourceContext.length))
+    (parentAway : sourceParent ≠ input.site)
+    (source : CompiledItems input.frame.val sourceContext rels
+      sourceBinders) where
   sourceDirect : ∀ occurrence, occurrence ∈ source.origins →
-    occurrence ∈ localOccurrences input.frame.val sourceCall.origin
-  target : CompiledItems layout.plugRaw (targetOuter ++ targetLocal)
-    sourceCall.rels targetBinders
+    occurrence ∈ localOccurrences input.frame.val sourceParent
+  target : CompiledItems layout.plugRaw targetContext rels targetBinders
   compiled : compileItems? layout.plugRaw targetWf
-    (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+    (layout.frameRegion sourceParent) targetContext
     targetBinders (source.origins.map layout.mapFrameOccurrence)
     (fun occurrence member => by
-      rw [layout.localOccurrences_frameRegion_of_ne_site sourceCall.origin
+      rw [layout.localOccurrences_frameRegion_of_ne_site sourceParent
         parentAway]
       obtain ⟨sourceOccurrence, sourceMember, rfl⟩ := List.mem_map.mp member
       exact List.mem_map.mpr
         ⟨sourceOccurrence, sourceDirect _ sourceMember, rfl⟩) = some target
-  iso : ItemSeqIso
-    (layout.mappedFullWire sourceCall targetOuter targetLocal outerEq localEq)
-    sourceCall.rels target.erase source.erase
+  iso : ItemSeqIso wire rels target.erase source.erase
 
 noncomputable def compileAwayBlock
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
     (terminal : input.TerminalBody) (targetWf : layout.plugRaw.WellFormed)
-    (sourceCall : CompilerCall input.frame.val)
-    (targetOuter targetLocal : WireContext layout.plugRaw)
-    (targetBinders : BinderContext layout.plugRaw sourceCall.rels)
-    (outerEq : targetOuter =
-      sourceCall.outerContext.map layout.frameWireMap)
-    (localEq : targetLocal =
-      sourceCall.localContext.map layout.frameWireMap)
-    (parentAway : sourceCall.origin ≠ input.site)
-    (sourceExact : sourceCall.fullContext.Exact sourceCall.origin)
-    (targetExact : (targetOuter ++ targetLocal).Exact
-      (layout.frameRegion sourceCall.origin))
+    (sourceParent : Fin input.frame.val.regionCount)
+    (sourceContext : WireContext input.frame.val)
+    (sourceBinders : BinderContext input.frame.val rels)
+    (targetContext : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw rels)
+    (wire : FiniteEquiv (Fin targetContext.length)
+      (Fin sourceContext.length))
+    (wireGet : ∀ index, targetContext.get (wire.symm index) =
+      layout.frameWireMap (sourceContext.get index))
+    (parentAway : sourceParent ≠ input.site)
+    (sourceExact : sourceContext.Exact sourceParent)
+    (targetExact : targetContext.Exact
+      (layout.frameRegion sourceParent))
     (frameBindersMapped : ∀ binder,
-      targetBinders (layout.frameRegion binder) = sourceCall.binders binder)
+      targetBinders (layout.frameRegion binder) = sourceBinders binder)
     (selected : Fin input.frame.val.regionCount)
     (selectedParent : (input.frame.val.regions selected).parent? =
-      some sourceCall.origin)
+      some sourceParent)
     (selectedEncloses : input.frame.val.Encloses selected input.site)
-    (source : CompiledItems input.frame.val sourceCall.fullContext
-      sourceCall.rels sourceCall.binders)
+    (source : CompiledItems input.frame.val sourceContext rels sourceBinders)
     (sourceDirect : ∀ occurrence, occurrence ∈ source.origins →
-      occurrence ∈ localOccurrences input.frame.val sourceCall.origin)
+      occurrence ∈ localOccurrences input.frame.val sourceParent)
     (different : ∀ child,
       LocalOccurrence.child child ∈ source.origins → child ≠ selected)
     (sourceCompiled : compileItems? input.frame.val input.frame.property
-      sourceCall.origin sourceCall.fullContext sourceCall.binders
+      sourceParent sourceContext sourceBinders
       source.origins sourceDirect = some source) :
-    AwayBlockResult layout targetWf targetOuter targetLocal targetBinders
-      outerEq localEq parentAway source := by
-  let fullWire := layout.mappedFullWire sourceCall targetOuter targetLocal
-    outerEq localEq
+    AwayBlockResult layout targetWf sourceParent sourceContext sourceBinders
+      targetContext targetBinders wire parentAway source := by
   have binderMapped : ∀ binder,
       targetBinders (layout.frameRegion binder) =
-        (sourceCall.binders binder).map fun relation =>
+        (sourceBinders binder).map fun relation =>
           ⟨relation.1, relation.2⟩ := by
     intro binder
     rw [frameBindersMapped]
-    cases sourceCall.binders binder <;> rfl
+    cases sourceBinders binder <;> rfl
   let childrenAway : ∀ child,
       LocalOccurrence.child child ∈ source.origins →
         ¬ input.frame.val.Encloses child input.site := by
     intro child member
     have childParent := (mem_localOccurrences_child input.frame.val
-      sourceCall.origin child).mp (sourceDirect _ member)
+      sourceParent child).mp (sourceDirect _ member)
     exact sibling_not_encloses input.frame.property selectedParent childParent
       (different child member) selectedEncloses
   have existsTarget := layout.compileFrameItemsAway consistent terminal targetWf
-      sourceCall.origin parentAway sourceCall.fullContext
-      (targetOuter ++ targetLocal) sourceCall.binders targetBinders
-      fullWire.symm (fun relation => relation) sourceExact targetExact
-      (layout.mappedFullWire_get sourceCall targetOuter targetLocal outerEq
-        localEq) binderMapped sourceDirect childrenAway sourceCompiled
+      sourceParent parentAway sourceContext targetContext sourceBinders
+      targetBinders wire.symm (fun relation => relation) sourceExact
+      targetExact wireGet binderMapped sourceDirect childrenAway sourceCompiled
   let target := Classical.choose existsTarget
   have targetSpec := Classical.choose_spec existsTarget
   refine {
@@ -426,10 +420,10 @@ noncomputable def compileAwayBlock
     iso := ?_
   }
   · exact targetSpec.1
-  · have erased' : target.erase = source.erase.renameWires fullWire.symm := by
+  · have erased' : target.erase = source.erase.renameWires wire.symm := by
       simpa only [target, ItemSeq.renameRelations_id] using targetSpec.2
     rw [erased']
-    exact (ItemSeqIso.renameWiresEquiv source.erase fullWire.symm).symm
+    exact (ItemSeqIso.renameWiresEquiv source.erase wire.symm).symm
 
 private noncomputable def compileHere
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
@@ -814,14 +808,22 @@ private noncomputable def compileAlongZipper
       subst child
       exact selectedNotSuffix member
     let beforeResult := layout.compileAwayBlock consistent
-      admissible.terminal_body targetWf sourceCall targetOuter targetLocal
-      targetBinders frame.outerEq localEq parentAway frame.sourceExact
+      admissible.terminal_body targetWf sourceCall.origin
+      sourceCall.fullContext sourceCall.binders (targetOuter ++ targetLocal)
+      targetBinders (layout.mappedFullWire sourceCall targetOuter targetLocal
+        frame.outerEq localEq)
+      (layout.mappedFullWire_get sourceCall targetOuter targetLocal
+        frame.outerEq localEq) parentAway frame.sourceExact
       frame.targetExact frame.frameBindersMapped origin sourceParent
       (by simpa only [siteEq] using childEncloses) before beforeDirect
       beforeDifferent beforeCompiled
     let suffixResult := layout.compileAwayBlock consistent
-      admissible.terminal_body targetWf sourceCall targetOuter targetLocal
-      targetBinders frame.outerEq localEq parentAway frame.sourceExact
+      admissible.terminal_body targetWf sourceCall.origin
+      sourceCall.fullContext sourceCall.binders (targetOuter ++ targetLocal)
+      targetBinders (layout.mappedFullWire sourceCall targetOuter targetLocal
+        frame.outerEq localEq)
+      (layout.mappedFullWire_get sourceCall targetOuter targetLocal
+        frame.outerEq localEq) parentAway frame.sourceExact
       frame.targetExact frame.frameBindersMapped origin sourceParent
       (by simpa only [siteEq] using childEncloses) suffix suffixDirect
       suffixDifferent suffixCompiled
@@ -1218,14 +1220,22 @@ private noncomputable def compileAlongZipper
       subst child
       exact selectedNotSuffix member
     let beforeResult := layout.compileAwayBlock consistent
-      admissible.terminal_body targetWf sourceCall targetOuter targetLocal
-      targetBinders frame.outerEq localEq parentAway frame.sourceExact
+      admissible.terminal_body targetWf sourceCall.origin
+      sourceCall.fullContext sourceCall.binders (targetOuter ++ targetLocal)
+      targetBinders (layout.mappedFullWire sourceCall targetOuter targetLocal
+        frame.outerEq localEq)
+      (layout.mappedFullWire_get sourceCall targetOuter targetLocal
+        frame.outerEq localEq) parentAway frame.sourceExact
       frame.targetExact frame.frameBindersMapped origin sourceParent
       (by simpa only [siteEq] using childEncloses) before beforeDirect
       beforeDifferent beforeCompiled
     let suffixResult := layout.compileAwayBlock consistent
-      admissible.terminal_body targetWf sourceCall targetOuter targetLocal
-      targetBinders frame.outerEq localEq parentAway frame.sourceExact
+      admissible.terminal_body targetWf sourceCall.origin
+      sourceCall.fullContext sourceCall.binders (targetOuter ++ targetLocal)
+      targetBinders (layout.mappedFullWire sourceCall targetOuter targetLocal
+        frame.outerEq localEq)
+      (layout.mappedFullWire_get sourceCall targetOuter targetLocal
+        frame.outerEq localEq) parentAway frame.sourceExact
       frame.targetExact frame.frameBindersMapped origin sourceParent
       (by simpa only [siteEq] using childEncloses) suffix suffixDirect
       suffixDifferent suffixCompiled

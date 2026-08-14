@@ -286,6 +286,89 @@ theorem compileOccurrence?_child_bubble_success
       refine ⟨body, rfl, ?_⟩
       simpa [bodyCompiled] using compiled.symm
 
+/-- A successful cut item determines both the source child kind and the exact
+recursive child compilation.  Dependent constructor elimination belongs to
+the compiler grammar, not to operation-specific frame folds. -/
+theorem compileOccurrence?_child_cut_inv
+    (hwf : d.WellFormed) (parent child : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (direct : LocalOccurrence.child child ∈ localOccurrences d parent)
+    {body : CompiledRegion d (.nested child context rels binders)}
+    (compiled : compileOccurrence? d hwf parent context binders
+      (.child child) direct = some (.cut body)) :
+    d.regions child = .cut parent ∧
+      compileRegion? d hwf child context binders = some body := by
+  have parentEq := (mem_localOccurrences_child d parent child).mp direct
+  cases regionEq : d.regions child with
+  | sheet =>
+      rw [compileOccurrence?_child_sheet hwf parent child context binders
+        direct regionEq] at compiled
+      contradiction
+  | cut actualParent =>
+      have actualParentEq : actualParent = parent := by
+        simpa [regionEq, CRegion.parent?] using parentEq
+      subst actualParent
+      refine ⟨rfl, ?_⟩
+      rw [compileOccurrence?_child_cut hwf parent child context binders direct
+        regionEq] at compiled
+      cases childCompiled : compileRegion? d hwf child context binders with
+      | none => simp [childCompiled] at compiled
+      | some actualBody =>
+          simp [childCompiled] at compiled
+          cases compiled
+          rfl
+  | bubble actualParent arity =>
+      have actualParentEq : actualParent = parent := by
+        simpa [regionEq, CRegion.parent?] using parentEq
+      subst actualParent
+      rw [compileOccurrence?_child_bubble hwf parent child context binders
+        arity direct regionEq] at compiled
+      cases childCompiled : compileRegion? d hwf child context
+          (binders.push child arity) <;> simp [childCompiled] at compiled
+
+/-- Bubble counterpart of `compileOccurrence?_child_cut_inv`. -/
+theorem compileOccurrence?_child_bubble_inv
+    (hwf : d.WellFormed) (parent child : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (arity : Nat)
+    (direct : LocalOccurrence.child child ∈ localOccurrences d parent)
+    {body : CompiledRegion d
+      (.nested child context (arity :: rels) (binders.push child arity))}
+    (compiled : compileOccurrence? d hwf parent context binders
+      (.child child) direct = some (.bubble arity body)) :
+    d.regions child = .bubble parent arity ∧
+      compileRegion? d hwf child context (binders.push child arity) =
+        some body := by
+  have parentEq := (mem_localOccurrences_child d parent child).mp direct
+  cases regionEq : d.regions child with
+  | sheet =>
+      rw [compileOccurrence?_child_sheet hwf parent child context binders
+        direct regionEq] at compiled
+      contradiction
+  | cut actualParent =>
+      have actualParentEq : actualParent = parent := by
+        simpa [regionEq, CRegion.parent?] using parentEq
+      subst actualParent
+      rw [compileOccurrence?_child_cut hwf parent child context binders direct
+        regionEq] at compiled
+      cases childCompiled : compileRegion? d hwf child context binders <;>
+        simp [childCompiled] at compiled
+  | bubble actualParent actualArity =>
+      have actualParentEq : actualParent = parent := by
+        simpa [regionEq, CRegion.parent?] using parentEq
+      subst actualParent
+      rw [compileOccurrence?_child_bubble hwf parent child context binders
+        actualArity direct regionEq] at compiled
+      cases childCompiled : compileRegion? d hwf child context
+          (binders.push child actualArity) with
+      | none => simp [childCompiled] at compiled
+      | some actualBody =>
+          have itemEq : CompiledItem.bubble actualArity actualBody =
+              .bubble arity body := by
+            exact Option.some.inj (by simpa [childCompiled] using compiled)
+          cases itemEq
+          exact ⟨rfl, childCompiled⟩
+
 theorem compileOccurrence?_child_cut_body
     (hwf : d.WellFormed) (parent child : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)
