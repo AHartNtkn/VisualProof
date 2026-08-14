@@ -89,8 +89,11 @@ async function addTwoRefs(page: Page): Promise<readonly [string, string]> {
   await page.mouse.down()
   await page.mouse.move(box.x + endpoints.target.x, box.y + endpoints.target.y, { steps: 10 })
   await page.mouse.up()
+  // wireJoin merges the two 2-end wires (ref+pin each) into one wire whose
+  // endpoint list is the concatenation of both: 4 endpoints (ref, pin, ref,
+  // pin), all node-bound — every one of them is a rendered wireBind.
   await expect.poll(() => page.evaluate(() =>
-    (window as DebugWindow).__vpaDebug!.wireBinds().length)).toBe(2)
+    (window as DebugWindow).__vpaDebug!.wireBinds().length)).toBe(4)
   await waitForRest(page)
   const ids = await page.evaluate(() =>
     (window as DebugWindow).__vpaDebug!.bodies()

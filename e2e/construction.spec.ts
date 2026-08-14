@@ -73,7 +73,9 @@ async function waitForNodes(page: Page, count: number): Promise<void> {
 test('the structural spawn cascade is disposable and preserves selection', async ({ page, theoryFiles }) => {
   await openApp(page, theoryFiles)
   await spawnRef(page)
-  await waitForNodes(page, 1)
+  // UnaryWitness is arity 1: spawning a ref mints its own node plus a pin
+  // holding the wire's other (open) end (spawn.ts's mintPin) — 2 nodes.
+  await waitForNodes(page, 2)
   const node = await page.evaluate(() =>
     window.__vpaDebug!.bodies().find((body) => body.kind === 'ref')!.id)
   const nodeAt = await bodyPoint(page, node)
@@ -98,7 +100,8 @@ test('the structural spawn cascade is disposable and preserves selection', async
   await expect(page.locator('.vpa-spawn-cascade')).toHaveCount(0)
 
   await spawnRef(page, invocation)
-  await waitForNodes(page, 2)
+  // Two spawns of an arity-1 relation: 2 refs + 2 pins.
+  await waitForNodes(page, 4)
   expect(await page.evaluate(() => window.__vpaDebug!.interaction().selected))
     .toEqual([{ kind: 'node', id: node }])
 
@@ -113,7 +116,8 @@ test('one selected structural ref uses the shared contextual copy gesture', asyn
   await openApp(page, theoryFiles)
   await spawnRef(page)
   await spawnRef(page)
-  await waitForNodes(page, 2)
+  // Two spawns of an arity-1 relation: 2 refs + 2 pins.
+  await waitForNodes(page, 4)
 
   const loose = await page.evaluate(() => window.__vpaDebug!.wires())
   const sourceBind = await page.evaluate(() => window.__vpaDebug!.wireBinds()[0]!)
@@ -124,9 +128,11 @@ test('one selected structural ref uses the shared contextual copy gesture', asyn
   await page.mouse.down()
   await page.mouse.move(secondWire.x, secondWire.y, { steps: 10 })
   await page.mouse.up()
+  // wireJoin concatenates both wires' endpoint lists: 4 endpoints (ref, pin,
+  // ref, pin) on the one surviving wire.
   await expect.poll(() =>
     page.evaluate(() => window.__vpaDebug!.diagram().wires.map((wire) => wire.endpoints)))
-    .toEqual([2])
+    .toEqual([4])
 
   const bodies = await page.evaluate(() =>
     window.__vpaDebug!.bodies().filter((body) => body.kind === 'ref'))
@@ -141,7 +147,10 @@ test('one selected structural ref uses the shared contextual copy gesture', asyn
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays()))
     .toContain('circle')
   await page.mouse.up()
-  await waitForNodes(page, 3)
+  // The shared contextual copy attaches the copied ref's port directly onto
+  // the existing joined wire (now 5 endpoints) rather than minting a fresh
+  // pin — one new node (the copy) on top of the 4 already present.
+  await waitForNodes(page, 5)
   expect(await page.evaluate(({ held, neighbour }) => {
     const ids = window.__vpaDebug!.diagram().nodes.map((node) => node.id)
     return ids.includes(held) && ids.includes(neighbour)
@@ -151,7 +160,9 @@ test('one selected structural ref uses the shared contextual copy gesture', asyn
 test('a contextual structural spawn inside a cut belongs to that cut', async ({ page, theoryFiles }) => {
   await openApp(page, theoryFiles)
   await spawnRef(page)
-  await waitForNodes(page, 1)
+  // UnaryWitness is arity 1: spawning a ref mints its own node plus a pin
+  // holding the wire's other (open) end — 2 nodes.
+  await waitForNodes(page, 2)
   const original = await page.evaluate(() =>
     window.__vpaDebug!.bodies().find((body) => body.kind === 'ref')!.id)
   const originalAt = await bodyPoint(page, original)
@@ -163,10 +174,18 @@ test('a contextual structural spawn inside a cut belongs to that cut', async ({ 
 
   const cut = await page.evaluate(() =>
     window.__vpaDebug!.regions().find((region) => region.kind === 'cut')!)
+  // cutWrap reparents only the touched ref into the cut; the ref's pin holds
+  // the wire's still-outer derived scope and is left at the root region, so
+  // it is one of the "not original" nodes but does NOT belong to the cut.
+  // Record every node id present before the contextual spawn so the newly
+  // introduced ones (the second ref plus its own pin, both minted at the
+  // spawn region per spawn.ts's mintPin) can be told apart from it.
+  const before = await page.evaluate(() => window.__vpaDebug!.diagram().nodes.map((node) => node.id))
   const center = await pagePoint(page, cut)
   await spawnRef(page, center)
-  await waitForNodes(page, 2)
+  await waitForNodes(page, 4)
   const structure = await page.evaluate(() => window.__vpaDebug!.diagram())
-  const added = structure.nodes.find((node) => node.id !== original)!
-  expect(added.region).toBe(cut.id)
+  const added = structure.nodes.filter((node) => !before.includes(node.id))
+  expect(added).toHaveLength(2)
+  for (const node of added) expect(node.region).toBe(cut.id)
 })

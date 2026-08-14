@@ -206,24 +206,33 @@ test('the drawing gesture severs a shared wire at a touched end', async ({ page,
   await page.mouse.down()
   await page.mouse.move(editBox.x + endpoints.target.x, editBox.y + endpoints.target.y, { steps: 10 })
   await page.mouse.up()
+  // wireJoin merges the two 2-end wires (ref+pin each) into one wire whose
+  // endpoint list is the concatenation of both: 4 endpoints (ref, pin, ref,
+  // pin), all node-bound — every one of them is a rendered wireBind.
   await expect.poll(() => page.evaluate(() =>
-    (window as DebugWindow).__vpaDebug!.wireBinds().length)).toBe(2)
+    (window as DebugWindow).__vpaDebug!.wireBinds().length)).toBe(4)
   await proveCurrent(page)
   const before = await counts(page)
 
   // Found a drawing whose stroke releases on one bound endpoint of the
   // shared wire, then drop the loose end in open space: end-partition sever.
+  // Every wire end is now a node (ref or pin), so the joined wire has four
+  // binds (two refs, two pins), not two — a bind on a pin would dispatch to
+  // identityAbstract (draw.ts's 'identity' contact kind), not wireSever, so
+  // the touched end must specifically be one of the wire's two ref binds.
   const bind = await page.evaluate(() => {
     const front = (window as DebugWindow).__vpaDebug!.proofFront('forward')
-    const byWire = new Map<string, { nodes: Set<string>; first: { x: number; y: number } }>()
+    const kindOf = new Map(front.bodies.map((body) => [body.id, body.kind]))
+    const byWire = new Map<string, { refs: { x: number; y: number }[] }>()
     for (const candidate of front.binds) {
-      const entry = byWire.get(candidate.id) ?? { nodes: new Set(), first: candidate }
-      entry.nodes.add(candidate.node)
+      if (kindOf.get(candidate.node) !== 'ref') continue
+      const entry = byWire.get(candidate.id) ?? { refs: [] }
+      entry.refs.push(candidate)
       byWire.set(candidate.id, entry)
     }
-    const shared = [...byWire.values()].find((entry) => entry.nodes.size === 2)
-    if (shared === undefined) throw new Error('the forward front has no two-node shared wire')
-    return { x: shared.first.x, y: shared.first.y }
+    const shared = [...byWire.values()].find((entry) => entry.refs.length === 2)
+    if (shared === undefined) throw new Error('the forward front has no two-ref shared wire')
+    return shared.refs[0]!
   })
   const endPoint = await frontPoint(page, bind)
   const start = await blankPoint(page)
@@ -254,9 +263,17 @@ test('dragging an applied end into open space tears it off (parallel split)', as
   await page.mouse.move(target.x, target.y, { steps: 12 })
   await page.mouse.up()
 
-  // The single-ended head wire splits into two side-by-side ends.
+  // The single-ended head wire splits into two side-by-side ends
+  // (applyParallelSplit, wire-content.ts:173): the touched atom is deleted
+  // and reborn twice, once per new wire — net +1 atom (2 new atoms, 1 old
+  // one deleted). Its relation wire's pins transfer to one half and
+  // duplicate onto the other (spec's "pin duplication is sound: ⊤ content
+  // copies freely") — net +2 pin nodes (2 kept by transfer, 2 freshly
+  // minted for the twin). Total: +3 nodes. The split relation wire becomes
+  // two wires (net +1); the atom's own argument wire is shared by both new
+  // atom copies via attachArgs, so no further wire is minted.
   await expect.poll(async () => (await counts(page)).nodes)
-    .toBe(before.nodes + 1)
+    .toBe(before.nodes + 3)
   await expect.poll(async () => (await counts(page)).wires)
     .toBe(before.wires + 1)
 })
