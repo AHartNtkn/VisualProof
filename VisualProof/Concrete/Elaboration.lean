@@ -6,3 +6,4 @@ import VisualProof.Concrete.Elaboration.Compiled
 import VisualProof.Concrete.Elaboration.Splice
 import VisualProof.Concrete.Elaboration.SpliceRootCompilation
 import VisualProof.Concrete.Elaboration.SelectionFrameCompilation
+import VisualProof.Concrete.Elaboration.SelectionReplacementSiteCompilation
