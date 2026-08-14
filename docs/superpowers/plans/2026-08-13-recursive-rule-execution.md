@@ -291,23 +291,23 @@
 - Create: `VisualProof/Rule/Executable/WireSever.lean`
 - Modify: `VisualProof/Rule/WireSever.lean`
 
-- [ ] **Step 1: Define local sever/join data**
+- [x] **Step 1: Define local sever/join data**
 
   Local sever stores `joined`, `separate`, an occurrence of the collapsed local body, and the required polarity. Local join stores the corresponding occurrence of the separated body and inverse polarity. Define the forward and backward variants explicitly.
 
-- [ ] **Step 2: Define open-boundary data without a target**
+- [x] **Step 2: Define open-boundary data without a target**
 
   Forward open sever data stores the new external-class count, separated boundary, collapse map and its laws, and separated body whose collapse recovers the source body. Backward open join data stores the collapse from the source boundary classes to the smaller target class count; the runner derives the joined boundary and renamed body. These are operands describing the rule instance, not a stored `OpenDiagram` target.
 
-- [ ] **Step 3: Define both runners**
+- [x] **Step 3: Define both runners**
 
   Local branches fill their supplied occurrence. Open branches construct the output `OpenDiagram` directly from the supplied boundary/body operands. No branch searches for a wire or returns `Option`.
 
-- [ ] **Step 4: Prove closure and exactness**
+- [x] **Step 4: Prove closure and exactness**
 
   Derive both target-isomorphism closure laws from `WireSever.iso`. Prove forward exactness, then backward exactness, by matching the contextual/open disjunction and returning the rule witness's target isomorphism.
 
-- [ ] **Step 5: Validate and commit**
+- [x] **Step 5: Validate and commit**
 
   Strict-check, scan for admissions and raised limits, run the focused build, and commit as `execute wire severance recursively`.
 

@@ -129,4 +129,18 @@ theorem WireSever.iso
       rcases openNonempty with ⟨openStep⟩
       exact Or.inr ⟨WireSever.Open.iso sourceIso openStep targetIso⟩
 
+theorem WireSever.respectsTargetIso
+    (step : WireSever source target)
+    (isomorphic : OpenDiagram.Isomorphic target target') :
+    WireSever source target' := by
+  rcases isomorphic with ⟨targetIso⟩
+  exact WireSever.iso (OpenDiagramIso.refl source) step targetIso
+
+theorem WireSever.backward_respectsTargetIso
+    (step : WireSever target source)
+    (isomorphic : OpenDiagram.Isomorphic target target') :
+    WireSever target' source := by
+  rcases isomorphic with ⟨targetIso⟩
+  exact WireSever.iso targetIso step (OpenDiagramIso.refl source)
+
 end VisualProof.Rule
