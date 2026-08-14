@@ -81,17 +81,26 @@ export function portKey(port: Port): string {
  * deliberately erased: their incident-wire multiset, not their storage
  * index, is the structure that identity carries — see `requiredPorts`'s
  * `identity` case, whose ports are storage addresses only.
+ *
+ * Every caller feeds endpoints of a validated diagram, where a node only
+ * ever carries the port kinds `requiredPorts` lists for it — a mismatched
+ * port kind is a structural invariant violation, not reachable input, so it
+ * throws loudly rather than returning a sentinel a caller could silently
+ * compare against.
  */
 export function endpointPositionKey(diagram: Diagram, endpoint: Endpoint): string {
   const node = diagram.nodes[endpoint.node]!
   switch (node.kind) {
     case 'atom':
       if (endpoint.port.kind === 'head') return 'hd'
-      return endpoint.port.kind === 'arg' ? `a:${endpoint.port.index}` : '!invalid'
+      if (endpoint.port.kind === 'arg') return `a:${endpoint.port.index}`
+      throw new DiagramError(`atom node cannot carry port kind '${endpoint.port.kind}'`)
     case 'ref':
-      return endpoint.port.kind === 'arg' ? `a:${endpoint.port.index}` : '!invalid'
+      if (endpoint.port.kind === 'arg') return `a:${endpoint.port.index}`
+      throw new DiagramError(`ref node cannot carry port kind '${endpoint.port.kind}'`)
     case 'identity':
-      return endpoint.port.kind === 'identity' ? 'i' : '!invalid'
+      if (endpoint.port.kind === 'identity') return 'i'
+      throw new DiagramError(`identity node cannot carry port kind '${endpoint.port.kind}'`)
   }
 }
 
