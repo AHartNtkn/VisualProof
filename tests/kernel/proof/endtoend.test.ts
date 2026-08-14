@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import {
@@ -185,6 +185,6 @@ describe('stored derived rule pipeline', () => {
       },
     }], context)
 
-    expect(exploreForm(native)).toBe(exploreForm(primitive))
+    expect(sameDiagram(native, primitive)).toBe(true)
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { applyDoubleCutElim, applyDoubleCutIntro } from '../../../src/kernel/rules/doublecut'
@@ -206,8 +206,7 @@ describe('structural round trips', () => {
           && diagram.regions[id] === undefined,
       )![0]
 
-      expect(exploreForm(applyDoubleCutElim(wrapped, outer)))
-        .toBe(exploreForm(diagram))
+      expect(sameDiagram(applyDoubleCutElim(wrapped, outer), diagram)).toBe(true)
     }
   })
 
@@ -234,13 +233,16 @@ describe('structural round trips', () => {
       nodes: [copy],
       wires: [],
     })
-    const evidence = findDeiterationEvidence(iterated, copySelection, 10_000)
+    const evidence = findDeiterationEvidence(iterated, copySelection)
 
-    expect(exploreForm(applyDeiteration(
-      iterated,
-      copySelection,
-      evidence.justifier,
-      evidence.certificate,
-    ))).toBe(exploreForm(diagram))
+    expect(sameDiagram(
+      applyDeiteration(
+        iterated,
+        copySelection,
+        evidence.justifier,
+        evidence.certificate,
+      ),
+      diagram,
+    )).toBe(true)
   })
 })

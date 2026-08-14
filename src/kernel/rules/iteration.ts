@@ -2,7 +2,7 @@ import type { Diagram, RegionId } from '../diagram/diagram'
 import { isAncestorOrEqual } from '../diagram/regions'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
-import { exploreForm, exploreIso } from '../diagram/canonical/explore'
+import { diagramIso } from '../diagram/canonical/iso'
 import { extractSubgraph } from '../diagram/subgraph/extract'
 import { removeSubgraph, spliceSubgraphMapped } from '../diagram/subgraph/splice'
 import type { IdReservation } from '../diagram/subgraph/freshId'
@@ -129,11 +129,11 @@ function mkValidatedSelection(
  * only; there is no object-language comparison or secondary verdict channel.
  */
 /**
- * Fast exact justifier search for single-subtree selections: canonical
- * forms are complete invariants, so comparing candidate cut subtrees by
- * form (with boundary pinning) finds every exact occurrence without the
- * matcher's backtracking — which degenerates when a pattern carries many
- * interchangeable pins. The certificate is assembled from the labeling
+ * Fast exact justifier search for single-subtree selections: testing each
+ * candidate cut subtree against the pattern with pairwise isomorphism
+ * (boundary-pinned) finds every exact occurrence without the matcher's
+ * backtracking — which degenerates when a pattern carries many
+ * interchangeable pins. The certificate is assembled from the witness
  * isomorphism.
  */
 function subtreeEvidence(
@@ -145,7 +145,6 @@ function subtreeEvidence(
   }
   const contents = selectionContents(diagram, selection)
   const { pattern, attachments } = extractSubgraph(diagram, selection)
-  const want = exploreForm(pattern.diagram, pattern.boundary)
   for (const [rid, region] of Object.entries(diagram.regions).sort()) {
     if (region.kind !== 'cut') continue
     if (rid === selection.regions[0]) continue
@@ -164,8 +163,7 @@ function subtreeEvidence(
     }
     if (probe.attachments.length !== attachments.length) continue
     if (probe.attachments.some((wire, index) => wire !== attachments[index])) continue
-    if (exploreForm(probe.pattern.diagram, probe.pattern.boundary) !== want) continue
-    const iso = exploreIso(
+    const iso = diagramIso(
       pattern.diagram,
       probe.pattern.diagram,
       pattern.boundary,
@@ -211,19 +209,23 @@ function subtreeEvidence(
   return null
 }
 
+/**
+ * The search is attachment-anchored: the pattern's boundary is seeded with
+ * the selection's own attachments, so propagation narrows candidates to
+ * exact structural matches without a budget. `findOccurrences` called
+ * without `explorationFuel` never spends fuel (`spend()`'s `remaining` stays
+ * `undefined`), so its status is always `'complete'` — refusal below is
+ * based only on the absence of an exact justifier, never on exhaustion.
+ */
 export function findDeiterationEvidence(
   diagram: Diagram,
   selection: SubgraphSelection,
-  explorationFuel: number,
 ): DeiterationEvidence {
   const fast = subtreeEvidence(diagram, selection)
   if (fast !== null) return fast
   const contents = selectionContents(diagram, selection)
   const { pattern, attachments } = extractSubgraph(diagram, selection)
-  const result = findOccurrences(diagram, pattern, {
-    explorationFuel,
-    attachments,
-  })
+  const result = findOccurrences(diagram, pattern, { attachments })
   const disjoint = (occurrence: Occurrence): boolean => {
     for (const region of occurrence.regionMap.values()) {
       if (contents.allRegions.has(region)) return false
@@ -250,12 +252,6 @@ export function findDeiterationEvidence(
       && disjoint(occurrence),
   )
   if (justifying === undefined) {
-    if (result.status === 'exhausted') {
-      throw new RuleError(
-        `graph exploration exhausted before finding an exact justifier `
-        + `for deiteration at '${selection.region}'`,
-      )
-    }
     throw new RuleError(
       `no exact justifying occurrence found for deiteration at '${selection.region}'`,
     )

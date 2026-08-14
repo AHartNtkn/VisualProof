@@ -54,7 +54,7 @@ describe('existential stubs honor wire scope', () => {
     expect(wv.net.edges).toHaveLength(1)
   })
 
-  it('a same-region singleton carries its loose end as a circular body with identity scale', () => {
+  it('a same-region singleton carries its loose end as a point body with identity scale', () => {
     const b = new DiagramBuilder()
     const n = b.ref(b.root, 'Unary', UNARY)
     const identityRegion = b.cut(b.root)
@@ -80,13 +80,13 @@ describe('existential stubs honor wire scope', () => {
     expect(loose).toBeDefined()
     expect(loose!.region).toBe(d.root)
     expect(loose!.geometry).not.toBeNull()
-    expect(loose!.geometry!.arcs).toHaveLength(1)
+    expect(loose!.geometry!.arcs, 'a pin is a point node with no drawn rail').toHaveLength(0)
     expect(loose!.geometry!.outerRadius).toBe(identityBody.geometry!.outerRadius)
     expect(loose!.discR).toBe(identityBody.discR)
     expect(loosePin.key).toBe('i:0')
   })
 
-  it('clamps a rotated singleton end on its rim, then routes farther out on its radial normal', () => {
+  it('terminates a rotated singleton end freely at its point-node centre', () => {
     const b = new DiagramBuilder()
     const n = b.ref(b.root, 'Unary', UNARY)
     const w = b.wire([{ node: n, port: { kind: 'arg', index: 0 } }])
@@ -99,27 +99,19 @@ describe('existential stubs honor wire scope', () => {
     body.pos = { x: 21, y: -8 }
     body.theta = -Math.PI / 4
     e.scale = 1.75
-    const local = body.localAnchor.get(end.key)!
     const anchor = worldBindAnchor(e, body, end.key)
     const terminal = wireTerminalPoints(e, wire)[terminalIndex]!
     const bc = wireTerminalBCs(e, wire)[terminalIndex]
-    const radial = Math.atan2(local.y, local.x) + body.theta
 
-    expect(Math.hypot(local.x, local.y)).toBeCloseTo(body.geometry!.arcs[0]!.r, 9)
-    expect(Math.hypot(anchor.x - body.pos.x, anchor.y - body.pos.y))
-      .toBeCloseTo(Math.hypot(local.x, local.y) * e.scale, 9)
-    expect(Math.hypot(anchor.x - body.pos.x, anchor.y - body.pos.y)).toBeGreaterThan(0)
-    expect(Math.hypot(terminal.x - body.pos.x, terminal.y - body.pos.y))
-      .toBeGreaterThan(Math.hypot(anchor.x - body.pos.x, anchor.y - body.pos.y))
-    expect(bc).not.toBeNull()
-    expect(bc!.p).toEqual(anchor)
-    expect(bc!.n.x).toBeCloseTo(Math.cos(radial), 9)
-    expect(bc!.n.y).toBeCloseTo(Math.sin(radial), 9)
+    expect(body.localAnchor.get(end.key)).toEqual({ x: 0, y: 0 })
+    expect(anchor).toEqual(body.pos)
+    expect(terminal).toEqual(body.pos)
+    expect(bc, 'a point node imposes no terminal direction').toBeNull()
   })
 })
 
-describe('zero-endpoint wires (a bare ∃) retain their scope-homed circular body', () => {
-  it('mkEngine gives the bare existential a visible circular body', () => {
+describe('zero-endpoint wires (a bare ∃) retain their scope-homed point bodies', () => {
+  it('mkEngine gives the bare existential its two point-node pin bodies', () => {
     // erasing a node can legally leave its wire with no endpoints: the bare
     // assertion that an individual exists — it must render, not crash
     const b = new DiagramBuilder()
@@ -135,8 +127,8 @@ describe('zero-endpoint wires (a bare ∃) retain their scope-homed circular bod
       expect(body, 'the bare ∃ draws as its own bodies at the wire scope').toBeDefined()
       expect(body!.region).toBe(d.root)
       expect(body!.geometry).not.toBeNull()
-      expect(body!.geometry!.arcs).toHaveLength(1)
-      expect(body!.geometry!.outerRadius).toBeGreaterThan(0)
+      expect(body!.geometry!.arcs, 'a pin is a point node with no drawn rail').toHaveLength(0)
+      expect(body!.geometry!.outerRadius).toBe(0)
     }
   })
 })

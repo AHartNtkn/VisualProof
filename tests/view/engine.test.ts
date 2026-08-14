@@ -67,7 +67,7 @@ describe('mkEngine', () => {
     }
   })
 
-  it('clamps every rotated identity incidence at its rim and escapes along its radial normal', () => {
+  it('terminates every rotated identity incidence freely at the body centre', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
     const identity = h.identity(cut, IOTA, 3)
@@ -88,30 +88,21 @@ describe('mkEngine', () => {
       const terminal = wire.binds.findIndex((bind) => bind.body === identity)
       expect(terminal).toBeGreaterThanOrEqual(0)
       const bind = wire.binds[terminal]!
-      const local = body.localAnchor.get(bind.key)!
       const anchor = worldBindAnchor(e, body, bind.key)
       const terminalPoint = wireTerminalPoints(e, wire)[terminal]!
       const bc = wireTerminalBCs(e, wire)[terminal]
       const escaped = escapePoint(e, bind)
-      const radial = Math.atan2(local.y, local.x) + body.theta
 
-      expect(body.geometry!.arcs).toHaveLength(1)
-      expect(Math.hypot(local.x, local.y)).toBeCloseTo(body.geometry!.arcs[0]!.r, 9)
-      expect(Math.hypot(anchor.x - body.pos.x, anchor.y - body.pos.y))
-        .toBeCloseTo(Math.hypot(local.x, local.y) * e.scale, 9)
-      expect(Math.hypot(anchor.x - body.pos.x, anchor.y - body.pos.y)).toBeGreaterThan(0)
-      expect(escaped.anchor).toEqual(anchor)
-      expect(terminalPoint).toEqual(escaped.escape)
-      expect(Math.hypot(terminalPoint.x - body.pos.x, terminalPoint.y - body.pos.y))
-        .toBeGreaterThan(Math.hypot(anchor.x - body.pos.x, anchor.y - body.pos.y))
-      expect(bc).not.toBeNull()
-      expect(bc!.p).toEqual(anchor)
-      expect(bc!.n.x).toBeCloseTo(Math.cos(radial), 9)
-      expect(bc!.n.y).toBeCloseTo(Math.sin(radial), 9)
+      expect(body.geometry!.arcs).toHaveLength(0)
+      expect(anchor).toEqual(body.pos)
+      expect(escaped.anchor).toEqual(body.pos)
+      expect(escaped.escape).toEqual(body.pos)
+      expect(terminalPoint).toEqual(body.pos)
+      expect(bc, 'a point node imposes no terminal direction').toBeNull()
     }
   })
 
-  it('derives every rendered small body as a routing and drawn obstacle', () => {
+  it('derives obstacles from drawn outlines: rails and discs yes, point nodes no', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
     const identity = h.identity(cut, IOTA, 2)
@@ -133,25 +124,32 @@ describe('mkEngine', () => {
     const e = mkEngine(h.build(), [])
     e.scale = 1.75
 
-    const smallBodies = [
+    const pointBodies = [
       e.bodies.get(identity)!,
       // the dangling wire's completing pin, and the two pins holding the bare ∃
       e.bodies.get(e.wires.get(danglingWire)!.binds[1]!.body)!,
       ...e.wires.get(bare)!.binds.map((bind) => e.bodies.get(bind.body)!),
     ]
+    const railBodies = [e.bodies.get(left)!, e.bodies.get(right)!, e.bodies.get(danglingRef)!]
     const routed = routeObstacles(e)
     const drawn = drawnObstacles(e)
     const renderedBodies = [...e.bodies.values()].filter(isBodyObstacle)
 
-    expect(smallBodies.every(isBodyObstacle)).toBe(true)
+    // point nodes are wire terminals, never obstacles; drawn rails/discs are both
+    expect(pointBodies.some(isBodyObstacle)).toBe(false)
+    expect(railBodies.every(isBodyObstacle)).toBe(true)
     expect(routed).toHaveLength(renderedBodies.length)
     expect(drawn).toHaveLength(renderedBodies.length)
-    for (const body of smallBodies) {
+    for (const body of railBodies) {
       expect(routed).toContainEqual({
         c: body.pos,
         r: (body.discR + ROUTE_CLEAR) * e.scale,
       })
       expect(drawn).toContainEqual({ c: body.pos, r: body.discR * e.scale })
+    }
+    for (const body of pointBodies) {
+      expect(routed.some((disc) => disc.c === body.pos)).toBe(false)
+      expect(drawn.some((disc) => disc.c === body.pos)).toBe(false)
     }
   })
 

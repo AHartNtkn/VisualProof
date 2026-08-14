@@ -156,7 +156,6 @@ function deiterateNode(
   const evidence = findDeiterationEvidence(
     recorder.diagram,
     selection,
-    65536,
   )
   recorder.record(label, {
     rule: 'deiteration',

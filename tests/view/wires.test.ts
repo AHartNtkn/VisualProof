@@ -48,7 +48,7 @@ describe('worldBindAnchor — wires attach to the DRAWN node rim, not the padded
     }
   })
 
-  it('an atom/identity bind reaches its rotated and scaled nonzero local rim anchor', () => {
+  it('an atom bind reaches its rotated rim anchor; an identity bind stays centred', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
     const identity = h.identity(cut, IOTA, 2)
@@ -66,21 +66,25 @@ describe('worldBindAnchor — wires attach to the DRAWN node rim, not the padded
     for (let i = 0; i < 2; i++) h.wire([{ node: at, port: { kind: 'arg', index: i } }])
     const e = mkEngine(h.build(), [])
     e.scale = 1.75
-    for (const id of [identity, at]) {
-      const b = e.bodies.get(id)!
-      b.theta = Math.PI / 3
-      for (const [key, la] of b.localAnchor) {
-        const a = worldBindAnchor(e, b, key)
-        const c = Math.cos(b.theta), s = Math.sin(b.theta)
-        const want = {
-          x: b.pos.x + e.scale * (la.x * c - la.y * s),
-          y: b.pos.y + e.scale * (la.x * s + la.y * c),
-        }
-        expect(Math.hypot(la.x, la.y), `${b.kind} local bind anchor lies on its rim`).toBeGreaterThan(0)
-        expect(Math.hypot(a.x - want.x, a.y - want.y), `${b.kind} wire starts at its drawn port anchor`).toBeLessThan(1e-6)
-        expect(Math.hypot(a.x - b.pos.x, a.y - b.pos.y), `${b.kind} bind is not centered`).toBeGreaterThan(0)
-        expect(Math.hypot(a.x - b.pos.x, a.y - b.pos.y), 'and strictly inside the padded clearance disc (no float)').toBeLessThan(b.discR * e.scale - 1e-6)
+    const atomBody = e.bodies.get(at)!
+    atomBody.theta = Math.PI / 3
+    for (const [key, la] of atomBody.localAnchor) {
+      const a = worldBindAnchor(e, atomBody, key)
+      const c = Math.cos(atomBody.theta), s = Math.sin(atomBody.theta)
+      const want = {
+        x: atomBody.pos.x + e.scale * (la.x * c - la.y * s),
+        y: atomBody.pos.y + e.scale * (la.x * s + la.y * c),
       }
+      expect(Math.hypot(la.x, la.y), 'atom local bind anchor lies on its rim').toBeGreaterThan(0)
+      expect(Math.hypot(a.x - want.x, a.y - want.y), 'atom wire starts at its drawn port anchor').toBeLessThan(1e-6)
+      expect(Math.hypot(a.x - atomBody.pos.x, a.y - atomBody.pos.y), 'atom bind is not centered').toBeGreaterThan(0)
+      expect(Math.hypot(a.x - atomBody.pos.x, a.y - atomBody.pos.y), 'and strictly inside the padded clearance disc (no float)').toBeLessThan(atomBody.discR * e.scale - 1e-6)
+    }
+    // the identity's drawn glyph IS its centre point, so its wires attach there
+    const identityBody = e.bodies.get(identity)!
+    identityBody.theta = Math.PI / 3
+    for (const key of identityBody.localAnchor.keys()) {
+      expect(worldBindAnchor(e, identityBody, key), 'identity wires attach at the drawn pip').toEqual(identityBody.pos)
     }
   })
 })

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { dwbFromJson, dwbToJson } from '../../../src/kernel/diagram/json'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import type { OccurrenceCertificate } from '../../../src/kernel/diagram/subgraph/occurrence-certificate'
 import type { ProofAction } from '../../../src/kernel/proof/action'
 import {
   actionFromJson,
@@ -338,6 +339,38 @@ describe('step JSON', () => {
     expect(encoded.certificate).not.toHaveProperty('termCertificates')
   })
 
+  it('serializes certificate maps sorted, independent of insertion order', () => {
+    const forward: OccurrenceCertificate = {
+      region: 'r0',
+      regionMap: new Map([['pr0', 'r0'], ['pr1', 'r1'], ['pr2', 'r2']]),
+      nodeMap: new Map([['pn0', 'n0'], ['pn1', 'n1'], ['pn2', 'n2']]),
+      wireMap: new Map([['pw0', 'w0'], ['pw1', 'w1'], ['pw2', 'w2']]),
+      attachments: ['w0'],
+    }
+    const reversed: OccurrenceCertificate = {
+      region: 'r0',
+      regionMap: new Map([['pr2', 'r2'], ['pr1', 'r1'], ['pr0', 'r0']]),
+      nodeMap: new Map([['pn2', 'n2'], ['pn1', 'n1'], ['pn0', 'n0']]),
+      wireMap: new Map([['pw2', 'w2'], ['pw1', 'w1'], ['pw0', 'w0']]),
+      attachments: ['w0'],
+    }
+
+    const stepA: ProofStep = {
+      rule: 'deiteration', sel: selection, justifier: selection, certificate: forward,
+    }
+    const stepB: ProofStep = {
+      rule: 'deiteration', sel: selection, justifier: selection, certificate: reversed,
+    }
+    const jsonA = JSON.stringify(stepToJson(stepA))
+    const jsonB = JSON.stringify(stepToJson(stepB))
+    expect(jsonA).toBe(jsonB)
+
+    const decoded = stepFromJson(JSON.parse(jsonA)) as { certificate: OccurrenceCertificate }
+    expect(decoded.certificate.regionMap).toEqual(forward.regionMap)
+    expect(decoded.certificate.nodeMap).toEqual(forward.nodeMap)
+    expect(decoded.certificate.wireMap).toEqual(forward.wireMap)
+  })
+
   it('rejects every removed proof-rule string', () => {
     for (const rule of [
       'openTermSpawn', 'relationSpawn', 'boundRelationSpawn',
@@ -421,10 +454,13 @@ describe('diagram-with-boundary JSON', () => {
         sig: IOTA,
         arity: 2,
       })
-      return exploreForm(result.diagram, result.boundary)
+      return result
     })
 
-    expect(decoded[1]).toBe(decoded[0])
+    expect(sameDiagram(
+      decoded[1]!.diagram, decoded[0]!.diagram,
+      decoded[1]!.boundary, decoded[0]!.boundary,
+    )).toBe(true)
   })
 
   it('round-trips repeated boundary positions without collapsing arity', () => {

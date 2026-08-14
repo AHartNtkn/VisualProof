@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { bareWire } from '../../fixtures/pins'
 
-describe('exploreForm', () => {
+describe('sameDiagram', () => {
   it('is invariant under construction order and id renaming', () => {
     const first = new DiagramBuilder()
     const firstCut = first.cut(first.root)
@@ -25,7 +25,7 @@ describe('exploreForm', () => {
       { node: secondOuter, port: { kind: 'arg', index: 0 } },
     ])
 
-    expect(exploreForm(first.build())).toBe(exploreForm(second.build()))
+    expect(sameDiagram(first.build(), second.build())).toBe(true)
   })
 
   it('distinguishes shared and separate positional argument wires', () => {
@@ -41,7 +41,7 @@ describe('exploreForm', () => {
       return builder.build()
     }
 
-    expect(exploreForm(make(true))).not.toBe(exploreForm(make(false)))
+    expect(sameDiagram(make(true), make(false))).toBe(false)
   })
 
   it('handles symmetric disconnected cuts by individualization', () => {
@@ -55,7 +55,7 @@ describe('exploreForm', () => {
       return builder.build()
     }
 
-    expect(exploreForm(make(false))).toBe(exploreForm(make(true)))
+    expect(sameDiagram(make(false), make(true))).toBe(true)
   })
 
   it('distinguishes wire scope with otherwise identical endpoints', () => {
@@ -70,7 +70,7 @@ describe('exploreForm', () => {
       return builder.build()
     }
 
-    expect(exploreForm(make(true))).not.toBe(exploreForm(make(false)))
+    expect(sameDiagram(make(true), make(false))).toBe(false)
   })
 
   it('pins boundary wires by order', () => {
@@ -84,14 +84,15 @@ describe('exploreForm', () => {
     ])
     const diagram = builder.build()
 
-    expect(exploreForm(diagram, [first, second]))
-      .not.toBe(exploreForm(diagram, [second, first]))
+    expect(sameDiagram(diagram, diagram, [first, second], [second, first]))
+      .toBe(false)
   })
 
   it('rejects a pinned wire that does not exist', () => {
     const builder = new DiagramBuilder()
     builder.ref(builder.root, 'P', relSig([]))
-    expect(() => exploreForm(builder.build(), ['ghost']))
+    const diagram = builder.build()
+    expect(() => sameDiagram(diagram, diagram, ['ghost'], ['ghost']))
       .toThrowError(/pinned wire 'ghost' does not exist/)
   })
 
@@ -104,14 +105,16 @@ describe('exploreForm', () => {
     const bare = bareWire(builder, builder.root)
     const diagram = builder.build()
 
-    expect(exploreForm(diagram, [exposed, exposed, bare]))
-      .not.toBe(exploreForm(diagram, [exposed, bare, exposed]))
-    expect(exploreForm(diagram, [exposed, exposed, bare]))
-      .not.toBe(exploreForm(diagram, [exposed, bare, bare]))
+    expect(sameDiagram(
+      diagram, diagram, [exposed, exposed, bare], [exposed, bare, exposed],
+    )).toBe(false)
+    expect(sameDiagram(
+      diagram, diagram, [exposed, exposed, bare], [exposed, bare, bare],
+    )).toBe(false)
   })
 })
 
-describe('exploreForm signature-indexed content', () => {
+describe('sameDiagram signature-indexed content', () => {
   it('ignores insertion order for same-scope relational wires', () => {
     const unary = relSig([IOTA])
     const nullary = relSig([])
@@ -160,7 +163,7 @@ describe('exploreForm signature-indexed content', () => {
       wires: { nullaryHead, unaryHead, unaryArg },
     })
 
-    expect(exploreForm(forward)).toBe(exploreForm(reversed))
+    expect(sameDiagram(forward, reversed)).toBe(true)
   })
 
   it('distinguishes wire signatures at the same scope', () => {
@@ -174,8 +177,8 @@ describe('exploreForm signature-indexed content', () => {
       return builder.build()
     }
 
-    expect(exploreForm(make(0))).not.toBe(exploreForm(make(1)))
-    expect(exploreForm(make(1))).not.toBe(exploreForm(make(2)))
+    expect(sameDiagram(make(0), make(1))).toBe(false)
+    expect(sameDiagram(make(1), make(2))).toBe(false)
   })
 
   it('distinguishes exact reference content beyond graph shape', () => {
@@ -185,6 +188,6 @@ describe('exploreForm signature-indexed content', () => {
       return builder.build()
     }
 
-    expect(exploreForm(make('P'))).not.toBe(exploreForm(make('Q')))
+    expect(sameDiagram(make('P'), make('Q'))).toBe(false)
   })
 })

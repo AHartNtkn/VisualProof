@@ -262,8 +262,11 @@ function identificationInputFromJson(value: unknown): IdentificationInput {
   return fail("identification input.kind must be 'collapse'|'expose'")
 }
 
+/** Sorted by pattern id so the emitted JSON is insensitive to the matcher's
+ *  internal insertion order; `idMapFromJson` rebuilds a `Map`, which is
+ *  order-insensitive, so sorting here changes no round-tripped value. */
 function idMapToJson(map: ReadonlyMap<string, string>): unknown {
-  return [...map]
+  return [...map].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
 }
 
 function idMapFromJson(value: unknown, what: string): Map<string, string> {

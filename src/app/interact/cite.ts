@@ -49,6 +49,14 @@ function containsHits(occurrence: Occurrence, hits: readonly Hit[]): boolean {
       : regions.has(hit.id))
 }
 
+/**
+ * `fuel` is caller-supplied UI policy, not a derivable bound: it flows from
+ * `moves.ts`'s `fuel: () => number` option, which shell.ts wires to the
+ * `fuel-input` numeric control the user can edit directly. Every theorem in
+ * `ctx.theorems` is probed once per interaction, so this is a responsiveness
+ * knob the user trades off against exhaustiveness, not a per-search size
+ * that this call site can compute — leave it caller-controlled.
+ */
 export function citationCandidates(
   d: Diagram,
   hits: readonly Hit[],

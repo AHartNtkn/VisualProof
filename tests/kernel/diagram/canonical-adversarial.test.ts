@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { bareWire } from '../../fixtures/pins'
 
-describe('exploreForm adversarial graph battery', () => {
+describe('sameDiagram adversarial graph battery', () => {
   it("distinguishes the scope of an atom's head wire", () => {
     const sig = relSig([])
     const make = (headAtOuter: boolean) => {
@@ -20,7 +20,7 @@ describe('exploreForm adversarial graph battery', () => {
       return builder.build()
     }
 
-    expect(exploreForm(make(true))).not.toBe(exploreForm(make(false)))
+    expect(sameDiagram(make(true), make(false))).toBe(false)
   })
 
   it('distinguishes one-sided from two-sided connectivity under symmetry', () => {
@@ -43,8 +43,8 @@ describe('exploreForm adversarial graph battery', () => {
       return builder.build()
     }
 
-    expect(exploreForm(make('first'))).toBe(exploreForm(make('second')))
-    expect(exploreForm(make('first'))).not.toBe(exploreForm(make('both')))
+    expect(sameDiagram(make('first'), make('second'))).toBe(true)
+    expect(sameDiagram(make('first'), make('both'))).toBe(false)
   })
 
   it('distinguishes ordered argument roles on an atom', () => {
@@ -64,7 +64,7 @@ describe('exploreForm adversarial graph battery', () => {
       return builder.build()
     }
 
-    expect(exploreForm(make(false))).not.toBe(exploreForm(make(true)))
+    expect(sameDiagram(make(false), make(true))).toBe(false)
   })
 
   it('canonicalizes all permutations of three symmetric cuts', () => {
@@ -72,7 +72,7 @@ describe('exploreForm adversarial graph battery', () => {
       [0, 1, 2], [0, 2, 1], [1, 0, 2],
       [1, 2, 0], [2, 0, 1], [2, 1, 0],
     ]
-    const forms = permutations.map((permutation) => {
+    const diagrams = permutations.map((permutation) => {
       const builder = new DiagramBuilder()
       const cuts = [
         builder.cut(builder.root),
@@ -83,10 +83,12 @@ describe('exploreForm adversarial graph battery', () => {
       permutation.forEach((cutIndex, contentIndex) => {
         builder.ref(cuts[cutIndex]!, content[contentIndex]!, relSig([]))
       })
-      return exploreForm(builder.build())
+      return builder.build()
     })
 
-    expect(new Set(forms).size).toBe(1)
+    for (const diagram of diagrams.slice(1)) {
+      expect(sameDiagram(diagrams[0]!, diagram)).toBe(true)
+    }
   })
 
   it('distinguishes endpoint-free wire count and scope', () => {
@@ -99,8 +101,8 @@ describe('exploreForm adversarial graph battery', () => {
       return builder.build()
     }
 
-    expect(exploreForm(make(1, false))).not.toBe(exploreForm(make(2, false)))
-    expect(exploreForm(make(1, false))).not.toBe(exploreForm(make(1, true)))
+    expect(sameDiagram(make(1, false), make(2, false))).toBe(false)
+    expect(sameDiagram(make(1, false), make(1, true))).toBe(false)
   })
 
   it('distinguishes node kind, definition identity, and signature', () => {
@@ -118,8 +120,8 @@ describe('exploreForm adversarial graph battery', () => {
       return builder.build()
     }
 
-    expect(exploreForm(ref('P'))).not.toBe(exploreForm(ref('Q')))
-    expect(exploreForm(ref('P'))).not.toBe(exploreForm(atom(0)))
-    expect(exploreForm(atom(0))).not.toBe(exploreForm(atom(1)))
+    expect(sameDiagram(ref('P'), ref('Q'))).toBe(false)
+    expect(sameDiagram(ref('P'), atom(0))).toBe(false)
+    expect(sameDiagram(atom(0), atom(1))).toBe(false)
   })
 })

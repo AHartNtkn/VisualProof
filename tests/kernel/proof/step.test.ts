@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
@@ -37,11 +37,14 @@ describe('primitive replay', () => {
       wires: [head],
     })
 
-    expect(exploreForm(applyStep(
-      diagram,
-      { rule: 'erasure', sel: selection },
-      EMPTY_PROOF_CONTEXT,
-    ))).toBe(exploreForm(applyErasure(diagram, selection)))
+    expect(sameDiagram(
+      applyStep(
+        diagram,
+        { rule: 'erasure', sel: selection },
+        EMPTY_PROOF_CONTEXT,
+      ),
+      applyErasure(diagram, selection),
+    )).toBe(true)
   })
 
   it('replays backward erasure only at negative regions', () => {
@@ -81,15 +84,18 @@ describe('primitive replay', () => {
       wires: [left, right],
     }
 
-    expect(exploreForm(applyStep(
-      diagram,
-      step,
-      EMPTY_PROOF_CONTEXT,
-    ))).toBe(exploreForm(applyIdentityInsertion(
-      diagram,
-      cut,
-      [left, right],
-    )))
+    expect(sameDiagram(
+      applyStep(
+        diagram,
+        step,
+        EMPTY_PROOF_CONTEXT,
+      ),
+      applyIdentityInsertion(
+        diagram,
+        cut,
+        [left, right],
+      ),
+    )).toBe(true)
     expect(() => applyStep(
       diagram,
       step,

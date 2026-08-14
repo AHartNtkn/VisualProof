@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
@@ -39,7 +39,7 @@ describe('double cut', () => {
     const spanning = Object.entries(wrapped.wires)
       .find(([, wire]) => wire.endpoints.length >= 2)![0]
     expect(derivedScope(wrapped, spanning)).toBe(diagram.root)
-    expect(exploreForm(applyDoubleCutElim(wrapped, outer))).toBe(exploreForm(diagram))
+    expect(sameDiagram(applyDoubleCutElim(wrapped, outer), diagram)).toBe(true)
   })
 
   it('wraps an empty selection as a bare double cut', () => {

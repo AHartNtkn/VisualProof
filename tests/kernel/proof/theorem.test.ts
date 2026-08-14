@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { applyAction, type ProofAction } from '../../../src/kernel/proof/action'
@@ -273,7 +273,7 @@ describe('checkTheorem', () => {
     }
     const lhs = side(false)
     const rhs = side(true)
-    expect(exploreForm(lhs.diagram)).toBe(exploreForm(rhs.diagram))
+    expect(sameDiagram(lhs.diagram, rhs.diagram)).toBe(true)
 
     expect(() => checkTheorem({
       name: 'swapped',

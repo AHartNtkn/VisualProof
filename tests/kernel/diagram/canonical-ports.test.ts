@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 
 describe('canonical positional and unordered ports', () => {
@@ -65,7 +65,7 @@ describe('canonical positional and unordered ports', () => {
       return builder.build()
     }
 
-    expect(exploreForm(make(false))).not.toBe(exploreForm(make(true)))
+    expect(sameDiagram(make(false), make(true))).toBe(false)
   })
 
   it('erases identity storage-index permutations from canonical form', () => {
@@ -99,7 +99,7 @@ describe('canonical positional and unordered ports', () => {
       },
     })
 
-    expect(exploreForm(make(false))).toBe(exploreForm(make(true)))
+    expect(sameDiagram(make(false), make(true))).toBe(true)
   })
 
   it('reuses already-canonical node and wire objects during validation', () => {

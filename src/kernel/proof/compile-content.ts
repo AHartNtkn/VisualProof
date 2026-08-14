@@ -10,7 +10,8 @@ import type {
   Wire,
   WireId,
 } from '../diagram/diagram'
-import { exploreForm, exploreIso } from '../diagram/canonical/explore'
+import { sameDiagram, diagramIso } from '../diagram/canonical/iso'
+import { diagramToJson } from '../diagram/json'
 import { mkDiagram } from '../diagram/diagram'
 import { derivedScope, derivedScopes, isAncestorOrEqual } from '../diagram/regions'
 import type { RelSig, Sig } from '../diagram/sig'
@@ -932,7 +933,6 @@ function constructSevered(
   const first = prepared[0]!
   const firstFormalSigs = input.occurrences[0]!.args.map((attachment) =>
     diagram.wires[attachment]!.sig)
-  const firstForm = exploreForm(first.pattern.diagram, first.pattern.boundary)
   for (const [index, candidate] of prepared.entries()) {
     if (index === 0) continue
     const args = input.occurrences[index]!.args
@@ -961,10 +961,10 @@ function constructSevered(
         'ambient attachments must be identical host wires in every occurrence',
       )
     }
-    if (
-      exploreForm(candidate.pattern.diagram, candidate.pattern.boundary)
-      !== firstForm
-    ) {
+    if (!sameDiagram(
+      candidate.pattern.diagram, first.pattern.diagram,
+      candidate.pattern.boundary, first.pattern.boundary,
+    )) {
       throw new RuleError(
         'occurrences are not isomorphic under the same pinned content',
       )
@@ -1077,11 +1077,11 @@ export function compileRelationSever(
       },
     )
     const finalState = trace.length > 0 ? trace[trace.length - 1]!.post : severed
-    const finalIso = exploreIso(finalState, diagram)
+    const finalIso = diagramIso(finalState, diagram)
     if (finalIso === null) {
       throw new RuleError(
         'sever compilation failed: the planned join does not reproduce the diagram\n'
-        + `-- planned:\n${exploreForm(finalState)}\n-- actual:\n${exploreForm(diagram)}`,
+        + `-- planned:\n${JSON.stringify(diagramToJson(finalState))}\n-- actual:\n${JSON.stringify(diagramToJson(diagram))}`,
       )
     }
   }
@@ -1092,11 +1092,11 @@ export function compileRelationSever(
   let reservation = options.reservation
   for (let index = trace.length - 1; index >= 0; index -= 1) {
     const { step, pre, post } = trace[index]!
-    const iso = exploreIso(post, real)
+    const iso = diagramIso(post, real)
     if (iso === null) {
       throw new RuleError(
         `sever compilation lost the isomorphism before inverting step ${index} `
-        + `(${step.rule})\n-- planned post:\n${exploreForm(post)}\n-- real:\n${exploreForm(real)}`,
+        + `(${step.rule})\n-- planned post:\n${JSON.stringify(diagramToJson(post))}\n-- real:\n${JSON.stringify(diagramToJson(real))}`,
       )
     }
     const inverse = invertStep(step, pre, post)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import type { Diagram, NodeId, WireId } from '../../../src/kernel/diagram/diagram'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
@@ -354,7 +354,7 @@ describe('Rule 5: explicit endpoint-level equals-for-equals evidence', () => {
       expect(extracted.attachments).toContain(left)
       expect(extracted.attachments).toContain(right)
 
-      const evidence = findDeiterationEvidence(iterated, copySelection, 10_000)
+      const evidence = findDeiterationEvidence(iterated, copySelection)
       const restored = applyDeiteration(
         iterated,
         copySelection,
@@ -362,20 +362,23 @@ describe('Rule 5: explicit endpoint-level equals-for-equals evidence', () => {
         evidence.certificate,
       )
       return {
-        source: exploreForm(diagram),
-        iterated: exploreForm(iterated),
-        extracted: exploreForm(
-          extracted.pattern.diagram,
-          extracted.pattern.boundary,
-        ),
-        restored: exploreForm(restored),
+        source: diagram,
+        iterated,
+        extracted: extracted.pattern,
+        restored,
       }
     }
 
     const ordinary = roundTrip(false)
     const permuted = roundTrip(true)
-    expect(ordinary.restored).toBe(ordinary.source)
-    expect(permuted).toEqual(ordinary)
+    expect(sameDiagram(ordinary.restored, ordinary.source)).toBe(true)
+    expect(sameDiagram(permuted.source, ordinary.source)).toBe(true)
+    expect(sameDiagram(permuted.iterated, ordinary.iterated)).toBe(true)
+    expect(sameDiagram(
+      permuted.extracted.diagram, ordinary.extracted.diagram,
+      permuted.extracted.boundary, ordinary.extracted.boundary,
+    )).toBe(true)
+    expect(sameDiagram(permuted.restored, ordinary.restored)).toBe(true)
   })
 
   it('derives P(b) from P(a): iterate the identity, sever, collapse, detach', () => {
@@ -458,8 +461,7 @@ describe('Rule 5: explicit endpoint-level equals-for-equals evidence', () => {
       ])
       expectedBuilder.pin(expectedB, expectedBuilder.root)
 
-      expect(exploreForm(substituted))
-        .toBe(exploreForm(expectedBuilder.build()))
+      expect(sameDiagram(substituted, expectedBuilder.build())).toBe(true)
     }
 
     derive('forward')
@@ -550,7 +552,9 @@ describe('ordinary identity contradiction theorem', () => {
       direction: 'reverse',
     }], context, undefined, 'backward')
 
-    expect(exploreForm(result, theorem.rhs.boundary))
-      .toBe(exploreForm(pinnedForReplay(theorem.lhs), theorem.lhs.boundary))
+    expect(sameDiagram(
+      result, pinnedForReplay(theorem.lhs),
+      theorem.rhs.boundary, theorem.lhs.boundary,
+    )).toBe(true)
   })
 })

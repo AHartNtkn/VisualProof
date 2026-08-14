@@ -1,8 +1,8 @@
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram'
-import { DiagramError } from '../diagram'
+import { DiagramError, endpointPositionKey } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
-import { derivedScope, derivedScopes, isAncestorOrEqual } from '../regions'
-import { sigEquals } from '../sig'
+import { cutDepth, derivedScopes, isAncestorOrEqual } from '../regions'
+import { buildRefineIndex, type RefineIndex } from '../canonical/refine'
 import {
   checkOccurrenceCertificate,
   type OccurrenceCertificate,
@@ -11,7 +11,7 @@ import {
 export type { OccurrenceCertificate } from './occurrence-certificate'
 
 /** Production-neutral counters retained for focused exploration benchmarks. */
-export const __benchCounter = { n: 0, permutations: 0 }
+export const __benchCounter = { n: 0 }
 
 export type Occurrence = OccurrenceCertificate
 
@@ -21,57 +21,30 @@ export type MatchResult = {
   readonly explorationSteps: number
 }
 
-type Index = {
-  readonly childrenOf: ReadonlyMap<RegionId, readonly RegionId[]>
-  readonly nodesIn: ReadonlyMap<RegionId, readonly NodeId[]>
-  readonly wiresScoped: ReadonlyMap<RegionId, readonly WireId[]>
-}
-
-function buildIndex(diagram: Diagram, boundary: readonly WireId[] = []): Index {
-  const scopes = derivedScopes(diagram, boundary)
-  const childrenOf = new Map<RegionId, RegionId[]>()
-  const nodesIn = new Map<RegionId, NodeId[]>()
-  const wiresScoped = new Map<RegionId, WireId[]>()
-  for (const regionId of Object.keys(diagram.regions)) {
-    childrenOf.set(regionId, [])
-    nodesIn.set(regionId, [])
-    wiresScoped.set(regionId, [])
-  }
-  for (const [regionId, region] of Object.entries(diagram.regions)) {
-    if (region.kind === 'cut') childrenOf.get(region.parent)!.push(regionId)
-  }
-  for (const [nodeId, node] of Object.entries(diagram.nodes)) {
-    nodesIn.get(node.region)!.push(nodeId)
-  }
-  for (const wireId of Object.keys(diagram.wires)) {
-    wiresScoped.get(scopes.get(wireId)!)!.push(wireId)
-  }
-  for (const values of childrenOf.values()) values.sort()
-  for (const values of nodesIn.values()) values.sort()
-  for (const values of wiresScoped.values()) values.sort()
-  return { childrenOf, nodesIn, wiresScoped }
-}
-
-/** Identity indices are storage-only; every identity endpoint has one key. */
-function endpointPositionKey(diagram: Diagram, endpoint: Endpoint): string {
-  const node = diagram.nodes[endpoint.node]!
-  switch (node.kind) {
-    case 'atom':
-      if (endpoint.port.kind === 'head') return 'hd'
-      if (endpoint.port.kind === 'arg') return `a:${endpoint.port.index}`
-      throw new DiagramError(`atom '${endpoint.node}' cannot carry port '${endpoint.port.kind}'`)
-    case 'ref':
-      if (endpoint.port.kind === 'arg') return `a:${endpoint.port.index}`
-      throw new DiagramError(`ref '${endpoint.node}' cannot carry port '${endpoint.port.kind}'`)
-    case 'identity':
-      if (endpoint.port.kind === 'identity') return 'i'
-      throw new DiagramError(`identity '${endpoint.node}' cannot carry port '${endpoint.port.kind}'`)
-  }
+/**
+ * A caller-supplied restriction on which host elements an occurrence may map
+ * onto: every occurrence's region images, node images, and INTERNAL-wire
+ * images must lie within these sets. Boundary-wire images (attachments) are
+ * unrestricted — they are the seam to the surrounding diagram, not occurrence
+ * content, so the caller's "images" describe the occurrence body only. Sound
+ * as a necessary condition whenever the caller only accepts occurrences whose
+ * images equal these very sets (e.g. `inferFoldArgs`'s exact-selection gate):
+ * any occurrence violating the restriction would fail that gate anyway, so
+ * narrowing candidates to it up front loses no genuine result.
+ */
+export type MatchImages = {
+  readonly regions: readonly RegionId[]
+  readonly nodes: readonly NodeId[]
+  readonly wires: readonly WireId[]
 }
 
 /**
- * Exhaustive exact structural occurrence search. Fuel limits graph candidate
- * probes only; no semantic equivalence oracle or secondary verdict exists.
+ * Exact structural occurrence search: candidate sets are narrowed by the
+ * propagation seam below, then a most-constrained-element-first backtracking
+ * search assigns each pattern region/node/wire to a host image, verifying
+ * injectivity and the residual exact checks propagation alone cannot
+ * guarantee. Fuel limits placement attempts only; no semantic equivalence
+ * oracle or secondary verdict exists.
  */
 export function findOccurrences(
   host: Diagram,
@@ -80,6 +53,7 @@ export function findOccurrences(
     readonly explorationFuel?: number
     readonly inRegion?: RegionId
     readonly attachments?: readonly WireId[]
+    readonly images?: MatchImages
   } = {},
 ): MatchResult {
   if (
@@ -95,6 +69,23 @@ export function findOccurrences(
   }
   if (opts.inRegion !== undefined && host.regions[opts.inRegion] === undefined) {
     throw new DiagramError(`unknown region '${opts.inRegion}'`)
+  }
+  if (opts.images !== undefined) {
+    for (const regionId of opts.images.regions) {
+      if (host.regions[regionId] === undefined) {
+        throw new DiagramError(`image region '${regionId}' does not exist in the host`)
+      }
+    }
+    for (const nodeId of opts.images.nodes) {
+      if (host.nodes[nodeId] === undefined) {
+        throw new DiagramError(`image node '${nodeId}' does not exist in the host`)
+      }
+    }
+    for (const wireId of opts.images.wires) {
+      if (host.wires[wireId] === undefined) {
+        throw new DiagramError(`image wire '${wireId}' does not exist in the host`)
+      }
+    }
   }
 
   const patternDiagram = pattern.diagram
@@ -136,165 +127,41 @@ export function findOccurrences(
     return true
   }
 
-  const hostIndex = buildIndex(host)
-  const patternIndex = buildIndex(patternDiagram, pattern.boundary)
-  const patternScopes = derivedScopes(patternDiagram, pattern.boundary)
-  const regionMap = new Map<RegionId, RegionId>()
-  const nodeMap = new Map<NodeId, NodeId>()
-  const usedRegions = new Set<RegionId>()
-  const usedNodes = new Set<NodeId>()
+  const ctx = __makePropagationContext(host, pattern, opts)
+  const cands0 = __initCandidates(ctx)
+  if (cands0 === null) return { status: 'complete', matches: [], explorationSteps: 0 }
+  if (!__propagate(ctx, cands0)) return { status: 'complete', matches: [], explorationSteps: 0 }
+
   const matches: Occurrence[] = []
   const footprints = new Set<string>()
 
-  const candidates = opts.inRegion === undefined
-    ? Object.keys(host.regions).sort()
-    : [opts.inRegion]
-  for (const hostRoot of candidates) {
+  const regionMap = new Map<RegionId, RegionId>()
+  const nodeMap = new Map<NodeId, NodeId>()
+  const wireMap = new Map<WireId, WireId>()
+  const usedRegions = new Set<RegionId>()
+  const usedNodes = new Set<NodeId>()
+  const usedInternalWires = new Set<WireId>()
+  const usedBoundaryWires = new Set<WireId>()
+
+  const patternWiresTouching = new Map<NodeId, WireId[]>()
+  for (const [wireId, wire] of Object.entries(patternDiagram.wires)) {
+    for (const endpoint of wire.endpoints) {
+      const list = patternWiresTouching.get(endpoint.node)
+      if (list === undefined) patternWiresTouching.set(endpoint.node, [wireId])
+      else list.push(wireId)
+    }
+  }
+
+  const rootRef: ElementRef = { sort: 'region', id: root }
+  for (const hostRoot of [...cands0.region.get(root)!]) {
     if (exhausted) break
-    if (!spend()) break
-    regionMap.set(root, hostRoot)
-    assignContainer(
-      patternIndex.childrenOf.get(root)!,
-      patternIndex.nodesIn.get(root)!,
-      hostRoot,
-      () => assignWires(hostRoot),
-    )
-    regionMap.delete(root)
+    tryAssign(rootRef, hostRoot, cands0)
   }
 
   return {
     status: exhausted ? 'exhausted' : 'complete',
     matches,
     explorationSteps,
-  }
-
-  function nodeCompatible(patternNode: NodeId, hostNode: NodeId): boolean {
-    __benchCounter.n++
-    const source = patternDiagram.nodes[patternNode]!
-    const target = host.nodes[hostNode]!
-    if (source.kind !== target.kind) return false
-    switch (source.kind) {
-      case 'atom':
-        return target.kind === 'atom' && sigEquals(source.sig, target.sig)
-      case 'ref':
-        return target.kind === 'ref'
-          && source.defId === target.defId
-          && sigEquals(source.sig, target.sig)
-      case 'identity':
-        return target.kind === 'identity'
-          && source.arity === target.arity
-          && sigEquals(source.sig, target.sig)
-    }
-  }
-
-  function assignContainer(
-    patternRegions: readonly RegionId[],
-    patternNodes: readonly NodeId[],
-    hostRegion: RegionId,
-    done: () => void,
-  ): void {
-    if (exhausted) return
-    const regionCandidates = hostIndex.childrenOf.get(hostRegion)!
-    const nodeCandidates = hostIndex.nodesIn.get(hostRegion)!
-
-    const placeRegion = (
-      patternRegion: RegionId,
-      candidateIndex: number,
-      continueWith: () => void,
-    ): void => {
-      if (!spend()) return
-      const candidate = regionCandidates[candidateIndex]
-      if (candidate === undefined || usedRegions.has(candidate)) return
-      matchSubtree(patternRegion, candidate, continueWith)
-    }
-    const placeNode = (
-      patternNode: NodeId,
-      candidateIndex: number,
-      continueWith: () => void,
-    ): void => {
-      if (!spend()) return
-      const candidate = nodeCandidates[candidateIndex]
-      if (
-        candidate === undefined
-        || usedNodes.has(candidate)
-        || !nodeCompatible(patternNode, candidate)
-      ) {
-        return
-      }
-      nodeMap.set(patternNode, candidate)
-      usedNodes.add(candidate)
-      continueWith()
-      usedNodes.delete(candidate)
-      nodeMap.delete(patternNode)
-    }
-
-    assignInjective(
-      patternRegions,
-      placeRegion,
-      regionCandidates.length,
-      0,
-      () => assignInjective(
-        patternNodes,
-        placeNode,
-        nodeCandidates.length,
-        0,
-        done,
-      ),
-    )
-  }
-
-  function assignInjective(
-    items: readonly string[],
-    place: (item: string, candidateIndex: number, done: () => void) => void,
-    candidateCount: number,
-    itemIndex: number,
-    done: () => void,
-  ): void {
-    if (exhausted) return
-    if (itemIndex === items.length) {
-      done()
-      return
-    }
-    for (let candidateIndex = 0; candidateIndex < candidateCount; candidateIndex++) {
-      if (exhausted) return
-      place(
-        items[itemIndex]!,
-        candidateIndex,
-        () => assignInjective(
-          items,
-          place,
-          candidateCount,
-          itemIndex + 1,
-          done,
-        ),
-      )
-    }
-  }
-
-  function matchSubtree(
-    patternRegion: RegionId,
-    hostRegion: RegionId,
-    done: () => void,
-  ): void {
-    const patternChildren = patternIndex.childrenOf.get(patternRegion)!
-    const hostChildren = hostIndex.childrenOf.get(hostRegion)!
-    const patternNodes = patternIndex.nodesIn.get(patternRegion)!
-    const hostNodes = hostIndex.nodesIn.get(hostRegion)!
-    const patternWires = patternIndex.wiresScoped.get(patternRegion)!
-    const hostWires = hostIndex.wiresScoped.get(hostRegion)!
-    if (
-      patternChildren.length !== hostChildren.length
-      || patternNodes.length !== hostNodes.length
-      || patternWires.length !== hostWires.length
-    ) {
-      return
-    }
-
-    regionMap.set(patternRegion, hostRegion)
-    usedRegions.add(hostRegion)
-    assignContainer(patternChildren, patternNodes, hostRegion, done)
-    usedRegions.delete(hostRegion)
-    regionMap.delete(patternRegion)
   }
 
   function mappedEndpointKey(endpoint: Endpoint): string {
@@ -311,136 +178,179 @@ export function findOccurrences(
     ])
   }
 
-  function wireCompatible(
-    patternWire: WireId,
-    hostWire: WireId,
-    hostRoot: RegionId,
-  ): boolean {
+  /** Exact endpoint-multiset check (internal) / sub-multiset check (boundary). */
+  function endpointsMatch(patternWire: WireId, hostWire: WireId): boolean {
     const source = patternDiagram.wires[patternWire]!
     const target = host.wires[hostWire]!
-    if (!sigEquals(source.sig, target.sig)) return false
-    const boundary = boundarySet.has(patternWire)
-    if (boundary) {
-      if (!isAncestorOrEqual(host, derivedScope(host, hostWire), hostRoot)) return false
-    } else {
-      const sourceScope = patternScopes.get(patternWire)!
-      const expectedScope = sourceScope === root
-        ? hostRoot
-        : regionMap.get(sourceScope)
-      if (derivedScope(host, hostWire) !== expectedScope) return false
-    }
-
     const expected = source.endpoints.map(mappedEndpointKey).sort()
     const actual = target.endpoints.map(hostEndpointKey).sort()
-    if (!boundary) return JSON.stringify(expected) === JSON.stringify(actual)
+    if (!boundarySet.has(patternWire)) {
+      return JSON.stringify(expected) === JSON.stringify(actual)
+    }
     const remainingEndpoints = [...actual]
-    for (const endpoint of expected) {
-      const index = remainingEndpoints.indexOf(endpoint)
+    for (const key of expected) {
+      const index = remainingEndpoints.indexOf(key)
       if (index < 0) return false
       remainingEndpoints.splice(index, 1)
     }
     return true
   }
 
-  function seededCandidate(patternWire: WireId): WireId | undefined {
-    if (opts.attachments === undefined || !boundarySet.has(patternWire)) {
-      return undefined
-    }
-    const positions = pattern.boundary
-      .map((wireId, index) => wireId === patternWire ? index : -1)
-      .filter((index) => index >= 0)
-    const candidate = opts.attachments[positions[0]!]!
-    if (positions.some((index) => opts.attachments![index] !== candidate)) {
-      return undefined
-    }
-    return candidate
+  function wireContextReady(wire: WireId): boolean {
+    return patternDiagram.wires[wire]!.endpoints.every((endpoint) => nodeMap.has(endpoint.node))
   }
 
-  function assignWires(hostRoot: RegionId): void {
-    const patternWires = Object.keys(patternDiagram.wires).sort()
-    const wireMap = new Map<WireId, WireId>()
-    const internalImages = new Set<WireId>()
-    const boundaryImages = new Set<WireId>()
-
-    const assign = (index: number): void => {
-      if (exhausted) return
-      if (index === patternWires.length) {
-        if (!identityIncidencesMatch(wireMap)) return
-        recordOccurrence(wireMap, hostRoot)
-        return
-      }
-      const patternWire = patternWires[index]!
-      const isBoundary = boundarySet.has(patternWire)
-      const seeded = seededCandidate(patternWire)
-      if (
-        isBoundary
-        && opts.attachments !== undefined
-        && seeded === undefined
-      ) {
-        return
-      }
-      const candidatesForWire = seeded === undefined
-        ? Object.keys(host.wires).sort()
-        : [seeded]
-      for (const hostWire of candidatesForWire) {
-        if (!spend()) return
-        if (isBoundary ? internalImages.has(hostWire) : (
-          internalImages.has(hostWire) || boundaryImages.has(hostWire)
-        )) {
-          continue
-        }
-        if (!wireCompatible(patternWire, hostWire, hostRoot)) continue
-        wireMap.set(patternWire, hostWire)
-        if (isBoundary) boundaryImages.add(hostWire)
-        else internalImages.add(hostWire)
-        assign(index + 1)
-        if (isBoundary) {
-          if (![...wireMap].some(
-            ([otherPattern, image]) =>
-              otherPattern !== patternWire
-              && boundarySet.has(otherPattern)
-              && image === hostWire,
-          )) {
-            boundaryImages.delete(hostWire)
-          }
-        } else {
-          internalImages.delete(hostWire)
-        }
-        wireMap.delete(patternWire)
-        if (exhausted) return
-      }
-    }
-
-    assign(0)
+  function identityReady(node: NodeId): boolean {
+    return (ctx.patternIdx.identityIncidentWires.get(node) ?? []).every((wire) => wireMap.has(wire))
   }
 
-  function identityIncidencesMatch(wireMap: ReadonlyMap<WireId, WireId>): boolean {
-    for (const [patternNode, source] of Object.entries(patternDiagram.nodes)) {
-      if (source.kind !== 'identity') continue
-      const hostNode = nodeMap.get(patternNode)!
-      const expected: WireId[] = []
-      for (const [patternWire, wire] of Object.entries(patternDiagram.wires)) {
-        for (const endpoint of wire.endpoints) {
-          if (endpoint.node === patternNode) expected.push(wireMap.get(patternWire)!)
-        }
-      }
-      const actual: WireId[] = []
-      for (const [hostWire, wire] of Object.entries(host.wires)) {
-        for (const endpoint of wire.endpoints) {
-          if (endpoint.node === hostNode) actual.push(hostWire)
-        }
-      }
-      expected.sort()
-      actual.sort()
-      if (JSON.stringify(expected) !== JSON.stringify(actual)) return false
+  /** Unordered mapped-incidence equality, ported from the identity check. */
+  function identityMatches(patternNode: NodeId): boolean {
+    const hostNode = nodeMap.get(patternNode)!
+    const expected = (ctx.patternIdx.identityIncidentWires.get(patternNode) ?? [])
+      .map((wire) => wireMap.get(wire)!)
+      .sort()
+    const actual = [...(ctx.hostIdx.identityIncidentWires.get(hostNode) ?? [])].sort()
+    return JSON.stringify(expected) === JSON.stringify(actual)
+  }
+
+  function afterWireCommit(wire: WireId): boolean {
+    if (wireContextReady(wire) && !endpointsMatch(wire, wireMap.get(wire)!)) return false
+    for (const endpoint of patternDiagram.wires[wire]!.endpoints) {
+      const node = endpoint.node
+      if (patternDiagram.nodes[node]!.kind !== 'identity') continue
+      if (!nodeMap.has(node) || !identityReady(node)) continue
+      if (!identityMatches(node)) return false
     }
     return true
   }
 
-  function recordOccurrence(
-    wireMap: ReadonlyMap<WireId, WireId>,
-    hostRoot: RegionId,
-  ): void {
+  function afterNodeCommit(node: NodeId): boolean {
+    for (const wire of patternWiresTouching.get(node) ?? []) {
+      if (!wireMap.has(wire) || !wireContextReady(wire)) continue
+      if (!endpointsMatch(wire, wireMap.get(wire)!)) return false
+    }
+    if (patternDiagram.nodes[node]!.kind === 'identity' && identityReady(node)) {
+      if (!identityMatches(node)) return false
+    }
+    return true
+  }
+
+  function commit(ref: ElementRef, image: string): void {
+    if (ref.sort === 'region') {
+      regionMap.set(ref.id, image)
+      usedRegions.add(image)
+    } else if (ref.sort === 'node') {
+      nodeMap.set(ref.id, image)
+      usedNodes.add(image)
+    } else {
+      wireMap.set(ref.id, image)
+      if (boundarySet.has(ref.id)) usedBoundaryWires.add(image)
+      else usedInternalWires.add(image)
+    }
+  }
+
+  /** Boundary wires may alias each other, so an image stays used until the
+   *  last boundary occupant of it backs out. */
+  function uncommit(ref: ElementRef, image: string): void {
+    if (ref.sort === 'region') {
+      regionMap.delete(ref.id)
+      usedRegions.delete(image)
+    } else if (ref.sort === 'node') {
+      nodeMap.delete(ref.id)
+      usedNodes.delete(image)
+    } else {
+      wireMap.delete(ref.id)
+      if (boundarySet.has(ref.id)) {
+        const stillUsed = [...wireMap].some(
+          ([otherId, otherImage]) => otherImage === image && boundarySet.has(otherId),
+        )
+        if (!stillUsed) usedBoundaryWires.delete(image)
+      } else {
+        usedInternalWires.delete(image)
+      }
+    }
+  }
+
+  /** Most-constrained-first: smallest candidate set; ties break region <
+   *  node < wire, then id order. */
+  function pickNext(cands: CandidateSets): ElementRef | null {
+    let best: ElementRef | null = null
+    let bestSize = Infinity
+    let bestRank = Infinity
+    const rankOf = (sort: ElementSort): number => (sort === 'region' ? 0 : sort === 'node' ? 1 : 2)
+    const consider = (sort: ElementSort, id: string, size: number): void => {
+      const rank = rankOf(sort)
+      if (
+        size < bestSize
+        || (size === bestSize && rank < bestRank)
+        || (size === bestSize && rank === bestRank && (best === null || id < best.id))
+      ) {
+        best = { sort, id }
+        bestSize = size
+        bestRank = rank
+      }
+    }
+    for (const id of ctx.patternIdx.regionIds) {
+      if (!regionMap.has(id)) consider('region', id, cands.region.get(id)!.size)
+    }
+    for (const id of ctx.patternIdx.nodeIds) {
+      if (!nodeMap.has(id)) consider('node', id, cands.node.get(id)!.size)
+    }
+    for (const id of ctx.patternIdx.wireIds) {
+      if (!wireMap.has(id)) consider('wire', id, cands.wire.get(id)!.size)
+    }
+    return best
+  }
+
+  function tryAssign(ref: ElementRef, image: string, parentCands: CandidateSets): void {
+    if (exhausted) return
+    if (!spend()) return
+    __benchCounter.n++
+
+    if (ref.sort === 'region') {
+      if (usedRegions.has(image)) return
+    } else if (ref.sort === 'node') {
+      if (usedNodes.has(image)) return
+    } else {
+      const isBoundary = boundarySet.has(ref.id)
+      if (isBoundary) {
+        if (usedInternalWires.has(image)) return
+        if (!isAncestorOrEqual(host, ctx.hostScopes.get(image)!, regionMap.get(root)!)) return
+      } else {
+        if (usedInternalWires.has(image) || usedBoundaryWires.has(image)) return
+      }
+    }
+
+    const branchCands = copyCandidateSets(parentCands)
+    setSingleton(branchCands, ref, image)
+    if (!__propagate(ctx, branchCands)) return
+
+    commit(ref, image)
+    const residualOk = ref.sort === 'wire'
+      ? afterWireCommit(ref.id)
+      : ref.sort === 'node'
+        ? afterNodeCommit(ref.id)
+        : true
+    if (!residualOk) {
+      uncommit(ref, image)
+      return
+    }
+
+    const next = pickNext(branchCands)
+    if (next === null) {
+      recordOccurrence(regionMap.get(root)!)
+    } else {
+      for (const candidate of [...candidateSet(branchCands, next)]) {
+        if (exhausted) break
+        tryAssign(next, candidate, branchCands)
+      }
+    }
+
+    uncommit(ref, image)
+  }
+
+  function recordOccurrence(hostRoot: RegionId): void {
     const attachments = pattern.boundary.map((wireId) => wireMap.get(wireId)!)
     const footprint = JSON.stringify([
       [...regionMap.values()].sort(),
@@ -465,4 +375,484 @@ export function findOccurrences(
     }
     matches.push(occurrence)
   }
+}
+
+/**
+ * CANDIDATE-SET PROPAGATION SEAM.
+ *
+ * Every filter here is a NECESSARY condition implied by the existence of an
+ * occurrence extending the current partial state, never a stronger one, or
+ * genuine occurrences would be silently lost. `findOccurrences` narrows
+ * candidates with this layer before backtracking over the narrowed sets.
+ */
+
+export type PropagationContext = {
+  readonly host: Diagram
+  readonly pattern: DiagramWithBoundary
+  readonly opts: {
+    readonly inRegion?: RegionId
+    readonly attachments?: readonly WireId[]
+    readonly images?: MatchImages
+  }
+  readonly hostIdx: RefineIndex
+  readonly patternIdx: RefineIndex
+  readonly patternScopes: ReadonlyMap<WireId, RegionId>
+  readonly hostScopes: ReadonlyMap<WireId, RegionId>
+  readonly hostFingerprint: ReadonlyMap<RegionId, string>
+  readonly patternFingerprint: ReadonlyMap<RegionId, string>
+  readonly boundarySet: ReadonlySet<WireId>
+  /** Every propagation arc, built once (`buildArcs` is pure in the fields
+   *  above) and reused by every `__propagate` call over this context, along
+   *  with the arcs-by-dependency index `__propagate` re-derives on every
+   *  call otherwise. */
+  readonly arcs: readonly Arc[]
+  readonly arcsByDep: ReadonlyMap<string, readonly Arc[]>
+}
+
+/**
+ * Nested-cut subtree census, bottom-up: a host cut is a candidate image for
+ * a pattern cut only if their fingerprints agree exactly (equal censuses of
+ * children, directly-contained nodes, and scoped wires, recursively). The
+ * root's own fingerprint is never used for matching — the top container is
+ * an at-least embedding, not an exact one.
+ */
+function subtreeFingerprints(
+  diagram: Diagram,
+  idx: RefineIndex,
+  scopes: ReadonlyMap<WireId, RegionId>,
+): Map<RegionId, string> {
+  const wiresByScope = new Map<RegionId, WireId[]>()
+  for (const id of idx.regionIds) wiresByScope.set(id, [])
+  for (const [wireId, scope] of scopes) wiresByScope.get(scope)!.push(wireId)
+
+  const order = [...idx.regionIds].sort((a, b) => cutDepth(diagram, b) - cutDepth(diagram, a))
+  const fingerprint = new Map<RegionId, string>()
+  for (const id of order) {
+    const children = idx.childrenOf.get(id)!.map((child) => fingerprint.get(child)!).sort()
+    const nodes = idx.nodesIn.get(id)!.map((node) => idx.nodeContentKey.get(node)!).sort()
+    const wires = wiresByScope.get(id)!.map((wire) => idx.wireSigKey.get(wire)!).sort()
+    fingerprint.set(id, `cut(${children.join(',')};${nodes.join(',')};${wires.join(',')})`)
+  }
+  return fingerprint
+}
+
+export function __makePropagationContext(
+  host: Diagram,
+  pattern: DiagramWithBoundary,
+  opts: {
+    readonly inRegion?: RegionId
+    readonly attachments?: readonly WireId[]
+    readonly images?: MatchImages
+  },
+): PropagationContext {
+  const hostIdx = buildRefineIndex(host, [])
+  const patternIdx = buildRefineIndex(pattern.diagram, pattern.boundary)
+  const hostScopes = derivedScopes(host)
+  const patternScopes = derivedScopes(pattern.diagram, pattern.boundary)
+  const boundarySet = new Set(pattern.boundary)
+  const arcs = buildArcs({ pattern, hostIdx, patternIdx, patternScopes, hostScopes, boundarySet })
+  const arcsByDep = new Map<string, Arc[]>()
+  for (const arc of arcs) {
+    const key = depKey(arc.dep)
+    const list = arcsByDep.get(key)
+    if (list === undefined) arcsByDep.set(key, [arc])
+    else list.push(arc)
+  }
+  return {
+    host,
+    pattern,
+    opts,
+    hostIdx,
+    patternIdx,
+    patternScopes,
+    hostScopes,
+    hostFingerprint: subtreeFingerprints(host, hostIdx, hostScopes),
+    patternFingerprint: subtreeFingerprints(pattern.diagram, patternIdx, patternScopes),
+    boundarySet,
+    arcs,
+    arcsByDep,
+  }
+}
+
+export type CandidateSets = {
+  readonly region: Map<RegionId, Set<RegionId>>
+  readonly node: Map<NodeId, Set<NodeId>>
+  readonly wire: Map<WireId, Set<WireId>>
+}
+
+/**
+ * Content-only candidate initialization: any pattern element left with an
+ * empty candidate set means no occurrence exists anywhere, so the whole
+ * result collapses to `null`.
+ *
+ * When `opts.images` is supplied, every pattern element that maps DIRECTLY
+ * onto a member of the restriction (regions and internal wires scoped at the
+ * pattern's own root/container, and nodes directly in the pattern's own
+ * root/container) is additionally intersected with the matching images set
+ * here. Pattern elements nested inside pattern cuts are deliberately left
+ * unrestricted at this seam: the cut/parent arcs (family 1) and the
+ * node/region and wire-scope arcs (families 2 and 5) already propagate the
+ * restriction down to them transitively, once their containing top-level cut
+ * is pinned to the restriction — restricting them here directly, against a
+ * flat id list that only ever names top-level selection members, would
+ * empty a nested element's candidate set and silently lose genuine
+ * occurrences.
+ */
+export function __initCandidates(ctx: PropagationContext): CandidateSets | null {
+  const {
+    host, pattern, opts, hostIdx, patternIdx, patternScopes,
+    hostFingerprint, patternFingerprint, boundarySet,
+  } = ctx
+  const patternRoot = pattern.diagram.root
+  let allNonEmpty = true
+
+  const imageRegions = opts.images !== undefined ? new Set(opts.images.regions) : null
+  const imageNodes = opts.images !== undefined ? new Set(opts.images.nodes) : null
+  const imageWires = opts.images !== undefined ? new Set(opts.images.wires) : null
+
+  const region = new Map<RegionId, Set<RegionId>>()
+  for (const id of patternIdx.regionIds) {
+    let candidates: RegionId[]
+    if (id === patternRoot) {
+      candidates = opts.inRegion !== undefined ? [opts.inRegion] : [...hostIdx.regionIds].sort()
+    } else {
+      const fp = patternFingerprint.get(id)!
+      let list = hostIdx.regionIds
+        .filter((hid) => hostIdx.regionKindKey.get(hid) === 'cut' && hostFingerprint.get(hid) === fp)
+      if (imageRegions !== null && patternIdx.parentOf.get(id) === patternRoot) {
+        list = list.filter((hid) => imageRegions.has(hid))
+      }
+      candidates = list.sort()
+    }
+    if (candidates.length === 0) allNonEmpty = false
+    region.set(id, new Set(candidates))
+  }
+
+  const node = new Map<NodeId, Set<NodeId>>()
+  for (const id of patternIdx.nodeIds) {
+    const key = patternIdx.nodeContentKey.get(id)!
+    let list = hostIdx.nodeIds.filter((hid) => hostIdx.nodeContentKey.get(hid) === key)
+    if (imageNodes !== null && patternIdx.nodeRegion.get(id) === patternRoot) {
+      list = list.filter((hid) => imageNodes.has(hid))
+    }
+    const candidates = list.sort()
+    if (candidates.length === 0) allNonEmpty = false
+    node.set(id, new Set(candidates))
+  }
+
+  const wire = new Map<WireId, Set<WireId>>()
+  for (const id of patternIdx.wireIds) {
+    const isBoundary = boundarySet.has(id)
+    const patternWire = pattern.diagram.wires[id]!
+    const sigMatches = (hid: WireId): boolean =>
+      hostIdx.wireSigKey.get(hid) === patternIdx.wireSigKey.get(id)!
+    let candidates: WireId[]
+    if (!isBoundary) {
+      let list = hostIdx.wireIds
+        .filter((hid) => sigMatches(hid) && host.wires[hid]!.endpoints.length === patternWire.endpoints.length)
+      if (imageWires !== null && patternScopes.get(id) === patternRoot) {
+        list = list.filter((hid) => imageWires.has(hid))
+      }
+      candidates = list.sort()
+    } else if (opts.attachments !== undefined) {
+      const positions = pattern.boundary
+        .map((wireId, index) => (wireId === id ? index : -1))
+        .filter((index) => index >= 0)
+      const seeds = positions.map((index) => opts.attachments![index]!)
+      candidates = seeds.every((seed) => seed === seeds[0]) && sigMatches(seeds[0]!) ? [seeds[0]!] : []
+    } else {
+      candidates = hostIdx.wireIds
+        .filter((hid) => sigMatches(hid) && host.wires[hid]!.endpoints.length >= patternWire.endpoints.length)
+        .sort()
+    }
+    if (candidates.length === 0) allNonEmpty = false
+    wire.set(id, new Set(candidates))
+  }
+
+  return allNonEmpty ? { region, node, wire } : null
+}
+
+type ElementSort = 'region' | 'node' | 'wire'
+type ElementRef = { readonly sort: ElementSort; readonly id: string }
+
+/** One direction of one binary constraint: `target ⊆ compute(cands)`. */
+type Arc = {
+  readonly target: ElementRef
+  readonly dep: ElementRef
+  readonly compute: (cands: CandidateSets) => ReadonlySet<string>
+}
+
+function depKey(ref: ElementRef): string {
+  return `${ref.sort}:${ref.id}`
+}
+
+function candidateSet(cands: CandidateSets, ref: ElementRef): Set<string> {
+  const map = ref.sort === 'region' ? cands.region : ref.sort === 'node' ? cands.node : cands.wire
+  return map.get(ref.id)!
+}
+
+function copyCandidateSets(cands: CandidateSets): CandidateSets {
+  return {
+    region: new Map([...cands.region].map(([id, set]) => [id, new Set(set)])),
+    node: new Map([...cands.node].map(([id, set]) => [id, new Set(set)])),
+    wire: new Map([...cands.wire].map(([id, set]) => [id, new Set(set)])),
+  }
+}
+
+function setSingleton(cands: CandidateSets, ref: ElementRef, image: string): void {
+  const map = ref.sort === 'region' ? cands.region : ref.sort === 'node' ? cands.node : cands.wire
+  map.set(ref.id, new Set([image]))
+}
+
+/**
+ * Every propagation arc from the five constraint families needed for sound
+ * necessary-condition filtering: nested-cut census equality, node/region
+ * membership, positional port bijection (atom head/args, ref args), wire
+ * endpoint support, and internal-wire scope transport. Boundary-wire scope
+ * is deliberately absent — it needs the chosen root, assigned during search.
+ */
+type ArcContext = Pick<
+  PropagationContext,
+  'pattern' | 'hostIdx' | 'patternIdx' | 'patternScopes' | 'hostScopes' | 'boundarySet'
+>
+
+function buildArcs(ctx: ArcContext): Arc[] {
+  const { hostIdx, patternIdx, patternScopes, boundarySet, hostScopes } = ctx
+  const arcs: Arc[] = []
+
+  // Reverse indexes, each built once per context (not per arc firing) so
+  // every forward-direction compute below intersects from the dependency's
+  // CURRENT candidate set instead of rescanning a full host id list.
+
+  /** wire id -> host nodes carrying that wire at port key `pk` (non-identity
+   *  nodes only; identity ports never populate `nodePortWire`). */
+  const portWireIndex = new Map<string, Map<WireId, NodeId[]>>()
+  for (const h of hostIdx.nodeIds) {
+    const ports = hostIdx.nodePortWire.get(h)
+    if (ports === undefined) continue
+    for (const [pk, wireId] of ports) {
+      let byWire = portWireIndex.get(pk)
+      if (byWire === undefined) {
+        byWire = new Map()
+        portWireIndex.set(pk, byWire)
+      }
+      const list = byWire.get(wireId)
+      if (list === undefined) byWire.set(wireId, [h])
+      else list.push(h)
+    }
+  }
+
+  /** node id -> host wires with an endpoint at that node whose position key
+   *  is `pk` (identity endpoints all share position key 'i', so several
+   *  wires can share one entry). */
+  const endpointIndex = new Map<NodeId, Map<string, WireId[]>>()
+  for (const hw of hostIdx.wireIds) {
+    for (const ep of hostIdx.wireEndpoints.get(hw)!) {
+      let byPk = endpointIndex.get(ep.node)
+      if (byPk === undefined) {
+        byPk = new Map()
+        endpointIndex.set(ep.node, byPk)
+      }
+      const list = byPk.get(ep.pkey)
+      if (list === undefined) byPk.set(ep.pkey, [hw])
+      else list.push(hw)
+    }
+  }
+
+  /** region id -> host wires scoped there. */
+  const hostWiresByScope = new Map<RegionId, WireId[]>()
+  for (const hw of hostIdx.wireIds) {
+    const scope = hostScopes.get(hw)!
+    const list = hostWiresByScope.get(scope)
+    if (list === undefined) hostWiresByScope.set(scope, [hw])
+    else list.push(hw)
+  }
+
+  // 1. Cut/parent, both directions.
+  for (const c of patternIdx.regionIds) {
+    if (patternIdx.regionKindKey.get(c) !== 'cut') continue
+    const p = patternIdx.parentOf.get(c)!
+    arcs.push({
+      target: { sort: 'region', id: c },
+      dep: { sort: 'region', id: p },
+      compute: (cands) => {
+        const parentCands = candidateSet(cands, { sort: 'region', id: p })
+        const allowed = new Set<RegionId>()
+        for (const parent of parentCands) {
+          for (const child of hostIdx.childrenOf.get(parent) ?? []) allowed.add(child)
+        }
+        return allowed
+      },
+    })
+    arcs.push({
+      target: { sort: 'region', id: p },
+      dep: { sort: 'region', id: c },
+      compute: (cands) => {
+        const childCands = candidateSet(cands, { sort: 'region', id: c })
+        const allowed = new Set<RegionId>()
+        for (const h of childCands) {
+          const parent = hostIdx.parentOf.get(h)
+          if (parent != null) allowed.add(parent)
+        }
+        return allowed
+      },
+    })
+  }
+
+  // 2. Node/region, both directions.
+  for (const n of patternIdx.nodeIds) {
+    const r = patternIdx.nodeRegion.get(n)!
+    arcs.push({
+      target: { sort: 'node', id: n },
+      dep: { sort: 'region', id: r },
+      compute: (cands) => {
+        const regionCands = candidateSet(cands, { sort: 'region', id: r })
+        const allowed = new Set<NodeId>()
+        for (const region of regionCands) {
+          for (const node of hostIdx.nodesIn.get(region) ?? []) allowed.add(node)
+        }
+        return allowed
+      },
+    })
+    arcs.push({
+      target: { sort: 'region', id: r },
+      dep: { sort: 'node', id: n },
+      compute: (cands) => {
+        const nodeCands = candidateSet(cands, { sort: 'node', id: n })
+        const allowed = new Set<RegionId>()
+        for (const h of nodeCands) allowed.add(hostIdx.nodeRegion.get(h)!)
+        return allowed
+      },
+    })
+  }
+
+  // 3. Positional ports (atom head/args, ref args), both directions.
+  for (const n of patternIdx.nodeIds) {
+    if (ctx.pattern.diagram.nodes[n]!.kind === 'identity') continue
+    for (const pk of patternIdx.nodePortOrder.get(n)!) {
+      const w = patternIdx.nodePortWire.get(n)!.get(pk)!
+      arcs.push({
+        target: { sort: 'node', id: n },
+        dep: { sort: 'wire', id: w },
+        compute: (cands) => {
+          const wireCands = candidateSet(cands, { sort: 'wire', id: w })
+          const byWire = portWireIndex.get(pk)
+          const allowed = new Set<NodeId>()
+          if (byWire !== undefined) {
+            for (const wireId of wireCands) {
+              for (const node of byWire.get(wireId) ?? []) allowed.add(node)
+            }
+          }
+          return allowed
+        },
+      })
+      arcs.push({
+        target: { sort: 'wire', id: w },
+        dep: { sort: 'node', id: n },
+        compute: (cands) => {
+          const nodeCands = candidateSet(cands, { sort: 'node', id: n })
+          const allowed = new Set<WireId>()
+          for (const h of nodeCands) {
+            const image = hostIdx.nodePortWire.get(h)?.get(pk)
+            if (image !== undefined) allowed.add(image)
+          }
+          return allowed
+        },
+      })
+    }
+  }
+
+  // 4. Wire/endpoint support, both directions, all wires (identity included).
+  for (const w of patternIdx.wireIds) {
+    for (const { node: n, pkey } of patternIdx.wireEndpoints.get(w)!) {
+      arcs.push({
+        target: { sort: 'wire', id: w },
+        dep: { sort: 'node', id: n },
+        compute: (cands) => {
+          const nodeCands = candidateSet(cands, { sort: 'node', id: n })
+          const allowed = new Set<WireId>()
+          for (const node of nodeCands) {
+            for (const hw of endpointIndex.get(node)?.get(pkey) ?? []) allowed.add(hw)
+          }
+          return allowed
+        },
+      })
+      arcs.push({
+        target: { sort: 'node', id: n },
+        dep: { sort: 'wire', id: w },
+        compute: (cands) => {
+          const wireCands = candidateSet(cands, { sort: 'wire', id: w })
+          const allowed = new Set<NodeId>()
+          for (const hw of wireCands) {
+            for (const ep of hostIdx.wireEndpoints.get(hw)!) {
+              if (ep.pkey === pkey) allowed.add(ep.node)
+            }
+          }
+          return allowed
+        },
+      })
+    }
+  }
+
+  // 5. Internal-wire scope (one direction only; boundary wires excluded).
+  for (const w of patternIdx.wireIds) {
+    if (boundarySet.has(w)) continue
+    const s = patternScopes.get(w)!
+    arcs.push({
+      target: { sort: 'wire', id: w },
+      dep: { sort: 'region', id: s },
+      compute: (cands) => {
+        const scopeCands = candidateSet(cands, { sort: 'region', id: s })
+        const allowed = new Set<WireId>()
+        for (const region of scopeCands) {
+          for (const hw of hostWiresByScope.get(region) ?? []) allowed.add(hw)
+        }
+        return allowed
+      },
+    })
+  }
+
+  return arcs
+}
+
+/**
+ * Arc-consistency propagation to a fixpoint: every arc computes a necessary
+ * condition on its target from its dependency's CURRENT candidates; when a
+ * target shrinks, every arc depending on it is re-queued. Sets are mutated
+ * in place, in their existing (sorted) insertion order, so materializing
+ * them later stays deterministic. Returns `false` the moment any set empties.
+ */
+export function __propagate(ctx: PropagationContext, cands: CandidateSets): boolean {
+  const { arcs, arcsByDep } = ctx
+
+  // Index cursor, not `shift()`: `queue` only ever grows (arcs are re-queued,
+  // never removed early), so an advancing read index keeps every dequeue
+  // O(1) instead of the O(n) re-index `Array.shift()` would do each time.
+  const queue: Arc[] = [...arcs]
+  const queued = new Set<Arc>(queue)
+  let head = 0
+
+  while (head < queue.length) {
+    const arc = queue[head++]!
+    queued.delete(arc)
+    const target = candidateSet(cands, arc.target)
+    const allowed = arc.compute(cands)
+    let changed = false
+    for (const value of [...target]) {
+      if (!allowed.has(value)) {
+        target.delete(value)
+        changed = true
+      }
+    }
+    if (target.size === 0) return false
+    if (changed) {
+      for (const dependent of arcsByDep.get(depKey(arc.target)) ?? []) {
+        if (!queued.has(dependent)) {
+          queued.add(dependent)
+          queue.push(dependent)
+        }
+      }
+    }
+  }
+  return true
 }

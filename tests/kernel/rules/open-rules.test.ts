@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import {
@@ -39,7 +39,7 @@ describe('open relational iteration and deiteration', () => {
       nodes: [copy],
       wires: [],
     })
-    const evidence = findDeiterationEvidence(iterated, copySelection, 10_000)
+    const evidence = findDeiterationEvidence(iterated, copySelection)
     const restored = applyDeiteration(
       iterated,
       copySelection,
@@ -49,7 +49,7 @@ describe('open relational iteration and deiteration', () => {
 
     expect(iterated.wires[argument]!.endpoints.some((endpoint) => endpoint.node === copy))
       .toBe(true)
-    expect(exploreForm(restored)).toBe(exploreForm(diagram))
+    expect(sameDiagram(restored, diagram)).toBe(true)
   })
 
   it('rejects iteration to a region outside the source', () => {
@@ -81,7 +81,7 @@ describe('open relational iteration and deiteration', () => {
       wires: [],
     })
 
-    expect(() => findDeiterationEvidence(diagram, selection, 10_000))
+    expect(() => findDeiterationEvidence(diagram, selection))
       .toThrowError(/no exact justifying occurrence/)
   })
 })

@@ -86,6 +86,30 @@ export function onlyNewCut(
   return exactOne('cut', ids, parent === undefined ? '' : ` under '${parent}'`)
 }
 
+/**
+ * The pin step a `ScopePreservationError` asks for: a fresh arity-1
+ * identity node at `scope`, attached to `wireId` via `attachments` (stub
+ * growth onto the existing wire, not a new one). The node id is a mint
+ * label — `applyVacuityInsert` freshens it. Pure: does not apply the step.
+ * Shared by `PrimitiveStepRecorder#recordPin` (below) and the search's
+ * auto-pin bundling (`src/generate/search/search.ts`), which resolves the
+ * same refusal the same way.
+ */
+export function pinStep(diagram: Diagram, wireId: WireId, scope: RegionId): ProofStep {
+  const wire = diagram.wires[wireId]
+  if (wire === undefined) throw new Error(`cannot pin unknown wire '${wireId}'`)
+  const label = `hold_${wireId}`
+  return {
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: {
+      nodes: { [label]: { region: scope, sig: wire.sig, arity: 1 } },
+      wires: {},
+      attachments: { [wireId]: [{ node: label, port: { kind: 'identity', index: 0 } }] },
+    },
+  }
+}
+
 export class PrimitiveStepRecorder {
   #diagram: Diagram
   readonly #context: ProofContext
@@ -114,18 +138,7 @@ export class PrimitiveStepRecorder {
   }
 
   #recordPin(wireId: WireId, scope: RegionId): void {
-    const wire = this.#diagram.wires[wireId]
-    if (wire === undefined) throw new Error(`cannot pin unknown wire '${wireId}'`)
-    const label = `hold_${wireId}`
-    const action = singleStepAction(`pin ${wireId}`, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: {
-        nodes: { [label]: { region: scope, sig: wire.sig, arity: 1 } },
-        wires: {},
-        attachments: { [wireId]: [{ node: label, port: { kind: 'identity', index: 0 } }] },
-      },
-    })
+    const action = singleStepAction(`pin ${wireId}`, pinStep(this.#diagram, wireId, scope))
     const before = this.#diagram
     this.#diagram = applyAction(
       this.#diagram,

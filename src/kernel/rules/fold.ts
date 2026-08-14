@@ -15,7 +15,7 @@ import {
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import { derivedScope } from '../diagram/regions'
 import { completeWireEnds } from './wire-ends'
-import { exploreForm } from '../diagram/canonical/explore'
+import { sameDiagram } from '../diagram/canonical/iso'
 import type { RelSig } from '../diagram/sig'
 import { relSig, sigEquals, sigKey } from '../diagram/sig'
 import { extractSubgraph } from '../diagram/subgraph/extract'
@@ -218,11 +218,12 @@ export function applyFold(
     definition,
   )
   const expectedPins = boundaryPins(expected, args)
-  if (exploreForm(extracted.pattern.diagram, actualPins)
-      !== exploreForm(expected.pattern.diagram, expectedPins)) {
+  if (!sameDiagram(
+    extracted.pattern.diagram, expected.pattern.diagram,
+    actualPins, expectedPins,
+  )) {
     throw new RuleError(
-      `fold: the occurrence does not match the definition `
-      + `(boundary-pinned canonical forms differ)`,
+      'fold: the occurrence does not match the definition under its pinned boundary',
     )
   }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
@@ -33,9 +33,8 @@ function rootAtomWithWire() {
 function deiterate(
   diagram: Parameters<typeof applyDeiteration>[0],
   selection: Parameters<typeof applyDeiteration>[1],
-  explorationFuel = 10_000,
 ) {
-  const evidence = findDeiterationEvidence(diagram, selection, explorationFuel)
+  const evidence = findDeiterationEvidence(diagram, selection)
   return applyDeiteration(
     diagram,
     selection,
@@ -175,7 +174,7 @@ describe('exact applyDeiteration evidence', () => {
       wires: [],
     })
 
-    expect(exploreForm(deiterate(iterated, copySelection))).toBe(exploreForm(diagram))
+    expect(sameDiagram(deiterate(iterated, copySelection), diagram)).toBe(true)
   })
 
   it('rejects removal with no disjoint exact justifier', () => {
@@ -291,16 +290,43 @@ describe('exact applyDeiteration evidence', () => {
       .toThrowError(/no exact justifying occurrence/)
   })
 
-  it('reports exhausted graph exploration without a semantic undecided channel', () => {
-    const { diagram, node } = host()
+  it('finds an exact justifier among several disconnected same-shape decoy components', () => {
+    // Six mutually disconnected, structurally identical "identity pair"
+    // components (an arity-2 identity whose two ports are pinned by two
+    // separate arity-1 identities): the real duplicate of the selected
+    // component 2 is component 4, but nothing in propagation splits the
+    // decoy candidate set apart from it — a fuel bound derived from element
+    // counts alone previously risked mis-refusing this exact shape (the
+    // same class `inferFoldArgs` was refuted on in define.test.ts). This
+    // pins the decisiveness contract: search without `explorationFuel`
+    // must still find the justifier.
+    const builder = new DiagramBuilder()
+    const components: { joint: string; pinA: string; pinB: string; wA: string; wB: string }[] = []
+    for (let i = 0; i < 6; i++) {
+      const joint = builder.identity(builder.root, IOTA, 2)
+      const pinA = builder.identity(builder.root, IOTA, 1)
+      const pinB = builder.identity(builder.root, IOTA, 1)
+      const wA = builder.wire([
+        { node: joint, port: { kind: 'identity', index: 0 } },
+        { node: pinA, port: { kind: 'identity', index: 0 } },
+      ])
+      const wB = builder.wire([
+        { node: joint, port: { kind: 'identity', index: 1 } },
+        { node: pinB, port: { kind: 'identity', index: 0 } },
+      ])
+      components.push({ joint, pinA, pinB, wA, wB })
+    }
+    const diagram = builder.build()
+    const target = components[2]!
     const selection = mkSelection(diagram, {
       region: diagram.root,
       regions: [],
-      nodes: [node],
-      wires: [],
+      nodes: [target.joint, target.pinA, target.pinB],
+      wires: [target.wA, target.wB],
     })
 
-    expect(() => findDeiterationEvidence(diagram, selection, 1))
-      .toThrowError(/graph exploration exhausted/)
+    const evidence = findDeiterationEvidence(diagram, selection)
+
+    expect(evidence.justifier).toBeDefined()
   })
 })

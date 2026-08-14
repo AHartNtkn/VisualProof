@@ -8,7 +8,7 @@ import {
   type WireId,
 } from '../../../src/kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig, type RelSig, type Sig } from '../../../src/kernel/diagram/sig'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
@@ -163,14 +163,14 @@ describe('definition-store unfolding', () => {
       const occurrence = selectionOf(unfolded, host.region, copiedNodes(host.diagram, unfolded))
       const folded = applyFold(unfolded, occurrence, host.args, 'R', store)
 
-      expect(exploreForm(folded)).toBe(exploreForm(host.diagram))
+      expect(sameDiagram(folded, host.diagram)).toBe(true)
       const unfoldedAgain = applyUnfold(
         folded,
         Object.keys(folded.nodes).find((id) => folded.nodes[id]!.kind === 'ref'
           && folded.nodes[id]!.defId === 'R')!,
         store,
       )
-      expect(exploreForm(unfoldedAgain)).toBe(exploreForm(unfolded))
+      expect(sameDiagram(unfoldedAgain, unfolded)).toBe(true)
     })
   }
 
@@ -268,8 +268,8 @@ describe('definition-store unfolding', () => {
         store,
       )
 
-      expect(exploreForm(folded)).toBe(exploreForm(host.diagram))
-      expect(exploreForm(foldedPermuted)).toBe(exploreForm(folded))
+      expect(sameDiagram(folded, host.diagram)).toBe(true)
+      expect(sameDiagram(foldedPermuted, folded)).toBe(true)
     })
   }
 

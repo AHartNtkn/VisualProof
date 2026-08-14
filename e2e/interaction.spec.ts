@@ -29,7 +29,7 @@ type DebugHook = {
   regions(): readonly { id: string; kind: string; x: number; y: number; r: number }[]
   wires(): readonly { id: string; x: number; y: number }[]
   wireBinds(): readonly { id: string; node: string; x: number; y: number }[]
-  editForm(): string
+  editJson(): string
   interaction(): InteractionDebug
 }
 
@@ -89,8 +89,11 @@ async function addTwoRefs(page: Page): Promise<readonly [string, string]> {
   await page.mouse.down()
   await page.mouse.move(box.x + endpoints.target.x, box.y + endpoints.target.y, { steps: 10 })
   await page.mouse.up()
+  // wireJoin merges the two 2-end wires (ref+pin each) into one wire whose
+  // endpoint list is the concatenation of both: 4 endpoints (ref, pin, ref,
+  // pin), all node-bound — every one of them is a rendered wireBind.
   await expect.poll(() => page.evaluate(() =>
-    (window as DebugWindow).__vpaDebug!.wireBinds().length)).toBe(2)
+    (window as DebugWindow).__vpaDebug!.wireBinds().length)).toBe(4)
   await waitForRest(page)
   const ids = await page.evaluate(() =>
     (window as DebugWindow).__vpaDebug!.bodies()
@@ -212,7 +215,7 @@ test('brush adds and removes nodes, may start in the void, and a void click clea
 test('plain and Shift drags are selection-only while Ctrl-drag is physics-only', async ({ page, theoryFiles }) => {
   await openApp(page, theoryFiles)
   const [leftId, rightId] = await addTwoRefs(page)
-  const semanticBefore = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.editForm())
+  const semanticBefore = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.editJson())
 
   const left = await pagePointForBody(page, leftId)
   const plainTarget = { x: left.x + 110, y: left.y + 30 }
@@ -222,7 +225,7 @@ test('plain and Shift drags are selection-only while Ctrl-drag is physics-only',
   const heldAfterPlainDrag = await pagePointForBody(page, leftId)
   expect(Math.hypot(heldAfterPlainDrag.x - plainTarget.x, heldAfterPlainDrag.y - plainTarget.y)).toBeGreaterThan(45)
   await page.mouse.up()
-  expect(await page.evaluate(() => (window as DebugWindow).__vpaDebug!.editForm())).toBe(semanticBefore)
+  expect(await page.evaluate(() => (window as DebugWindow).__vpaDebug!.editJson())).toBe(semanticBefore)
 
   // Shift has precedence over every manipulation claim. Even Ctrl+Shift is a
   // brush stroke: it changes selection, never body geometry or semantics.
@@ -236,7 +239,7 @@ test('plain and Shift drags are selection-only while Ctrl-drag is physics-only',
     .sort()).toEqual([leftId, rightId].sort())
   const leftAfterShift = await pagePointForBody(page, leftId)
   expect(Math.hypot(leftAfterShift.x - shiftEnd.x, leftAfterShift.y - shiftEnd.y)).toBeGreaterThan(35)
-  expect(await page.evaluate(() => (window as DebugWindow).__vpaDebug!.editForm())).toBe(semanticBefore)
+  expect(await page.evaluate(() => (window as DebugWindow).__vpaDebug!.editJson())).toBe(semanticBefore)
   expect(await pins(page)).toEqual([])
 
   // Ctrl alone claims physics. Sample while the button is held so passive
@@ -253,7 +256,7 @@ test('plain and Shift drags are selection-only while Ctrl-drag is physics-only',
   expect(Math.hypot(heldAfterCtrlDrag.x - ctrlTarget.x, heldAfterCtrlDrag.y - ctrlTarget.y)).toBeLessThan(25)
   await page.mouse.up()
   await page.keyboard.up('Control')
-  expect(await page.evaluate(() => (window as DebugWindow).__vpaDebug!.editForm())).toBe(semanticBefore)
+  expect(await page.evaluate(() => (window as DebugWindow).__vpaDebug!.editJson())).toBe(semanticBefore)
   expect(await pins(page)).toEqual([])
 })
 

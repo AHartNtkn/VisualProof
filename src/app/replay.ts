@@ -1,9 +1,9 @@
 import type { Diagram, WireId } from '../kernel/diagram/diagram'
 import {
-  exploreForm,
-  exploreIso,
+  diagramIso,
+  sameDiagram,
   type DiagramIso,
-} from '../kernel/diagram/canonical/explore'
+} from '../kernel/diagram/canonical/iso'
 import { transportBoundary } from '../kernel/proof/step'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
@@ -101,10 +101,7 @@ export function mkReplay(name: string, ctx: ProofContext): Replay {
   const backwardMeet = backward.states.at(-1)!
   const forwardMeetBoundary = forward.boundaries.at(-1)!
   const backwardMeetBoundary = backward.boundaries.at(-1)!
-  if (
-    exploreForm(forwardMeet, forwardMeetBoundary)
-    !== exploreForm(backwardMeet, backwardMeetBoundary)
-  ) {
+  if (!sameDiagram(forwardMeet, backwardMeet, forwardMeetBoundary, backwardMeetBoundary)) {
     throw new Error(`verified theorem replay '${name}' has proof halves that do not meet`)
   }
 
@@ -129,7 +126,7 @@ export function mkReplay(name: string, ctx: ProofContext): Replay {
     () => null,
   )
   if (meetingIndex === n) {
-    const iso = exploreIso(
+    const iso = diagramIso(
       proofStates[n]!,
       thm.rhs.diagram,
       proofBoundaries[n]!,

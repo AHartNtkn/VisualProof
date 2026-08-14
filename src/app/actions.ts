@@ -25,9 +25,9 @@ export type ActionDescriptor =
   | { readonly kind: 'citeTheorem'; readonly label: string; readonly name: string; readonly direction: 'forward' | 'reverse' }
 
 /**
- * `backward` changes citation direction, flips identity insertion's polarity
- * gate, and suppresses forward-only erasure. Other structural rule gates retain
- * their physical polarity when their appliers have no orientation dual.
+ * `backward` is the same interface with polarity flipped: it changes citation
+ * direction and flips the erasure and identity-insertion polarity gates.
+ * Polarity-blind structural rules are unaffected.
  */
 export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: ProofContext, backward = false): ActionDescriptor[] {
   assertProofContext(ctx)
@@ -35,8 +35,9 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
   const pol = polarity(d, sel.region)
   const hasContent = sel.nodes.length + sel.regions.length + sel.wires.length > 0
 
-  if (!backward && hasContent && pol === 'positive') {
-    out.push({ kind: 'erase', label: 'Erase (positive region)' })
+  const erasurePol = backward ? 'negative' : 'positive'
+  if (hasContent && pol === erasurePol) {
+    out.push({ kind: 'erase', label: `Erase (${erasurePol} region)` })
   }
   out.push({ kind: 'doubleCutWrap', label: 'Wrap in a double cut' })
   if (hasContent) {

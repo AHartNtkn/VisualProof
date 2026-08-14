@@ -5,7 +5,7 @@ import {
   type DiagramParts,
   type Endpoint,
 } from '../../../src/kernel/diagram/diagram'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { diagramFromJson, diagramToJson } from '../../../src/kernel/diagram/json'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
@@ -433,7 +433,7 @@ describe('identity diagram nodes', () => {
       },
     })
 
-    expect(exploreForm(make(false))).toBe(exploreForm(make(true)))
+    expect(sameDiagram(make(false), make(true))).toBe(true)
   })
 
   it('round-trips identity JSON and rejects term/body node JSON', () => {

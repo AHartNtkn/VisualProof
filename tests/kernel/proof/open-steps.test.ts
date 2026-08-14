@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { relSig } from '../../../src/kernel/diagram/sig'
 import { replayActions, singleStepAction } from '../../../src/kernel/proof/action'
 import { composeActions } from '../../../src/kernel/proof/compose'
@@ -38,7 +38,7 @@ describe('atom and vacuous proof steps', () => {
       direction: 'delete',
       assembly: removal,
     }], EMPTY_PROOF_CONTEXT)
-    expect(exploreForm(restored)).toBe(exploreForm(diagram))
+    expect(sameDiagram(restored, diagram)).toBe(true)
   })
 
   it('composes a later atom step that names a wire minted by vacuity', () => {
@@ -79,15 +79,18 @@ describe('atom and vacuous proof steps', () => {
       EMPTY_PROOF_CONTEXT,
     )
 
-    expect(exploreForm(replayActions(
-      target.diagram,
-      composed,
-      EMPTY_PROOF_CONTEXT,
-    ))).toBe(exploreForm(replayActions(
-      source.diagram,
-      tail,
-      EMPTY_PROOF_CONTEXT,
-    )))
+    expect(sameDiagram(
+      replayActions(
+        target.diagram,
+        composed,
+        EMPTY_PROOF_CONTEXT,
+      ),
+      replayActions(
+        source.diagram,
+        tail,
+        EMPTY_PROOF_CONTEXT,
+      ),
+    )).toBe(true)
   })
 
   it('maps a bare vacuous elimination wire across an isomorphism', () => {

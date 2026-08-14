@@ -67,9 +67,8 @@ export function erasureStep(diagram: Diagram, selection: SubgraphSelection): Pro
 export function deiterationStep(
   diagram: Diagram,
   selection: SubgraphSelection,
-  fuel: number,
 ): ProofStep {
-  const evidence = findDeiterationEvidence(diagram, selection, fuel)
+  const evidence = findDeiterationEvidence(diagram, selection)
   return {
     rule: 'deiteration',
     sel: selection,
@@ -80,7 +79,6 @@ export function deiterationStep(
 export function contextualDeleteStep(
   diagram: Diagram,
   discovery: ProofDiscovery,
-  fuel: number,
 ): ProofStep | null {
   const has = (kind: ActionDescriptor['kind']): boolean =>
     discovery.actions.some((action) => action.kind === kind)
@@ -95,7 +93,7 @@ export function contextualDeleteStep(
     }
   }
   if (has('erase')) return erasureStep(diagram, discovery.sel)
-  return has('deiterate') ? deiterationStep(diagram, discovery.sel, fuel) : null
+  return has('deiterate') ? deiterationStep(diagram, discovery.sel) : null
 }
 
 export type ProofMoveControllerOptions = {
@@ -380,7 +378,6 @@ export class ProofMoveController {
         const step = contextualDeleteStep(
           this.#options.diagram(),
           discovery,
-          this.#options.fuel(),
         )
         if (step === null) {
           this.#options.refuse('nothing here reads as a deletion', this.#lastPointer)
@@ -580,7 +577,6 @@ export class ProofMoveController {
         row(action.label, () => this.#commit(deiterationStep(
           this.#options.diagram(),
           selection,
-          this.#options.fuel(),
         )))
         return
       case 'relFold':

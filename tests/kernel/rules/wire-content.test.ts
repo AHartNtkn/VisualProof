@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import {
@@ -61,7 +61,7 @@ describe('cut wrap / cut absorb', () => {
     expect(contentEndpoints(wrapped, cutArg)).toHaveLength(1)
 
     const restored = applyCutAbsorb(wrapped, fresh)
-    expect(exploreForm(restored)).toEqual(exploreForm(diagram))
+    expect(sameDiagram(restored, diagram)).toBe(true)
   })
 
   it('refuses a wire with a non-applied endpoint', () => {
@@ -120,7 +120,7 @@ describe('parallel split / parallel fuse', () => {
     }
 
     const fused = applyParallelFuse(split, freshWires[0]!, freshWires[1]!)
-    expect(exploreForm(fused)).toEqual(exploreForm(diagram))
+    expect(sameDiagram(fused, diagram)).toBe(true)
   })
 
   it('refuses fusing wires whose end multisets differ', () => {
@@ -191,7 +191,7 @@ describe('ends delete / ends spawn', () => {
     const respawned = applyEndsSpawn(deleted, wire, [
       { region: scope, args: [arg] },
     ], 'backward')
-    expect(exploreForm(respawned)).toEqual(exploreForm(diagram))
+    expect(sameDiagram(respawned, diagram)).toBe(true)
   })
 
   it('gates delete on the wire scope polarity in both orientations', () => {

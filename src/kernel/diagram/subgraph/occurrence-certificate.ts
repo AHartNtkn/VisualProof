@@ -1,4 +1,5 @@
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram'
+import { endpointPositionKey } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
 import { derivedScope, derivedScopes, isAncestorOrEqual } from '../regions'
 import { sigEquals, sigKey } from '../sig'
@@ -20,27 +21,20 @@ function fail(reason: string): OccurrenceCertificateCheck {
   return { ok: false, reason }
 }
 
-/**
- * Semantic port position. Identity incidence indices are deliberately erased:
- * their incident-wire multiset is the structure certificates preserve.
- */
-function endpointPositionKey(diagram: Diagram, endpoint: Endpoint): string {
-  const node = diagram.nodes[endpoint.node]!
-  switch (node.kind) {
-    case 'atom':
-      if (endpoint.port.kind === 'head') return 'hd'
-      return endpoint.port.kind === 'arg' ? `a:${endpoint.port.index}` : '!invalid'
-    case 'ref':
-      return endpoint.port.kind === 'arg' ? `a:${endpoint.port.index}` : '!invalid'
-    case 'identity':
-      return endpoint.port.kind === 'identity' ? 'i' : '!invalid'
-  }
-}
-
 function endpointKey(diagram: Diagram, endpoint: Endpoint): string {
   return JSON.stringify([endpoint.node, endpointPositionKey(diagram, endpoint)])
 }
 
+/**
+ * Domain-completeness check only: `map`'s key set must equal `expected`
+ * exactly. Unlike `checkBijection` in `canonical/iso.ts`, this checks
+ * nothing about the map's values — no codomain, no injectivity, no onto
+ * requirement — because a certificate map is an injective embedding of a
+ * pattern into a generally larger host, not a bijection between equal-sized
+ * sides; injectivity here is instead checked inline, per element, by the
+ * `regionImages`/`nodeImages`/`internalImages` sets below, interleaved with
+ * each element's other structural checks in the same pass.
+ */
 function exactDomain<K>(
   map: ReadonlyMap<K, unknown>,
   expected: ReadonlySet<K>,

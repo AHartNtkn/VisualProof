@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../src/kernel/diagram/canonical/iso'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { applyAction, singleStepAction } from '../../src/kernel/proof/action'
 import { registerTheorem, verifyTheory } from '../../src/kernel/proof/context'
@@ -105,13 +105,19 @@ describe('structural replay', () => {
     expect(replay.actionCount).toBe(2)
     expect(replay.meetingIndex).toBe(1)
     expect(replay.diagramAt(0)).toBe(theorem.lhs.diagram)
-    expect(exploreForm(replay.diagramAt(0), replay.boundaryAt(0)))
-      .toBe(exploreForm(theorem.lhs.diagram, theorem.lhs.boundary))
-    expect(exploreForm(replay.diagramAt(replay.meetingIndex), replay.boundaryAt(replay.meetingIndex)))
-      .toBe(exploreForm(meet))
+    expect(sameDiagram(
+      replay.diagramAt(0), theorem.lhs.diagram,
+      replay.boundaryAt(0), theorem.lhs.boundary,
+    )).toBe(true)
+    expect(sameDiagram(
+      replay.diagramAt(replay.meetingIndex), meet,
+      replay.boundaryAt(replay.meetingIndex), [],
+    )).toBe(true)
     expect(replay.diagramAt(replay.actionCount)).toBe(theorem.rhs.diagram)
-    expect(exploreForm(replay.diagramAt(replay.actionCount), replay.boundaryAt(replay.actionCount)))
-      .toBe(exploreForm(theorem.rhs.diagram, theorem.rhs.boundary))
+    expect(sameDiagram(
+      replay.diagramAt(replay.actionCount), theorem.rhs.diagram,
+      replay.boundaryAt(replay.actionCount), theorem.rhs.boundary,
+    )).toBe(true)
 
     expect(replay.labelAt(1)).toBe('forward · open from lhs')
     expect(replay.labelAt(2)).toBe('backward · open from rhs')
@@ -129,8 +135,10 @@ describe('structural replay', () => {
     const replay = mkReplay(theorem.name, ctx)
 
     expect(computed).not.toBe(theorem.rhs.diagram)
-    expect(exploreForm(computed, theorem.lhs.boundary))
-      .toBe(exploreForm(theorem.rhs.diagram, theorem.rhs.boundary))
+    expect(sameDiagram(
+      computed, theorem.rhs.diagram,
+      theorem.lhs.boundary, theorem.rhs.boundary,
+    )).toBe(true)
     expect(replay.meetingIndex).toBe(replay.actionCount)
     expect(replay.actionCount).toBe(1)
     expect(replay.transitions).toHaveLength(1)
@@ -151,8 +159,10 @@ describe('structural replay', () => {
     const final = replay.diagramAt(replay.actionCount)
 
     expect(final).toBe(theorem.rhs.diagram)
-    expect(exploreForm(final, replay.boundaryAt(replay.actionCount)))
-      .toBe(exploreForm(theorem.rhs.diagram, theorem.rhs.boundary))
+    expect(sameDiagram(
+      final, theorem.rhs.diagram,
+      replay.boundaryAt(replay.actionCount), theorem.rhs.boundary,
+    )).toBe(true)
     expect(Object.values(final.nodes).some((node) =>
       node.kind === 'ref' && node.defId === 'nat')).toBe(true)
   })

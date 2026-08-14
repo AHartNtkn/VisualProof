@@ -106,34 +106,32 @@ describe('applicableActions', () => {
     expect(actions.every((action) => action.label.length > 0)).toBe(true)
   })
 
-  it('does not offer forward-only erasure anywhere during backward work', () => {
+  it('mirrors the orientation-aware erasure polarity matrix', () => {
+    // Backward work is the SAME interface with polarity flipped: erasure is
+    // offered exactly where the applier accepts it — positive regions going
+    // forward, negative regions going backward. Nothing is suppressed.
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const negativeRef = builder.ref(cut, 'UnaryWitness', UNARY)
     const positiveRef = builder.ref(builder.root, 'UnaryWitness', UNARY)
     const diagram = builder.build()
-    for (const selection of [
-      mkSelection(diagram, {
-        region: cut,
-        regions: [],
-        nodes: [negativeRef],
-        wires: [],
-      }),
-      mkSelection(diagram, {
-        region: diagram.root,
-        regions: [],
-        nodes: [positiveRef],
-        wires: [],
-      }),
-    ]) {
-      const actions = applicableActions(
-        diagram,
-        selection,
-        verifyTheory(tinyTheory()),
-        true,
-      )
-      expect(actions.map((action) => action.kind)).not.toContain('erase')
-    }
+    const negativeSelection = mkSelection(diagram, {
+      region: cut,
+      regions: [],
+      nodes: [negativeRef],
+      wires: [],
+    })
+    const positiveSelection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [positiveRef],
+      wires: [],
+    })
+
+    expect(kinds(diagram, positiveSelection)).toContain('erase')
+    expect(kinds(diagram, negativeSelection)).not.toContain('erase')
+    expect(kinds(diagram, negativeSelection, true)).toContain('erase')
+    expect(kinds(diagram, positiveSelection, true)).not.toContain('erase')
   })
 
   it('offers only Phase-1 actions for a generic selected cut', () => {

@@ -3,7 +3,7 @@ import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
-import { exploreLabeling } from '../kernel/diagram/canonical/explore'
+import { canonicalWireOrder } from '../kernel/diagram/canonical/wire-order'
 import { findOccurrences } from '../kernel/diagram/subgraph/match'
 import { occurrenceToSelection } from '../kernel/diagram/subgraph/occurrence'
 import type { ProofContext } from '../kernel/proof/context'
@@ -67,7 +67,7 @@ export function defineRelation(
  */
 export function canonicalArgOrder(diagram: Diagram, sel: SubgraphSelection): WireId[] {
   const { pattern, attachments } = extractSubgraph(diagram, sel)
-  const ord = exploreLabeling(pattern.diagram).wireOrd
+  const ord = canonicalWireOrder(pattern.diagram)
   return [...attachments]
     .map((host, i) => ({ host, o: ord.get(pattern.boundary[i]!)! }))
     .sort((a, b) => a.o - b.o)
@@ -79,8 +79,25 @@ export function canonicalArgOrder(diagram: Diagram, sel: SubgraphSelection): Wir
  * order is already fixed, so which host wire plays which argument is exactly
  * an occurrence match of the body against the selection — no user picking.
  * When the body has symmetric arguments, any valid assignment folds to the
- * same diagram, so the first (canonical) occurrence is taken. Refusal is based
- * only on bounded exact graph matching.
+ * same diagram, so the first (canonical) occurrence is taken. Refusal is
+ * based only on exact graph matching, never a search budget: no
+ * `explorationFuel` is passed, so `findOccurrences`'s `spend()` never sees
+ * `remaining === 0` (an absent budget leaves `remaining` `undefined`
+ * forever) and `status` is always `'complete'` — the same decisive
+ * treatment `diagramIso` gives adversarial worst cases, with no fuel cap on
+ * a check that must be exact.
+ *
+ * The search is also selection-scaled: `images` restricts every occurrence's
+ * region/node/internal-wire images to `sel`'s own elements, so the matcher
+ * never explores host structure outside the selection. This is sound, not a
+ * heuristic — the loop below only accepts an occurrence whose image sets are
+ * EXACTLY `sel`'s (the `sameIds` checks), so any occurrence `images` prunes
+ * would have been rejected anyway. Without it, disconnected
+ * structurally-identical decoy components elsewhere in `sel.region` leave
+ * their candidate sets unsplit by content-only propagation, making the true
+ * cost multiplicative in the decoy count rather than additive in element
+ * count — restricting to `sel`'s own elements removes the decoys from the
+ * search entirely instead of bounding a search that still considers them.
  */
 export function inferFoldArgs(
   diagram: Diagram,
@@ -94,8 +111,8 @@ export function inferFoldArgs(
     throw new Error(`unknown relation '${defId}' (known: ${[...ctx.relations.keys()].join(', ') || 'none'})`)
   }
   const found = findOccurrences(diagram, body, {
-    explorationFuel: 64,
     inRegion: sel.region,
+    images: { regions: sel.regions, nodes: sel.nodes, wires: sel.wires },
   })
   const sameIds = (left: readonly string[], right: readonly string[]): boolean => {
     const a = [...left].sort()
@@ -110,9 +127,6 @@ export function inferFoldArgs(
       && sameIds(occurrence.nodes, sel.nodes)
       && sameIds(occurrence.wires, sel.wires)
     ) return [...occ.attachments]
-  }
-  if (found.status === 'exhausted') {
-    throw new Error(`graph exploration exhausted while matching definition '${defId}'`)
   }
   throw new Error(`the selection must match the definition exactly.`)
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import type { Diagram } from '../../../src/kernel/diagram/diagram'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import {
@@ -24,7 +24,7 @@ function roundTrip(diagram: Diagram, rawSelection: SubgraphSelection): void {
     extraction.pattern,
     extraction.attachments,
   )
-  expect(exploreForm(restored)).toBe(exploreForm(diagram))
+  expect(sameDiagram(restored, diagram)).toBe(true)
 }
 
 describe('extract, remove, and splice canonical round trip', () => {

@@ -76,6 +76,25 @@ export function identityJunctionScene(): Diagram {
   return builder.build()
 }
 
+/** A deterministic scene whose settled rest holds a junction in a genuine
+ * barrier-separated basin: two 3-terminal wires must route their Steiner
+ * junctions around a bulky cut (six refs inside), so a better junction basin
+ * lies across the cut-circle obstacle. Point-node identities are wire
+ * terminals, not obstacles, so the cusp comes from drawn discs alone. */
+export function junctionCuspScene(): Diagram {
+  const builder = new DiagramBuilder()
+  const cut = builder.cut(builder.root)
+  for (let index = 0; index < 6; index++) builder.ref(cut, `C${index}`, UNARY)
+  for (let wire = 0; wire < 2; wire++) {
+    const refs = Array.from(
+      { length: 3 },
+      (_, index) => builder.ref(builder.root, `W${wire}P${index}`, UNARY),
+    )
+    builder.wire(refs.map((node) => ({ node, port: { kind: 'arg' as const, index: 0 } })))
+  }
+  return builder.build()
+}
+
 export function commutedBoundaryRefs(): {
   readonly lhs: DiagramWithBoundary
   readonly rhs: DiagramWithBoundary

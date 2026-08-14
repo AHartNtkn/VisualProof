@@ -99,7 +99,9 @@ test('Manuscript and Slate render accessible, distinct controls across app mount
   await expectHoverChange(spawnRow)
   await expectNoInlineControlColors(spawnRow)
   await spawnRow.click()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
+  // The spawned relation is arity 1: the ref node plus the pin holding the
+  // wire's other (open) end — 2 nodes.
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(2)
 
   await openMode(page)
   await page.getByRole('button', { name: 'Set goal LHS', exact: true }).click()

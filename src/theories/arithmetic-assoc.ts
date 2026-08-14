@@ -262,7 +262,6 @@ function plusAssoc(
     const evidence = findDeiterationEvidence(
       publicForward.diagram,
       sel,
-      65536,
     )
     publicForward.record('discharge cited base standing hypothesis', {
       rule: 'deiteration',
@@ -702,7 +701,6 @@ function plusAssoc(
       const evidence = findDeiterationEvidence(
         publicBackward.diagram,
         sel,
-        65536,
       )
       publicBackward.record('discharge ' + name + ' hypothesis', {
         rule: 'deiteration',
@@ -814,7 +812,6 @@ function plusAssoc(
     const evidence = findDeiterationEvidence(
       publicBackward.diagram,
       sel,
-      65536,
     )
     if (label === 'base') {
       leftBaseSourceUsed = evidence.justifier.regions[0]
@@ -923,7 +920,6 @@ function plusAssoc(
     const evidence = findDeiterationEvidence(
       publicBackward.diagram,
       sel,
-      65536,
     )
     if (label === 'base') {
       rightBaseSourceUsed = evidence.justifier.regions[0]

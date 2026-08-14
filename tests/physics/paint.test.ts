@@ -87,7 +87,7 @@ describe('labels belong only to ref-node discs', () => {
 })
 
 describe('boundary honesty: boundary wires connect inside the frame and internal singletons own end bodies', () => {
-  it('a lone internal ref argument gets one circular end body and nothing at the frame', () => {
+  it('a lone internal ref argument gets one point-node end body and nothing at the frame', () => {
     const h = new DiagramBuilder()
     h.ref(h.root, 'Unary', UNARY)
     const d = h.build()
@@ -99,9 +99,10 @@ describe('boundary honesty: boundary wires connect inside the frame and internal
       e.bodies.get(bind.body)!.kind === 'identity')!.body)!
     const shapes = paint(e, LIGHT, () => [])
     expect(shapes.filter((s) => s.kind === 'arc'
-      && s.center.x === body.pos.x && s.center.y === body.pos.y)).toHaveLength(1)
-    expect(shapes.filter((s) => s.kind === 'dot'
       && s.center.x === body.pos.x && s.center.y === body.pos.y)).toHaveLength(0)
+    // the pin draws as the two-dot point glyph: paper halo plus filled pip
+    expect(shapes.filter((s) => s.kind === 'dot'
+      && s.center.x === body.pos.x && s.center.y === body.pos.y)).toHaveLength(2)
   })
 
   it("a bundled side's boundary wires each reach a slot on the INSIDE of the frame — no shape outside it", () => {
@@ -186,8 +187,8 @@ describe('frame ports — a prominent origin marks port 0 and unattached ports s
   })
 })
 
-describe('linework coherence: individual wires and identity rails share stroke ownership', () => {
-  it('every individual wire path and identity rail uses theme.wire at theme.wireW', () => {
+describe('linework coherence: individual wires and identity pips share stroke ownership', () => {
+  it('every individual wire path uses theme.wire and every identity pip fills with it', () => {
     const e = mkEngine(identityJunctionScene(), [])
     settle(e, 600)
     const shapes = paint(e, LIGHT)
@@ -199,13 +200,16 @@ describe('linework coherence: individual wires and identity rails share stroke o
       expect(s.stroke).toBe(LIGHT.wire)
       expect(s.width).toBe(LIGHT.wireW)
     }
-    // No atoms are present, so every rail is neutral shared linework.
-    const arcs = shapes.filter((s) => s.kind === 'arc')
-    expect(arcs.length).toBeGreaterThan(0)
-    for (const s of arcs) {
-      if (s.kind !== 'arc') continue
-      expect(s.stroke).toBe(LIGHT.wire)
-      expect(s.width).toBe(LIGHT.wireW)
+    // No atoms are present, so every identity paints the neutral point glyph:
+    // a paper halo under a pip filled in the shared individual-wire colour.
+    for (const b of e.bodies.values()) {
+      if (b.kind !== 'identity') continue
+      const dots = shapes.filter((s): s is Extract<typeof s, { kind: 'dot' }> => s.kind === 'dot'
+        && s.center.x === b.pos.x && s.center.y === b.pos.y)
+      expect(dots).toHaveLength(2)
+      const [halo, pip] = [...dots].sort((a, z) => z.rPx - a.rPx)
+      expect(halo!.fill).toBe(LIGHT.paper)
+      expect(pip!.fill).toBe(LIGHT.wire)
     }
   })
 })
@@ -255,10 +259,10 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
     expect(new Set([c0, c1, c2]).size).toBe(3) // three distinct ladder entries
   })
 
-  it('a relational wire’s ∃ end rail is stroked in the wire’s rung, not the iota colour', () => {
+  it('a relational wire’s ∃ end pip is filled in the wire’s rung, not the iota colour', () => {
     // The end body is a point of the wire (the outermost quantifier point of the
-    // line of identity), so its rail carries the wire's colour like every stroke —
-    // a propositional ∃ rail in the base iota colour reads as the wrong sort
+    // line of identity), so its pip carries the wire's colour like every stroke —
+    // a propositional ∃ pip in the base iota colour reads as the wrong sort
     // (USER 2026-07-30).
     const { d, e, head } = wireAtom()
     const hue = relationWireHues(d, LIGHT.relationHueLightness).get(head)!
@@ -267,10 +271,11 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
     const at = e.bodies.get(headWire.binds.find((bind) =>
       e.bodies.get(bind.body)!.kind === 'identity')!.body)!.pos
     const shapes = paint(e, LIGHT)
-    const rail = shapes.find((s) =>
-      s.kind === 'arc' && s.center.x === at.x && s.center.y === at.y)
-    expect(rail, 'the ∃ end rail is painted').toBeDefined()
-    expect(rail!.kind === 'arc' && rail!.stroke, 'the ∃ rail carries its wire’s ladder rung').toBe(hue)
+    const dots = shapes.filter((s): s is Extract<typeof s, { kind: 'dot' }> =>
+      s.kind === 'dot' && s.center.x === at.x && s.center.y === at.y)
+    expect(dots, 'the ∃ end paints as the two-dot point glyph').toHaveLength(2)
+    const pip = [...dots].sort((a, z) => a.rPx - z.rPx)[0]!
+    expect(pip.fill, 'the ∃ pip carries its wire’s ladder rung').toBe(hue)
   })
 
   it('Dark: the relation wire AND atom anatomy glow in the order hue; Light does not glow', () => {

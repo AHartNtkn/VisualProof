@@ -8,7 +8,8 @@ import { extractSubgraph } from '../diagram/subgraph/extract'
 import { removeSubgraph, spliceSubgraphMapped } from '../diagram/subgraph/splice'
 import type { IdReservation } from '../diagram/subgraph/freshId'
 import { freshId } from '../diagram/subgraph/freshId'
-import { exploreForm } from '../diagram/canonical/explore'
+import { sameDiagram } from '../diagram/canonical/iso'
+import { diagramToJson } from '../diagram/json'
 import { RuleError } from '../rules/error'
 import type { ProofContext } from './context'
 import { assertProofContext } from './context'
@@ -107,9 +108,10 @@ export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
   // asserts its result entails its input, so the chain runs rhs-ward
   const bwdInterface = carry(thm.rhs.boundary)
   const bwd = replayActions(pinnedForReplay(thm.rhs), backActions, ctx, bwdInterface.afterStep, 'backward')
-  if (exploreForm(fwd, fwdInterface.boundary()) !== exploreForm(bwd, bwdInterface.boundary())) {
+  if (!sameDiagram(fwd, bwd, fwdInterface.boundary(), bwdInterface.boundary())) {
     const detail = process.env.THEOREM_DEBUG
-      ? `\n-- forward:\n${exploreForm(fwd, fwdInterface.boundary())}\n-- stated/backward:\n${exploreForm(bwd, bwdInterface.boundary())}`
+      ? `\n-- forward:\n${JSON.stringify({ diagram: diagramToJson(fwd), boundary: fwdInterface.boundary() })}`
+        + `\n-- stated/backward:\n${JSON.stringify({ diagram: diagramToJson(bwd), boundary: bwdInterface.boundary() })}`
       : ''
     throw new ProofError((backActions.length === 0
       ? `theorem '${thm.name}': the proof does not arrive at the stated right-hand side`
@@ -181,7 +183,7 @@ function applyVerifiedTheorem(
    * directly even though the empty wire cannot appear in extraction.
    *
    * Reuse one candidate stub per host wire, including an extracted stub when
-   * the same host wire is also a touching attachment. This makes exploreForm
+   * the same host wire is also a touching attachment. This makes sameDiagram
    * check the actual alias relation at the call site: distinct theorem
    * identities cannot be diagonalized onto one host wire, and a repeated
    * theorem identity cannot be split across different host wires.
@@ -212,7 +214,7 @@ function applyVerifiedTheorem(
     if (existing !== undefined) return existing
 
     // Mirror the detached formal's shape exactly — its pins included — so
-    // the canonical-form comparison sees the same structure.
+    // the sameDiagram comparison sees the same structure.
     const stub = freshId(takenCandidateWires, `capture${index}`)
     takenCandidateWires.add(stub)
     const endpoints = sourcePins.map((sourcePin) => {
@@ -239,7 +241,7 @@ function applyVerifiedTheorem(
     },
     candidateBoundary,
   )
-  if (exploreForm(candidate.diagram, candidate.boundary) !== exploreForm(from.diagram, from.boundary)) {
+  if (!sameDiagram(candidate.diagram, from.diagram, candidate.boundary, from.boundary)) {
     throw new RuleError(
       `the selection is not an occurrence of theorem '${thm.name}' ${direction === 'forward' ? 'left' : 'right'}-hand side`,
     )

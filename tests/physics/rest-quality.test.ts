@@ -4,7 +4,7 @@ import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { mkEngine } from '../../src/view/engine'
 import { recomputeRegions, resolveOverlaps, establishFrame, settleStep, wireEnergy, contentEnergy } from '../../src/view/relax'
 import { LayoutOptimizer, applyLayoutSnapshot } from '../../src/view/optimize'
-import { identityJunctionScene } from '../fixtures/zero-signature'
+import { junctionCuspScene } from '../fixtures/zero-signature'
 
 /**
  * REST QUALITY (plan Task 9, USER: "whatever it stops at shouldn't be obviously
@@ -103,8 +103,8 @@ function junctionSweep(e: ReturnType<typeof mkEngine>): { restWire: number; best
 }
 
 describe('rest quality — the search crosses the junction cusp (plan Task 10)', () => {
-  it("the annealer's best on the identity junction scene admits no macroscopic junction improvement", () => {
-    const e = mkEngine(identityJunctionScene(), [])
+  it("the annealer's best on the junction cusp scene admits no macroscopic junction improvement", () => {
+    const e = mkEngine(junctionCuspScene(), [])
     recomputeRegions(e); resolveOverlaps(e); recomputeRegions(e)
     for (let k = 0; k < 200; k++) if (!settleStep(e)) break
 
@@ -152,7 +152,7 @@ describe('rest quality — the search crosses the junction cusp (plan Task 10)',
       if (best.score !== lastScore) {
         lastScore = best.score
         if (best.score <= target) {
-          const probe = mkEngine(identityJunctionScene(), [])
+          const probe = mkEngine(junctionCuspScene(), [])
           applyLayoutSnapshot(probe, best)
           bestWire = (recomputeRegions(probe), wireEnergy(probe))
           const s = junctionSweep(probe)
