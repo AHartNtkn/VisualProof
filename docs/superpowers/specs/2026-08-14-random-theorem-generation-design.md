@@ -136,42 +136,56 @@ minimal whenever ψ is), nor positive-polarity same-region duplicates
 the copy as load-bearing; negative-region duplicates ARE already shrunk via
 ⊤-substitution). Both structures hand the player a free opening move — a
 double-cut elimination or an uninteresting same-area deiteration — so both
-families guarantee output free of doubled negations AND deiteration
-redexes, by repair, not rejection. The deiteration scope is FULL
-deiterate-to-fixpoint (user ruling): an occurrence is removable when an
-identical copy exists disjointly in the same or any enclosing area — a cut
-never justifies removals inside itself. Fixed points are exactly the
-theorems whose backward proof cannot open with a free deiteration; shallow
-theorems whose validity is locally witnessed (¬(P∧¬P) normalizes to ⊤)
-collapse and are resampled, which is correct grading, while nontrivial
-theorems such as the distribution law
-¬(¬(A∧¬(B∧C)) ∧ ¬(¬(A∧¬B)∧¬(A∧¬C))) are fixed points, untouched:
+families guarantee output free of doubled negations AND same-region
+duplicate conjuncts, by repair, not rejection.
+
+FULL deiterate-to-fixpoint normalization — an occurrence is removable when
+an identical copy exists disjointly in the same or ANY enclosing area (a
+cut never justifies removals inside itself) — is a **per-family toggle
+knob, default off** (user ruling). Measured basis: its fixed points are
+nearly unsamplable (100% collapse to ⊤ across 18 knob configurations,
+atoms 2–4, sample sizes 10–800), and they exclude axiom-shaped statements
+like Peirce's law, whose inner ¬P is a free opening deiteration. Interesting
+puzzles tend to be implication chains unlocking one another, which the
+default admits; the toggle exists for players who want a strictly
+deiteration-free opening and accept the (honest, loud) generation cost.
+When the toggle is on, candidates are normalized to fixpoint and those
+collapsing below the acceptance bars resample — the distribution law
+¬(¬(A∧¬(B∧C)) ∧ ¬(¬(A∧¬B)∧¬(A∧¬C))) is a fixed point and survives.
+Flag knobs extend the registry: a `KnobSpec` carries `kind: 'count' |
+'flag'`; flags hold 0/1 (validated as such by `readKnobs`) and render as
+checkboxes.
+
+The always-on repairs:
 
 - Family A: `simplify` includes ¬¬ψ → ψ alongside the constant
-  identities, and a deiteration-normalization pass removes every conjunct
-  with a disjoint identical copy in its own or an enclosing area
+  identities, and ∧-idempotence (flatten each ∧-chain, drop structural
+  duplicates, first kept). These rewrites live here rather than the
+  sampler because they create each other's redexes (¬(⊤ ∧ ¬P) → ¬¬P;
+  collapsing ¬¬A beside an A creates a duplicate). With the toggle on, a
+  deiteration-normalization pass additionally removes every conjunct with
+  a disjoint identical copy in its own or an enclosing area
   (context-carrying top-down traversal; the cut being descended into is
-  excluded from its own context). Pass + simplify loop to a fixpoint, run
-  jointly with `shrinkToCore` (each exposes the other's redexes), and the
-  existing bars (size, minimality, atom use) then decide — a collapsed
-  candidate resamples. The rewrites live here rather than the sampler
-  because they create each other's redexes (¬(⊤ ∧ ¬P) → ¬¬P; collapsing
-  ¬¬A beside an A creates a duplicate). Normalized output provably carries
-  no redex; a survivor is a bug and throws loudly.
+  excluded from its own context), looped with simplify to fixpoint and run
+  jointly with `shrinkToCore`; the existing bars then decide, and a
+  collapsed candidate resamples. Output provably carries no redex of the
+  active rewrites; a survivor is a bug and throws loudly.
 - Family B normalizes the walked diagram: after the wire cleanup, a joint
-  fixpoint of two recorded forward rewrites — `doubleCutElim` for every
+  fixpoint of recorded forward rewrites — `doubleCutElim` for every
   empty-annulus double-cut pair strictly inside the body, and `deiteration`
-  for every atomic selection at-or-below the body with justifying evidence
+  for same-region duplicates always, widened to every atomic selection
+  at-or-below the body with justifying evidence when the toggle is on
   (`findDeiterationEvidence` supplies ancestor justifiers and disjointness
   natively). Each rewrite can expose the other's redex, hence the joint
-  fixpoint. Both are ungated equivalences, so the derivation still
+  fixpoint. All are ungated equivalences, so the derivation still
   certifies. The shell's own cuts are excluded from double-cut
   elimination: the ∀ shell's inner cut plus a ¬-headed body form the one
   intrinsic pair, and removing it is part of unwrapping the quantifier. A
-  redex surviving in the read formula is then possible only when the
-  applier rightly refuses the rewrite (a pin inside a pair's annulus; a
-  scope-preservation refusal), so family B rejects that rare walk rather
-  than treating it as a bug.
+  redex surviving in the read formula is possible only when the applier
+  rightly refuses the rewrite (a pin inside a pair's annulus; a
+  scope-preservation refusal) or, toggle-on, when full deiteration empties
+  a cut into a shape the diagram alphabet cannot reduce (no ⊥-propagation
+  analogue); both are rejections, not bugs.
 
 This is a syntactic definition, not a tuned heuristic.
 
