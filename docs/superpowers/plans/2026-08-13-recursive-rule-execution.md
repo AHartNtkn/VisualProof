@@ -4,7 +4,7 @@
 
 **Goal:** Replace graph-based execution with computable indexed functional relations defined directly on recursive `OpenDiagram` syntax, proving that the union of each rule's forward family equals that rule and the union of its backward family equals the rule's converse.
 
-**Architecture:** An `ExecutableFamily R` owns source-indexed request data, a total computable `apply` function, soundness, and completeness. Requests contain only recursive source decompositions and operation operands: never a target diagram or proof of `R`. Because the existing rules are invariant under `OpenDiagramIso`, family relations are functional on the quotient of recursive diagrams by `OpenDiagram.Isomorphic`; every rule witness factors through one computed canonical representative, making the family union exactly equal to the induced rule relation.
+**Architecture:** An `ExecutableFamily` contains only an index family and an ordinary computable `run` function. Its union relation is defined by existentially quantifying an index whose function result is the target; each rule exports one theorem equating that union with the rule (or its converse). Indices contain only recursive source decompositions and operation operands, while the existing `OpenDiagram.Isomorphic` quotient accounts for the rules' presentation invariance without adding a runtime normalization pass.
 
 **Tech Stack:** Lean 4.30.0, Lake, the existing intrinsic `Region`/`Item`/`ItemSeq`/`OpenDiagram` syntax, `DiagramContext`, the five existing `Rule` relations, and their existing semantic soundness theorems.
 
@@ -12,26 +12,26 @@
 
 - Interpret the requested reverse/“contrapositive” executable as the existing relational `Rule.converse R`; do not introduce a second notion of reverse execution.
 - Remove the graph representation and its execution/refinement dependents before adding recursive executables. Do not retain aliases, adapters, re-exports, compatibility modules, or dual authorities.
-- An executable request may contain source decomposition evidence, finite maps, and rule operands. It must not contain a target `OpenDiagram`, `Rule`/`Rule.Step` evidence, a `ContextReplacement`, or an `OpenDiagramIso`.
-- Each indexed relation is definitionally the graph of one total `apply` function on recursive-diagram isomorphism classes. Applicability belongs in the source-indexed request type, not in an error enum or a success-shaped fallback.
-- `apply` definitions must be ordinary computable `def`s. `noncomputable`, `Classical.choice`, target search, target occurrence discovery, and semantic denotation are forbidden in executable modules.
+- An executable index may contain source decomposition evidence, finite maps, and rule operands. It must not contain a target `OpenDiagram`, `Rule`/`Rule.Step` evidence, a `ContextReplacement`, or an `OpenDiagramIso`.
+- The executable authority is the function itself: `run` is a total function from a source-indexed operation index to a recursive target representative. Do not define or prove a separate `Functional` predicate.
+- `run` definitions must be ordinary computable `def`s. `noncomputable`, `Classical.choice`, target search, target occurrence discovery, and semantic denotation are forbidden in executable modules.
 - Soundness may construct proof-only `ContextReplacement`, `NestedContextReplacement`, and isomorphism witnesses after the target has been computed.
-- Prove both inclusions for every direction: family-member soundness and rule-witness completeness. The exported theorem must state equality between the family union and the induced rule relation on recursive-diagram isomorphism classes.
-- Reject the vacuous empty-family solution structurally: each rule has concrete request constructors, and `complete` must extract one of them from every corresponding rule witness.
-- Follow theorem-driven RED/GREEN. Supporting definitions compile before the owning soundness theorem is entered with `sorry`; GREEN removes that sole `sorry` before the task is committed.
-- Do not add heartbeat or recursion-depth overrides. If a proof needs duplicated traversal, dependent target reconciliation, or growing cast/HEq infrastructure, stop that task, restore its last GREEN boundary, and redesign the request or theorem boundary.
+- Prove one owning equality theorem for every direction. Its forward implication excludes extra function results; its reverse implication proves every rule witness is the result of some indexed function.
+- Reject the vacuous empty-family solution structurally: each rule has concrete index constructors, and the reverse direction of the equality theorem must extract one from every corresponding rule witness.
+- Follow theorem-driven RED/GREEN. Supporting definitions compile before the owning union-equality theorem is entered with `sorry`; GREEN removes that sole `sorry` before the task is committed.
+- Do not add heartbeat or recursion-depth overrides. If a proof needs duplicated traversal, dependent target reconciliation, or growing cast/HEq infrastructure, stop that task, restore its last GREEN boundary, and redesign the index or theorem boundary.
 - Preserve all unrelated TypeScript and test changes in the shared worktree. Stage and commit only the task-owned Lean, audit, and plan files.
 
 ## Complexity Ledger
 
 - **Essential behavior:** five recursive rule relations; a computable forward family whose union equals each relation; a computable backward family whose union equals its converse; aggregate one-step execution; proof replay; semantic soundness through the existing `Rule.Step.sound`.
 - **Essential state:** the recursive source diagram, execution direction, an exact recursive site/nested-site decomposition, and the operands that select one member of a nondeterministic rule family.
-- **Integrity constraints:** one request determines one target class; every indexed graph member lies in the selected directed rule; every directed rule witness yields an index and the same endpoint classes; boundaries remain ordered; wire/relation renamings remain well typed; contextual polarity is derived from the supplied recursive context.
+- **Integrity constraints:** Lean's function type makes one index determine one target; the union contains exactly the selected directed rule; boundaries remain ordered; wire/relation renamings remain well typed; contextual polarity is derived from the supplied recursive context.
 - **Derived data:** target diagrams, filled contexts, local before/after regions, `ContextReplacement` witnesses, aggregate `Rule.Step` evidence, replay endpoints, and theorem validity.
 - **Accidental state to remove:** graph identifiers, checked graph wrappers, receipts, survivor domains, allocation layouts, compiler results, encoded/elaborated mirrors, and representation witnesses.
 - **Accidental control to remove:** graph selection/removal/splice pipelines, compilation replay, target reconstruction, refinement dispatch, operation error plumbing, and generated step-tag execution.
 - **Code volume:** the current graph/execution/proof bridge is 66 Lean files and about 42,000 lines. The replacement is bounded to one generic contract, two exact recursive decomposition types, five rule modules, one aggregate, and the recursive proof layer.
-- **Power leaks prohibited:** generic transformation/simulation records, matchers hidden inside soundness, arbitrary relation evidence as an index, caller-supplied targets, and a second syntax or navigation authority.
+- **Power leaks prohibited:** generic transformation/simulation records, matchers hidden inside adequacy proofs, arbitrary relation evidence as an index, caller-supplied targets, and a second syntax or navigation authority.
 
 ## Target File Structure
 
@@ -44,9 +44,9 @@
 ### New executable authority
 
 - `VisualProof/Diagram/Rewrite.lean`: exact source-side contextual and nested contextual decompositions plus deterministic fill operations.
-- `VisualProof/Rule/Executable/Core.lean`: recursive-diagram isomorphism quotient, invariant-rule lifting, direction, indexed-family contract, functionality, completeness, and exact union theorem.
-- `VisualProof/Rule/Executable/{Erasure,WireSever,Iteration,DoubleCut,Vacuity}.lean`: rule-specific request types, `apply`, and soundness.
-- `VisualProof/Rule/Executable/Step.lean`: exhaustive five-family request sum and aggregate executor.
+- `VisualProof/Rule/Executable/Core.lean`: recursive-diagram isomorphism quotient, invariant-rule lifting, direction, the index/`run` family, and its derived union relation.
+- `VisualProof/Rule/Executable/{Erasure,WireSever,Iteration,DoubleCut,Vacuity}.lean`: rule-specific index types, computable `run` functions, and exact union-equality theorems.
+- `VisualProof/Rule/Executable/Step.lean`: exhaustive five-family index sum and aggregate executor.
 - `VisualProof/Rule/Executable.lean`: import-only public executable umbrella.
 
 ### Rebuilt proof authority
@@ -150,7 +150,7 @@ git commit -m "remove graph execution authority"
 
 **Interfaces:**
 - Consumes: `OpenDiagram`, `DiagramContext`, `ContextReplacement`, `NestedContextReplacement`, `Rule`, and `Rule.converse`.
-- Produces: `ExactSite`, `ExactNestedSite`, `OpenDiagramClass`, `Rule.IsoInvariant`, `ExecutableDirection`, `ExecutableFamily`, `ExecutableFamily.At`, `ExecutableFamily.Member`, `At.functional`, and `member_eq_relation`.
+- Produces: `ExactSite`, `ExactNestedSite`, `OpenDiagramClass`, `Rule.IsoInvariant`, `ExecutableDirection`, `ExecutableFamily`, and `ExecutableFamily.Member`.
 
 - [ ] **Step 1: Add the exact source-side contextual input**
 
@@ -207,56 +207,31 @@ def ExecutableDirection.relation
   | .forward => R
   | .backward => converse R
 
-structure ExecutableFamily (R : Rule) where
-  invariant : Rule.IsoInvariant R
-  Request : (direction : ExecutableDirection) →
+structure ExecutableFamily where
+  Index : (direction : ExecutableDirection) →
     {arity : Nat} → OpenDiagram arity → Type
-  apply : ∀ {direction arity source},
-    Request direction source → OpenDiagram arity
-  sound : ∀ {direction arity source}
-    (request : Request direction source),
-    direction.relation R source (apply request)
-  complete : ∀ {direction arity source target},
-    direction.relation R source target →
-    ∃ (canonicalSource : OpenDiagram arity)
-      (request : Request direction canonicalSource),
-      OpenDiagram.Isomorphic source canonicalSource ∧
-      OpenDiagram.Isomorphic target (apply request)
+  run : ∀ {direction arity source},
+    Index direction source → OpenDiagram arity
 ```
 
 Derive `ExecutableDirection.invariant` for the selected relation and define `Rule.ClassRelation` by quotient lifting `direction.relation R` through that invariance proof.
 
-Define `ExecutableFamily.Index direction arity` as a dependent pair of `canonicalSource` and `Request direction canonicalSource`. Define:
+Define the union of the actual indexed functions directly:
 
 ```lean
-def ExecutableFamily.At
-    (family : ExecutableFamily R)
-    (index : family.Index direction arity)
-    (source target : OpenDiagramClass arity) : Prop :=
-  source = Quotient.mk _ index.canonicalSource ∧
-  target = Quotient.mk _ (family.apply index.request)
-
 def ExecutableFamily.Member
-    (family : ExecutableFamily R)
+    (family : ExecutableFamily)
     (direction : ExecutableDirection)
     (source target : OpenDiagramClass arity) : Prop :=
-  ∃ index, family.At index source target
+  ∃ (canonicalSource : OpenDiagram arity)
+    (index : family.Index direction canonicalSource),
+    source = Quotient.mk _ canonicalSource ∧
+    target = Quotient.mk _ (family.run index)
 ```
 
-- [ ] **Step 4: Enter and prove exactness of the union RED/GREEN**
+- [ ] **Step 4: Compile the function family and quotient relation**
 
-First enter and close `ExecutableFamily.At.functional`, proving literal target-class equality for one fixed index. Then enter the owning theorem:
-
-```lean
-theorem ExecutableFamily.member_eq_relation
-    (family : ExecutableFamily R)
-    (direction : ExecutableDirection) :
-    family.Member direction =
-      Rule.ClassRelation (direction.invariant family.invariant) := by
-  sorry
-```
-
-Prove the forward inclusion from `family.sound` and quotient invariance. Prove the reverse inclusion by quotient induction on the source/target representatives, `family.complete`, and the two returned endpoint isomorphisms. Remove the sole owner `sorry` before continuing.
+This task is structural setup and has no owning rule theorem. Kernel-check the quotient lift, `ExecutableFamily`, and `Member` definitions directly. Do not add `At`, `Functional`, `sound`, `complete`, or generic equality fields; each rule module owns its single concrete equality theorem.
 
 - [ ] **Step 5: Validate computability and dependency direction**
 
@@ -279,7 +254,7 @@ git add VisualProof/Diagram/Rewrite.lean VisualProof/Rule/Executable/Core.lean V
 git commit -m "define recursive executable families"
 ```
 
-**Architecture check:** `ExecutableFamily` and the recursive isomorphism quotient are the only generic abstractions. The quotient exists because the mathematical rules already identify isomorphic presentations; it must not become a second recursive syntax or runtime normalization pass. If a rule needs another simulation, route, receipt, or transformation record, redesign its request around `ExactSite`/`ExactNestedSite` instead.
+**Architecture check:** `ExecutableFamily` is only data (`Index` and `run`), and the recursive isomorphism quotient is only the extensional theorem carrier. If the core grows a functionality predicate, proof fields, simulation, route, receipt, or runtime normalization, remove it and redesign the rule-specific index around `ExactSite`/`ExactNestedSite`.
 
 ---
 
@@ -290,7 +265,7 @@ git commit -m "define recursive executable families"
 
 **Interfaces:**
 - Consumes: `ExecutableFamily`, `ExactSite`, `Rule.Erasure.Local.erase`, `ContextReplacement.lift`, and `DiagramContext.polarity`.
-- Produces: `Erasure.Request`, `Erasure.apply`, `Erasure.apply_sound`, `Erasure.apply_complete`, and `Erasure.executable : ExecutableFamily Rule.Erasure` with exact forward/backward union theorems.
+- Produces: `Erasure.Index`, computable `Erasure.run`, `Erasure.executable : ExecutableFamily`, and `Erasure.executable_eq_rule` for both directions.
 
 - [ ] **Step 1: Define direction-selected contextual polarities**
 
@@ -306,9 +281,9 @@ def Erasure.insertPolarity : ExecutableDirection → Polarity
   | .backward => .positive
 ```
 
-- [ ] **Step 2: Define the two source-indexed request constructors**
+- [ ] **Step 2: Define the two source-indexed operation constructors**
 
-Define `Erasure.Request direction source` with:
+Define `Erasure.Index direction source` with:
 
 - `erase`: the local `hostLocal`, `hostItems`, `material`, `wireMap`, and `relationMap`; an `ExactSite source (Region.spliceAt hostLocal hostItems material wireMap relationMap)`; and proof that the site polarity is `erasePolarity direction`.
 - `insert`: the same operands; an `ExactSite source (.mk hostLocal hostItems)`; and proof that the site polarity is `insertPolarity direction`.
@@ -317,32 +292,38 @@ Neither constructor may contain `Rule.Erasure` evidence or a target diagram.
 
 - [ ] **Step 3: Implement the target function**
 
-`Erasure.apply` replaces the erase site with `.mk hostLocal hostItems`, and replaces the insert site with `Region.spliceAt hostLocal hostItems material wireMap relationMap`.
+`Erasure.run` replaces the erase site with `.mk hostLocal hostItems`, and replaces the insert site with `Region.spliceAt hostLocal hostItems material wireMap relationMap`.
 
-- [ ] **Step 4: Enter the owning soundness theorem RED**
+- [ ] **Step 4: Package the function family**
+
+Define:
+
+```lean
+def Erasure.executable : ExecutableFamily where
+  Index := Erasure.Index
+  run := Erasure.run
+```
+
+- [ ] **Step 5: Enter the one exact adequacy theorem RED**
 
 Declare:
 
 ```lean
-theorem Erasure.apply_sound
-    (request : Erasure.Request direction source) :
-    direction.relation Rule.Erasure source (Erasure.apply request) := by
+theorem Erasure.executable_eq_rule
+    (direction : ExecutableDirection) :
+    Erasure.executable.Member direction =
+      Rule.ClassRelation
+        (direction.invariant ⟨Rule.Erasure.iso⟩) := by
   sorry
 ```
 
-This must be the only `sorry` in the task closure. Close it before entering completeness.
+- [ ] **Step 6: Prove both directions GREEN inside the equality theorem**
 
-- [ ] **Step 5: Prove GREEN by local construction and contextual lift**
-
-Case on `direction` and the request constructor. Construct `Rule.Erasure.Local.erase` from the stored operands, use the polarity equation to select the direct or converse local evidence, and apply `request.site.replacement` followed by `ContextReplacement.lift` and `Rule.Erasure.iso` only as proof steps.
-
-- [ ] **Step 6: Prove every Erasure witness is executable RED/GREEN**
-
-Enter `Erasure.apply_complete` with the exact `ExecutableFamily.complete` signature and one `sorry`. Case on `direction`; unfold `Rule.converse` in the backward case. Invert the `Rule.Erasure` contextual witness, its polarity, and `Rule.Erasure.Local.erase` evidence. Choose the canonical source `occurrence.interface.withBody (occurrence.context.fill before)`, construct the corresponding `erase` or `insert` request with `ExactSite.source_eq := rfl`, and return `occurrence.host_iso` plus the existing target isomorphism. This proof must not search either endpoint.
+For left-to-right, unpack the function index, construct `Rule.Erasure.Local.erase`, select direct/converse local evidence from polarity, and lift the exact site replacement. For right-to-left, quotient-induct to representatives, invert the contextual rule witness and local evidence, choose `occurrence.interface.withBody (occurrence.context.fill before)`, construct the corresponding `erase` or `insert` index with `ExactSite.source_eq := rfl`, and close the endpoint classes with the witness's source/target isomorphisms. This proof must not search either endpoint.
 
 - [ ] **Step 7: Package and validate the exact family**
 
-Define `Erasure.executable` using the existing `Rule.Erasure.iso` theorem as `invariant`, plus `Request`, `apply`, `apply_sound`, and `apply_complete`. Instantiate `ExecutableFamily.member_eq_relation` for both directions. Run:
+Run:
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Erasure.lean
@@ -357,7 +338,7 @@ git add VisualProof/Rule/Executable/Erasure.lean
 git commit -m "execute erasure on recursive diagrams"
 ```
 
-**Architecture check:** The proof must case only on direction and the two request constructors. Any recursive traversal or target comparison indicates the request boundary is wrong.
+**Architecture check:** The proof must case only on direction and the two index constructors. Any recursive traversal or target comparison indicates the index boundary is wrong.
 
 ---
 
@@ -369,28 +350,28 @@ git commit -m "execute erasure on recursive diagrams"
 
 **Interfaces:**
 - Consumes: `ExactSite`, `Rule.DoubleCut.wrap`, `Rule.Vacuity.wrap`, their local `introduce` constructors, `atPolarity_symmetric_of`, and their existing `.symm` theorems.
-- Produces: two request types with `introduce`/`eliminate`, two computable `apply` functions, soundness/completeness pairs, and exact `DoubleCut.executable`/`Vacuity.executable` families.
+- Produces: two index types with `introduce`/`eliminate`, two computable `run` functions, and one exact union theorem for each family and direction.
 
-- [ ] **Step 1: Define DoubleCut requests and application**
+- [ ] **Step 1: Define DoubleCut indices and execution**
 
-`DoubleCut.Request direction source` has:
+`DoubleCut.Index direction source` has:
 
 - `introduce`: operands `hostLocal`, `hostItems`, `body`, `wireMap`, `relationMap`, and an exact site at the unwrapped `Region.spliceAt` body.
 - `eliminate`: the same operands and an exact site at `Region.spliceAt hostLocal hostItems (DoubleCut.wrap body) wireMap relationMap`.
 
-`apply` replaces one form with the other. The request shape is independent of `direction` because `Rule.DoubleCut` is symmetric.
+`run` replaces one form with the other. The index shape is independent of `direction` because `Rule.DoubleCut` is symmetric.
 
-- [ ] **Step 2: Prove DoubleCut soundness and completeness RED/GREEN**
+- [ ] **Step 2: Prove DoubleCut exactness RED/GREEN**
 
-Enter and close `DoubleCut.apply_sound`. Then enter `DoubleCut.apply_complete` with one `sorry`. Invert the contextual witness and symmetric local evidence to select `introduce` or `eliminate`, choose the occurrence's canonical filled source, and return the source/target isomorphisms already present in the rule witness. Define `DoubleCut.executable` with both proofs and instantiate `member_eq_relation` in both directions.
+Define `DoubleCut.executable := ⟨DoubleCut.Index, DoubleCut.run⟩`. Enter one `DoubleCut.executable_eq_rule` theorem with `sorry`; prove its forward implication by constructing `Rule.DoubleCut.Local.introduce` and its reverse implication by inverting the contextual witness and symmetric local evidence to select `introduce` or `eliminate`. Choose the occurrence's canonical filled source and close endpoint classes with the rule witness's isomorphisms.
 
-- [ ] **Step 3: Define Vacuity requests and application**
+- [ ] **Step 3: Define Vacuity indices and execution**
 
-Mirror the exact interface with the additional `arity` operand and `Vacuity.wrap arity body`. Do not factor the two rule request types through a configurable wrapper function; their rule constructors remain explicit.
+Mirror the exact interface with the additional `arity` operand and `Vacuity.wrap arity body`. Do not factor the two rule index types through a configurable wrapper function; their rule constructors remain explicit.
 
-- [ ] **Step 4: Prove Vacuity soundness and completeness RED/GREEN**
+- [ ] **Step 4: Prove Vacuity exactness RED/GREEN**
 
-Enter and close `Vacuity.apply_sound`, then invert each `Rule.Vacuity` witness in `Vacuity.apply_complete` exactly as for DoubleCut, preserving the explicit binder arity. Define `Vacuity.executable` and instantiate exact union equality in both directions.
+Define `Vacuity.executable := ⟨Vacuity.Index, Vacuity.run⟩`. Enter one `Vacuity.executable_eq_rule` theorem and prove both implications exactly as for DoubleCut while preserving the explicit binder arity.
 
 - [ ] **Step 5: Validate and commit each family**
 
@@ -403,7 +384,7 @@ git add VisualProof/Rule/Executable/DoubleCut.lean VisualProof/Rule/Executable/V
 git commit -m "execute modal rules on recursive diagrams"
 ```
 
-**Architecture check:** Each module has one nonrecursive `apply` and one short soundness case split. Shared higher-order wrapper machinery is a power leak and must not be introduced.
+**Architecture check:** Each module has one nonrecursive `run` and one exact equality proof. Shared higher-order wrapper machinery is a power leak and must not be introduced.
 
 ---
 
@@ -414,7 +395,7 @@ git commit -m "execute modal rules on recursive diagrams"
 
 **Interfaces:**
 - Consumes: `ExactNestedSite`, `Iteration.WireFreshening`, `Iteration.Local.copy`, `NestedContextReplacement.lift`, and `Iteration.symm`.
-- Produces: `Iteration.Request`, `Iteration.apply`, `Iteration.apply_sound`, `Iteration.apply_complete`, and exact `Iteration.executable` forward/backward unions.
+- Produces: `Iteration.Index`, computable `Iteration.run`, `Iteration.executable`, and `Iteration.executable_eq_rule`.
 
 - [ ] **Step 1: Define the copied descendant body once**
 
@@ -435,28 +416,24 @@ def Iteration.copied
       descendant.outerRelation)).conjoin remainder)
 ```
 
-- [ ] **Step 2: Define copy and uncopy requests**
+- [ ] **Step 2: Define copy and uncopy indices**
 
-`Iteration.Request direction source` has:
+`Iteration.Index direction source` has:
 
 - `copy`: an `ExactNestedSite source selected remainder`, `copyLocal`, and `copyWires`.
 - `uncopy`: the same selected/remainder/copy data and an `ExactNestedSite source selected (Iteration.copied ...)`.
 
 The direction index is phantom because `Rule.Iteration` is symmetric; both constructors must be available in both directions.
 
-- [ ] **Step 3: Implement `Iteration.apply`**
+- [ ] **Step 3: Implement `Iteration.run`**
 
 Copy replaces `remainder` by `copied`; uncopy replaces `copied` by `remainder`. Both use `ExactNestedSite.replace` and perform no search.
 
-- [ ] **Step 4: Prove soundness RED/GREEN**
+- [ ] **Step 4: Package the function and prove exact adequacy RED/GREEN**
 
-Enter `Iteration.apply_sound` with one `sorry`. For copy, construct `Iteration.Local.copy` with `after_eq := rfl`, then use `ExactNestedSite.replacement` and `NestedContextReplacement.lift`. For uncopy, reverse the same symmetric `Rule.Iteration` evidence. Case on direction only at the final rule/converse boundary.
+Define `Iteration.executable := ⟨Iteration.Index, Iteration.run⟩`. Enter one `Iteration.executable_eq_rule` theorem with `sorry`. For the function-to-rule implication, construct `Iteration.Local.copy`, lift through `ExactNestedSite.replacement`, and use symmetry for `uncopy`. For rule-to-function, invert the symmetric `Rule.Iteration`, `NestedContextual`, and `Iteration.Local` witnesses; normalize `after_eq`, choose the exact canonical source, and construct `copy` or `uncopy` with matching endpoint classes.
 
-- [ ] **Step 5: Prove completeness RED/GREEN**
-
-Enter `Iteration.apply_complete` with one `sorry`. Invert `Rule.Iteration` into its direct or symmetric branch, then invert `NestedContextual` and `Iteration.Local`. Normalize `after_eq`, choose the nested replacement's exact canonical source, construct `copy` or `uncopy`, and return its source/target isomorphisms. Package `Iteration.executable` and prove both `member_eq_relation` instantiations.
-
-- [ ] **Step 6: Validate and commit**
+- [ ] **Step 5: Validate and commit**
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Iteration.lean
@@ -477,13 +454,13 @@ git commit -m "execute iteration on recursive diagrams"
 
 **Interfaces:**
 - Consumes: `ExactSite`, `WireSever.collapseLocal`, `WireSever.Local.sever`, `WireSever.Open`, and `ContextReplacement.lift`.
-- Produces: local sever/join requests, open sever/join requests, `WireSever.apply`, its soundness/completeness pair, and exact `WireSever.executable` forward/backward unions.
+- Produces: local sever/join indices, open sever/join indices, computable `WireSever.run`, `WireSever.executable`, and `WireSever.executable_eq_rule`.
 
 - [ ] **Step 1: Define local direction polarities**
 
 Use the same two functions as the Erasure shape: local sever is positive in `.forward` and negative in `.backward`; local join is negative in `.forward` and positive in `.backward`.
 
-- [ ] **Step 2: Define local sever and join request constructors**
+- [ ] **Step 2: Define local sever and join index constructors**
 
 For `joined : Fin (wires + localWires)` and `separate : ItemSeq (wires + (localWires + 1)) rels`:
 
@@ -494,7 +471,7 @@ Their targets are the other body, computed directly.
 
 - [ ] **Step 3: Define open sever input data**
 
-Define `WireSever.OpenSeverRequest source` with:
+Define `WireSever.OpenSeverData source` with:
 
 ```lean
 separateBoundary : Fin arity → Fin (source.externalClasses + 1)
@@ -511,19 +488,19 @@ The target is the `OpenDiagram` with `separateBoundary` and `separateBody`. This
 
 - [ ] **Step 4: Define open join input data**
 
-Define `WireSever.OpenJoinRequest source` with `targetClasses`, an equality `source.externalClasses = targetClasses + 1`, and a surjective `collapse : Fin source.externalClasses → Fin targetClasses`. Define the target boundary as `collapse ∘ source.boundary`, prove its surjectivity from the two supplied surjections, and define the target body as `source.body.renameWires collapse`. This constructor exists only for `.backward`.
+Define `WireSever.OpenJoinData source` with `targetClasses`, an equality `source.externalClasses = targetClasses + 1`, and a surjective `collapse : Fin source.externalClasses → Fin targetClasses`. Define the target boundary as `collapse ∘ source.boundary`, prove its surjectivity from the two supplied surjections, and define the target body as `source.body.renameWires collapse`. This constructor exists only for `.backward`.
 
-- [ ] **Step 5: Implement all four `apply` branches**
+- [ ] **Step 5: Implement all four `run` branches**
 
 The local branches call `ExactSite.replace`; the open branches construct the stated `OpenDiagram`. No branch returns `Option` or accepts a target.
 
-- [ ] **Step 6: Prove `WireSever.apply_sound` RED/GREEN**
+- [ ] **Step 6: Package the function family**
 
-Enter one owner `sorry`. Local branches construct `WireSever.Local.sever`, select direct/converse contextual evidence from polarity, and lift. The open-sever branch constructs `Nonempty (WireSever.Open source target)` using `body_eq`; the open-join branch constructs `WireSever.Open target source` definitionally. Close soundness before entering completeness.
+Define `WireSever.executable := ⟨WireSever.Index, WireSever.run⟩` with no proof fields.
 
-- [ ] **Step 7: Prove `WireSever.apply_complete` RED/GREEN**
+- [ ] **Step 7: Prove `WireSever.executable_eq_rule` RED/GREEN**
 
-Case on direction and invert the directed `Rule.WireSever` witness. For a contextual local witness, invert polarity and `WireSever.Local.sever` to construct `localSever` or `localJoin` at the occurrence's canonical source. For `WireSever.Open`, use its explicit `one_more`, `collapse`, boundary, and body isomorphism to construct the corresponding open request; when the rule witness supplies only an isomorphic body rather than equality, choose the witness's canonical renamed body as the computed representative and return the body isomorphism in the endpoint-class proof. Package `WireSever.executable` and prove forward/backward `member_eq_relation`.
+Enter one equality theorem with `sorry`. For function-to-rule, local branches construct `WireSever.Local.sever` and lift with polarity; open branches construct `WireSever.Open`. For rule-to-function, case on direction and invert the directed `Rule.WireSever` witness. A contextual witness yields `localSever` or `localJoin` at the canonical source. An open witness yields the corresponding open index; when it supplies only an isomorphic body, choose the canonical renamed body as the function input representative and use the body isomorphism only to close equality of endpoint classes.
 
 - [ ] **Step 8: Validate and commit**
 
@@ -548,40 +525,32 @@ git commit -m "execute wire severance on recursive diagrams"
 
 **Interfaces:**
 - Consumes: the five `*.executable` families.
-- Produces: `ExecutableStep`, `ExecutableStep.apply`, `ExecutableStep.sound`, `ExecutableStep.complete`, `ExecutableStep.member_eq_relation`, and the public executable umbrella.
+- Produces: `ExecutableStep.Index`, computable `ExecutableStep.run`, `ExecutableStep.executable`, `ExecutableStep.executable_eq_rule`, and the public executable umbrella.
 
-- [ ] **Step 1: Define the five-family request sum**
+- [ ] **Step 1: Define the five-family index sum**
 
 ```lean
-inductive ExecutableStep
+inductive ExecutableStep.Index
     (direction : ExecutableDirection)
     {arity : Nat} (source : OpenDiagram arity) : Type
-  | erasure (request : Erasure.Request direction source)
-  | wireSever (request : WireSever.Request direction source)
-  | iteration (request : Iteration.Request direction source)
-  | doubleCut (request : DoubleCut.Request direction source)
-  | vacuity (request : Vacuity.Request direction source)
+  | erasure (index : Erasure.Index direction source)
+  | wireSever (index : WireSever.Index direction source)
+  | iteration (index : Iteration.Index direction source)
+  | doubleCut (index : DoubleCut.Index direction source)
+  | vacuity (index : Vacuity.Index direction source)
 ```
 
 Do not add wildcard/default constructors or a registry.
 
-- [ ] **Step 2: Define exhaustive application**
+- [ ] **Step 2: Define exhaustive execution**
 
-`ExecutableStep.apply` case-splits on all five constructors and invokes exactly the corresponding family `apply`.
+`ExecutableStep.run` case-splits on all five constructors and invokes exactly the corresponding family `run`. Package `ExecutableStep.executable := ⟨ExecutableStep.Index, ExecutableStep.run⟩`.
 
-- [ ] **Step 3: Prove aggregate soundness RED/GREEN**
+- [ ] **Step 3: Prove aggregate exactness RED/GREEN**
 
-Enter `ExecutableStep.sound` with one `sorry` and conclusion `direction.relation Rule.Step source (ExecutableStep.apply request)`. Close it by five cases, applying the corresponding family soundness and the matching `Rule.Step` constructor; for `.backward`, unfold `Rule.converse` before applying the constructor.
+Enter `ExecutableStep.executable_eq_rule` with one `sorry`. For function-to-rule, case on the five indices, use the corresponding family's equality theorem in the forward direction, and wrap with the matching `Rule.Step` constructor. For rule-to-function, quotient-induct to representatives, invert the five constructors of `Rule.Step`, use the corresponding equality theorem in reverse, and wrap the resulting family index. No aggregate branch may inspect rule-specific evidence beyond selecting its family.
 
-- [ ] **Step 4: Prove aggregate completeness RED/GREEN**
-
-Enter `ExecutableStep.complete` with one `sorry`. Case on direction, unfold `Rule.converse` for backward execution, invert the five constructors of `Rule.Step`, invoke the corresponding family's `complete`, and wrap the returned request with the matching `ExecutableStep` constructor. No aggregate branch may inspect rule-specific evidence beyond selecting its family.
-
-- [ ] **Step 5: Expose the exact aggregate member relation**
-
-Define the request-indexed graph and union exactly as in `ExecutableFamily`, prove per-request functionality, and prove the union equals the quotient-lifted `direction.relation Rule.Step` by the aggregate soundness/completeness pair.
-
-- [ ] **Step 6: Validate and commit**
+- [ ] **Step 4: Validate and commit**
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Step.lean
@@ -607,7 +576,7 @@ git commit -m "aggregate recursive rule executables"
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
-- Consumes: recursive `OpenDiagram`, `ExecutableStep`, `ExecutableStep.sound`, `Rule.Step.sound`, and `OpenDiagramIso`.
+- Consumes: recursive `OpenDiagram`, `ExecutableStep.executable`, `ExecutableStep.executable_eq_rule`, `Rule.Step.sound`, and `OpenDiagramIso`.
 - Produces: recursive `TheoremSchema`, `Program`, `replay`, `Program.sound`, `CheckedTheorem`, `CheckedTheorem.valid`, and `VerifiedTheory`.
 
 - [ ] **Step 1: Define recursive theorem schemas**
@@ -632,8 +601,8 @@ inductive Program (direction : ExecutableDirection) :
     OpenDiagram arity → Type
   | done (source) : Program direction source
   | step {source}
-      (request : ExecutableStep direction source)
-      (next : Program direction (ExecutableStep.apply request)) :
+      (index : ExecutableStep.Index direction source)
+      (next : Program direction (ExecutableStep.run index)) :
       Program direction source
 
 def replay : Program direction source → OpenDiagram arity
@@ -641,11 +610,11 @@ def replay : Program direction source → OpenDiagram arity
   | .step _ next => replay next
 ```
 
-There is no receipt, error channel, or success equality because applicability is already indexed by `request`.
+There is no receipt, error channel, or success equality because applicability is already carried by the operation index.
 
 - [ ] **Step 3: Prove replay rule closure RED/GREEN**
 
-Define a small inductive `DirectedDerivation direction source target` with `.refl` and `.step` constructors over `direction.relation Rule.Step`. Enter `Program.sound : DirectedDerivation direction source (replay program)` with one `sorry`; prove by structural induction using `ExecutableStep.sound`.
+Define a small inductive `DirectedDerivation direction source target` with `.refl` and `.step` constructors over `direction.relation Rule.Step`. Enter `Program.sound : DirectedDerivation direction source (replay program)` with one `sorry`; prove by structural induction, obtaining each one-step rule fact from the forward implication of `ExecutableStep.executable_eq_rule` applied to the current index's function equation.
 
 - [ ] **Step 4: Prove semantic replay soundness**
 
@@ -684,7 +653,7 @@ git add VisualProof/Proof VisualProof.lean
 git commit -m "replay proofs on recursive executables"
 ```
 
-**Architecture check:** `Program` stores only requests and continuation structure. If it stores targets, equalities, receipts, or rule proofs, remove that duplicated state and derive it from `ExecutableStep.apply`/`sound`.
+**Architecture check:** `Program` stores only operation indices and continuation structure. If it stores targets, equalities, receipts, or rule proofs, remove that duplicated state and derive it from `ExecutableStep.run`/`executable_eq_rule`.
 
 ---
 
@@ -697,7 +666,7 @@ git commit -m "replay proofs on recursive executables"
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
-- Consumes: all five rule `apply` functions, aggregate `ExecutableStep.apply`, `replay`, every family soundness/completeness/equality theorem, `Rule.Step.sound`, and `CheckedTheorem.valid`.
+- Consumes: all five rule `run` functions, aggregate `ExecutableStep.run`, `replay`, every family equality theorem, `Rule.Step.sound`, and `CheckedTheorem.valid`.
 - Produces: compiler-backed computability evidence, dependency/roster audit, axiom audit, and the final public build.
 
 - [ ] **Step 1: Add compiler-backed computability evidence**
@@ -712,12 +681,12 @@ import VisualProof.Proof.Replay
 open Lean
 
 run_meta Lean.compileDecls #[
-  ``VisualProof.Rule.Erasure.apply,
-  ``VisualProof.Rule.WireSever.apply,
-  ``VisualProof.Rule.Iteration.apply,
-  ``VisualProof.Rule.DoubleCut.apply,
-  ``VisualProof.Rule.Vacuity.apply,
-  ``VisualProof.Rule.ExecutableStep.apply,
+  ``VisualProof.Rule.Erasure.run,
+  ``VisualProof.Rule.WireSever.run,
+  ``VisualProof.Rule.Iteration.run,
+  ``VisualProof.Rule.DoubleCut.run,
+  ``VisualProof.Rule.Vacuity.run,
+  ``VisualProof.Rule.ExecutableStep.run,
   ``VisualProof.Proof.replay
 ]
 ```
@@ -726,11 +695,11 @@ Use the final namespaces exactly as implemented; compilation failure is a task f
 
 - [ ] **Step 2: Extend the source authority audit**
 
-Require exactly five mathematical `Rule.Step` constructors and exactly five aggregate `ExecutableStep` constructors. Require one exported `executable : ExecutableFamily` for each rule. Reject imports from executable/proof modules into mathematical rule or soundness modules. Reject any remaining `Concrete`, `Refinement`, receipt, representation, compiler, or graph-operation module under `VisualProof`.
+Require exactly five mathematical `Rule.Step` constructors and exactly five aggregate `ExecutableStep.Index` constructors. Require one exported `executable : ExecutableFamily` and one exact `executable_eq_rule` theorem for each rule. Reject any `Functional` predicate/theorem in executable modules. Reject imports from executable/proof modules into mathematical rule or soundness modules and reject any remaining `Concrete`, `Refinement`, receipt, representation, compiler, or graph-operation module under `VisualProof`.
 
 - [ ] **Step 3: Extend the axiom audit**
 
-Add `#print axioms` for each `*.apply_sound`, each `*.apply_complete`, each rule's `member_eq_relation`, `ExecutableStep.sound`, `ExecutableStep.complete`, aggregate `ExecutableStep.member_eq_relation`, `Program.sound`, and `CheckedTheorem.valid`. The output may contain Lean’s accepted classical/propext axioms from existing isomorphism semantics, but must not contain project placeholder axioms.
+Add `#print axioms` for each rule's `executable_eq_rule`, aggregate `ExecutableStep.executable_eq_rule`, `Program.sound`, and `CheckedTheorem.valid`. The output may contain Lean’s accepted classical/propext axioms from existing isomorphism semantics, but must not contain project placeholder axioms.
 
 - [ ] **Step 4: Run strict module validation**
 
@@ -766,11 +735,11 @@ Expected: strict checks and full build pass; both forbidden searches return no m
 
 Inspect each family and confirm:
 
-- `apply` is a direct constructor/fill function with no recursion other than structural recursive syntax helpers.
-- each request contains no target, relation evidence, isomorphism, or semantic proof;
-- each family has one soundness owner, one completeness owner, one exact union theorem, and no alternative executor;
+- `run` is an ordinary computable function and a direct constructor/fill operation with no recursion other than structural recursive syntax helpers;
+- each index contains no target, relation evidence, isomorphism, or semantic proof;
+- each family has one exact union theorem and no functionality wrapper, soundness/completeness record fields, or alternative executor;
 - aggregate execution contains dispatch only;
-- replay contains no execution state beyond requests;
+- replay contains no execution state beyond operation indices;
 - no file raises elaboration limits.
 
 If any item fails, return to the owning task and redesign before committing.
@@ -784,8 +753,8 @@ git commit -m "audit recursive rule execution"
 
 ## Self-Review
 
-- **Spec coverage:** Task 1 removes the representation split. Tasks 2–6 define a computable indexed functional family for every mathematical rule and its relational converse, and prove both inclusions. Task 7 proves exact equality for aggregate directed `Rule.Step`. Task 8 rebuilds the proof consumer directly on recursive execution. Task 9 proves computability, equality, semantic soundness, dependency direction, and absence of the displaced authority.
-- **Anti-vacuity:** Requests cannot contain `R` evidence or a target, every rule exports concrete constructors in both directions, completeness extracts those constructors from every rule witness, and the compiler audit checks the actual target functions.
-- **Exact adequacy:** Each family proves per-index functionality and equality of its union with the corresponding quotient-lifted rule relation. Neither missing valid rule instances nor extra executable transitions can pass.
-- **Type consistency:** Every `apply` returns an `OpenDiagram arity` representative; every soundness theorem concludes `ExecutableDirection.relation R source target`; every completeness theorem returns isomorphic canonical endpoints; every exported equality is between relations on `OpenDiagramClass arity`; aggregate requests preserve source/arity indices; replay endpoints are definitionally produced by aggregate application.
+- **Spec coverage:** Task 1 removes the representation split. Tasks 2–6 define a computable indexed function family for every mathematical rule and its relational converse, with one exact equality theorem per family. Task 7 proves exact equality for aggregate directed `Rule.Step`. Task 8 rebuilds the proof consumer directly on recursive execution. Task 9 proves computability, equality, semantic soundness, dependency direction, and absence of the displaced authority.
+- **Anti-vacuity:** Indices cannot contain `R` evidence or a target, every rule exports concrete indices in both directions, the reverse implication extracts those indices from every rule witness, and the compiler audit checks the actual functions.
+- **Exact adequacy:** Each family union is defined directly from successful `run` equations and equals the corresponding quotient-lifted rule relation. Neither missing valid rule instances nor extra executable transitions can pass.
+- **Type consistency:** Every `run` returns an `OpenDiagram arity` representative; every exported equality is between the function-family union and the rule relation on `OpenDiagramClass arity`; aggregate indices preserve source/arity indices; replay endpoints are definitionally produced by aggregate `run`.
 - **Architecture discipline:** Deletion occurs before replacement. There is one generic family contract, one recursive isomorphism quotient matching the rules' existing invariance, one direct exact-site boundary, no representation/refinement bridge, no target search, no second recursive syntax, and explicit stop/rethink gates after every implementation task.
