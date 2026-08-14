@@ -9,10 +9,10 @@ import type {
 } from '../../../src/kernel/diagram/diagram'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import {
-  exploreForm,
-  exploreIso,
-  exploreLabeling,
-} from '../../../src/kernel/diagram/canonical/explore'
+  diagramIso,
+  sameDiagram,
+} from '../../../src/kernel/diagram/canonical/iso'
+import { canonicalWireOrder } from '../../../src/kernel/diagram/canonical/wire-order'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 
@@ -129,44 +129,39 @@ function semanticEndpointKey(diagram: Diagram, endpoint: Endpoint): string {
   return JSON.stringify([endpoint.node, position])
 }
 
-describe('exploreLabeling', () => {
-  it('returns exploreForm and total distinct ordinals for every sort', () => {
+describe('canonicalWireOrder and diagramIso correspondence', () => {
+  it('provides a canonical wire order and a complete self-correspondence for every sort', () => {
     const diagram = host()
-    const labeling = exploreLabeling(diagram)
+    const iso = diagramIso(diagram, diagram)
 
-    expect(labeling.form).toBe(exploreForm(diagram))
-    expect(labeling.regionOrd.size).toBe(Object.keys(diagram.regions).length)
-    expect(labeling.nodeOrd.size).toBe(Object.keys(diagram.nodes).length)
-    expect(labeling.wireOrd.size).toBe(Object.keys(diagram.wires).length)
-    expect(new Set(labeling.regionOrd.values()).size).toBe(labeling.regionOrd.size)
-    expect(new Set(labeling.nodeOrd.values()).size).toBe(labeling.nodeOrd.size)
-    expect(new Set(labeling.wireOrd.values()).size).toBe(labeling.wireOrd.size)
+    expect(iso).not.toBeNull()
+    expect(iso!.regions.size).toBe(Object.keys(diagram.regions).length)
+    expect(iso!.nodes.size).toBe(Object.keys(diagram.nodes).length)
+    expect(iso!.wires.size).toBe(Object.keys(diagram.wires).length)
+
+    const wireOrder = canonicalWireOrder(diagram)
+    expect(wireOrder.size).toBe(Object.keys(diagram.wires).length)
+    expect(new Set(wireOrder.values()).size).toBe(wireOrder.size)
   })
 
-  it('assigns corresponding ordinals across a complete id renaming', () => {
+  it('assigns a corresponding wire order across a complete id renaming', () => {
     const diagram = host()
     const copy = renamed(diagram)
-    const left = exploreLabeling(diagram)
-    const right = exploreLabeling(copy)
+    const leftWireOrder = canonicalWireOrder(diagram)
+    const rightWireOrder = canonicalWireOrder(copy)
 
-    expect(left.form).toBe(right.form)
-    for (const [id, ordinal] of left.regionOrd) {
-      expect(right.regionOrd.get(`X_${id}`)).toBe(ordinal)
-    }
-    for (const [id, ordinal] of left.nodeOrd) {
-      expect(right.nodeOrd.get(`X_${id}`)).toBe(ordinal)
-    }
-    for (const [id, ordinal] of left.wireOrd) {
-      expect(right.wireOrd.get(`X_${id}`)).toBe(ordinal)
+    expect(sameDiagram(diagram, copy)).toBe(true)
+    for (const [id, ordinal] of leftWireOrder) {
+      expect(rightWireOrder.get(`X_${id}`)).toBe(ordinal)
     }
   })
 })
 
-describe('exploreIso', () => {
+describe('diagramIso', () => {
   it('returns the complete identity-like mapping to a renamed graph', () => {
     const diagram = host()
     const copy = renamed(diagram)
-    const iso = exploreIso(diagram, copy)
+    const iso = diagramIso(diagram, copy)
 
     expect(iso).not.toBeNull()
     for (const id of Object.keys(diagram.regions)) {
@@ -183,7 +178,7 @@ describe('exploreIso', () => {
   it('transports parents, node regions, wire scopes, and endpoint multisets', () => {
     const diagram = host()
     const copy = renamed(diagram)
-    const iso = exploreIso(diagram, copy)!
+    const iso = diagramIso(diagram, copy)!
 
     for (const [id, region] of Object.entries(diagram.regions)) {
       const image = copy.regions[iso.regions.get(id)!]!
@@ -225,16 +220,16 @@ describe('exploreIso', () => {
     }
     const left = make()
     const right = make()
-    const iso = exploreIso(left, right)!
+    const iso = diagramIso(left, right)!
 
     expect(new Set(iso.nodes.values()).size).toBe(2)
-    expect(exploreForm(left)).toBe(exploreForm(right))
+    expect(sameDiagram(left, right)).toBe(true)
   })
 
   it('returns null for non-isomorphic graphs', () => {
     const builder = new DiagramBuilder()
     builder.ref(builder.root, 'Q', relSig([]))
-    expect(exploreIso(host(), builder.build())).toBeNull()
+    expect(diagramIso(host(), builder.build())).toBeNull()
   })
 
   it('uses winning structural colors rather than insertion order', () => {
@@ -264,13 +259,13 @@ describe('exploreIso', () => {
       },
       wires: {},
     })
-    const iso = exploreIso(first, second)!
+    const iso = diagramIso(first, second)!
 
     expect(second.nodes[iso.nodes.get('n0')!]?.region).toBe('r1')
     expect(second.nodes[iso.nodes.get('n1')!]?.region).toBe('r2')
   })
 
-  it('takes a deterministic lexicographically minimal symmetry branch', () => {
+  it('takes a deterministic mapping across a repeated symmetric construction', () => {
     const make = () => {
       const builder = new DiagramBuilder()
       const outer = builder.cut(builder.root)
@@ -282,7 +277,7 @@ describe('exploreIso', () => {
     const first = make()
     const second = make()
 
-    expect(exploreForm(first)).toBe(exploreForm(second))
-    expect(exploreIso(first, second)).not.toBeNull()
+    expect(sameDiagram(first, second)).toBe(true)
+    expect(diagramIso(first, second)).not.toBeNull()
   })
 })

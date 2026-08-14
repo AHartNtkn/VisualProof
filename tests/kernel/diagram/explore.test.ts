@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import {
-  exploreForm,
-  exploreIso,
-  exploreLabeling,
-} from '../../../src/kernel/diagram/canonical/explore'
+  diagramIso,
+  sameDiagram,
+} from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 
 function namedGraph(
@@ -74,14 +73,14 @@ describe('canonical graph exploration', () => {
       head: 'w0',
     })
 
-    expect(exploreForm(first)).toBe(exploreForm(second))
-    const iso = exploreIso(first, second)
+    expect(sameDiagram(first, second)).toBe(true)
+    const iso = diagramIso(first, second)
     expect(iso).not.toBeNull()
     expect(iso?.regions.get('r0')).toBe('sheet')
     expect(iso?.regions.get('r1')).toBe('inside')
   })
 
-  it('returns total distinct ordinals with form equal to exploreForm', () => {
+  it('assigns a complete correspondence covering every region, node, and wire', () => {
     const diagram = namedGraph({
       root: 'r0',
       cut: 'r1',
@@ -90,13 +89,21 @@ describe('canonical graph exploration', () => {
       value: 'value',
       head: 'head',
     })
-    const labeling = exploreLabeling(diagram)
+    const renamed = namedGraph({
+      root: 'sheet',
+      cut: 'inside',
+      ref: 'z',
+      atom: 'a',
+      value: 'w9',
+      head: 'w0',
+    })
+    const iso = diagramIso(diagram, renamed)
 
-    expect(labeling.form).toBe(exploreForm(diagram))
-    expect(new Set(labeling.regionOrd.values()).size).toBe(2)
+    expect(iso).not.toBeNull()
+    expect(iso!.regions.size).toBe(2)
     // atom, ref, and the head wire's pin
-    expect(new Set(labeling.nodeOrd.values()).size).toBe(3)
-    expect(new Set(labeling.wireOrd.values()).size).toBe(2)
+    expect(iso!.nodes.size).toBe(3)
+    expect(iso!.wires.size).toBe(2)
   })
 
   it('distinguishes node content and wire scope', () => {
@@ -105,7 +112,7 @@ describe('canonical graph exploration', () => {
       builder.ref(builder.root, defId, relSig([]))
       return builder.build()
     }
-    expect(exploreForm(ref('P'))).not.toBe(exploreForm(ref('Q')))
+    expect(sameDiagram(ref('P'), ref('Q'))).toBe(false)
 
     const scoped = (outer: boolean) => {
       const builder = new DiagramBuilder()
@@ -117,7 +124,7 @@ describe('canonical graph exploration', () => {
       builder.pin(argument, outer ? builder.root : cut)
       return builder.build()
     }
-    expect(exploreForm(scoped(true))).not.toBe(exploreForm(scoped(false)))
+    expect(sameDiagram(scoped(true), scoped(false))).toBe(false)
   })
 
   it('makes ordered boundary pins semantically visible', () => {
@@ -131,9 +138,10 @@ describe('canonical graph exploration', () => {
     ])
     const diagram = builder.build()
 
-    expect(exploreForm(diagram, [left, right]))
-      .not.toBe(exploreForm(diagram, [right, left]))
-    expect(() => exploreForm(diagram, ['ghost'])).toThrowError(/does not exist/)
+    expect(sameDiagram(diagram, diagram, [left, right], [right, left]))
+      .toBe(false)
+    expect(() => sameDiagram(diagram, diagram, ['ghost'], ['ghost']))
+      .toThrowError(/does not exist/)
   })
 
   it('returns null for non-isomorphic diagrams', () => {
@@ -142,6 +150,6 @@ describe('canonical graph exploration', () => {
     const binary = new DiagramBuilder()
     binary.ref(binary.root, 'P', relSig([IOTA, IOTA]))
 
-    expect(exploreIso(unary.build(), binary.build())).toBeNull()
+    expect(diagramIso(unary.build(), binary.build())).toBeNull()
   })
 })
