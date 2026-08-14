@@ -253,6 +253,14 @@ structure FrameFocusResult
     endpointOuter endpointLocal endpointBinders).compile?
       (host.val.removeRaw selection domains)
       (Diagram.removeRaw_wellFormed host selection domains) = some endpointBody
+  endpointExact : (domains.targetCall endpointCall endpointSurvives
+    endpointOuter endpointLocal endpointBinders).fullContext.Exact
+      (domains.targetCall endpointCall endpointSurvives endpointOuter
+        endpointLocal endpointBinders).origin
+  endpointCovers : (domains.targetCall endpointCall endpointSurvives
+    endpointOuter endpointLocal endpointBinders).binders.Covers
+      (domains.targetCall endpointCall endpointSurvives endpointOuter
+        endpointLocal endpointBinders).origin
   holeWire : FiniteEquiv (Fin endpointOuter.length)
     (Fin endpointCall.outerContext.length)
   targetContext : DiagramContext targetOuter.length endpointOuter.length
@@ -336,6 +344,25 @@ theorem compileAlongFocus
           endpointBinders := targetBinders
           endpointBody := result.body
           endpointCompiled := result.compiled
+          endpointExact := by
+            rw [domains.targetCall_fullContext_eq_map (.root sourceAmbient
+              sourceLocal) frame.originSurvives targetOuter targetLocal
+              targetBinders frame.outerEq frame.localEq frame.targetLocalCall,
+              domains.targetCall_origin]
+            exact domains.mapWireContext_exact host selection _
+              (domains.regions.index host.val.root frame.originSurvives)
+              (by
+                rw [domains.regions.origin_index]
+                exact frame.sourceExact)
+          endpointCovers := by
+            rw [domains.targetCall_origin]
+            simpa [frame.bindersEq] using
+              domains.mapBinderContext_covers host selection
+                (BinderContext.empty : BinderContext host.val [])
+                (domains.regions.index host.val.root frame.originSurvives)
+                (by
+                  rw [domains.regions.origin_index]
+                  exact frame.sourceCovers)
           holeWire := frame.outerWire
           targetContext := .hole
           alignment := .hole frame.outerWire
@@ -356,6 +383,28 @@ theorem compileAlongFocus
           endpointBinders := targetBinders
           endpointBody := result.body
           endpointCompiled := result.compiled
+          endpointExact := by
+            rw [domains.targetCall_fullContext_eq_map
+              (.nested origin sourceOuter rels sourceBinders)
+              frame.originSurvives targetOuter targetLocal targetBinders
+              frame.outerEq frame.localEq frame.targetLocalCall,
+              domains.targetCall_origin]
+            exact domains.mapWireContext_exact host selection _
+              (domains.regions.index origin frame.originSurvives)
+              (by
+                rw [domains.regions.origin_index]
+                exact frame.sourceExact)
+          endpointCovers := by
+            let originSurvives := frame.originSurvives
+            have bindersEq := frame.bindersEq
+            change targetBinders.Covers
+              (domains.regions.index origin originSurvives)
+            rw [bindersEq]
+            exact domains.mapBinderContext_covers host selection sourceBinders
+              (domains.regions.index origin originSurvives)
+              (by
+                rw [domains.regions.origin_index]
+                exact frame.sourceCovers)
           holeWire := frame.outerWire
           targetContext := .hole
           alignment := .hole frame.outerWire
@@ -800,6 +849,8 @@ theorem compileAlongFocus
       endpointBinders := childResult.endpointBinders
       endpointBody := childResult.endpointBody
       endpointCompiled := childResult.endpointCompiled
+      endpointExact := childResult.endpointExact
+      endpointCovers := childResult.endpointCovers
       holeWire := childResult.holeWire
       targetContext := assembled.targetContext
       alignment := by
@@ -1264,6 +1315,8 @@ theorem compileAlongFocus
       endpointBinders := childResult.endpointBinders
       endpointBody := childResult.endpointBody
       endpointCompiled := childResult.endpointCompiled
+      endpointExact := childResult.endpointExact
+      endpointCovers := childResult.endpointCovers
       holeWire := childResult.holeWire
       targetContext := assembled.targetContext
       alignment := by
@@ -1306,6 +1359,20 @@ structure FrameRootResult
     (source.checked.val.diagram.removeRaw selection domains)
     (Diagram.removeRaw_wellFormed source.diagram selection domains) =
       some endpointBody
+  endpointExact : (domains.targetCall
+      (CompiledSite.endpointCall source selection.val.anchor)
+      endpointSurvives endpointOuter endpointLocal endpointBinders
+      ).fullContext.Exact
+    (domains.targetCall
+      (CompiledSite.endpointCall source selection.val.anchor)
+      endpointSurvives endpointOuter endpointLocal endpointBinders).origin
+  endpointCovers : (domains.targetCall
+      (CompiledSite.endpointCall source selection.val.anchor)
+      endpointSurvives endpointOuter endpointLocal endpointBinders
+      ).binders.Covers
+    (domains.targetCall
+      (CompiledSite.endpointCall source selection.val.anchor)
+      endpointSurvives endpointOuter endpointLocal endpointBinders).origin
   holeWire : FiniteEquiv (Fin endpointOuter.length)
     (Fin (CompiledSite.endpointCall source selection.val.anchor
       ).outerContext.length)
@@ -1372,6 +1439,8 @@ theorem compileRootFrame
     endpointBinders := result.endpointBinders
     endpointBody := result.endpointBody
     endpointCompiled := result.endpointCompiled
+    endpointExact := result.endpointExact
+    endpointCovers := result.endpointCovers
     holeWire := result.holeWire
     targetContext := result.targetContext
     externalWire := frame.outerWire
