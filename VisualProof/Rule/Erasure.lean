@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Algebra
+import VisualProof.Diagram.UnaryIdentity
 import VisualProof.Rule.Relation
 
 namespace VisualProof.Rule
@@ -7,23 +8,6 @@ open Theory
 open Diagram
 
 namespace Erasure
-
-/-- Emit unary identities for a decidable selection of typed wires. -/
-def pinWires :
-    (source : List Sig) →
-    WireRenaming source target →
-    (∀ {signature}, Var source signature → Bool) →
-    ItemSeq target
-  | [], _, _ => .nil
-  | _ :: rest, renameWires, selected =>
-      let tailRename : WireRenaming rest target :=
-        ⟨fun wire => renameWires (.there wire)⟩
-      let tailSelected : ∀ {signature}, Var rest signature → Bool :=
-        fun wire => selected (.there wire)
-      let tail := pinWires rest tailRename tailSelected
-      if selected (.here) then
-        .cons (.identity _ 1 (fun _ => renameWires (.here))) tail
-      else tail
 
 private def retainedItems
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
@@ -43,17 +27,6 @@ private def removedItems
       (addedItems.renameWires (wireMap.appendRight addedLocals)).renameWires
         (Region.adjoinMaterialWire outer hostLocals addedLocals)
 
-private def pinNeeded
-    (retained : ItemSeq (outer ++ locals))
-    (wire : Var locals signature) : Bool :=
-  let paths := retained.incidencePaths
-    (outer.length + wire.index.val) 0
-  decide (¬(paths ≠ [] ∧ RegionPath.deepestCommonAncestor paths = []))
-
-private def removedUsed (removed : ItemSeq wires)
-    (wire : Var wires signature) : Bool :=
-  decide (removed.incidencePaths wire.index.val 0 ≠ [])
-
 /-- Canonical ownership residue left after material is erased. It retains every
 locally quantified wire and adds a unary identity exactly when the retained
 items no longer place that wire at this region's DCA. -/
@@ -64,10 +37,13 @@ def residue
     ItemSeq (outer ++ (hostLocals ++ material.locals)) :=
   let retained := retainedItems hostLocals hostItems material
   let removed := removedItems hostLocals material wireMap
-  let removedPins := pinWires (outer ++ (hostLocals ++ material.locals))
-    WireRenaming.id (removedUsed removed)
-  let localPins := pinWires (hostLocals ++ material.locals)
-    ⟨fun wire => Var.appendRight outer wire⟩ (pinNeeded retained)
+  let removedPins := ItemSeq.pinWires
+    (outer ++ (hostLocals ++ material.locals)) WireRenaming.id
+    (ItemSeq.usesWire removed)
+  let localPins := ItemSeq.pinWires (hostLocals ++ material.locals)
+    ⟨fun wire => Var.appendRight outer wire⟩
+    (fun wire => ItemSeq.needsRootPin retained
+      (Var.appendRight outer wire))
   removedPins.append localPins
 
 /-- Erasure preserves the quantified wire owners and replaces any ownership
@@ -81,91 +57,6 @@ def eraseAt
     ((retainedItems hostLocals hostItems material).append
       (residue hostLocals hostItems material wireMap))
 
-private theorem pinWires_childrenCanonical
-    (source : List Sig) (renameWires : WireRenaming source target)
-    (selected : ∀ {signature}, Var source signature → Bool) :
-    (pinWires source renameWires selected).ChildrenCanonical := by
-  induction source with
-  | nil => trivial
-  | cons signature rest induction =>
-      simp only [pinWires]
-      split
-      · exact ⟨True.intro,
-          induction
-            ⟨fun wire => renameWires (.there wire)⟩
-            (fun wire => selected (.there wire))⟩
-      · exact induction
-          ⟨fun wire => renameWires (.there wire)⟩
-          (fun wire => selected (.there wire))
-
-private theorem pinWires_mem_nil
-    (source : List Sig) (renameWires : WireRenaming source target)
-    (selected : ∀ {signature}, Var source signature → Bool)
-    (wire : Var source signature) (itemIndex : Nat)
-    (selectedWire : selected wire = true) :
-    [] ∈ (pinWires source renameWires selected).incidencePaths
-      (renameWires wire).index.val itemIndex := by
-  induction source generalizing target signature itemIndex with
-  | nil => exact nomatch wire
-  | cons head rest induction =>
-      cases wire with
-      | here =>
-          simp [pinWires, selectedWire, ItemSeq.incidencePaths,
-            Item.incidencePaths]
-      | @there _ _ _ tailWire =>
-          simp only [pinWires]
-          cases selectedHead : selected (.here) with
-          | true =>
-            simp only [if_true, ItemSeq.incidencePaths,
-              List.mem_append]
-            exact Or.inr (induction
-              ⟨fun wire => renameWires (.there wire)⟩
-              (fun wire => selected (.there wire)) tailWire
-              (itemIndex + 1) selectedWire)
-          | false =>
-            simp only [Bool.false_eq]
-            exact induction
-              ⟨fun wire => renameWires (.there wire)⟩
-              (fun wire => selected (.there wire)) tailWire
-              itemIndex selectedWire
-
-private theorem pinWires_incidence_eq_nil_of
-    (source : List Sig) (renameWires : WireRenaming source target)
-    (selected : ∀ {signature}, Var source signature → Bool)
-    (wireIndex itemIndex : Nat)
-    (noneAt : ∀ {signature} (wire : Var source signature),
-      selected wire = true → (renameWires wire).index.val ≠ wireIndex) :
-    (pinWires source renameWires selected).incidencePaths
-      wireIndex itemIndex = [] := by
-  induction source generalizing target itemIndex with
-  | nil => rfl
-  | cons head rest induction =>
-      simp only [pinWires]
-      cases selectedHead : selected (.here) with
-      | false =>
-          simp only [Bool.false_eq]
-          exact induction
-            ⟨fun wire => renameWires (.there wire)⟩
-            (fun wire => selected (.there wire)) itemIndex
-            (by
-              intro signature wire selectedWire
-              exact noneAt (.there wire) selectedWire)
-      | true =>
-          simp only [if_true, ItemSeq.incidencePaths, Item.incidencePaths]
-          have headNe := noneAt (.here) selectedHead
-          have headCount :
-              (List.ofFn fun _ : Fin 1 => (renameWires (.here)).index.val).count
-                wireIndex = 0 := by
-            simp [headNe]
-          rw [headCount]
-          simp only [List.replicate_zero, List.nil_append]
-          exact induction
-            ⟨fun wire => renameWires (.there wire)⟩
-            (fun wire => selected (.there wire)) (itemIndex + 1)
-            (by
-              intro signature wire selectedWire
-              exact noneAt (.there wire) selectedWire)
-
 theorem eraseAt_canonical
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
     (material : Region materialWires) (wireMap : WireRenaming materialWires
@@ -177,16 +68,18 @@ theorem eraseAt_canonical
   | mk addedLocals addedItems =>
       let retained := hostItems.renameWires
         (Region.adjoinHostWire outer hostLocals addedLocals)
-      let pins := pinWires (hostLocals ++ addedLocals)
+      let pins := ItemSeq.pinWires (hostLocals ++ addedLocals)
         (⟨fun wire => Var.appendRight outer wire⟩ :
           WireRenaming (hostLocals ++ addedLocals)
             (outer ++ (hostLocals ++ addedLocals)))
-        (pinNeeded retained)
+        (fun wire => ItemSeq.needsRootPin retained
+          (Var.appendRight outer wire))
       let removed :=
         (addedItems.renameWires (wireMap.appendRight addedLocals)).renameWires
           (Region.adjoinMaterialWire outer hostLocals addedLocals)
-      let removedPins := pinWires (outer ++ (hostLocals ++ addedLocals))
-        WireRenaming.id (removedUsed removed)
+      let removedPins := ItemSeq.pinWires
+        (outer ++ (hostLocals ++ addedLocals)) WireRenaming.id
+        (ItemSeq.usesWire removed)
       let allPins := removedPins.append pins
       simp only [eraseAt, residue, retainedItems, removedItems]
       change (∀ localIndex : Fin (hostLocals ++ addedLocals).length,
@@ -213,8 +106,10 @@ theorem eraseAt_canonical
           exact ⟨List.append_ne_nil_of_left_ne_nil retainedCanonical.1 _,
             RegionPath.deepestCommonAncestor_append_eq_nil
               retainedPaths _ retainedCanonical.1 retainedCanonical.2⟩
-        · have selected : pinNeeded retained localWire = true := by
-            simp [pinNeeded, retainedPaths, retainedCanonical, localWire]
+        · have selected : ItemSeq.needsRootPin retained
+              (Var.appendRight outer localWire) = true := by
+            simp [ItemSeq.needsRootPin, retainedPaths, retainedCanonical,
+              localWire]
           have localPinContains : [] ∈ pins.incidencePaths
               (outer.length + localIndex.val)
                 (retained.length + removedPins.length) := by
@@ -226,7 +121,7 @@ theorem eraseAt_canonical
                   outer.length + localIndex.val := by
               simp [localWire]
             rw [← mappedIndex]
-            exact pinWires_mem_nil _ _ _ localWire
+            exact ItemSeq.pinWires_mem_nil _ _ _ localWire
               (retained.length + removedPins.length) selected
           have pinContains : [] ∈ allPins.incidencePaths
               (outer.length + localIndex.val) retained.length := by
@@ -245,8 +140,8 @@ theorem eraseAt_canonical
         · have sourceChildren := sourceCanonical.2
           exact (ItemSeq.childrenCanonical_append _ _).mp sourceChildren |>.1
         · apply (ItemSeq.childrenCanonical_append removedPins pins).mpr
-          exact ⟨pinWires_childrenCanonical _ _ _,
-            pinWires_childrenCanonical _ _ _⟩
+          exact ⟨ItemSeq.pinWires_childrenCanonical _ _ _,
+            ItemSeq.pinWires_childrenCanonical _ _ _⟩
 
 theorem eraseAt_inherited_nonempty_iff
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
@@ -264,16 +159,18 @@ theorem eraseAt_inherited_nonempty_iff
       let removed :=
         (addedItems.renameWires (wireMap.appendRight addedLocals)).renameWires
           (Region.adjoinMaterialWire outer hostLocals addedLocals)
-      let removedPins := pinWires (outer ++ (hostLocals ++ addedLocals))
-        WireRenaming.id (removedUsed removed)
-      let localPins := pinWires (hostLocals ++ addedLocals)
+      let removedPins := ItemSeq.pinWires
+        (outer ++ (hostLocals ++ addedLocals)) WireRenaming.id
+        (ItemSeq.usesWire removed)
+      let localPins := ItemSeq.pinWires (hostLocals ++ addedLocals)
         (⟨fun localWire => Var.appendRight outer localWire⟩ :
           WireRenaming (hostLocals ++ addedLocals)
             (outer ++ (hostLocals ++ addedLocals)))
-        (pinNeeded retained)
+        (fun localWire => ItemSeq.needsRootPin retained
+          (Var.appendRight outer localWire))
       have localPinsEmpty : localPins.incidencePaths wire.index.val
           (retained.length + removedPins.length) = [] := by
-        apply pinWires_incidence_eq_nil_of
+        apply ItemSeq.pinWires_incidence_eq_nil_of
         intro localSignature localWire _
         simp only [Var.index_appendRight]
         omega
@@ -286,22 +183,22 @@ theorem eraseAt_inherited_nonempty_iff
               removed.incidencePaths wire.index.val 0 = []
           · exact removedEmpty
           · let sourceWire := wire.appendLeft (hostLocals ++ addedLocals)
-            have selected : removedUsed removed sourceWire = true := by
-              simp [removedUsed, sourceWire, removedEmpty]
-            have contains := pinWires_mem_nil
+            have selected : ItemSeq.usesWire removed sourceWire = true := by
+              simp [ItemSeq.usesWire, sourceWire, removedEmpty]
+            have contains := ItemSeq.pinWires_mem_nil
               (outer ++ (hostLocals ++ addedLocals)) WireRenaming.id
-              (removedUsed removed) sourceWire retained.length selected
+              (ItemSeq.usesWire removed) sourceWire retained.length selected
             have sourceIndex :
                 (WireRenaming.id sourceWire).index.val = wire.index.val := by
               simp [WireRenaming.id, sourceWire]
             rw [sourceIndex, pinsEmpty] at contains
             simp at contains
         · intro removedEmpty
-          apply pinWires_incidence_eq_nil_of
+          apply ItemSeq.pinWires_incidence_eq_nil_of
           intro sourceSignature sourceWire selected
           have sourceUsed :
               removed.incidencePaths sourceWire.index.val 0 ≠ [] := by
-            simpa [removedUsed] using selected
+            simpa [ItemSeq.usesWire] using selected
           intro sameIndex
           apply sourceUsed
           change sourceWire.index.val = wire.index.val at sameIndex
