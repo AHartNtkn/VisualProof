@@ -73,6 +73,15 @@ function endpointKey(d: Diagram, node: NodeId, port: Port): string {
   }
 }
 
+/**
+ * Build one diagram's `RefineIndex`: a per-side lookup of content keys
+ * (region kind, node signature/defId/arity, wire signature), port wiring
+ * (each node's port-key-to-wire map, or an identity node's unordered
+ * incident-wire list), and structural incidences (region parent/children,
+ * nodes-in-region, wire endpoints with position keys, and pin positions).
+ * Pure in `(d, pins)`, so a caller refining the same diagram under many
+ * different `marks` builds this once and reuses it.
+ */
 export function buildRefineIndex(d: Diagram, pins: readonly WireId[]): RefineIndex {
   for (const w of pins) {
     if (d.wires[w] === undefined) throw new DiagramError(`pinned wire '${w}' does not exist`)
@@ -297,6 +306,20 @@ export function refineJointlyIndexed(
   return refine(indexes, initialColors(indexes, marks))
 }
 
+/**
+ * Rank every side jointly to a stable-partition fixpoint: colors seed from
+ * content-only signature strings (shared vocabulary across sides, so equal
+ * colors on different sides mean corresponding structure), folding each
+ * `Mark`'s token into its element's initial signature (`|#token`) so paired
+ * marks — and only paired marks — start in their own class; refinement then
+ * repeatedly re-derives every element's signature from its current
+ * neighborhood colors until the joint class count stops growing. Marks are
+ * strictly class-splitting: they only ever divide an initial class, never
+ * merge two elements that content alone kept apart. Builds each side's
+ * `RefineIndex` fresh — callers re-refining the same sides under many
+ * different `marks` should call `buildRefineIndexes` once and use
+ * `refineJointlyIndexed` instead.
+ */
 export function refineJointly(
   sides: readonly RefinementSide[],
   marks: readonly Mark[] = [],

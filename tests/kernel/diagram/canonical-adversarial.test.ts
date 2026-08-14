@@ -86,7 +86,7 @@ describe('sameDiagram adversarial graph battery', () => {
       return builder.build()
     })
 
-    for (const diagram of diagrams) {
+    for (const diagram of diagrams.slice(1)) {
       expect(sameDiagram(diagrams[0]!, diagram)).toBe(true)
     }
   })
