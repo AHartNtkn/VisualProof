@@ -9,10 +9,24 @@ const BOT: PropFormula = { kind: 'bot' }
  * non-adjacent duplicate like A∧B∧A is caught too), bottom-up. The collapse
  * must live here rather than in the caller because constant elimination can
  * itself create a doubled negation (¬(⊤∧¬P) → ¬¬P), so by induction this
- * function's output is always ¬¬-free. Dedup runs on the flattened list
- * AFTER every member has been recursively simplified (so ¬¬A next to A
- * dedupes once the ¬¬ has collapsed), so by the same induction this
- * function's output never has duplicate ∧-siblings.
+ * function's output is always ¬¬-free.
+ *
+ * The and-case's conjunct list is built by `flattenSimplified`, NOT by
+ * flattening the raw tree and then simplifying each leaf: a leaf that is
+ * NOT ∧-shaped in the raw tree (e.g. `¬¬(P∧Q)`, a `not` node) can still
+ * simplify INTO an ∧-shaped result (the ¬¬ collapses, exposing `P∧Q`), and
+ * that exposed ∧ must be re-flattened against this area's OTHER conjuncts
+ * for the dedup below to see it — otherwise a duplicate hiding one
+ * ¬¬-collapse deep survives undetected. Nesting depth is unbounded (each
+ * ¬¬ layer can expose another ∧, which can itself contain another
+ * ¬¬-wrapped ∧, …), so `flattenSimplified` recurses to its own fixpoint
+ * rather than a fixed number of passes: every leaf it returns is
+ * genuinely non-∧ AFTER simplification, by structural induction — the
+ * `if (result.kind === 'and')` branch immediately re-flattens any ∧ that
+ * simplification exposes, recursing into strictly smaller subformulas
+ * (result's own children) each time, so it terminates. Dedup then runs on
+ * this fully-flattened, fully-simplified list, so by induction this
+ * function's output never has duplicate ∧-siblings, at any depth.
  */
 export function simplify(formula: PropFormula): PropFormula {
   switch (formula.kind) {
@@ -28,10 +42,10 @@ export function simplify(formula: PropFormula): PropFormula {
       return body === formula.body ? formula : { kind: 'not', body }
     }
     case 'and': {
-      const simplified = flattenAnd(formula).map(simplify)
-      if (simplified.some((conjunct) => conjunct.kind === 'bot')) return BOT
+      const items = flattenSimplified(formula)
+      if (items.some((conjunct) => conjunct.kind === 'bot')) return BOT
       const deduped: PropFormula[] = []
-      for (const conjunct of simplified) {
+      for (const conjunct of items) {
         if (conjunct.kind === 'top') continue
         if (deduped.some((kept) => sameFormula(kept, conjunct))) continue
         deduped.push(conjunct)
@@ -40,6 +54,17 @@ export function simplify(formula: PropFormula): PropFormula {
       return deduped.reduce((left, right) => ({ kind: 'and', left, right }))
     }
   }
+}
+
+/** Simplify `node`, then flatten the result if simplification exposed a
+ *  fresh ∧-shape (see `simplify`'s and-case docstring). A raw ∧-node is
+ *  flattened directly (no need to simplify it as a whole — flattening its
+ *  children and letting each recurse through this same function already
+ *  simplifies them). */
+function flattenSimplified(node: PropFormula): PropFormula[] {
+  if (node.kind === 'and') return [...flattenSimplified(node.left), ...flattenSimplified(node.right)]
+  const result = simplify(node)
+  return result.kind === 'and' ? flattenSimplified(result) : [result]
 }
 
 /**

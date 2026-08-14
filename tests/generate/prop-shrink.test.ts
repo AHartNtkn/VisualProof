@@ -92,6 +92,44 @@ describe('simplify', () => {
     // conjunct list, so the ∧-chain is [P, P] and reduces to P alone.
     expect(simplify(and(P, not(not(P))))).toEqual(P)
   })
+  it('dedupes a leaf that only becomes ∧-shaped through its OWN simplification', () => {
+    // ¬¬(P∧Q) is not ∧-shaped in the RAW tree — it's a `not` node — so a
+    // flatten-then-simplify-leaves order (flatten the raw shape, THEN
+    // simplify each leaf) never re-flattens what that leaf's simplification
+    // exposes. and(¬¬(P∧Q), and(P,R)): the ¬¬ collapses to and(P,Q), which
+    // must be re-flattened and compared against the OTHER branch's P for
+    // this to dedupe correctly, one call, no fixed retry count.
+    const result = simplify(and(not(not(and(P, Q))), and(P, D)))
+    expect(result).toEqual(and(and(P, Q), D))
+    expect(containsDuplicateConjunct(result)).toBe(false)
+  })
+  it('dedupes across TWO nested levels of ∧-exposing ¬¬ collapse (unbounded-depth case)', () => {
+    // The exposed and(P,Q) inside the ¬¬ itself contains ANOTHER ¬¬-wrapped
+    // and — flattening it requires simplifying its own children, which in
+    // turn exposes a THIRD level (P,Q) needing yet another round. No single
+    // fixed number of flatten/simplify alternations suffices in general;
+    // the fix must recurse to an actual fixpoint, not a bounded retry count.
+    const nested = and(not(not(and(not(not(and(P, Q))), D))), P)
+    const result = simplify(nested)
+    expect(result).toEqual(and(and(P, Q), D))
+    expect(containsDuplicateConjunct(result)).toBe(false)
+  })
+  it(
+    'property: output never contains a duplicate conjunct, over many sampled formulas (single call — ' +
+    'this is the exact assertion that would have caught the incomplete-flatten bug; final-core checks alone missed it)',
+    () => {
+      // Reviewer's repro methodology exactly: default family-A sample knobs
+      // (atoms 3, sample size 12 connectives), seed 2026, 20,000 samples.
+      // Measured with the pre-fix and-case: 22% of these single-call
+      // outputs carried a residual duplicate.
+      const rng = seededRng(2026)
+      for (let round = 0; round < 20_000; round += 1) {
+        const sampled = samplePropFormula(12, 3, rng)
+        const result = simplify(sampled)
+        expect(containsDuplicateConjunct(result), `simplify(sample ${round}) contains a duplicate conjunct`).toBe(false)
+      }
+    },
+  )
 })
 
 describe('weakenings', () => {
