@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { seededRng } from '../../src/generate/rng'
 import { GENERATOR_FAMILIES } from '../../src/generate'
-import { propWalkFamily } from '../../src/generate/walk/family'
+import { findDoubleCutToNormalize, propWalkFamily } from '../../src/generate/walk/family'
 import { readPropTheorem } from '../../src/generate/prop/read'
 import { isMinimalTautology } from '../../src/generate/prop/shrink'
 import { containsDoubleNegation, usedAtoms } from '../../src/generate/prop/formula'
 import { formulaToDiagram } from '../../src/formula'
+import { applyStep, EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof'
 import { isAncestorOrEqual, sameDiagram } from '../../src/kernel/diagram'
 import { childCuts, nodesIn } from '../../src/generate/diagram-scan'
 import type { Diagram, RegionId } from '../../src/kernel/diagram/diagram'
@@ -66,4 +67,31 @@ describe('propWalkFamily', () => {
     expect(() => propWalkFamily.generate({ atoms: 1, length: 12, attempts: 1 }, seededRng(4)))
       .toThrow(/attempts/)
   })
+})
+
+describe('findDoubleCutToNormalize', () => {
+  it(
+    'eliminates ¬¬¬(P ∧ ¬P) down to ¬(P ∧ ¬P) in exactly one doubleCutElim',
+    () => {
+      // ¬¬¬(P ∧ ¬P): the body holds three nested cuts before reaching the
+      // and-content; the outermost two form a genuine empty-annulus
+      // double-cut pair (each has exactly one child cut and no nodes of
+      // its own) — the shape doubleCutElim removes as a single unit
+      // (applyDoubleCutElim deletes the passed region AND its lone child
+      // together, promoting the child's own children up two levels), so
+      // one call collapses both extra negations at once.
+      let diagram = formulaToDiagram('∀P:o. ¬¬¬(P ∧ ¬P)')
+      const body = findBodyRegion(diagram)
+      let target = findDoubleCutToNormalize(diagram, body)
+      expect(target, 'expected an eligible double-cut region in ¬¬¬(P ∧ ¬P)').not.toBeNull()
+      let steps = 0
+      while (target !== null) {
+        diagram = applyStep(diagram, { rule: 'doubleCutElim', region: target }, EMPTY_PROOF_CONTEXT, 'forward')
+        steps += 1
+        target = findDoubleCutToNormalize(diagram, body)
+      }
+      expect(steps).toBe(1)
+      expect(sameDiagram(diagram, formulaToDiagram('∀P:o. ¬(P ∧ ¬P)'))).toBe(true)
+    },
+  )
 })

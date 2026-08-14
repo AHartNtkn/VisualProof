@@ -155,7 +155,7 @@ function tryWalk(atoms: number, length: number, rng: () => number): GeneratedPro
  * removes. `inner` itself is excluded: it and its ¬-headed body are the
  * shell's own intrinsic double-cut pair, not walk-introduced junk.
  */
-function findDoubleCutToNormalize(diagram: Diagram, inner: RegionId): RegionId | null {
+export function findDoubleCutToNormalize(diagram: Diagram, inner: RegionId): RegionId | null {
   for (const id of Object.keys(diagram.regions).sort()) {
     if (diagram.regions[id]!.kind !== 'cut') continue
     if (id === inner) continue
