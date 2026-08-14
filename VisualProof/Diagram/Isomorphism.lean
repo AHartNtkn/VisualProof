@@ -101,6 +101,22 @@ def append (left : WireEquiv sourceLeft targetLeft)
     · intro signature localWire
       simp [appendRenaming, right.right_inv]
 
+@[simp] theorem append_apply_left
+    (left : WireEquiv sourceLeft targetLeft)
+    (right : WireEquiv sourceRight targetRight)
+    (wire : Var sourceLeft signature) :
+    left.append right (wire.appendLeft sourceRight) =
+      (left wire).appendLeft targetRight := by
+  simp [append, appendRenaming]
+
+@[simp] theorem append_apply_right
+    (left : WireEquiv sourceLeft targetLeft)
+    (right : WireEquiv sourceRight targetRight)
+    (wire : Var sourceRight signature) :
+    left.append right (Var.appendRight sourceLeft wire) =
+      Var.appendRight targetLeft (right wire) := by
+  simp [append, appendRenaming]
+
 @[simp] theorem refl_apply (wire : Var context signature) :
     WireEquiv.refl context wire = wire := rfl
 

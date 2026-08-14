@@ -6,12 +6,15 @@ namespace VisualProof.Diagram
 open VisualProof
 open Theory
 
+def EnvironmentsAgree (wire : WireEquiv source target)
+    (sourceEnv : Values model source) (targetEnv : Values model target) : Prop :=
+  ∀ {signature} (sourceWire : Var source signature),
+    sourceEnv.lookup sourceWire = targetEnv.lookup (wire sourceWire)
+
 theorem denoteItemSeq_iff_get
-    (model : Model) (env : Fin wires -> model.Carrier)
-    (rels : RelEnv model.Carrier relCtx)
-    (items : ItemSeq  wires relCtx) :
-    denoteItemSeq model  env rels items <->
-      forall i, denoteItem model  env rels (items.get i) := by
+    (model : Model) (env : Values model wires) (items : ItemSeq wires) :
+    denoteItemSeq model env items ↔
+      ∀ index, denoteItem model env (items.get index) := by
   cases items with
   | nil =>
       constructor
@@ -20,287 +23,256 @@ theorem denoteItemSeq_iff_get
       · intro _
         trivial
   | cons head tail =>
-      have ih := denoteItemSeq_iff_get model  env rels tail
+      have induction := denoteItemSeq_iff_get model env tail
       constructor
-      · rintro ⟨hhead, htail⟩ index
-        refine Fin.cases hhead (fun i => ?_) index
-        exact ih.mp htail i
-      · intro hall
+      · rintro ⟨headDenotes, tailDenotes⟩ index
+        exact Fin.cases headDenotes
+          (fun tailIndex => induction.mp tailDenotes tailIndex) index
+      · intro allDenote
         constructor
-        · exact hall ⟨0, by simp [ItemSeq.length]⟩
-        · apply ih.mpr
-          intro i
-          exact hall i.succ
+        · exact allDenote ⟨0, by simp [ItemSeq.length]⟩
+        · apply induction.mpr
+          intro index
+          exact allDenote index.succ
 
-private def RegionDenotationMotive {sourceWires targetWires : Nat}
-    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
-    (rels : RelCtx) (left : Region  sourceWires rels)
-    (right : Region  targetWires rels)
-    (_ : RegionIso  wire rels left right) : Prop :=
-  forall (model : Model)
-    (sourceEnv : Fin sourceWires -> model.Carrier)
-    (targetEnv : Fin targetWires -> model.Carrier)
-    (relEnv : RelEnv model.Carrier rels),
-    EnvironmentsAgree wire sourceEnv targetEnv ->
-      (denoteRegion model  sourceEnv relEnv left <->
-        denoteRegion model  targetEnv relEnv right)
+private def RegionDenotationMotive
+    {sourceOuter targetOuter : List Sig}
+    (ambient : WireEquiv sourceOuter targetOuter)
+    (source : Region sourceOuter) (target : Region targetOuter)
+    (_ : RegionIso ambient source target) : Prop :=
+  ∀ (model : Model)
+    (sourceEnv : Values model sourceOuter)
+    (targetEnv : Values model targetOuter),
+    EnvironmentsAgree ambient sourceEnv targetEnv →
+      (denoteRegion model sourceEnv source ↔
+        denoteRegion model targetEnv target)
 
-private def ItemDenotationMotive {sourceWires targetWires : Nat}
-    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
-    (rels : RelCtx) (left : Item  sourceWires rels)
-    (right : Item  targetWires rels)
-    (_ : ItemIso  wire rels left right) : Prop :=
-  forall (model : Model)
-    (sourceEnv : Fin sourceWires -> model.Carrier)
-    (targetEnv : Fin targetWires -> model.Carrier)
-    (relEnv : RelEnv model.Carrier rels),
-    EnvironmentsAgree wire sourceEnv targetEnv ->
-      (denoteItem model  sourceEnv relEnv left <->
-        denoteItem model  targetEnv relEnv right)
+private def ItemDenotationMotive
+    {sourceWires targetWires : List Sig}
+    (ambient : WireEquiv sourceWires targetWires)
+    (source : Item sourceWires) (target : Item targetWires)
+    (_ : ItemIso ambient source target) : Prop :=
+  ∀ (model : Model)
+    (sourceEnv : Values model sourceWires)
+    (targetEnv : Values model targetWires),
+    EnvironmentsAgree ambient sourceEnv targetEnv →
+      (denoteItem model sourceEnv source ↔
+        denoteItem model targetEnv target)
 
-private def ItemSeqDenotationMotive {sourceWires targetWires : Nat}
-    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
-    (rels : RelCtx) (left : ItemSeq  sourceWires rels)
-    (right : ItemSeq  targetWires rels)
-    (_ : ItemSeqIso  wire rels left right) : Prop :=
-  forall (model : Model)
-    (sourceEnv : Fin sourceWires -> model.Carrier)
-    (targetEnv : Fin targetWires -> model.Carrier)
-    (relEnv : RelEnv model.Carrier rels),
-    EnvironmentsAgree wire sourceEnv targetEnv ->
-      (denoteItemSeq model  sourceEnv relEnv left <->
-        denoteItemSeq model  targetEnv relEnv right)
+private def ItemsDenotationMotive
+    {sourceWires targetWires : List Sig}
+    (ambient : WireEquiv sourceWires targetWires)
+    (source : ItemSeq sourceWires) (target : ItemSeq targetWires)
+    (_ : ItemSeqIso ambient source target) : Prop :=
+  ∀ (model : Model)
+    (sourceEnv : Values model sourceWires)
+    (targetEnv : Values model targetWires),
+    EnvironmentsAgree ambient sourceEnv targetEnv →
+      (denoteItemSeq model sourceEnv source ↔
+        denoteItemSeq model targetEnv target)
+
+private theorem appendEnvironmentsAgree
+    (ambient : WireEquiv sourceOuter targetOuter)
+    (locals : WireEquiv sourceLocals targetLocals)
+    (sourceOuterEnv : Values model sourceOuter)
+    (targetOuterEnv : Values model targetOuter)
+    (sourceLocalEnv : Values model sourceLocals)
+    (targetLocalEnv : Values model targetLocals)
+    (outerAgree : EnvironmentsAgree ambient sourceOuterEnv targetOuterEnv)
+    (localAgree : EnvironmentsAgree locals sourceLocalEnv targetLocalEnv) :
+    EnvironmentsAgree (ambient.append locals)
+      (sourceOuterEnv.append sourceLocalEnv)
+      (targetOuterEnv.append targetLocalEnv) := by
+  intro signature wire
+  apply Var.appendCases
+    (motive := fun wire =>
+      (sourceOuterEnv.append sourceLocalEnv).lookup wire =
+        (targetOuterEnv.append targetLocalEnv).lookup
+          (ambient.append locals wire))
+  · intro signature inherited
+    simpa only [Values.lookup_append_left, WireEquiv.append_apply_left] using
+      outerAgree inherited
+  · intro signature localWire
+    simpa only [Values.lookup_append_right, WireEquiv.append_apply_right] using
+      localAgree localWire
 
 private theorem regionDenotationCase
-    {sourceWires targetWires sourceLocal targetLocal : Nat}
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)} {rels : RelCtx}
-    {sourceItems : ItemSeq  (sourceWires + sourceLocal) rels}
-    {targetItems : ItemSeq  (targetWires + targetLocal) rels}
-    (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
-    (items : ItemSeqIso  (extendWireEquiv wire localEquiv) rels
-      sourceItems targetItems)
-    (itemsIH : ItemSeqDenotationMotive (extendWireEquiv wire localEquiv)
-      rels sourceItems targetItems items) :
-    RegionDenotationMotive wire rels
-      (.mk sourceLocal sourceItems) (.mk targetLocal targetItems)
-      (.mk localEquiv items) := by
-  intro model  sourceEnv targetEnv relEnv henv
+    {sourceOuter targetOuter sourceLocals targetLocals : List Sig}
+    {ambient : WireEquiv sourceOuter targetOuter}
+    {sourceItems : ItemSeq (sourceOuter ++ sourceLocals)}
+    {targetItems : ItemSeq (targetOuter ++ targetLocals)}
+    (locals : WireEquiv sourceLocals targetLocals)
+    (items : ItemSeqIso (ambient.append locals) sourceItems targetItems)
+    (itemsIH : ItemsDenotationMotive
+      (ambient.append locals) sourceItems targetItems items) :
+    RegionDenotationMotive ambient (.mk sourceLocals sourceItems)
+      (.mk targetLocals targetItems) (.mk locals items) := by
+  intro model sourceEnv targetEnv outerAgree
   constructor
-  · rintro ⟨sourceLocalEnv, hitems⟩
-    let targetLocalEnv := fun i => sourceLocalEnv (localEquiv.invFun i)
-    refine ⟨targetLocalEnv, ?_⟩
-    apply (itemsIH model
-      (extendWireEnv sourceEnv sourceLocalEnv)
-      (extendWireEnv targetEnv targetLocalEnv) relEnv ?_).mp hitems
-    apply extendWireEnv_agree wire localEquiv
-    · exact henv
-    · intro i
-      simp [targetLocalEnv, localEquiv.left_inv]
-  · rintro ⟨targetLocalEnv, hitems⟩
-    let sourceLocalEnv := fun i => targetLocalEnv (localEquiv i)
-    refine ⟨sourceLocalEnv, ?_⟩
-    apply (itemsIH model
-      (extendWireEnv sourceEnv sourceLocalEnv)
-      (extendWireEnv targetEnv targetLocalEnv) relEnv ?_).mpr hitems
-    apply extendWireEnv_agree wire localEquiv
-    · exact henv
-    · intro _
-      rfl
+  · rintro ⟨sourceLocalEnv, sourceDenotes⟩
+    let targetLocalEnv := Values.rename locals.invRenaming sourceLocalEnv
+    refine ⟨targetLocalEnv, (itemsIH model
+      (sourceEnv.append sourceLocalEnv)
+      (targetEnv.append targetLocalEnv) ?_).mp sourceDenotes⟩
+    apply appendEnvironmentsAgree ambient locals
+    · exact outerAgree
+    · intro signature wire
+      simp only [targetLocalEnv, Values.lookup_rename]
+      rw [locals.left_inv]
+  · rintro ⟨targetLocalEnv, targetDenotes⟩
+    let sourceLocalEnv := Values.rename locals.toRenaming targetLocalEnv
+    refine ⟨sourceLocalEnv, (itemsIH model
+      (sourceEnv.append sourceLocalEnv)
+      (targetEnv.append targetLocalEnv) ?_).mpr targetDenotes⟩
+    apply appendEnvironmentsAgree ambient locals
+    · exact outerAgree
+    · intro signature wire
+      simp only [sourceLocalEnv, Values.lookup_rename]
 
 private theorem atomDenotationCase
-    {sourceWires targetWires arity : Nat}
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)} {rels : RelCtx}
-    (relation : RelVar rels arity)
-    {sourceArguments : Fin arity -> Fin sourceWires}
-    {targetArguments : Fin arity -> Fin targetWires}
-    (arguments_eq : wire.toFun ∘ sourceArguments = targetArguments) :
-    ItemDenotationMotive  wire rels
-      (.atom relation sourceArguments) (.atom relation targetArguments)
-      (.atom  relation arguments_eq) := by
-  intro model  sourceEnv targetEnv relEnv henv
-  subst targetArguments
-  have arguments_env_eq :
-      targetEnv ∘ (wire.toFun ∘ sourceArguments) =
-        sourceEnv ∘ sourceArguments := by
-    funext i
-    exact henv (sourceArguments i)
-  simp only [denoteItem]
-  rw [arguments_env_eq]
-
+    {sourceWires targetWires arguments : List Sig}
+    {ambient : WireEquiv sourceWires targetWires}
+    {sourceHead : Var sourceWires (.rel arguments)}
+    {targetHead : Var targetWires (.rel arguments)}
+    {sourcePorts : Vars sourceWires arguments}
+    {targetPorts : Vars targetWires arguments}
+    (head_eq : ambient sourceHead = targetHead)
+    (ports_eq : sourcePorts.map (fun wire => ambient wire) = targetPorts) :
+    ItemDenotationMotive ambient (.atom sourceHead sourcePorts)
+      (.atom targetHead targetPorts) (.atom head_eq ports_eq) := by
+  intro model sourceEnv targetEnv agree
+  subst targetHead
+  subst targetPorts
+  simp only [denoteItem_atom]
+  rw [← agree sourceHead]
+  have argumentsEq :
+      evaluateVars (sourcePorts.map (fun wire => ambient wire)) targetEnv =
+        evaluateVars sourcePorts sourceEnv := by
+    exact evaluateVars_map_eq sourcePorts ambient.toRenaming
+      sourceEnv targetEnv agree
+  rw [argumentsEq]
 
 private theorem identityDenotationCase
-    {sourceWires targetWires arity : Nat}
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)} {rels : RelCtx}
-    {sourceArguments : Fin arity -> Fin sourceWires}
-    {targetArguments : Fin arity -> Fin targetWires}
-    (arguments_eq : wire.toFun ∘ sourceArguments = targetArguments) :
-    ItemDenotationMotive  wire rels
-      (.identity arity sourceArguments) (.identity arity targetArguments)
-      (.identity arguments_eq) := by
-  intro model  sourceEnv targetEnv relEnv henv
-  subst targetArguments
+    {sourceWires targetWires : List Sig} {signature : Sig} {arity : Nat}
+    {ambient : WireEquiv sourceWires targetWires}
+    {sourcePorts : Fin arity → Var sourceWires signature}
+    {targetPorts : Fin arity → Var targetWires signature}
+    (ports_eq : (fun index => ambient (sourcePorts index)) = targetPorts) :
+    ItemDenotationMotive ambient (.identity signature arity sourcePorts)
+      (.identity signature arity targetPorts) (.identity ports_eq) := by
+  intro model sourceEnv targetEnv agree
+  subst targetPorts
   simp only [denoteItem_identity]
   constructor
   · intro sourceDenotes left right
-    calc
-      targetEnv (wire (sourceArguments left)) =
-          sourceEnv (sourceArguments left) := henv _
-      _ = sourceEnv (sourceArguments right) := sourceDenotes left right
-      _ = targetEnv (wire (sourceArguments right)) := (henv _).symm
+    rw [← agree (sourcePorts left), ← agree (sourcePorts right)]
+    exact sourceDenotes left right
   · intro targetDenotes left right
-    calc
-      sourceEnv (sourceArguments left) =
-          targetEnv (wire (sourceArguments left)) := (henv _).symm
-      _ = targetEnv (wire (sourceArguments right)) := targetDenotes left right
-      _ = sourceEnv (sourceArguments right) := henv _
+    rw [agree (sourcePorts left), agree (sourcePorts right)]
+    exact targetDenotes left right
 
 private theorem cutDenotationCase
-    {sourceWires targetWires : Nat}
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)} {rels : RelCtx}
-    {sourceBody : Region  sourceWires rels}
-    {targetBody : Region  targetWires rels}
-    (body : RegionIso  wire rels sourceBody targetBody)
-    (bodyIH : RegionDenotationMotive wire rels sourceBody targetBody body) :
-    ItemDenotationMotive wire rels (.cut sourceBody) (.cut targetBody)
+    {sourceWires targetWires : List Sig}
+    {ambient : WireEquiv sourceWires targetWires}
+    {sourceBody : Region sourceWires} {targetBody : Region targetWires}
+    (body : RegionIso ambient sourceBody targetBody)
+    (bodyIH : RegionDenotationMotive ambient sourceBody targetBody body) :
+    ItemDenotationMotive ambient (.cut sourceBody) (.cut targetBody)
       (.cut body) := by
-  intro model  sourceEnv targetEnv relEnv henv
-  constructor
-  · intro hsource htarget
-    exact hsource ((bodyIH model  sourceEnv targetEnv relEnv henv).mpr htarget)
-  · intro htarget hsource
-    exact htarget ((bodyIH model  sourceEnv targetEnv relEnv henv).mp hsource)
-
-private theorem bubbleDenotationCase
-    {sourceWires targetWires arity : Nat}
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)} {rels : RelCtx}
-    {sourceBody : Region  sourceWires (arity :: rels)}
-    {targetBody : Region  targetWires (arity :: rels)}
-    (body : RegionIso  wire (arity :: rels) sourceBody targetBody)
-    (bodyIH : RegionDenotationMotive wire (arity :: rels)
-      sourceBody targetBody body) :
-    ItemDenotationMotive wire rels
-      (.bubble arity sourceBody) (.bubble arity targetBody) (.bubble body) := by
-  intro model  sourceEnv targetEnv relEnv henv
-  constructor
-  · rintro ⟨relation, hsource⟩
-    exact ⟨relation, (bodyIH model  sourceEnv targetEnv
-      (relation, relEnv) henv).mp hsource⟩
-  · rintro ⟨relation, htarget⟩
-    exact ⟨relation, (bodyIH model  sourceEnv targetEnv
-      (relation, relEnv) henv).mpr htarget⟩
+  intro model sourceEnv targetEnv agree
+  simp only [denoteItem_cut]
+  exact not_congr (bodyIH model sourceEnv targetEnv agree)
 
 private theorem permuteDenotationCase
-    {sourceWires targetWires : Nat}
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)} {rels : RelCtx}
-    {source : ItemSeq  sourceWires rels}
-    {target : ItemSeq  targetWires rels}
+    {sourceWires targetWires : List Sig}
+    {ambient : WireEquiv sourceWires targetWires}
+    {source : ItemSeq sourceWires} {target : ItemSeq targetWires}
     (positions : FiniteEquiv (Fin source.length) (Fin target.length))
-    (items : forall i, ItemIso  wire rels
-      (source.get i) (target.get (positions i)))
-    (itemsIH : forall i, ItemDenotationMotive wire rels
-      (source.get i) (target.get (positions i)) (items i)) :
-    ItemSeqDenotationMotive wire rels source target (.permute positions items) := by
-  intro model  sourceEnv targetEnv relEnv henv
+    (items : ∀ (sourceIndex : Fin source.length)
+      (targetIndex : Fin target.length), positions sourceIndex = targetIndex →
+      ItemIso ambient (source.get sourceIndex) (target.get targetIndex))
+    (itemsIH : ∀ (sourceIndex : Fin source.length)
+      (targetIndex : Fin target.length) (equality : positions sourceIndex = targetIndex),
+      ItemDenotationMotive ambient (source.get sourceIndex)
+        (target.get targetIndex) (items sourceIndex targetIndex equality)) :
+    ItemsDenotationMotive ambient source target (.permute positions items) := by
+  intro model sourceEnv targetEnv agree
   rw [denoteItemSeq_iff_get, denoteItemSeq_iff_get]
   constructor
-  · intro hsource targetIndex
-    have hitem := (itemsIH (positions.invFun targetIndex) model
-      sourceEnv targetEnv relEnv henv).mp
-        (hsource (positions.invFun targetIndex))
-    simpa only [positions.right_inv] using hitem
-  · intro htarget sourceIndex
-    exact (itemsIH sourceIndex model  sourceEnv targetEnv relEnv henv).mpr
-      (htarget (positions sourceIndex))
+  · intro sourceDenotes targetIndex
+    let sourceIndex := positions.invFun targetIndex
+    have positionEq : positions sourceIndex = targetIndex :=
+      positions.right_inv targetIndex
+    exact (itemsIH sourceIndex targetIndex positionEq model
+      sourceEnv targetEnv agree).mp (sourceDenotes sourceIndex)
+  · intro targetDenotes sourceIndex
+    exact (itemsIH sourceIndex (positions sourceIndex) rfl model
+      sourceEnv targetEnv agree).mpr (targetDenotes (positions sourceIndex))
 
 private theorem regionDenotationRec
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    {left : Region  sourceWires rels}
-    {right : Region  targetWires rels}
-    (hiso : RegionIso  wire rels left right) :
-    RegionDenotationMotive wire rels left right hiso := by
+    {ambient : WireEquiv sourceWires targetWires}
+    {source : Region sourceWires} {target : Region targetWires}
+    (iso : RegionIso ambient source target) :
+    RegionDenotationMotive ambient source target iso := by
   apply RegionIso.rec
     (motive_1 := RegionDenotationMotive)
     (motive_2 := ItemDenotationMotive)
-    (motive_3 := ItemSeqDenotationMotive)
+    (motive_3 := ItemsDenotationMotive)
     regionDenotationCase atomDenotationCase identityDenotationCase
-    cutDenotationCase bubbleDenotationCase
-    permuteDenotationCase hiso
+    cutDenotationCase permuteDenotationCase iso
 
 private theorem itemDenotationRec
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    {left : Item  sourceWires rels}
-    {right : Item  targetWires rels}
-    (hiso : ItemIso  wire rels left right) :
-    ItemDenotationMotive wire rels left right hiso := by
+    {ambient : WireEquiv sourceWires targetWires}
+    {source : Item sourceWires} {target : Item targetWires}
+    (iso : ItemIso ambient source target) :
+    ItemDenotationMotive ambient source target iso := by
   apply ItemIso.rec
     (motive_1 := RegionDenotationMotive)
     (motive_2 := ItemDenotationMotive)
-    (motive_3 := ItemSeqDenotationMotive)
+    (motive_3 := ItemsDenotationMotive)
     regionDenotationCase atomDenotationCase identityDenotationCase
-    cutDenotationCase bubbleDenotationCase
-    permuteDenotationCase hiso
+    cutDenotationCase permuteDenotationCase iso
 
-private theorem itemSeqDenotationRec
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    {left : ItemSeq  sourceWires rels}
-    {right : ItemSeq  targetWires rels}
-    (hiso : ItemSeqIso  wire rels left right) :
-    ItemSeqDenotationMotive wire rels left right hiso := by
+private theorem itemsDenotationRec
+    {ambient : WireEquiv sourceWires targetWires}
+    {source : ItemSeq sourceWires} {target : ItemSeq targetWires}
+    (iso : ItemSeqIso ambient source target) :
+    ItemsDenotationMotive ambient source target iso := by
   apply ItemSeqIso.rec
     (motive_1 := RegionDenotationMotive)
     (motive_2 := ItemDenotationMotive)
-    (motive_3 := ItemSeqDenotationMotive)
+    (motive_3 := ItemsDenotationMotive)
     regionDenotationCase atomDenotationCase identityDenotationCase
-    cutDenotationCase bubbleDenotationCase
-    permuteDenotationCase hiso
+    cutDenotationCase permuteDenotationCase iso
 
 theorem RegionIso.denotation
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    {left : Region  sourceWires rels}
-    {right : Region  targetWires rels}
-    (hiso : RegionIso  wire rels left right)
-    (model : Model) (sourceEnv : Fin sourceWires -> model.Carrier)
-    (targetEnv : Fin targetWires -> model.Carrier)
-    (relEnv : RelEnv model.Carrier rels)
-    (henv : EnvironmentsAgree wire sourceEnv targetEnv) :
-    denoteRegion model  sourceEnv relEnv left <->
-      denoteRegion model  targetEnv relEnv right :=
-  regionDenotationRec hiso model  sourceEnv targetEnv relEnv henv
+    {ambient : WireEquiv sourceWires targetWires}
+    {source : Region sourceWires} {target : Region targetWires}
+    (iso : RegionIso ambient source target)
+    (model : Model) (sourceEnv : Values model sourceWires)
+    (targetEnv : Values model targetWires)
+    (agree : EnvironmentsAgree ambient sourceEnv targetEnv) :
+    denoteRegion model sourceEnv source ↔ denoteRegion model targetEnv target :=
+  regionDenotationRec iso model sourceEnv targetEnv agree
 
 theorem ItemIso.denotation
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    {left : Item  sourceWires rels}
-    {right : Item  targetWires rels}
-    (hiso : ItemIso  wire rels left right)
-    (model : Model) (sourceEnv : Fin sourceWires -> model.Carrier)
-    (targetEnv : Fin targetWires -> model.Carrier)
-    (relEnv : RelEnv model.Carrier rels)
-    (henv : EnvironmentsAgree wire sourceEnv targetEnv) :
-    denoteItem model  sourceEnv relEnv left <->
-      denoteItem model  targetEnv relEnv right :=
-  itemDenotationRec hiso model  sourceEnv targetEnv relEnv henv
+    {ambient : WireEquiv sourceWires targetWires}
+    {source : Item sourceWires} {target : Item targetWires}
+    (iso : ItemIso ambient source target)
+    (model : Model) (sourceEnv : Values model sourceWires)
+    (targetEnv : Values model targetWires)
+    (agree : EnvironmentsAgree ambient sourceEnv targetEnv) :
+    denoteItem model sourceEnv source ↔ denoteItem model targetEnv target :=
+  itemDenotationRec iso model sourceEnv targetEnv agree
 
 theorem ItemSeqIso.denotation
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    {left : ItemSeq  sourceWires rels}
-    {right : ItemSeq  targetWires rels}
-    (hiso : ItemSeqIso  wire rels left right)
-    (model : Model) (sourceEnv : Fin sourceWires -> model.Carrier)
-    (targetEnv : Fin targetWires -> model.Carrier)
-    (relEnv : RelEnv model.Carrier rels)
-    (henv : EnvironmentsAgree wire sourceEnv targetEnv) :
-    denoteItemSeq model  sourceEnv relEnv left <->
-      denoteItemSeq model  targetEnv relEnv right :=
-  itemSeqDenotationRec hiso model  sourceEnv targetEnv relEnv henv
-
-theorem iso_denotation
-    {left right : Region  wires rels}
-    (hiso : Core.Isomorphic left right)
-    (model : Model) (env : Fin wires -> model.Carrier)
-    (relEnv : RelEnv model.Carrier rels) :
-    denoteRegion model  env relEnv left <->
-      denoteRegion model  env relEnv right := by
-  rcases hiso with ⟨iso⟩
-  exact iso.denotation model env env relEnv (fun _ => rfl)
+    {ambient : WireEquiv sourceWires targetWires}
+    {source : ItemSeq sourceWires} {target : ItemSeq targetWires}
+    (iso : ItemSeqIso ambient source target)
+    (model : Model) (sourceEnv : Values model sourceWires)
+    (targetEnv : Values model targetWires)
+    (agree : EnvironmentsAgree ambient sourceEnv targetEnv) :
+    denoteItemSeq model sourceEnv source ↔ denoteItemSeq model targetEnv target :=
+  itemsDenotationRec iso model sourceEnv targetEnv agree
 
 end VisualProof.Diagram
