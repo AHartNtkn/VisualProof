@@ -115,12 +115,22 @@ describe('rest quality — the search crosses the junction cusp (plan Task 10)',
     const { best: barrierGap } = junctionSweep(e)
 
     // pin every node so ONLY displaceJunction is applicable — isolates the
-    // junction fix from whole-layout reshaping. Fixed seed + budget ⇒ the best is
-    // a pure function of the scene (the optimizer's rng is seeded; no wall clock).
+    // junction fix from whole-layout reshaping. The chain is seeded, so WHICH
+    // unit crosses the barrier is a pure function of the scene; the wall clock
+    // only bounds how long we wait for it (USER ruling 2026-07-24: reach the
+    // target within the budget or FAIL). A fixed unit count is NOT a valid
+    // budget: it couples the test to the phase schedule (streamed descent +
+    // 16 calibration probes come first), which is implementation, not the
+    // behavior — measured 2026-08-13, at unit 30 the chain was still
+    // calibrating (T = 0) and the hop phase it exists to test had not begun.
+    // Nodes are pinned and content is junction-invariant, so a published
+    // score improvement IS a wire-energy improvement — drive on the score.
     const pinned = new Set([...e.bodies.keys()])
     const opt = new LayoutOptimizer(0xbeef)
     opt.sync(e, pinned)
-    for (let k = 0; k < 30; k++) opt.tick(null, 0)
+    const target = opt.best()!.score - barrierGap
+    const t0 = performance.now()
+    while (opt.best()!.score > target && performance.now() - t0 < 20_000) opt.tick(null, 0)
     const best = opt.best()!
 
     const probe = mkEngine(identityJunctionScene(), [])
