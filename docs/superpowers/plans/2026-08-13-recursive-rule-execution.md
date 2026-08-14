@@ -2,302 +2,232 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace graph-based execution with computable indexed functional relations defined directly on recursive `OpenDiagram` syntax, proving that the union of each rule's forward family equals that rule and the union of its backward family equals the rule's converse.
+**Goal:** Remove graph execution and define direct recursive executors for exactly the five constructors of `Rule.Step`, with forward and backward outputs equal to the corresponding rule relation up to target isomorphism.
 
-**Architecture:** Every rule directly owns a source-dependent `ForwardIndex`/`BackwardIndex` and computable `runForward`/`runBackward`. The forward theorem says the isomorphism-closed outputs of `runForward` are exactly `R source target`; the backward theorem says the outputs of `runBackward` are exactly `R target source`. There is no generic relation wrapper or direction switch.
+**Architecture:** Each rule owns source-indexed data describing one already-selected instance and two ordinary functions, `runForward` and `runBackward`. A runner performs no search or discovery: it applies the local operation and rebuilds only the explicitly supplied recursive context. The mathematical rule modules remain the relational authority; exact iff theorems prove that the executors produce every and only rule instances.
 
-**Tech Stack:** Lean 4.30.0, Lake, the existing intrinsic `Region`/`Item`/`ItemSeq`/`OpenDiagram` syntax, `DiagramContext`, the five existing `Rule` relations, and their existing semantic soundness theorems.
+**Tech Stack:** Lean 4.30.0, Lake, recursive `OpenDiagram`/`Region`/`ItemSeq` syntax, `Occurrence`, `DiagramContext`, and the five existing `Rule.Step` relations.
 
 ## Global Constraints
 
-- State reverse execution by swapping endpoints: the backward theorem characterizes `R target source`. No named direction or converse wrapper belongs in the executable interface.
-- Remove the graph representation and its execution/refinement dependents before adding recursive executables. Do not retain aliases, adapters, re-exports, compatibility modules, or dual authorities.
-- `Index source` is the computable type of valid choices available at that particular source. Applicability belongs in this dependent domain, so `run` does not return `Option`.
-- An executable index may contain source decomposition evidence, finite maps, and rule operands. It must not contain a target `OpenDiagram`, `Rule`/`Rule.Step` evidence, a `ContextReplacement`, or an `OpenDiagramIso`.
-- The executable authority is the dependent function itself: `run source : Index source → OpenDiagram arity`. Lean's function type supplies functionality; do not define or prove a separate `Functional` predicate.
-- Coverage is presentation-invariant: each exact theorem quantifies an index and requires `OpenDiagram.Isomorphic (run source index) target`. Do not require raw syntactic equality between the computed representative and the rule endpoint.
-- Every mathematical rule module must export `respectsTargetIso`, proving `R source target → target ≅ target' → R source target'`, and `backward_respectsTargetIso`, proving `R target source → target ≅ target' → R target' source`. These are proof obligations, not inputs to `run`.
-- Each rule must expose distinct `runForward` and `runBackward` definitions and distinct `forward_exact` and `backward_exact` theorems. Do not hide the two functions behind a direction argument.
-- `runForward`, `runBackward`, and every definition in their computational dependency closures must be ordinary computable `def`s accepted by `Lean.compileDecls`. Correctness theorems and proof-only helpers may use classical reasoning, `Classical.choice`, or `noncomputable` definitions.
-- Target search, target occurrence discovery, and semantic denotation are forbidden in the computational dependency closures of the two `run` functions.
-- Soundness may construct proof-only `ContextReplacement`, `NestedContextReplacement`, and isomorphism witnesses after the target has been computed.
-- Prove two owning iff theorems for every rule. `forward_exact` characterizes `R source target`; `backward_exact` characterizes `R target source`. Each theorem excludes extra results and covers every witness in its direction up to target isomorphism.
-- Reject the vacuous empty-family solution structurally: each rule has concrete index constructors, and the reverse direction of the equality theorem must extract one from every corresponding rule witness.
-- Follow theorem-driven RED/GREEN one theorem at a time. After supporting definitions compile, enter `forward_exact` with the sole `sorry` and make it GREEN; only then enter and prove `backward_exact`. A task is committed with neither admission remaining.
-- Do not add heartbeat or recursion-depth overrides. If a proof needs duplicated traversal, dependent target reconciliation, or growing cast/HEq infrastructure, stop that task, restore its last GREEN boundary, and redesign the index or theorem boundary.
-- Preserve all unrelated TypeScript and test changes in the shared worktree. Stage and commit only the task-owned Lean, audit, and plan files.
+- Scope is exactly `Erasure`, `WireSever`, `Iteration`, `DoubleCut`, and `Vacuity`, the five constructors of `Rule.Step`. `Comprehension` has no executable obligation.
+- For each rule, define separate source-indexed `ForwardIndex source` and `BackwardIndex source` types and separate ordinary `runForward` and `runBackward` functions.
+- An index describes the precise already-selected rule instance. It may contain a source occurrence/decomposition, local operands, finite maps, and proofs that those operands are valid at the source.
+- An index must not contain the desired target diagram, evidence of the rule relation, a completed replacement from source to target, or a function whose captured result is the desired target.
+- A runner returns `OpenDiagram arity`, never `Option`. Applicability is expressed by whether `ForwardIndex source` or `BackwardIndex source` has a value.
+- A runner performs no traversal to discover a site, no target search, and no semantic evaluation. It performs one local rewrite and rebuilds the supplied context spine. Consequently, runtime is proportional to the explicitly supplied context depth and local operand construction, independent of the size of unselected source subtrees.
+- Coverage is up to target presentation:
+
+  ```lean
+  (∃ index : ForwardIndex source,
+      OpenDiagram.Isomorphic (runForward source index) target) ↔
+    R source target
+
+  (∃ index : BackwardIndex source,
+      OpenDiagram.Isomorphic (runBackward source index) target) ↔
+    R target source
+  ```
+
+- Every rule also proves closure under changing the computed endpoint by isomorphism in both orientations:
+
+  ```lean
+  R source target → OpenDiagram.Isomorphic target target' → R source target'
+  R target source → OpenDiagram.Isomorphic target target' → R target' source
+  ```
+
+- Only `runForward`, `runBackward`, and definitions they evaluate must be computable. The correctness theorems and proof-only helpers may use classical reasoning, `Classical.choice`, and `noncomputable` definitions.
+- Lean function types already provide functionality. Do not add program, family, member, replay, functionality, direction, or aggregate execution wrappers.
+- Remove obsolete dependents rather than preserving aliases, adapters, re-exports, compatibility modules, or a second execution authority.
+- Use theorem-driven RED/GREEN. Supporting definitions must compile before an owning exactness theorem is entered with the sole `sorry`; replace that `sorry` with a kernel-checked proof before beginning the other direction.
+- Do not raise heartbeat or recursion-depth limits. If a proof starts duplicating navigation, accumulating casts/`HEq`, or reconstructing targets by search, restore the last GREEN boundary and redesign the index or theorem boundary.
 
 ## Complexity Ledger
 
-- **Essential behavior:** five recursive rule relations; computable forward outputs covering exactly `R source target`; computable backward outputs covering exactly `R target source`; target-isomorphism closure in both orientations.
-- **Essential state:** the recursive source diagram, an exact recursive site/nested-site decomposition, and the operands that select one member of a forward or backward nondeterministic rule family.
-- **Integrity constraints:** Lean's dependent function type makes one valid source/index pair determine one canonical target representative; the union contains exactly its isomorphism class and equals the selected directed rule; boundaries remain ordered; wire/relation renamings remain well typed; contextual polarity is derived from the supplied recursive context.
-- **Derived data:** canonical target diagrams, filled contexts, local before/after regions, and proof-only contextual replacement/isomorphism witnesses.
-- **Accidental state to remove:** graph identifiers, checked graph wrappers, receipts, survivor domains, allocation layouts, compiler results, encoded/elaborated mirrors, and representation witnesses.
-- **Accidental control to remove:** graph selection/removal/splice pipelines, compilation replay, target reconstruction, refinement dispatch, operation error plumbing, and generated step-tag execution.
-- **Code volume:** the replacement is bounded to two exact recursive decomposition types, five rule executor modules, one import-only umbrella, and validation files.
-- **Power leaks prohibited:** generic transformation/simulation records, matchers hidden inside adequacy proofs, arbitrary relation evidence as an index, caller-supplied targets, and a second syntax or navigation authority.
+- **Essential behavior:** ten direct executors; ten exact iff theorems; two target-isomorphism closure laws per rule.
+- **Essential state:** the recursive source diagram; a source-side occurrence/decomposition identifying the selected instance; the local data needed to compute the other side of that instance.
+- **Integrity constraints:** an index is valid only at its source; local wire and relation maps are typed at the selected hole; the runner neither guesses nor validates applicability at runtime.
+- **Derived data:** the replacement body, the context-filled output diagram, and all proof-only relational/isomorphism witnesses.
+- **Accidental state to remove:** graph states, checked graph mirrors, receipts, allocation/survivor tables, compiler traces, encoded/elaborated mirrors, target reconstruction certificates, and execution lifecycle data.
+- **Accidental control to remove:** selection discovery, graph splice/removal pipelines, compilation replay, dispatch programs, error plumbing, and step-tag generation.
+- **Code volume to remove:** every module whose only purpose is graph execution, graph refinement, graph replay, or auditing those systems; all imports, build targets, scripts, and documents that keep those modules reachable.
+- **Power leaks prohibited:** caller-supplied targets, rule witnesses as indices, generic simulation/transformation frameworks, hidden search inside adequacy proofs, and generic execution containers.
 
 ## Target File Structure
 
-### Retained authorities
+### Retained mathematical authority
 
-- `VisualProof/Diagram/**`: intrinsic recursive syntax, contexts, paths, isomorphisms, replacements, and semantics.
-- `VisualProof/Rule/{Relation,Erasure,WireSever,Iteration,DoubleCut,Vacuity,Step}.lean`: mathematical rule relations.
-- `VisualProof/Rule/Soundness.lean` and `VisualProof/Rule/Soundness/**`: semantic soundness.
+- `VisualProof/Diagram/**`: recursive syntax, contexts, occurrences, isomorphisms, and semantics.
+- `VisualProof/Rule/{Relation,Erasure,WireSever,Iteration,DoubleCut,Vacuity,Step}.lean`: the five mathematical relations and their aggregate.
+- `VisualProof/Rule/Soundness.lean` and `VisualProof/Rule/Soundness/**`: semantic soundness, including comprehension soundness where independently required.
 
 ### New executable authority
 
-- `VisualProof/Diagram/Rewrite.lean`: exact source-side contextual and nested contextual decompositions plus deterministic fill operations.
-- `VisualProof/Rule/Executable/{Erasure,WireSever,Iteration,DoubleCut,Vacuity}.lean`: rule-specific index types, ten computable `run` functions, and ten exact iff theorems.
-- `VisualProof/Rule/Executable.lean`: import-only public executable umbrella.
+- `VisualProof/Diagram/NestedOccurrence.lean`: the source half of a nested replacement and its direct `replace` function.
+- `VisualProof/Rule/Executable/{Erasure,WireSever,Iteration,DoubleCut,Vacuity}.lean`: rule-specific index types, runners, and exactness theorems.
+- `VisualProof/Rule/Executable.lean`: import-only umbrella.
 
 ### Validation authority
 
-- `VisualProof/ComputabilityAudit.lean`: compiler checks for all recursive executable functions.
-- `VisualProof/Audit.lean`: axiom audit for exact coverage and isomorphism closure.
-
-### Removed authority
-
-- `VisualProof/Concrete.lean` and `VisualProof/Concrete/**`.
-- `VisualProof/Refinement/**`.
-- The graph-dependent contents of `VisualProof/Proof/**`.
-- The `visualproof_step_tags` executable target in `lakefile.toml`.
+- `VisualProof/ComputabilityAudit.lean`: asks Lean's code generator to compile the ten runners. This is a validation file, not an execution abstraction.
+- `VisualProof/Audit.lean`: prints axioms for exactness and isomorphism-closure theorems.
 
 ---
 
-### Task 1: Delete the graph execution authority and restore a recursive-only build
+### Task 1: Remove the graph execution closure and all orphaned dependents
 
 **Files:**
-- Delete: `VisualProof/Concrete.lean`
-- Delete: `VisualProof/Concrete/**`
-- Delete: `VisualProof/Refinement/**`
-- Delete: `VisualProof/Proof/Schema.lean`
-- Delete: `VisualProof/Proof/Replay.lean`
-- Delete: `VisualProof/Proof/Theorem.lean`
-- Delete: `VisualProof/Proof/Theory.lean`
+- Remove: `VisualProof/Concrete.lean` and `VisualProof/Concrete/**`
+- Remove: `VisualProof/Refinement/**`
+- Remove: graph-backed `VisualProof/Proof/**`
+- Remove: current `VisualProof/ComputabilityAudit.lean`
 - Modify: `VisualProof.lean`
 - Modify: `VisualProof/Audit.lean`
-- Delete: `VisualProof/ComputabilityAudit.lean`
 - Modify: `lakefile.toml`
 - Modify: `scripts/audit-lean-authority.sh`
-- Modify: `docs/goals/recursive-rewrite-authority/goal.md`
+- Modify: architecture/goal documents that describe graph execution
 
 **Interfaces:**
-- Consumes: the independent recursive `Diagram`, `Rule`, and `Rule.Soundness` modules.
-- Produces: a project whose only rewriting authority is `Rule.Step`; a rules audit that rejects imports from future executable/proof modules back into mathematical rules.
+- Consumes: recursive diagram syntax, the five rule relations, and semantic soundness.
+- Produces: a recursive-only build with no reachable graph execution, refinement, replay, or step-tag authority.
 
-- [ ] **Step 1: Record the deletion baseline without touching unrelated work**
+- [ ] **Step 1: Establish the dependency and deletion boundary**
 
-Run:
+  Run:
 
-```bash
-git status --short
-find VisualProof/Concrete VisualProof/Refinement VisualProof/Proof -type f -name '*.lean' -print | sort
-rg -n '^import VisualProof\.(Concrete|Refinement|Proof)' VisualProof VisualProof.lean
-```
+  ```bash
+  git status --short
+  rg -n '^import VisualProof\.(Concrete|Refinement|Proof)' VisualProof VisualProof.lean
+  rg -n 'Concrete|Refinement|StepTags|Proof\.(Replay|Schema|Theorem|Theory)' lakefile.toml VisualProof.lean scripts docs
+  ```
 
-Expected: only the known unrelated TypeScript/test files are dirty; recursive rule imports do not depend on `Concrete`, `Refinement`, or `Proof`.
+  Classify every match as retained mathematical/semantic authority or obsolete execution-dependent material. Add every obsolete importer, build target, audit, and document to this task; do not leave unreachable source behind.
 
-- [ ] **Step 2: Remove the graph execution closure**
+- [ ] **Step 2: Remove the complete obsolete closure**
 
-Run `git rm` on `VisualProof/Concrete.lean`, the complete `VisualProof/Concrete/` and `VisualProof/Refinement/` trees, and the four graph-dependent `VisualProof/Proof/*.lean` files. Delete `VisualProof/ComputabilityAudit.lean`; it will be recreated only after executable functions exist.
+  Use `git rm` for the graph, refinement, graph-backed proof, step-tag, and obsolete audit modules established in Step 1. Remove the `visualproof_step_tags` executable from `lakefile.toml`. Remove their imports from `VisualProof.lean` and all retained aggregators.
 
-- [ ] **Step 3: Narrow the public and build roots**
+- [ ] **Step 3: Narrow the retained audits and documentation**
 
-Make `VisualProof.lean` import the recursive `Theory`, `Data`, `Diagram`, `Rule`, and `Rule.Soundness` modules only. Remove the `[[lean_exe]] visualproof_step_tags` stanza from `lakefile.toml`. Change `VisualProof/Audit.lean` to import `VisualProof` and print axioms for the existing semantic and `Rule.Step.sound` theorems only.
+  Make `VisualProof/Audit.lean` cover only retained recursive rules and semantic soundness. Rewrite the authority audit and active goal document around the five recursive executors and the exactness contract in this plan.
 
-- [ ] **Step 4: Replace the audit boundary**
+- [ ] **Step 4: Validate the recursive-only boundary**
 
-In `scripts/audit-lean-authority.sh`, retain the exact five-constructor `Rule.Step` roster and recursive rule dependency checks. Remove graph-operation, receipt, step-tag, representation, and refinement rosters. Add a check that files in `VisualProof/Rule/` other than `VisualProof/Rule/Executable/**` do not import `VisualProof.Rule.Executable` or `VisualProof.Proof`.
+  ```bash
+  lake env lean -DwarningAsError=true VisualProof/Rule/Step.lean
+  lake env lean -DwarningAsError=true VisualProof/Rule/Soundness.lean
+  lake build
+  rg -n 'VisualProof\.(Concrete|Refinement)|namespace VisualProof\.(Concrete|Refinement)' VisualProof VisualProof.lean lakefile.toml
+  git diff --check
+  ```
 
-- [ ] **Step 5: Update the active architecture objective**
+  Expected: builds pass and the final search is empty.
 
-Rewrite `docs/goals/recursive-rewrite-authority/goal.md` so its oracle is: recursive syntax and rules are the sole authority; for every one of the five rules, forward outputs cover exactly `R source target` up to target isomorphism and backward outputs cover exactly `R target source`; both functions are compiler-accepted; no flat representation/refinement layer exists.
+- [ ] **Step 5: Commit the removal boundary**
 
-- [ ] **Step 6: Validate the deletion boundary**
+  Stage only the files classified in this task and commit as `remove graph execution closure`.
 
-Run:
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Rule/Step.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Soundness.lean
-lake build VisualProof.Rule.Soundness
-lake build
-scripts/audit-lean-authority.sh rules
-rg -n 'VisualProof\.(Concrete|Refinement)|namespace VisualProof\.(Concrete|Refinement)' VisualProof VisualProof.lean lakefile.toml
-git diff --check
-```
-
-Expected: every build/audit passes; the final search returns no matches.
-
-- [ ] **Step 7: Commit the deletion boundary**
-
-```bash
-git add -u -- VisualProof/Concrete.lean VisualProof/Concrete VisualProof/Refinement VisualProof/Proof VisualProof/ComputabilityAudit.lean
-git add -- VisualProof.lean VisualProof/Audit.lean lakefile.toml scripts/audit-lean-authority.sh docs/goals/recursive-rewrite-authority/goal.md
-git commit -m "remove graph execution authority"
-```
-
-**Architecture check:** The retained build must contain recursive syntax, rules, and semantics only. If any retained module still needs a graph type, move that consumer out of the retained build rather than restoring an adapter.
+**Architecture check:** Nothing retained may require graph states, compilation, receipts, replay programs, or refinement bridges. If an importer has no purpose independent of those systems, remove it rather than adapting it.
 
 ---
 
-### Task 2: Define exact recursive rewrite inputs
+### Task 2: Define the one missing source-side selection type
 
 **Files:**
-- Create: `VisualProof/Diagram/Rewrite.lean`
+- Create: `VisualProof/Diagram/NestedOccurrence.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
-- Consumes: `OpenDiagram`, `DiagramContext`, `ContextReplacement`, and `NestedContextReplacement`.
-- Produces: `ExactSite`, `ExactNestedSite`, and their computable `replace` functions plus proof-only replacement witnesses.
+- Consumes: existing `Occurrence` for ordinary contextual rules and existing recursive contexts.
+- Produces: `NestedOccurrence selected before source` and its direct `replace` operation for iteration.
 
-- [ ] **Step 1: Add the exact source-side contextual input**
+- [ ] **Step 1: Reuse `Occurrence` for ordinary contextual rules**
 
-Implement this data owner in `VisualProof/Diagram/Rewrite.lean`:
+  Do not introduce an ordinary-site wrapper. A contextual index stores:
 
-```lean
-structure ExactSite
-    (source : OpenDiagram arity)
-    (before : Region holeWires holeRels) where
-  interface : OpenDiagram arity
-  context : DiagramContext interface.externalClasses holeWires [] holeRels
-  source_eq : source = interface.withBody (context.fill before)
+  ```lean
+  occurrence : Occurrence before source
+  ```
 
-def ExactSite.replace
-    (site : ExactSite source before)
-    (after : Region holeWires holeRels) : OpenDiagram arity :=
-  site.interface.withBody (site.context.fill after)
-```
+  Its output representative is computed directly as:
 
-Add proof-only `ExactSite.replacement`, constructing `ContextReplacement source (site.replace after)` from `source_eq` and reflexive endpoint isomorphisms. The `replace` definition must remain computable and must not mention isomorphisms.
+  ```lean
+  occurrence.interface.withBody (occurrence.context.fill after)
+  ```
 
-- [ ] **Step 2: Add the exact source-side nested input**
+  `Occurrence.host_iso` is source-location evidence, not rule evidence or a supplied target.
 
-Define `ExactNestedSite source selected before` with exactly the source half of `NestedContextReplacement`: `interface`, `outer`, `descendant`, `selected`, `before`, and one `source_eq`. Define `replace after` by filling the same `outer`/`descendant` decomposition with `after`, and a proof-only `replacement` theorem returning `NestedContextReplacement source (replace after)`.
+- [ ] **Step 2: Define only the source half needed by nested iteration**
 
-- [ ] **Step 3: Validate the rewrite inputs**
+  Define:
 
-Run:
+  ```lean
+  structure NestedOccurrence
+      (selected : Region (ancestorWires + anchorLocal) ancestorRels)
+      (before : Region descendantWires descendantRels)
+      (source : OpenDiagram arity) where
+    interface : OpenDiagram arity
+    outer : DiagramContext interface.externalClasses ancestorWires [] ancestorRels
+    descendant : DiagramContext (ancestorWires + anchorLocal)
+      descendantWires ancestorRels descendantRels
+    source_iso : OpenDiagramIso source
+      (interface.withBody
+        (outer.fill
+          (Region.adjoinAt anchorLocal .nil
+            (selected.conjoin (descendant.fill before)))))
+  ```
 
-```bash
-lake env lean -DwarningAsError=true VisualProof/Diagram/Rewrite.lean
-rg -n '\b(Option|HEq)\b' VisualProof/Diagram/Rewrite.lean
-git diff --check
-```
+  Define `NestedOccurrence.replace occurrence after` by changing only `before` to `after` in that displayed recursive expression. It must be an ordinary computable definition and must not store or inspect a target.
 
-Expected: strict checking passes and the search returns no matches in the computational rewrite owner.
+- [ ] **Step 3: Validate and commit**
 
-- [ ] **Step 4: Commit the rewrite boundary**
+  ```bash
+  lake env lean -DwarningAsError=true VisualProof/Diagram/NestedOccurrence.lean
+  rg -n '\b(Option|HEq)\b|target\s*:' VisualProof/Diagram/NestedOccurrence.lean
+  git diff --check
+  ```
 
-```bash
-git add VisualProof/Diagram/Rewrite.lean VisualProof.lean
-git commit -m "define recursive rewrite inputs"
-```
+  Commit as `define nested recursive occurrence`.
 
-**Architecture check:** This file owns source decomposition and deterministic fill only. If it grows rule dispatch, a target field, `Option`, a relation wrapper, or runtime normalization, move that responsibility back to the concrete rule executor.
+**Architecture check:** Ordinary contextual rules use existing `Occurrence`; iteration gets exactly one analogous nested source occurrence. Neither type performs discovery or contains the computed endpoint.
 
 ---
 
-### Task 3: Implement the Erasure executable family
+### Task 3: Implement Erasure in both directions
 
 **Files:**
 - Create: `VisualProof/Rule/Executable/Erasure.lean`
 - Modify: `VisualProof/Rule/Erasure.lean`
 
 **Interfaces:**
-- Consumes: `ExactSite`, `Rule.Erasure.Local.erase`, `ContextReplacement.lift`, and `DiagramContext.polarity`.
-- Produces: `Erasure.ForwardIndex`, `Erasure.BackwardIndex`, computable `Erasure.runForward`/`runBackward`, two isomorphism-closure proofs, and two exact iff theorems.
+- Produces: `Erasure.ForwardIndex`, `Erasure.BackwardIndex`, `runForward`, `runBackward`, `forward_exact`, `backward_exact`, and the two target-isomorphism closure theorems.
 
-- [ ] **Step 1: Define the forward and backward index types**
+- [ ] **Step 1: Define the asymmetric indices**
 
-Define `Erasure.ForwardIndex source` with these constructors:
+  `ForwardIndex source` has an `erase` constructor containing the operands of `Erasure.Local.erase`, an `Occurrence` of the spliced body in `source`, and positive polarity; it also has an `insert` constructor containing the same operands, an occurrence of the smaller body, and negative polarity.
 
-- `erase`: the local `hostLocal`, `hostItems`, `material`, `wireMap`, and `relationMap`; an `ExactSite source (Region.spliceAt hostLocal hostItems material wireMap relationMap)`; and proof that the site polarity is positive.
-- `insert`: the same operands; an `ExactSite source (.mk hostLocal hostItems)`; and proof that the site polarity is negative.
+  `BackwardIndex source` reverses those source shapes and polarity obligations: it needs the full insertion description when the backward executor adds material. Neither index contains a target or `Rule.Erasure` evidence.
 
-Define `Erasure.BackwardIndex source` with the same two computational shapes but swapped polarity requirements: `erase` is negative and `insert` is positive. Neither type may contain `Rule.Erasure` evidence or a target diagram.
+- [ ] **Step 2: Define both runners**
 
-- [ ] **Step 2: Implement the two target functions**
+  Each branch computes the opposite local body and fills its supplied occurrence. The definitions contain no recursion except `DiagramContext.fill`, no source inspection, and no branch that can fail.
 
-Define both ordinary functions explicitly:
+- [ ] **Step 3: Prove target-isomorphism closure**
 
-```lean
-def Erasure.runForward (source : OpenDiagram arity) :
-    Erasure.ForwardIndex source → OpenDiagram arity
+  Derive `Erasure.respectsTargetIso` and `Erasure.backward_respectsTargetIso` directly from `Erasure.iso` with a reflexive source isomorphism.
 
-def Erasure.runBackward (source : OpenDiagram arity) :
-    Erasure.BackwardIndex source → OpenDiagram arity
-```
+- [ ] **Step 4: Prove exactness sequentially RED/GREEN**
 
-Each function replaces an `erase` site with `.mk hostLocal hostItems` and an `insert` site with `Region.spliceAt ...`. The two definitions are separate compiler targets even where their branch bodies coincide.
+  Prove the two global iff statements from the constraints section. In the executable-to-rule direction, build the contextual witness from the index. In the rule-to-executable direction, invert the contextual witness and its polarity, construct the corresponding index, and return its existing target isomorphism.
 
-- [ ] **Step 3: Prove the two presentation-closure theorems**
+- [ ] **Step 5: Validate and commit**
 
-In `VisualProof/Rule/Erasure.lean`, prove the two presentation-closure
-interfaces from the existing `Rule.Erasure.iso` theorem:
+  Strict-check the rule and executable modules, scan them for admissions and raised limits, run `git diff --check`, and commit as `execute erasure recursively`.
 
-```lean
-theorem Erasure.respectsTargetIso
-    (step : Rule.Erasure source target)
-    (iso : OpenDiagram.Isomorphic target target') :
-    Rule.Erasure source target'
-
-theorem Erasure.backward_respectsTargetIso
-    (step : Rule.Erasure target source)
-    (iso : OpenDiagram.Isomorphic target target') :
-    Rule.Erasure target' source
-```
-
-- [ ] **Step 4: Prove the two exact adequacy theorems sequentially RED/GREEN**
-
-Enter and prove the forward theorem first:
-
-```lean
-theorem Erasure.forward_exact (source target : OpenDiagram arity) :
-    (∃ index : Erasure.ForwardIndex source,
-      OpenDiagram.Isomorphic (Erasure.runForward source index) target) ↔
-    Rule.Erasure source target := by
-  sorry
-```
-
-After it is GREEN, enter and prove the backward theorem:
-
-```lean
-theorem Erasure.backward_exact (source target : OpenDiagram arity) :
-    (∃ index : Erasure.BackwardIndex source,
-      OpenDiagram.Isomorphic (Erasure.runBackward source index) target) ↔
-    Rule.Erasure target source := by
-  sorry
-```
-
-- [ ] **Step 5: Verify the proof responsibilities**
-
-For each theorem's function-to-relation implication, unpack its own index, construct the canonical contextual rule witness, then apply the corresponding presentation-closure theorem. For each relation-to-function implication, invert the selected rule orientation, construct that direction's index at `source`, and return the rule witness's target isomorphism. Proof-only isomorphism composition may be noncomputable; neither `run` function may call it.
-
-- [ ] **Step 6: Validate both functions and theorems**
-
-Run:
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Erasure.lean
-rg -n '\b(sorry|admit|HEq)\b' VisualProof/Rule/Executable/Erasure.lean
-git diff --check
-```
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add VisualProof/Rule/Erasure.lean VisualProof/Rule/Executable/Erasure.lean
-git commit -m "execute erasure on recursive diagrams"
-```
-
-**Architecture check:** The module exposes two index types, two `run` definitions, and two direct iff theorems. Any direction switch inside a shared executor, recursive traversal, or target comparison indicates the boundary is wrong.
+**Architecture check:** The backward insertion index must carry the material description; the forward erasure index need only identify it in the source. No common “program” abstraction is permitted.
 
 ---
 
-### Task 4: Implement DoubleCut and Vacuity executable families
+### Task 4: Implement DoubleCut and Vacuity in both directions
 
 **Files:**
 - Create: `VisualProof/Rule/Executable/DoubleCut.lean`
@@ -305,221 +235,87 @@ git commit -m "execute erasure on recursive diagrams"
 - Modify: `VisualProof/Rule/DoubleCut.lean`
 - Modify: `VisualProof/Rule/Vacuity.lean`
 
-**Interfaces:**
-- Consumes: `ExactSite`, `Rule.DoubleCut.wrap`, `Rule.Vacuity.wrap`, their local `introduce` constructors, `atPolarity_symmetric_of`, and their existing `.symm` theorems.
-- Produces: forward/backward index types, distinct computable `runForward`/`runBackward` functions, and two exact union theorems in each module.
+- [ ] **Step 1: Define direct introduction and elimination data**
 
-- [ ] **Step 1: Define DoubleCut's two families**
+  For each rule and direction, define constructors that either identify an unwrapped occurrence and carry the data needed to construct the wrapper, or identify the wrapped occurrence and carry the data needed to remove it. Vacuity introduction additionally carries the binder arity. Keep distinct public forward and backward index types even when their constructors are structurally similar.
 
-Define both `DoubleCut.ForwardIndex source` and `DoubleCut.BackwardIndex source` with:
+- [ ] **Step 2: Define the four runners**
 
-- `introduce`: operands `hostLocal`, `hostItems`, `body`, `wireMap`, `relationMap`, and an exact site at the unwrapped `Region.spliceAt` body.
-- `eliminate`: the same operands and an exact site at `Region.spliceAt hostLocal hostItems (DoubleCut.wrap body) wireMap relationMap`.
+  Each runner performs one `wrap`/unwrap local computation and fills the supplied `Occurrence`. It performs no traversal or recognition of wrapper syntax outside data already present in the index.
 
-Define separate `DoubleCut.runForward` and `DoubleCut.runBackward`; each replaces one form with the other. Symmetry makes their branch bodies coincide but does not collapse the two public executors.
+- [ ] **Step 3: Prove closure and exactness**
 
-- [ ] **Step 2: Prove DoubleCut's two equalities RED/GREEN**
+  For each rule, derive the two target-isomorphism closure laws from its existing `.iso` theorem. Prove forward exactness GREEN before entering backward exactness. Use the existing symmetric local relation only in proofs, not as a runtime direction abstraction.
 
-Prove direct `DoubleCut.respectsTargetIso` and `DoubleCut.backward_respectsTargetIso` theorems from `Rule.DoubleCut.iso`. Then prove these sequentially, with only the current owning theorem admitted during its RED state:
+- [ ] **Step 4: Validate and commit separately**
 
-```lean
-theorem DoubleCut.forward_exact (source target : OpenDiagram arity) :
-    (∃ index : DoubleCut.ForwardIndex source,
-      OpenDiagram.Isomorphic (DoubleCut.runForward source index) target) ↔
-    Rule.DoubleCut source target
+  Strict-check both executable modules, scan for admissions/raised limits, run their focused builds, and commit each independently.
 
-theorem DoubleCut.backward_exact (source target : OpenDiagram arity) :
-    (∃ index : DoubleCut.BackwardIndex source,
-      OpenDiagram.Isomorphic (DoubleCut.runBackward source index) target) ↔
-    Rule.DoubleCut target source
-```
-
-- [ ] **Step 3: Define Vacuity's two families**
-
-Define `Vacuity.ForwardIndex`, `Vacuity.BackwardIndex`, `runForward`, and `runBackward` with the additional binder `arity` operand and `Vacuity.wrap arity body`. Do not factor the two rule modules through a configurable wrapper function; their constructors remain explicit.
-
-- [ ] **Step 4: Prove Vacuity's two equalities RED/GREEN**
-
-Prove direct `Vacuity.respectsTargetIso` and `Vacuity.backward_respectsTargetIso` theorems from `Rule.Vacuity.iso`. Then prove sequentially:
-
-```lean
-theorem Vacuity.forward_exact (source target : OpenDiagram arity) :
-    (∃ index : Vacuity.ForwardIndex source,
-      OpenDiagram.Isomorphic (Vacuity.runForward source index) target) ↔
-    Rule.Vacuity source target
-
-theorem Vacuity.backward_exact (source target : OpenDiagram arity) :
-    (∃ index : Vacuity.BackwardIndex source,
-      OpenDiagram.Isomorphic (Vacuity.runBackward source index) target) ↔
-    Rule.Vacuity target source
-```
-
-- [ ] **Step 5: Validate and commit each family**
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Rule/Executable/DoubleCut.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Vacuity.lean
-rg -n '\b(sorry|admit|HEq)\b' VisualProof/Rule/Executable/{DoubleCut,Vacuity}.lean
-git diff --check
-git add VisualProof/Rule/DoubleCut.lean VisualProof/Rule/Vacuity.lean VisualProof/Rule/Executable/DoubleCut.lean VisualProof/Rule/Executable/Vacuity.lean
-git commit -m "execute modal rules on recursive diagrams"
-```
-
-**Architecture check:** Each module has two nonrecursive `run` definitions and two exact iff proofs. Classical proof-only isomorphism work is permitted; shared configurable execution machinery is a power leak and must not be introduced.
+**Architecture check:** Similar rule shapes do not justify a configurable wrapper executor. Four direct functions are smaller and expose exactly the required behavior.
 
 ---
 
-### Task 5: Implement the Iteration executable family
+### Task 5: Implement Iteration in both directions
 
 **Files:**
 - Create: `VisualProof/Rule/Executable/Iteration.lean`
 - Modify: `VisualProof/Rule/Iteration.lean`
 
-**Interfaces:**
-- Consumes: `ExactNestedSite`, `Iteration.WireFreshening`, `Iteration.Local.copy`, `NestedContextReplacement.lift`, and `Iteration.symm`.
-- Produces: `Iteration.ForwardIndex`, `Iteration.BackwardIndex`, computable `runForward`/`runBackward`, and two exact iff theorems.
+- [ ] **Step 1: Define the local copied body**
 
-- [ ] **Step 1: Define the copied descendant body once**
+  Add one computable helper equal to the right-hand side of `Iteration.Local.after_eq`, using the supplied `selected`, `descendant`, `copyLocal`, and `WireFreshening`.
 
-Add a private computable definition with the exact existing local law:
+- [ ] **Step 2: Define asymmetric source-indexed data**
 
-```lean
-def Iteration.copied
-    (descendant : DiagramContext (ancestorWires + anchorLocal)
-      descendantWires ancestorRels descendantRels)
-    (selected : Region (ancestorWires + anchorLocal) ancestorRels)
-    (remainder : Region descendantWires descendantRels)
-    (copyLocal : Nat)
-    (copyWires : Iteration.WireFreshening
-      (ancestorWires + anchorLocal) descendantWires copyLocal
-      descendant.outerWire) : Region descendantWires descendantRels :=
-  ((Region.adjoinAt copyLocal .nil
-    ((selected.renameWires copyWires.wire).renameRelations
-      descendant.outerRelation)).conjoin remainder)
-```
+  A copy constructor stores `NestedOccurrence selected remainder source`, `copyLocal`, and `copyWires`. An uncopy constructor stores `NestedOccurrence selected copied source` plus the same data needed to identify the exact copied instance. Define both forward and backward index types explicitly.
 
-- [ ] **Step 2: Define forward and backward copy indices**
+- [ ] **Step 3: Define both runners**
 
-Both `Iteration.ForwardIndex source` and `Iteration.BackwardIndex source` have:
+  Copy calls `NestedOccurrence.replace` with the computed copied body. Uncopy calls it with the remainder. There is no nested-site discovery or comparison against a proposed target.
 
-- `copy`: an `ExactNestedSite source selected remainder`, `copyLocal`, and `copyWires`.
-- `uncopy`: the same selected/remainder/copy data and an `ExactNestedSite source selected (Iteration.copied ...)`.
+- [ ] **Step 4: Prove closure and exactness**
 
-Both constructors are available in each family because `Rule.Iteration` is symmetric.
-
-- [ ] **Step 3: Implement both functions**
-
-Define separate `Iteration.runForward` and `Iteration.runBackward`. Copy replaces `remainder` by `copied`; uncopy replaces `copied` by `remainder`. Both functions use `ExactNestedSite.replace` and perform no search.
-
-- [ ] **Step 4: Package and prove both exact equalities RED/GREEN**
-
-Prove direct `Iteration.respectsTargetIso` and `Iteration.backward_respectsTargetIso` theorems from `Rule.Iteration.iso`. Then prove sequentially:
-
-```lean
-theorem Iteration.forward_exact (source target : OpenDiagram arity) :
-    (∃ index : Iteration.ForwardIndex source,
-      OpenDiagram.Isomorphic (Iteration.runForward source index) target) ↔
-    Rule.Iteration source target
-
-theorem Iteration.backward_exact (source target : OpenDiagram arity) :
-    (∃ index : Iteration.BackwardIndex source,
-      OpenDiagram.Isomorphic (Iteration.runBackward source index) target) ↔
-    Rule.Iteration target source
-```
-
-Construct `Iteration.Local.copy` for function-to-rule; for coverage, invert the symmetric nested witness, normalize `after_eq`, construct that direction's index at the exact source, and return the target isomorphism.
+  Derive both target-isomorphism closure laws from `Iteration.iso`; prove the two exact iff theorems sequentially using `NestedContextReplacement.lift` only in proof code.
 
 - [ ] **Step 5: Validate and commit**
 
-```bash
-lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Iteration.lean
-rg -n '\b(sorry|admit|HEq)\b' VisualProof/Rule/Executable/Iteration.lean
-git diff --check
-git add VisualProof/Rule/Iteration.lean VisualProof/Rule/Executable/Iteration.lean
-git commit -m "execute iteration on recursive diagrams"
-```
+  Strict-check, scan for admissions and raised limits, run the focused build, and commit as `execute iteration recursively`.
 
-**Architecture check:** Each executor is one nested fill. Any direction switch, selection partition, path alignment, compiler, or reconstruction theorem indicates an incorrect boundary.
+**Architecture check:** The index supplies the selected ancestor and descendant occurrence directly. Any path search, selection partition, or replay traversal is a design failure.
 
 ---
 
-### Task 6: Implement the WireSever executable family
+### Task 6: Implement WireSever in both directions
 
 **Files:**
 - Create: `VisualProof/Rule/Executable/WireSever.lean`
 - Modify: `VisualProof/Rule/WireSever.lean`
 
-**Interfaces:**
-- Consumes: `ExactSite`, `WireSever.collapseLocal`, `WireSever.Local.sever`, `WireSever.Open`, and `ContextReplacement.lift`.
-- Produces: `WireSever.ForwardIndex`, `WireSever.BackwardIndex`, computable `runForward`/`runBackward`, and two exact iff theorems.
+- [ ] **Step 1: Define local sever/join data**
 
-- [ ] **Step 1: Define the two local index surfaces**
+  Local sever stores `joined`, `separate`, an occurrence of the collapsed local body, and the required polarity. Local join stores the corresponding occurrence of the separated body and inverse polarity. Define the forward and backward variants explicitly.
 
-For `joined : Fin (wires + localWires)` and `separate : ItemSeq (wires + (localWires + 1)) rels`:
+- [ ] **Step 2: Define open-boundary data without a target**
 
-- `WireSever.ForwardIndex.localSever` stores an exact site at `.mk localWires (separate.renameWires (WireSever.collapseLocal wires localWires joined))` with positive polarity; `localJoin` stores an exact site at `.mk (localWires + 1) separate` with negative polarity.
-- `WireSever.BackwardIndex` contains the same computational branches with sever negative and join positive.
+  Forward open sever data stores the new external-class count, separated boundary, collapse map and its laws, and separated body whose collapse recovers the source body. Backward open join data stores the collapse from the source boundary classes to the smaller target class count; the runner derives the joined boundary and renamed body. These are operands describing the rule instance, not a stored `OpenDiagram` target.
 
-Their targets are the other body, computed directly.
+- [ ] **Step 3: Define both runners**
 
-- [ ] **Step 2: Define forward open-sever data**
+  Local branches fill their supplied occurrence. Open branches construct the output `OpenDiagram` directly from the supplied boundary/body operands. No branch searches for a wire or returns `Option`.
 
-Define `WireSever.OpenSeverData source` with:
+- [ ] **Step 4: Prove closure and exactness**
 
-```lean
-separateBoundary : Fin arity → Fin (source.externalClasses + 1)
-separateBoundary_surjective : Function.Surjective separateBoundary
-collapse : Fin (source.externalClasses + 1) → Fin source.externalClasses
-collapse_surjective : Function.Surjective collapse
-boundary : ∀ position,
-  collapse (separateBoundary position) = source.boundary position
-separateBody : Region (source.externalClasses + 1) []
-body_eq : separateBody.renameWires collapse = source.body
-```
+  Derive both target-isomorphism closure laws from `WireSever.iso`. Prove forward exactness, then backward exactness, by matching the contextual/open disjunction and returning the rule witness's target isomorphism.
 
-The target is the `OpenDiagram` with `separateBoundary` and `separateBody`. Include this constructor only in `ForwardIndex`.
+- [ ] **Step 5: Validate and commit**
 
-- [ ] **Step 3: Define backward open-join data**
+  Strict-check, scan for admissions and raised limits, run the focused build, and commit as `execute wire severance recursively`.
 
-Define `WireSever.OpenJoinData source` with `targetClasses`, an equality `source.externalClasses = targetClasses + 1`, and a surjective `collapse : Fin source.externalClasses → Fin targetClasses`. Define the target boundary as `collapse ∘ source.boundary`, prove its surjectivity from the supplied maps, and define the target body as `source.body.renameWires collapse`. Include this constructor only in `BackwardIndex`.
-
-- [ ] **Step 4: Implement the two functions**
-
-Define `WireSever.runForward` over forward local sever/join plus open sever, and `WireSever.runBackward` over backward local sever/join plus open join. Local branches call `ExactSite.replace`; open branches construct the stated `OpenDiagram`. No branch returns `Option` or accepts a target.
-
-- [ ] **Step 5: Prove both exact iff theorems RED/GREEN**
-
-Prove direct `WireSever.respectsTargetIso` and `WireSever.backward_respectsTargetIso` theorems from `Rule.WireSever.iso`. Then prove sequentially:
-
-```lean
-theorem WireSever.forward_exact (source target : OpenDiagram arity) :
-    (∃ index : WireSever.ForwardIndex source,
-      OpenDiagram.Isomorphic (WireSever.runForward source index) target) ↔
-    Rule.WireSever source target
-
-theorem WireSever.backward_exact (source target : OpenDiagram arity) :
-    (∃ index : WireSever.BackwardIndex source,
-      OpenDiagram.Isomorphic (WireSever.runBackward source index) target) ↔
-    Rule.WireSever target source
-```
-
-Local branches construct `WireSever.Local.sever`; open branches construct `WireSever.Open`; coverage returns the existing target isomorphism.
-
-- [ ] **Step 6: Validate and commit**
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Rule/Executable/WireSever.lean
-rg -n '\b(sorry|admit|HEq)\b' VisualProof/Rule/Executable/WireSever.lean
-git diff --check
-git add VisualProof/Rule/WireSever.lean VisualProof/Rule/Executable/WireSever.lean
-git commit -m "execute wire severance on recursive diagrams"
-```
-
-**Architecture check:** Open boundary changes are the only special case. Each direction has its own direct function. If local and open execution start sharing a general renaming/simulation framework, split them back into direct constructors.
+**Architecture check:** Open sever and open join are legitimately asymmetric. Do not force them through a general renaming or simulation framework.
 
 ---
 
-### Task 7: Install computability and exact-coverage validation
+### Task 7: Install public imports and direct validation
 
 **Files:**
 - Create: `VisualProof/Rule/Executable.lean`
@@ -528,99 +324,49 @@ git commit -m "execute wire severance on recursive diagrams"
 - Modify: `scripts/audit-lean-authority.sh`
 - Modify: `VisualProof.lean`
 
-**Interfaces:**
-- Consumes: the ten rule `run` functions and the twenty required rule facts.
-- Produces: compiler-backed computability evidence, dependency/roster audit, axiom audit, and the final public build.
+- [ ] **Step 1: Add an import-only umbrella**
 
-- [ ] **Step 1: Add the import-only executable umbrella**
+  `VisualProof/Rule/Executable.lean` imports the five executable modules and declares nothing.
 
-Create `VisualProof/Rule/Executable.lean` importing exactly the five rule executor modules, and import that umbrella from `VisualProof.lean`. It defines no dispatcher, wrapper, index, or function.
+- [ ] **Step 2: Validate code generation for the ten runners**
 
-- [ ] **Step 2: Add compiler-backed computability evidence**
+  In `VisualProof/ComputabilityAudit.lean`, use Lean's test-only `Lean.compileDecls` command on the ten runner names. This asks Lean's code generator to compile those definitions and fails if their computational dependency closure contains a noncomputable definition. It creates no runtime API and imposes no restriction on theorem proofs.
 
-Create `VisualProof/ComputabilityAudit.lean`:
+- [ ] **Step 3: Validate the public theorem roster**
 
-```lean
-import Lean.Compiler
-import VisualProof.Rule.Executable
+  Require exactly these declarations for each rule: `ForwardIndex`, `BackwardIndex`, `runForward`, `runBackward`, `forward_exact`, `backward_exact`, `respectsTargetIso`, and `backward_respectsTargetIso`. Reject aggregate executors, direction switches, replay/program types, target fields, rule-evidence fields, and imports from executable modules into mathematical rule or soundness modules.
 
-open Lean
+- [ ] **Step 4: Run final validation**
 
-run_meta Lean.compileDecls #[
-  ``VisualProof.Rule.Erasure.runForward,
-  ``VisualProof.Rule.Erasure.runBackward,
-  ``VisualProof.Rule.WireSever.runForward,
-  ``VisualProof.Rule.WireSever.runBackward,
-  ``VisualProof.Rule.Iteration.runForward,
-  ``VisualProof.Rule.Iteration.runBackward,
-  ``VisualProof.Rule.DoubleCut.runForward,
-  ``VisualProof.Rule.DoubleCut.runBackward,
-  ``VisualProof.Rule.Vacuity.runForward,
-  ``VisualProof.Rule.Vacuity.runBackward
-]
-```
+  ```bash
+  lake env lean -DwarningAsError=true VisualProof/Diagram/NestedOccurrence.lean
+  lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Erasure.lean
+  lake env lean -DwarningAsError=true VisualProof/Rule/Executable/WireSever.lean
+  lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Iteration.lean
+  lake env lean -DwarningAsError=true VisualProof/Rule/Executable/DoubleCut.lean
+  lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Vacuity.lean
+  lake env lean -DwarningAsError=true VisualProof/ComputabilityAudit.lean
+  lake env lean -DwarningAsError=true VisualProof/Audit.lean
+  scripts/audit-lean-authority.sh rules
+  scripts/audit-lean-authority.sh implementation
+  rg -n '\b(sorry|admit|decreasing_by sorry|^axiom |set_option (maxHeartbeats|maxRecDepth))\b' VisualProof
+  lake build
+  git diff --check
+  ```
 
-Use the final namespaces exactly as implemented. Compilation failure is a task failure and must be repaired in the computational dependency closure; it places no restriction on theorem proofs or proof-only helper definitions.
+- [ ] **Step 5: Perform the architecture-compensation review**
 
-- [ ] **Step 3: Extend the source authority audit**
+  Confirm that every runner merely pattern-matches its index, constructs one local counterpart, and fills the supplied occurrence; no runner traverses the source to discover anything. Confirm that proof code has not introduced a second navigation authority, target reconstruction layer, or raised elaboration limits. Backtrack the owning task if either check fails.
 
-For each of the five rules require exactly `ForwardIndex`, `BackwardIndex`, `runForward`, `runBackward`, `forward_exact`, `backward_exact`, `respectsTargetIso`, and `backward_respectsTargetIso`. Reject aggregate dispatch, program/replay types, `ExecutableFamily`/`Member` wrappers, `Functional` predicates, named direction switches, and direction-switched executors. Reject imports from executable modules into mathematical rule or soundness modules and reject any remaining flat-representation or refinement authority under `VisualProof`.
+- [ ] **Step 6: Commit validation authority**
 
-- [ ] **Step 4: Extend the axiom audit**
-
-Add `#print axioms` for every rule's `forward_exact`, `backward_exact`, `respectsTargetIso`, and `backward_respectsTargetIso`. The output may contain Lean’s accepted classical/propext axioms from proof-only isomorphism reasoning, but must not contain project placeholder axioms.
-
-- [ ] **Step 5: Run strict module validation**
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Diagram/Rewrite.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Erasure.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Executable/WireSever.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Iteration.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Executable/DoubleCut.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Vacuity.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Executable.lean
-lake env lean -DwarningAsError=true VisualProof/ComputabilityAudit.lean
-lake env lean -DwarningAsError=true VisualProof/Audit.lean
-```
-
-- [ ] **Step 6: Run final architecture and family-coverage validation**
-
-```bash
-scripts/audit-lean-authority.sh rules
-scripts/audit-lean-authority.sh implementation
-rg -n '\b(sorry|admit|decreasing_by sorry|^axiom |set_option (maxHeartbeats|maxRecDepth))\b' VisualProof
-rg -n 'VisualProof\.(Concrete|Refinement)|namespace VisualProof\.(Concrete|Refinement)' VisualProof VisualProof.lean lakefile.toml
-lake build
-git diff --check
-git status --short
-```
-
-Expected: strict checks and full build pass; both forbidden searches return no matches; status lists only unrelated user changes before staging.
-
-- [ ] **Step 7: Perform the final architecture-compensation review**
-
-Inspect each family and confirm:
-
-- each rule has two ordinary computable functions, each a direct constructor/fill operation with no recursion other than structural recursive syntax helpers;
-- each index contains no target, relation evidence, isomorphism, or semantic proof;
-- each exact theorem uses `∃ index, Isomorphic (run source index) target`, with no raw-target equality requirement;
-- each rule has two exact iff theorems, two target-isomorphism closure proofs, and no generic relation/functionality wrapper or soundness/completeness record fields;
-- no file raises elaboration limits.
-
-If any item fails, return to the owning task and redesign before committing.
-
-- [ ] **Step 8: Commit final audits**
-
-```bash
-git add VisualProof/Rule/Executable.lean VisualProof/ComputabilityAudit.lean VisualProof/Audit.lean scripts/audit-lean-authority.sh VisualProof.lean
-git commit -m "audit recursive rule execution"
-```
+  Commit the umbrella and audits as `audit recursive rule execution`.
 
 ## Self-Review
 
-- **Spec coverage:** Task 1 removes the representation split. Task 2 provides deterministic recursive fills. Tasks 3–6 define separate computable forward and backward indexed functions for all five rules and establish exactly four required facts per rule. Task 7 validates computability, exact coverage, isomorphism closure, and dependency direction.
-- **Anti-vacuity:** Indices cannot contain `R` evidence or a target, every rule exports concrete indices in both directions, the reverse implication extracts those indices from every rule witness, and the compiler audit checks the actual functions.
-- **Exact adequacy:** `forward_exact` equates `∃ index, Isomorphic (runForward source index) target` with `R source target`; `backward_exact` equates the analogous backward executor with `R target source`. Neither missing valid rule instances nor extra executable transitions can pass.
-- **Type consistency:** Every forward/backward `Index source` is a type of valid choices for that source; every `runForward source` and `runBackward source` is an ordinary computable function to an `OpenDiagram arity`.
-- **Architecture discipline:** Deletion occurs before replacement. There is one direct exact-site boundary, two explicit functions and two direct iff theorems per rule, no generic family/relation wrapper, no quotient runtime or theorem carrier, no representation/refinement bridge, no target search, no second recursive syntax, and explicit stop/rethink gates after every implementation task.
+- **Spec coverage:** exactly five `Rule.Step` rules; two direct functions, two exact iff theorems, and two target-isomorphism closure laws per rule.
+- **Anti-vacuity:** indices may describe the source occurrence and operands but cannot contain the desired target or evidence that the rule holds.
+- **Execution cost:** no discovery or source traversal; cost is rebuilding the explicitly supplied context spine plus local construction.
+- **Proof freedom:** classical/noncomputable proof machinery is allowed outside the runners' evaluated dependency closures.
+- **Removal discipline:** the graph execution closure and every orphaned dependent/build/audit/documentation surface are removed before replacement.
+- **Architecture discipline:** existing `Occurrence` is reused, only one nested source occurrence is added, and no generic program/family/relation/functionality wrapper exists.
