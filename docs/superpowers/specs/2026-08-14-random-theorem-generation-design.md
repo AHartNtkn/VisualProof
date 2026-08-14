@@ -67,8 +67,10 @@ Kernel facts the design relies on (verified against the code):
 - No move enumerator or proof search exists anywhere;
   `applicableActions` (`src/app/actions.ts`) only classifies an
   already-chosen selection. The enumerator is new work.
-- `exploreForm` (`src/kernel/diagram/canonical/explore.ts`) provides canonical
-  forms for goal testing and search memoization.
+- `sameDiagram`/`diagramIso` (`src/kernel/diagram/canonical/iso.ts`) decide
+  exact diagram isomorphism via joint color refinement. There is no canonical
+  string-form function anywhere in the kernel, so the search memoizes via an
+  iso-invariant digest confirmed by `sameDiagram` (see the search section).
 - `checkTheorem` (`src/kernel/proof/theorem.ts`) replays a recorded
   derivation and is the provability certificate for family B.
 
@@ -128,11 +130,16 @@ is falsifiable. The both-polarities-per-atom prefilter from the source notes
 is intentionally omitted — at puzzle sizes the full check is already
 instant, so the prefilter buys nothing.
 
-**Accept/reject loop.** Knobs: atom count (min 1, default 3), minimum core
-size in connectives (min 1, default 6), and attempt cap (min 1, default
-10,000). Sample → reject non-tautologies → shrink → accept if the core meets
-the minimum size, else resample. Exceeding the attempt cap throws with a
-clear message rather than spinning on an unsatisfiable knob combination.
+**Accept/reject loop.** Knobs: atom count (min 1, default 3), sample size in
+connectives (min 1, default 12 — the size formulas are sampled at, before
+shrinking), minimum core size in connectives (min 1, default 6), and attempt
+cap (min 1, default 10,000). Sample at the sample size → reject
+non-tautologies → shrink → accept if the core meets the minimum size, else
+resample. The sample size must be its own knob because the shrinker only
+removes: cores can never exceed the sampled size, so sampling at the minimum
+core size would degenerate into pure rejection sampling. Exceeding the
+attempt cap throws with a clear message rather than spinning on an
+unsatisfiable knob combination.
 
 **Output.** The core prints as `∀P Q R:o. <formula>`, quantifying exactly the
 atoms that survived shrinking, and runs through the existing
@@ -184,18 +191,17 @@ the attempt cap throws with a clear message.
 
 **Knobs.** Atom count (number of ∀ wires; min 1, default 2), walk length
 (moves after the prelude; min 1, default 12), and attempt cap (min 1,
-default 1,000). Defaults are validated by the integration test: default-knob
-problems must be solved by the search within default fuel. Walk length is an
-upper bound on difficulty, not a guarantee; the honest number comes from the
-search.
+default 1,000). Walk length is an upper bound on difficulty, not a
+guarantee; the honest number comes from the search.
 
 ## Minimal-proof search (`src/generate/search/`)
 
 **Direction and goal.** Backward-oriented — exactly what the user plays.
 Start at the generated theorem diagram, apply steps with
 `applyStep(…, 'backward')` over `EMPTY_PROOF_CONTEXT`; the goal is the blank
-sheet, tested by `exploreForm` canonical-form equality (dismantling the ∀
-shell included).
+sheet (dismantling the ∀ shell included), tested literally: exactly one
+region (the root sheet), zero nodes, zero wires. No isomorphism machinery is
+needed for the goal test.
 
 **Enumerator.** New work. For a diagram it emits every applicable atomic
 move in the backward propositional alphabet — the mirror of the walk's:
@@ -213,10 +219,14 @@ All finitely enumerable. Selection construction reuses the pure helpers in
 wires, `deiterationStep`) rather than reimplementing them; the import is
 acyclic at file level.
 
-**Algorithm.** Iterative-deepening DFS memoized on `exploreForm`: a state is
-pruned when its canonical form was already visited with at least as much
-remaining depth budget. Runs under an explicit expanded-state fuel budget.
-Deterministic; no RNG.
+**Algorithm.** Iterative-deepening DFS under an explicit expanded-state fuel
+budget. Deterministic; no RNG. Memoization: states are bucketed by an
+iso-invariant digest (multisets of region depths, node kinds per depth, wire
+signatures with endpoint counts — all preserved by diagram isomorphism);
+within a bucket, identity is confirmed by `sameDiagram` against stored
+representatives, so pruning is exact, never hash-optimistic. A state is
+pruned when an isomorphic state was already visited with at least as much
+remaining depth budget.
 
 **Outputs, honestly labeled.**
 
@@ -276,20 +286,26 @@ Tests land as each piece is built. All generator tests use fixed seeds.
   minimal, `formulaToDiagram` accepts it; attempt cap throws loudly on an
   impossible knob combination.
 - **Family B.** Over a seed batch: `checkTheorem` passes on the emitted
-  theorem; cross-check — `exploreForm` of the walk's diagram equals
-  `exploreForm` of `formulaToDiagram(statement)`, pinning the reader and the
-  prelude shape against the formula pipeline in one assertion; minimality
-  filter verified by feeding the reader's formula back through the weakening
-  test.
+  theorem; cross-check — `sameDiagram` holds between the walk's diagram and
+  `formulaToDiagram(statement)`, pinning the reader and the prelude shape
+  against the formula pipeline in one assertion; minimality filter verified
+  by feeding the reader's formula back through the weakening test.
 - **Enumerator.** Soundness: every emitted candidate applies via
   `applyStep(…, 'backward')` without error, over a corpus of generated
   diagrams. Completeness spot-checks: hand-built positions where a specific
   move (a deiteration, an empty-annulus elim) must be offered.
 - **Search.** Tiny theorems with hand-computed minimal lengths verified
-  exactly; rule-class labels on known cases (¬(P∧¬P) requires insertion and
-  iteration); fuel-exhaustion path returns the honest bound; integration
-  property: for default knobs, both families' outputs are solved by the
-  search within default fuel (this also validates the default fuel value).
+  exactly — e.g. ∀P:o. ¬(P∧¬P) has the 5-step backward proof (deiterate
+  inner P, erase outer P, double-cut-elim the body pair, vacuity-delete the
+  bare wire, double-cut-elim the shell) and its inner cut can only be
+  emptied by deiteration, so the search must report length 5 requiring the
+  iteration class and not requiring insertion. Fuel-exhaustion path returns
+  the honest bound. Integration property: for default knobs, both families'
+  outputs run through the search without error, returning either a solve or
+  an honest bound — exact-solve assertions are reserved for small
+  hand-chosen knob cases that finish inside the ordinary suite's 5-second
+  test timeout. Default search fuel is sized so those small cases solve and
+  a default-knob run returns promptly with at worst an honest bound.
 - **UI.** `tests/app/` unit tests mirroring the formula-entry tests
   (open/close/escape, knob rendering per family, error surfacing); one
   Playwright spec in `e2e/`: open Random…, generate, create diagram, enter
