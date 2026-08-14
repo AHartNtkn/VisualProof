@@ -7,6 +7,13 @@ import { buildRefineIndex, refineJointly, type Mark, type RefineIndex, type Side
  * refinement cannot split is an automorphism orbit ONLY when every member
  * is explored, so this search tries each and keeps the least form. Cold
  * path (once per definition, small bodies) — no orbit pruning by design.
+ *
+ * Contract: deterministic (a pure function of the diagram) and id-invariant
+ * — isomorphic diagrams receive corresponding wire ordinals, so isomorphic
+ * selections get the same argument order. When a genuine automorphism orbit
+ * ties several wires together, this search's own lex-min winner picks among
+ * the tied total orders; nothing requires that winner to coincide with any
+ * other canonicalization engine's choice among the same tied orders.
  */
 export function canonicalWireOrder(d: Diagram): Map<WireId, number> {
   const idx = buildRefineIndex(d, [])
