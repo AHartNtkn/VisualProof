@@ -81,7 +81,8 @@ Algorithm:
    "isomorphic" is impossible even if refinement had a bug; only "not
    isomorphic" answers rest on refinement keys being iso-invariant (they
    are: built from content only).
-4. Otherwise take the smallest tied class, fix its least A-member (any
+4. Otherwise take the tied class of smallest color (a deterministic choice;
+   any tied class preserves completeness), fix its least A-member (any
    fixed choice is complete, because the image of that member under any
    isomorphism must lie in the matched class), and try each B-member of
    the class in turn: individualize both to one fresh shared color,
