@@ -5,71 +5,83 @@ namespace VisualProof.Rule.Erasure
 open Theory
 open Diagram
 
-inductive ForwardIndex {arity : Nat} (source : OpenDiagram arity) : Type
+inductive ForwardIndex {boundary : List Sig}
+    (source : OpenDiagram boundary) : Type
   | erase
-      (hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (material : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels)
+      (hostLocals : List Sig)
+      (hostItems : ItemSeq (holeWires ++ hostLocals))
+      (material : Region materialWires)
+      (wireMap : WireRenaming materialWires (holeWires ++ hostLocals))
       (occurrence : Occurrence
-        (Region.spliceAt hostLocal hostItems material wireMap relationMap)
-        source)
+        (Region.spliceAt hostLocals hostItems material wireMap) source)
       (polarity : occurrence.context.polarity = .positive) :
       ForwardIndex source
   | insert
-      (hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (material : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels)
-      (occurrence : Occurrence (.mk hostLocal hostItems) source)
-      (polarity : occurrence.context.polarity = .negative) :
+      (hostLocals : List Sig)
+      (hostItems : ItemSeq (holeWires ++ hostLocals))
+      (material : Region materialWires)
+      (wireMap : WireRenaming materialWires (holeWires ++ hostLocals))
+      (occurrence : Occurrence
+        (eraseAt hostLocals hostItems material wireMap) source)
+      (polarity : occurrence.context.polarity = .negative)
+      (targetCanonical : (occurrence.context.fill
+        (Region.spliceAt hostLocals hostItems material wireMap)).Canonical) :
       ForwardIndex source
 
-inductive BackwardIndex {arity : Nat} (source : OpenDiagram arity) : Type
+inductive BackwardIndex {boundary : List Sig}
+    (source : OpenDiagram boundary) : Type
   | insert
-      (hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (material : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels)
-      (occurrence : Occurrence (.mk hostLocal hostItems) source)
-      (polarity : occurrence.context.polarity = .positive) :
+      (hostLocals : List Sig)
+      (hostItems : ItemSeq (holeWires ++ hostLocals))
+      (material : Region materialWires)
+      (wireMap : WireRenaming materialWires (holeWires ++ hostLocals))
+      (occurrence : Occurrence
+        (eraseAt hostLocals hostItems material wireMap) source)
+      (polarity : occurrence.context.polarity = .positive)
+      (targetCanonical : (occurrence.context.fill
+        (Region.spliceAt hostLocals hostItems material wireMap)).Canonical) :
       BackwardIndex source
   | erase
-      (hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (material : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels)
+      (hostLocals : List Sig)
+      (hostItems : ItemSeq (holeWires ++ hostLocals))
+      (material : Region materialWires)
+      (wireMap : WireRenaming materialWires (holeWires ++ hostLocals))
       (occurrence : Occurrence
-        (Region.spliceAt hostLocal hostItems material wireMap relationMap)
-        source)
+        (Region.spliceAt hostLocals hostItems material wireMap) source)
       (polarity : occurrence.context.polarity = .negative) :
       BackwardIndex source
 
-def runForward (source : OpenDiagram arity) :
-    ForwardIndex source → OpenDiagram arity
-  | .erase _ hostItems _ _ _ occurrence _ =>
-      occurrence.interface.withBody
-        (occurrence.context.fill (.mk _ hostItems))
-  | .insert hostLocal hostItems material wireMap relationMap occurrence _ =>
+def runForward (source : OpenDiagram boundary) :
+    ForwardIndex source → OpenDiagram boundary
+  | .erase hostLocals hostItems material wireMap occurrence _ =>
       occurrence.interface.withBody
         (occurrence.context.fill
-          (Region.spliceAt hostLocal hostItems material wireMap relationMap))
-
-def runBackward (source : OpenDiagram arity) :
-    BackwardIndex source → OpenDiagram arity
-  | .insert hostLocal hostItems material wireMap relationMap occurrence _ =>
+          (eraseAt hostLocals hostItems material wireMap))
+        (occurrenceTargetCanonical hostLocals hostItems material wireMap
+          occurrence)
+  | .insert hostLocals hostItems material wireMap occurrence _
+      targetCanonical =>
       occurrence.interface.withBody
         (occurrence.context.fill
-          (Region.spliceAt hostLocal hostItems material wireMap relationMap))
-  | .erase _ hostItems _ _ _ occurrence _ =>
-      occurrence.interface.withBody
-        (occurrence.context.fill (.mk _ hostItems))
+          (Region.spliceAt hostLocals hostItems material wireMap))
+        targetCanonical
 
-theorem forward_exact (source target : OpenDiagram arity) :
+def runBackward (source : OpenDiagram boundary) :
+    BackwardIndex source → OpenDiagram boundary
+  | .insert hostLocals hostItems material wireMap occurrence _
+      targetCanonical =>
+      occurrence.interface.withBody
+        (occurrence.context.fill
+          (Region.spliceAt hostLocals hostItems material wireMap))
+        targetCanonical
+  | .erase hostLocals hostItems material wireMap occurrence _ =>
+      occurrence.interface.withBody
+        (occurrence.context.fill
+          (eraseAt hostLocals hostItems material wireMap))
+        (occurrenceTargetCanonical hostLocals hostItems material wireMap
+          occurrence)
+
+theorem forward_exact (source target : OpenDiagram boundary) :
     (∃ index : ForwardIndex source,
       OpenDiagram.Isomorphic (runForward source index) target) ↔
     Rule.Erasure source target := by
@@ -77,33 +89,36 @@ theorem forward_exact (source target : OpenDiagram arity) :
   · rintro ⟨index, isomorphic⟩
     apply respectsTargetIso (target' := target) ?_ isomorphic
     cases index with
-    | erase hostLocal hostItems material wireMap relationMap occurrence
-        polarity =>
-        refine ⟨_, _, _, _, occurrence, OpenDiagramIso.refl _, ?_⟩
+    | erase hostLocals hostItems material wireMap occurrence polarity =>
+        refine ⟨_, _, _, occurrence,
+          occurrenceTargetCanonical hostLocals hostItems material wireMap
+            occurrence,
+          OpenDiagramIso.refl _, ?_⟩
         rw [polarity]
-        exact Local.erase hostLocal hostItems material wireMap relationMap
-    | insert hostLocal hostItems material wireMap relationMap occurrence
-        polarity =>
-        refine ⟨_, _, _, _, occurrence, OpenDiagramIso.refl _, ?_⟩
+        exact Local.erase hostLocals hostItems material wireMap
+    | insert hostLocals hostItems material wireMap occurrence polarity
+        targetCanonical =>
+        refine ⟨_, _, _, occurrence, targetCanonical,
+          OpenDiagramIso.refl _, ?_⟩
         rw [polarity]
-        exact Local.erase hostLocal hostItems material wireMap relationMap
-  · rintro ⟨wires, rels, before, after, occurrence, targetIso,
+        exact Local.erase hostLocals hostItems material wireMap
+  · rintro ⟨wires, before, after, occurrence, targetCanonical, targetIso,
       localEvidence⟩
     cases polarity : occurrence.context.polarity with
     | positive =>
         simp only [polarity, atPolarity] at localEvidence
         cases localEvidence with
-        | erase hostLocal hostItems material wireMap relationMap =>
-            exact ⟨.erase hostLocal hostItems material wireMap relationMap
-              occurrence polarity, ⟨targetIso.symm⟩⟩
+        | erase hostLocals hostItems material wireMap =>
+            exact ⟨.erase hostLocals hostItems material wireMap occurrence
+              polarity, ⟨targetIso.symm⟩⟩
     | negative =>
         simp only [polarity, atPolarity, converse] at localEvidence
         cases localEvidence with
-        | erase hostLocal hostItems material wireMap relationMap =>
-            exact ⟨.insert hostLocal hostItems material wireMap relationMap
-              occurrence polarity, ⟨targetIso.symm⟩⟩
+        | erase hostLocals hostItems material wireMap =>
+            exact ⟨.insert hostLocals hostItems material wireMap occurrence
+              polarity targetCanonical, ⟨targetIso.symm⟩⟩
 
-theorem backward_exact (source target : OpenDiagram arity) :
+theorem backward_exact (source target : OpenDiagram boundary) :
     (∃ index : BackwardIndex source,
       OpenDiagram.Isomorphic (runBackward source index) target) ↔
     Rule.Erasure target source := by
@@ -111,60 +126,71 @@ theorem backward_exact (source target : OpenDiagram arity) :
   · rintro ⟨index, isomorphic⟩
     apply backward_respectsTargetIso (target' := target) ?_ isomorphic
     cases index with
-    | insert hostLocal hostItems material wireMap relationMap occurrence
-        polarity =>
+    | insert hostLocals hostItems material wireMap occurrence polarity
+        targetCanonical =>
         let outputOccurrence : Occurrence
-            (Region.spliceAt hostLocal hostItems material wireMap relationMap)
+            (Region.spliceAt hostLocals hostItems material wireMap)
             (occurrence.interface.withBody
               (occurrence.context.fill
-                (Region.spliceAt hostLocal hostItems material wireMap
-                  relationMap))) := {
+                (Region.spliceAt hostLocals hostItems material wireMap))
+              targetCanonical) := {
           interface := occurrence.interface
           context := occurrence.context
+          sourceCanonical := targetCanonical
           host_iso := OpenDiagramIso.refl _
         }
-        refine ⟨_, _, _, _, outputOccurrence, occurrence.host_iso, ?_⟩
+        refine ⟨_, _, _, outputOccurrence, occurrence.sourceCanonical,
+          occurrence.host_iso, ?_⟩
         rw [polarity]
-        exact Local.erase hostLocal hostItems material wireMap relationMap
-    | erase hostLocal hostItems material wireMap relationMap occurrence
-        polarity =>
-        let outputOccurrence : Occurrence (.mk hostLocal hostItems)
+        exact Local.erase hostLocals hostItems material wireMap
+    | erase hostLocals hostItems material wireMap occurrence polarity =>
+        let outputCanonical := occurrenceTargetCanonical hostLocals hostItems
+          material wireMap occurrence
+        let outputOccurrence : Occurrence
+            (eraseAt hostLocals hostItems material wireMap)
             (occurrence.interface.withBody
-              (occurrence.context.fill (.mk hostLocal hostItems))) := {
+              (occurrence.context.fill
+                (eraseAt hostLocals hostItems material wireMap))
+              outputCanonical) := {
           interface := occurrence.interface
           context := occurrence.context
+          sourceCanonical := outputCanonical
           host_iso := OpenDiagramIso.refl _
         }
-        refine ⟨_, _, _, _, outputOccurrence, occurrence.host_iso, ?_⟩
+        refine ⟨_, _, _, outputOccurrence, occurrence.sourceCanonical,
+          occurrence.host_iso, ?_⟩
         rw [polarity]
-        exact Local.erase hostLocal hostItems material wireMap relationMap
-  · rintro ⟨wires, rels, before, after, occurrence, sourceIso,
+        exact Local.erase hostLocals hostItems material wireMap
+  · rintro ⟨wires, before, after, occurrence, targetCanonical, sourceIso,
       localEvidence⟩
     cases polarity : occurrence.context.polarity with
     | positive =>
         simp only [polarity, atPolarity] at localEvidence
         cases localEvidence with
-        | erase hostLocal hostItems material wireMap relationMap =>
-            let sourceOccurrence : Occurrence (.mk hostLocal hostItems)
-                source := {
+        | erase hostLocals hostItems material wireMap =>
+            let sourceOccurrence : Occurrence
+                (eraseAt hostLocals hostItems material wireMap) source := {
               interface := occurrence.interface
               context := occurrence.context
+              sourceCanonical := targetCanonical
               host_iso := sourceIso
             }
-            exact ⟨.insert hostLocal hostItems material wireMap relationMap
-              sourceOccurrence polarity, ⟨occurrence.host_iso.symm⟩⟩
+            exact ⟨.insert hostLocals hostItems material wireMap
+              sourceOccurrence polarity occurrence.sourceCanonical,
+              ⟨occurrence.host_iso.symm⟩⟩
     | negative =>
         simp only [polarity, atPolarity, converse] at localEvidence
         cases localEvidence with
-        | erase hostLocal hostItems material wireMap relationMap =>
+        | erase hostLocals hostItems material wireMap =>
             let sourceOccurrence : Occurrence
-                (Region.spliceAt hostLocal hostItems material wireMap
-                  relationMap) source := {
+                (Region.spliceAt hostLocals hostItems material wireMap)
+                source := {
               interface := occurrence.interface
               context := occurrence.context
+              sourceCanonical := targetCanonical
               host_iso := sourceIso
             }
-            exact ⟨.erase hostLocal hostItems material wireMap relationMap
+            exact ⟨.erase hostLocals hostItems material wireMap
               sourceOccurrence polarity, ⟨occurrence.host_iso.symm⟩⟩
 
 end VisualProof.Rule.Erasure
