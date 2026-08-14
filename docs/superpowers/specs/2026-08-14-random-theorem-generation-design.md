@@ -209,7 +209,9 @@ exceeding the attempt cap throws with a clear message.
 
 **Knobs.** Atoms (max) — the number of ∀ wires the prelude declares, an
 upper bound on the atoms of the resulting theorem (min 1, default 2); walk
-length (moves after the prelude; min 1, default 12); attempt cap (min 1,
+length (moves after the prelude; min 1, default 8 — length 12 was measured
+to exceed the attempt cap or take tens of seconds at default knobs, while
+length 8 generates in 0.1–4.3s across a 10-seed sample); attempt cap (min 1,
 default 1,000). Walk length is an upper bound on difficulty, not a
 guarantee; the honest number comes from the search.
 
