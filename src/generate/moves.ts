@@ -51,27 +51,40 @@ export function enumerateMoves(
     for (const sel of atomicSelections) {
       if (polarity(diagram, sel.region) !== deletionPolarity) continue
       const step = erasureStep(diagram, sel)
-      // erasureStep's rider computation (src/app/interact/moves.ts) only
-      // orphans wires all of whose endpoints sit on the selection's
-      // *direct* nodes; it does not walk the interior of a selected cut
-      // subtree. A cut-selection can therefore hide a half-orphaned rider:
-      // a wire with one endpoint deep inside the selected subtree and
-      // another endpoint outside it (e.g. at the selection's own region,
-      // the wire's derived scope) is invisible to that direct-nodes check,
-      // so it is never added to the erasure's `wires` and never pinned.
-      // Erasing then leaves it with a single end, and applyErasure
-      // correctly refuses with ScopePreservationError. There is no
-      // atomic-selection-level fix that stays within this file's scope
-      // (the interior walk lives in the shared app-level rider helper), so
-      // such candidates are probed and dropped here; every other RuleError
-      // is a real gate-mirroring bug and is rethrown.
-      try {
-        applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
-      } catch (error) {
-        if (error instanceof RuleError) continue
-        throw error
+      if (sel.regions.length > 0) {
+        // erasureStep's rider computation (src/app/interact/moves.ts) only
+        // orphans wires all of whose endpoints sit on the selection's
+        // *direct* nodes (`orphanedWires(diagram, new Set(selection.nodes))`);
+        // it does not walk the interior of a selected cut subtree. A
+        // cut-selection (this branch: `sel.regions = [cut]`, `sel.nodes = []`)
+        // can therefore hide a half-orphaned rider: a wire with one endpoint
+        // deep inside the selected subtree and another endpoint outside it
+        // (e.g. at the selection's own region, the wire's derived scope) is
+        // invisible to that direct-nodes check, so it is never added to the
+        // erasure's `wires` and never pinned. Erasing then leaves it with a
+        // single end, and applyErasure correctly refuses with
+        // ScopePreservationError. There is no atomic-selection-level fix
+        // that stays within this file's scope (the interior walk lives in
+        // the shared app-level rider helper), so such candidates are probed
+        // and dropped here; every other RuleError is a real gate-mirroring
+        // bug and is rethrown.
+        //
+        // Atom-node selections (`sel.nodes = [nodeId]`, the `else` branch)
+        // are exactly what `orphanedWires` handles correctly — a node's own
+        // wires are checked directly — so they are verified purely by gate
+        // mirroring, with no probe, so a future gate-mirroring regression
+        // there still surfaces as a soundness-test failure instead of being
+        // silently swallowed by this catch.
+        try {
+          applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
+        } catch (error) {
+          if (error instanceof RuleError) continue
+          throw error
+        }
+        out.push({ moveClass: 'erasure', step })
+      } else {
+        out.push({ moveClass: 'erasure', step })
       }
-      out.push({ moveClass: 'erasure', step })
     }
   }
   if (classes.has('spawn')) {
