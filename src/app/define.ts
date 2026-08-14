@@ -3,7 +3,7 @@ import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
-import { exploreLabeling } from '../kernel/diagram/canonical/explore'
+import { canonicalWireOrder } from '../kernel/diagram/canonical/wire-order'
 import { findOccurrences } from '../kernel/diagram/subgraph/match'
 import { occurrenceToSelection } from '../kernel/diagram/subgraph/occurrence'
 import type { ProofContext } from '../kernel/proof/context'
@@ -67,7 +67,7 @@ export function defineRelation(
  */
 export function canonicalArgOrder(diagram: Diagram, sel: SubgraphSelection): WireId[] {
   const { pattern, attachments } = extractSubgraph(diagram, sel)
-  const ord = exploreLabeling(pattern.diagram).wireOrd
+  const ord = canonicalWireOrder(pattern.diagram)
   return [...attachments]
     .map((host, i) => ({ host, o: ord.get(pattern.boundary[i]!)! }))
     .sort((a, b) => a.o - b.o)
