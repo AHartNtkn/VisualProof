@@ -33,12 +33,18 @@ const cases: [string, Diagram, readonly WireId[]][] = [
 // shared cap 1100 is the highest budget any of these read-only tests used; the plan-
 // 24 fixed-point stop terminates well under it for the converging fixtures.
 const settledShared = new Map<string, Engine>()
+/** The frame JSON at establishment, per shared case — settleWithin proves it
+    byte-identical through every descent tick, and the frame law test asserts
+    it still holds at rest. */
+const settledFrameSnaps = new Map<string, string>()
 function settledCase(name: string, d: Diagram, boundary: readonly WireId[]): Engine {
   let e = settledShared.get(name)
   if (e === undefined) {
     e = mkEngine(d, boundary)
-    if (!settleWithin(e, 20_000)) throw new Error(`${name}: did not rest within 20 s`)
+    const r = settleWithin(e, 20_000)
+    if (!r.rested) throw new Error(`${name}: did not rest within 20 s`)
     settledShared.set(name, e)
+    settledFrameSnaps.set(name, r.frameSnap)
   }
   return e
 }
@@ -82,22 +88,29 @@ function anyOverlap(e: { regions: Map<string, { center: { x: number; y: number }
  */
 /** Settle to the operator's proven rest within a WALL-CLOCK budget (USER ruling
     2026-07-24: a physics test settles within its budget or FAILS — vitest's
-    timeout cannot interrupt a synchronous loop, so the clock lives here). */
-function settleWithin(e: Engine, maxMs: number): boolean {
+    timeout cannot interrupt a synchronous loop, so the clock lives here).
+    Along the way it PROVES the frame law tick-by-tick: the frame is absolute
+    state set at establishment, so any tick that changes it is a breathe —
+    crash immediately with the tick number rather than settling on past it. */
+function settleWithin(e: Engine, maxMs: number): { rested: boolean; frameSnap: string } {
   // the same bracketing as `settle`: leading legality projection + frame
   // establishment, wall-clock-bounded descent, trailing projection
   recomputeRegions(e)
   resolveOverlaps(e)
   establishFrame(e)
+  const frameSnap = JSON.stringify(e.frame)
   const t0 = performance.now()
   let rested = false
-  for (;;) {
+  for (let tick = 0; ; tick++) {
     if (!settleStep(e)) { rested = true; break }
+    if (JSON.stringify(e.frame) !== frameSnap) {
+      throw new Error(`frame breathed at descent tick ${tick}: ${frameSnap} -> ${JSON.stringify(e.frame)}`)
+    }
     if (performance.now() - t0 > maxMs) break
   }
   recomputeRegions(e)
   resolveOverlaps(e)
-  return rested
+  return { rested, frameSnap }
 }
 
 
@@ -198,15 +211,17 @@ describe('the fixed near-square frame (plan 24, USER RULING 2026-07-06)', () => 
   // The frame is ABSOLUTE state set once at establishment and CONSTANT between
   // rewrites — it never grows/shrinks/shifts from motion. A HARD edge the content
   // lives within: a settling trial or a drag past the inner edge is projected back.
-  it('the frame is byte-identical across 500 settle ticks — it never breathes', () => {
+  it('the frame is byte-identical across the ENTIRE descent — it never breathes', () => {
+    // Tick-by-tick constancy is proven inside settleWithin (it crashes with
+    // the tick number on any change); this asserts the endpoints match too.
+    // Post-rest constancy needs no extra ticks: the plan-24 fixed-point tests
+    // prove a settled engine is BIT-IDENTICAL under further sweeps, which
+    // subsumes the frame.
     for (const [name, diagram, boundary] of cases) {
-      const e = mkEngine(diagram, boundary)
-      settle(e, 300) // establishes the frame from the legal seed, settles to rest
-      const f0 = e.frame
-      expect(f0, `${name}: frame must be established after settle`).not.toBeNull()
-      const snap = JSON.stringify(f0)
-      for (let t = 0; t < 500; t++) settleStep(e)
-      expect(JSON.stringify(e.frame), `${name}: frame breathed during settling`).toBe(snap)
+      const e = settledCase(name, diagram, boundary)
+      expect(e.frame, `${name}: frame must be established after settle`).not.toBeNull()
+      expect(JSON.stringify(e.frame), `${name}: frame changed between establishment and rest`)
+        .toBe(settledFrameSnaps.get(name))
     }
   })
 

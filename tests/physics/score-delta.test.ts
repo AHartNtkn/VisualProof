@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import type { RegionId, WireId } from '../../src/kernel/diagram/diagram'
 import type { Engine } from '../../src/view/engine'
 import { mkEngine, subtreeCarriers } from '../../src/view/engine'
 import {
@@ -10,6 +12,7 @@ import { theoryToJson } from '../../src/kernel/proof/store'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { emptyLibrary, loadEntry, rebuild } from '../../src/app/library'
 import type { Vec2 } from '../../src/view/vec'
+import { UNARY } from '../fixtures/zero-signature'
 
 /**
  * THE EXACTNESS CONTRACT for the incremental energy delta (annealing redesign
@@ -18,9 +21,13 @@ import type { Vec2 } from '../../src/view/vec'
  * `wireEnergy(e)+contentEnergy(e)` to float tolerance after every move — the
  * delta evaluator is the acceptance oracle for the local solver's gates and
  * the search chain, so an inexact delta silently changes accept/reject
- * decisions. New coverage vs the original: ROTATION moves (the solver's theta
- * trials) and cut-heavy scenes where a body move drags region circles that are
- * other wires' forbidden routing obstacles (the 2026-07-30 per-wire spaces).
+ * decisions. Coverage: ROTATION moves (the solver's theta trials); a replay
+ * scene (zeroIsNat@11) as the integration case; and a SYNTHETIC cut-heavy
+ * scene for the 2026-07-30 per-wire-spaces class — a body move that drags a
+ * region circle which is ANOTHER wire's forbidden routing obstacle. The
+ * synthetic scene is small enough to afford a fresh-eval check after EVERY
+ * move (a large replay fixture bought the same class at 10× the cost with a
+ * check only every 10th move).
  */
 
 const lib0 = loadEntry(emptyLibrary(), 'frege.json', theoryToJson(buildFregeTheory()))
@@ -92,28 +99,93 @@ function randomMove(e: Engine, rng: () => number): Move {
   }
 }
 
+/** Synthetic cut-heavy scene: a root wire A–B whose straight route passes two
+    sibling cuts standing between its terminals, a wired pair inside the first
+    cut (member moves translate AND resize that cut's circle), and a wire
+    crossing from inside the second cut to a root ref. Both cut circles are
+    forbidden obstacles of the A–B wire, so a move on a cut MEMBER changes the
+    routing space of a wire with no terminal on any moved body — the exact
+    class the unchanged-wire lemma must handle for region discs. */
+function cutObstacleScene(): { e: Engine; crossWire: WireId; cuts: RegionId[] } {
+  const b = new DiagramBuilder()
+  const a = b.ref(b.root, 'A', UNARY)
+  const z = b.ref(b.root, 'B', UNARY)
+  const crossWire = b.wire([
+    { node: a, port: { kind: 'arg', index: 0 } },
+    { node: z, port: { kind: 'arg', index: 0 } },
+  ])
+  const c1 = b.cut(b.root)
+  const c = b.ref(c1, 'C', UNARY)
+  const d = b.ref(c1, 'D', UNARY)
+  b.wire([
+    { node: c, port: { kind: 'arg', index: 0 } },
+    { node: d, port: { kind: 'arg', index: 0 } },
+  ])
+  const c2 = b.cut(b.root)
+  const f = b.ref(c2, 'F', UNARY)
+  const g = b.ref(b.root, 'G', UNARY)
+  b.wire([
+    { node: f, port: { kind: 'arg', index: 0 } },
+    { node: g, port: { kind: 'arg', index: 0 } },
+  ])
+  const e = mkEngine(b.build(), [])
+  e.bodies.get(a)!.pos = { x: -45, y: 0 }
+  e.bodies.get(z)!.pos = { x: 45, y: 0 }
+  e.bodies.get(c)!.pos = { x: -12, y: -6 }
+  e.bodies.get(d)!.pos = { x: -12, y: 6 }
+  e.bodies.get(f)!.pos = { x: 14, y: 0 }
+  e.bodies.get(g)!.pos = { x: 40, y: 28 }
+  recomputeRegions(e)
+  resolveOverlaps(e)
+  establishFrame(e)
+  recomputeRegions(e)
+  return { e, crossWire, cuts: [c1, c2] }
+}
+
 describe('incremental energy delta is exact (annealing redesign D1)', () => {
-  for (const [name, at] of [['zeroIsNat', 11], ['plusLeftUnit', 39]] as const) {
-    it(`st.total tracks a fresh full eval across 200 random moves — ${name}@${at}`, () => {
-      const e = replayEngine(name, at)
-      const st = mkScoreState(e)
-      expect(Math.abs(st.total - freshTotal(e))).toBeLessThan(1e-6 * (Math.abs(st.total) + 1))
-      const rng = mkRng(0x51ade1 ^ at)
-      for (let k = 0; k < 200; k++) {
-        const mv = randomMove(e, rng)
-        mv.apply()
-        recomputeRegions(e)
-        const res = applyMove(e, st, mv.moved)
-        res.commit()
-        if (k % 10 === 9) {
-          const fresh = freshTotal(e)
-          const tol = 1e-6 * (Math.abs(fresh) + 1)
-          expect(Math.abs(st.total - fresh),
-            `${name} move ${k}: tracked ${st.total} vs fresh ${fresh} (Δ ${Math.abs(st.total - fresh)})`).toBeLessThan(tol)
-        }
+  it('st.total tracks a fresh full eval across 200 random moves — zeroIsNat@11', () => {
+    const e = replayEngine('zeroIsNat', 11)
+    const st = mkScoreState(e)
+    expect(Math.abs(st.total - freshTotal(e))).toBeLessThan(1e-6 * (Math.abs(st.total) + 1))
+    const rng = mkRng(0x51ade1 ^ 11)
+    for (let k = 0; k < 200; k++) {
+      const mv = randomMove(e, rng)
+      mv.apply()
+      recomputeRegions(e)
+      const res = applyMove(e, st, mv.moved)
+      res.commit()
+      if (k % 10 === 9) {
+        const fresh = freshTotal(e)
+        const tol = 1e-6 * (Math.abs(fresh) + 1)
+        expect(Math.abs(st.total - fresh),
+          `zeroIsNat move ${k}: tracked ${st.total} vs fresh ${fresh} (Δ ${Math.abs(st.total - fresh)})`).toBeLessThan(tol)
       }
-    })
-  }
+    }
+  })
+
+  it('st.total tracks a fresh full eval after EVERY move on the cut-heavy scene (region circles are other wires\' obstacles)', () => {
+    const { e, crossWire, cuts } = cutObstacleScene()
+    const st = mkScoreState(e)
+    // fixture sanity: the class is actually exercised — the root cross wire
+    // must forbid BOTH cut circles, so a cut-member move changes the routing
+    // space of a wire none of whose terminals moved
+    const forbidden = st.forbiddenRids.get(crossWire) ?? []
+    for (const rid of cuts) {
+      expect(forbidden, 'the cross wire forbids both cut circles').toContain(rid)
+    }
+    expect(Math.abs(st.total - freshTotal(e))).toBeLessThan(1e-6 * (Math.abs(st.total) + 1))
+    const rng = mkRng(0xc0ffee)
+    for (let k = 0; k < 200; k++) {
+      const mv = randomMove(e, rng)
+      mv.apply()
+      recomputeRegions(e)
+      applyMove(e, st, mv.moved).commit()
+      const fresh = freshTotal(e)
+      const tol = 1e-6 * (Math.abs(fresh) + 1)
+      expect(Math.abs(st.total - fresh),
+        `move ${k}: tracked ${st.total} vs fresh ${fresh} (Δ ${Math.abs(st.total - fresh)})`).toBeLessThan(tol)
+    }
+  })
 
   it('abort() after a rejected move leaves st.total at the pre-move eval', () => {
     const e = replayEngine('zeroIsNat', 11)

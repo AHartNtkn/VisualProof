@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "vitest run --config vitest.config.ts",
-    "test:physics": "vitest run --config vitest.physics.config.ts",
+    "test:physics": "vitest run --config vitest.physics.config.ts && vitest run --config vitest.physics-timing.config.ts",
     "test:all": "vitest run --config vitest.all.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "formal:size": "node scripts/check-source-size.mjs",

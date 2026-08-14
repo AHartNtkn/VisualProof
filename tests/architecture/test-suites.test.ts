@@ -11,16 +11,23 @@ describe('Vitest suite ownership', () => {
     })
   })
 
-  it('selects exactly the expensive physics directory', () => {
+  it('selects the physics directory minus the wall-clock timing file, in parallel', () => {
     expect(suiteTestConfig('physics')).toEqual({
       include: ['tests/physics/**/*.test.ts'],
-      exclude: [],
+      exclude: ['tests/physics/frame-budget.test.ts'],
       // USER ruling 2026-07-24: a physics test settles and asserts within 30 s
       // or it fails — waiting longer can only hide a defect.
       testTimeout: 30_000,
       hookTimeout: 60_000,
-      // physics tests assert wall-clock budgets — one file at a time so those
-      // budgets measure the solver, not cross-file CPU contention.
+    })
+  })
+
+  it('isolates the wall-clock timing tests so they measure the frame loop, not contention', () => {
+    expect(suiteTestConfig('physics-timing')).toEqual({
+      include: ['tests/physics/frame-budget.test.ts'],
+      exclude: [],
+      testTimeout: 30_000,
+      hookTimeout: 60_000,
       fileParallelism: false,
     })
   })
