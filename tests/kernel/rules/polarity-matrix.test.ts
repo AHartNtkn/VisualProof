@@ -233,7 +233,7 @@ describe('structural round trips', () => {
       nodes: [copy],
       wires: [],
     })
-    const evidence = findDeiterationEvidence(iterated, copySelection, 10_000)
+    const evidence = findDeiterationEvidence(iterated, copySelection)
 
     expect(sameDiagram(
       applyDeiteration(

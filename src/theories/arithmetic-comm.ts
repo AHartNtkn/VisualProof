@@ -50,7 +50,7 @@ function deiterateNode(
   node: NodeId,
 ): void {
   const sel = { region, regions: [], nodes: [node], wires: [] } as const
-  const evidence = findDeiterationEvidence(recorder.diagram, sel, 65536)
+  const evidence = findDeiterationEvidence(recorder.diagram, sel)
   recorder.record(label, {
     rule: 'deiteration',
     sel,
@@ -499,7 +499,6 @@ function plusComm(
     const evidence = findDeiterationEvidence(
       backward.diagram,
       sel,
-      65536,
     )
     backward.record('discharge cited standing hypothesis', {
       rule: 'deiteration',
@@ -559,7 +558,6 @@ function plusComm(
     const evidence = findDeiterationEvidence(
       backward.diagram,
       sel,
-      65536,
     )
     backward.record('discharge unfolded cited Nat(b)', {
       rule: 'deiteration',
@@ -636,7 +634,6 @@ function plusComm(
     const evidence = findDeiterationEvidence(
       backward.diagram,
       sel,
-      65536,
     )
     backward.record(`discharge Nat(a) ${label}`, {
       rule: 'deiteration',

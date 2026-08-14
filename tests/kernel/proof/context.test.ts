@@ -35,7 +35,7 @@ function deiterationTheory(): Theory {
   const copyInner = Object.entries(iterated.regions).find(([id, r]) =>
     r.kind === 'cut' && r.parent === target && id !== inner)![0]
   const selCopy = mkSelection(iterated, { region: target, regions: [copyInner], nodes: [], wires: [] })
-  const evidence = findDeiterationEvidence(iterated, selCopy, 100)
+  const evidence = findDeiterationEvidence(iterated, selCopy)
   const afterDeiteration = applyDeiteration(iterated, selCopy, evidence.justifier, evidence.certificate)
   const action: ProofAction = {
     label: 'deiterate the copy',

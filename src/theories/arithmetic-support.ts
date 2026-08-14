@@ -402,7 +402,7 @@ export function deiterationStep(
     nodes: [node],
     wires: [],
   } as const
-  const evidence = findDeiterationEvidence(diagram, sel, 65536)
+  const evidence = findDeiterationEvidence(diagram, sel)
   return {
     rule: 'deiteration',
     sel,
@@ -415,7 +415,7 @@ export function deiterationSelectionStep(
   diagram: Diagram,
   sel: SubgraphSelection,
 ) {
-  const evidence = findDeiterationEvidence(diagram, sel, 65536)
+  const evidence = findDeiterationEvidence(diagram, sel)
   return {
     rule: 'deiteration',
     sel,

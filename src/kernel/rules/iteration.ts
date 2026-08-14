@@ -210,27 +210,22 @@ function subtreeEvidence(
 }
 
 /**
- * `explorationFuel` is a pure passthrough — there is no literal here to
- * derive a bound for. Its callers split into two kinds: `moves.ts` forwards
- * the same caller-supplied UI `fuel-input` policy documented at
- * `cite.ts`'s `citationCandidates`, and the `theories/arithmetic-*.ts`
- * call sites pass a fixed `65536`, which predates the propagation rewrite
- * and is unexplained by this budget's derived-cost model — flagged as
- * follow-up debt outside Task 9's file scope, not fixed here.
+ * The search is attachment-anchored: the pattern's boundary is seeded with
+ * the selection's own attachments, so propagation narrows candidates to
+ * exact structural matches without a budget. `findOccurrences` called
+ * without `explorationFuel` never spends fuel (`spend()`'s `remaining` stays
+ * `undefined`), so its status is always `'complete'` — refusal below is
+ * based only on the absence of an exact justifier, never on exhaustion.
  */
 export function findDeiterationEvidence(
   diagram: Diagram,
   selection: SubgraphSelection,
-  explorationFuel: number,
 ): DeiterationEvidence {
   const fast = subtreeEvidence(diagram, selection)
   if (fast !== null) return fast
   const contents = selectionContents(diagram, selection)
   const { pattern, attachments } = extractSubgraph(diagram, selection)
-  const result = findOccurrences(diagram, pattern, {
-    explorationFuel,
-    attachments,
-  })
+  const result = findOccurrences(diagram, pattern, { attachments })
   const disjoint = (occurrence: Occurrence): boolean => {
     for (const region of occurrence.regionMap.values()) {
       if (contents.allRegions.has(region)) return false
@@ -257,12 +252,6 @@ export function findDeiterationEvidence(
       && disjoint(occurrence),
   )
   if (justifying === undefined) {
-    if (result.status === 'exhausted') {
-      throw new RuleError(
-        `graph exploration exhausted before finding an exact justifier `
-        + `for deiteration at '${selection.region}'`,
-      )
-    }
     throw new RuleError(
       `no exact justifying occurrence found for deiteration at '${selection.region}'`,
     )

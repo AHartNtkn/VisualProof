@@ -39,7 +39,7 @@ describe('open relational iteration and deiteration', () => {
       nodes: [copy],
       wires: [],
     })
-    const evidence = findDeiterationEvidence(iterated, copySelection, 10_000)
+    const evidence = findDeiterationEvidence(iterated, copySelection)
     const restored = applyDeiteration(
       iterated,
       copySelection,
@@ -81,7 +81,7 @@ describe('open relational iteration and deiteration', () => {
       wires: [],
     })
 
-    expect(() => findDeiterationEvidence(diagram, selection, 10_000))
+    expect(() => findDeiterationEvidence(diagram, selection))
       .toThrowError(/no exact justifying occurrence/)
   })
 })

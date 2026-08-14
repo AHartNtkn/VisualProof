@@ -354,7 +354,7 @@ describe('Rule 5: explicit endpoint-level equals-for-equals evidence', () => {
       expect(extracted.attachments).toContain(left)
       expect(extracted.attachments).toContain(right)
 
-      const evidence = findDeiterationEvidence(iterated, copySelection, 10_000)
+      const evidence = findDeiterationEvidence(iterated, copySelection)
       const restored = applyDeiteration(
         iterated,
         copySelection,
