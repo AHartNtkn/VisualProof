@@ -1,78 +1,47 @@
-# Recursive Rewrite Authority
+# Recursive Rule Execution
 
 ## Objective
 
-Reconstruct the diagram-rewriting architecture so recursive diagrams, relational rewrite rules, and recursive semantics are the proof-theoretic authority, while flat diagrams and executable rewriting are certified implementations connected only by representation and refinement proofs.
+Use recursive `OpenDiagram` syntax as the only execution representation. For
+each of the five constructors of `Rule.Step`, define a computable forward
+runner and a computable backward runner whose source-indexed inputs identify
+one already-selected rule instance.
 
-## Original Request
+## Required Theorems
 
-Refactor the complete calculus to ordinary relational recursive-diagram rewriting modulo isomorphism, certify the concrete implementation against it, use subagent-driven development to plan and execute the work to completion, and create and follow a `/goal`.
+For each rule `R`:
 
-## Intake Summary
+```lean
+(∃ index : ForwardIndex source,
+    OpenDiagram.Isomorphic (runForward source index) target) ↔
+  R source target
 
-- Input shape: `existing_plan`
-- Audience: maintainers and users relying on kernel-checked rule soundness
-- Authority: `requested`
-- Proof type: `test`
-- Completion proof: the Lean development builds without incomplete definitions, the five executable recursive rule families factor through `Step.sound`, standalone Comprehension remains recursive mathematics outside the actual ruleset, and every successful concrete transition has a Lean refinement proof into `Step`
-- Goal oracle: kernel-checked Lean theorems demonstrate the requested authority boundary and the final audit records `full_outcome_complete: true`
-- Likely misfire: adding abstract wrappers while leaving concrete execution data as the real rule or semantic authority
-- Blind spots considered: bound-wire equivalence, repeated boundary aliases, iteration selections that overlap the ordered boundary, inherently simultaneous rules, capture avoidance, ordered interfaces, representation uniqueness, and the distinction between executor soundness and executor completeness
-- Existing plan facts: recursive diagrams own mathematical syntax and structural semantics; occurrence is context-decomposition evidence; local rules use contextual closure modulo isomorphism; whole-diagram rules use direct relations; `Step.sound` contains no execution artifacts; concrete diagrams represent recursive diagrams; execution correctness is refinement; all rule families and dependents migrate without compatibility authorities
+(∃ index : BackwardIndex source,
+    OpenDiagram.Isomorphic (runBackward source index) target) ↔
+  R target source
+```
 
-## Goal Oracle
+The rule must also remain true when either computed endpoint is replaced by an
+isomorphic diagram.
 
-The oracle for this goal is:
+## Execution Boundary
 
-`lake build` passes and kernel-checked theorem declarations establish one recursive relational calculus, structural recursive semantics, and a separate concrete representation/refinement layer.
+- Indices contain the selected source occurrence and the operands needed to
+  compute the other side.
+- Indices do not contain the desired target or evidence that `R` already
+  holds.
+- Runners do not search for occurrences or inspect a proposed target.
+- Runners rebuild only the supplied recursive context.
+- Proofs may use classical reasoning; runner dependency closures remain
+  computable.
+- Comprehension remains recursive mathematics and has no runner requirement.
 
-The PM must keep comparing task receipts to this oracle. Planning, discovery, a passing tiny slice, or a clean-looking board is not enough. The goal finishes only when a final Judge/PM audit maps receipts and verification back to this oracle and records `full_outcome_complete: true`.
+## Governing Plan
 
-## Goal Kind
+`docs/superpowers/plans/2026-08-13-recursive-rule-execution.md`
 
-`existing_plan`
+## Completion Oracle
 
-## Current Tranche
-
-Establish canonical proof-relevant structural witnesses and source-derived
-generic flat-transformation refinement laws under an independent Worker/Judge
-gate, then resume the reviewed theorem-driven implementation plan.
-
-## Non-Negotiable Constraints
-
-- Recursive open diagrams and their structural denotation are the sole mathematical syntax and semantic authority.
-- The five executable recursive rule families are propositions over recursive diagrams; `Step` is their exhaustive inductive union, while standalone Comprehension remains recursive mathematics outside the actual ruleset.
-- Occurrence is context decomposition evidence, never a search algorithm or execution result.
-- Local rules use contextual closure modulo recursive isomorphism; global and simultaneous rules retain direct relational statements.
-- Rule soundness mentions no concrete carriers, numbering, execution state, trace, receipt, request, or error.
-- Concrete correctness is representation and refinement, including ordered interfaces and repeated aliases; it does not directly define semantic preservation.
-- The Iteration request carries exact boundary-disjointness evidence; reflection, execution refinement, and exact-request meaning use that evidence without changing the recursive rule or adding an executor rejection class.
-- `RegionIso`, `ItemIso`, and `ItemSeqIso` are the one canonical
-  proof-relevant Type hierarchy; theorem-facing propositions use `Nonempty` of
-  that witness and canonical maps are fields or indices.
-- `OpenDiagramIso.body` and `DiagramContextIso` retain recursive/composable
-  Type data. `ContextPathAlignment` provides that data directly, without
-  Prop-to-Type elimination.
-- Proof-only context replacement is derived from the source occurrence and
-  generic flat-transformation laws; concrete execution contains only the
-  computable source-to-target transformation and its direct receipt data.
-- The Lean formalization has no matcher or occurrence-search subsystem; requests supply occurrence evidence.
-- Representation completeness and one-step execution completeness are required.
-- TypeScript is outside this goal's implementation, planning, and validation scope.
-- No aliases, adapters, compatibility modes, parallel authorities, or fallback semantics preserve the displaced model.
-- Lean proof work follows theorem-driven RED/GREEN; no incomplete production definitions are permitted.
-- Preserve unrelated user work, validate behavior-affecting changes, and commit every completed task-owned package.
-
-## Stop Rule
-
-Stop only when a final audit proves the full original outcome is complete and the machine-checkable GoalBuddy stop gate passes.
-
-## Canonical Board
-
-Machine truth lives at:
-
-`docs/goals/recursive-rewrite-authority/state.yaml`
-
-## Run Command
-
-`/goal Follow docs/goals/recursive-rewrite-authority/goal.md.`
+The obsolete execution closure is absent; all ten runners compile; all ten
+exact iff theorems and ten endpoint-isomorphism closure theorems are
+kernel-checked; the strict module checks, source audits, and full build pass.

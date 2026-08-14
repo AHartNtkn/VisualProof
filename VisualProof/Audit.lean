@@ -1,12 +1,7 @@
 import VisualProof
-import VisualProof.Proof.Theory
 
 /-!
-Public trust audit for the formalization boundary.  These commands report the
-axioms used by the principal semantic, rule-soundness, and replay/theory
-results.  The placeholder-axiom detector identifies still-unproved theorem
-obligations; project-defined `axiom` declarations are rejected separately by
-the source audit.
+Public trust audit for recursive diagram semantics and rule soundness.
 -/
 
 #print axioms VisualProof.Diagram.iso_denotation

@@ -1,9 +1,0 @@
-import VisualProof.Data.Finite
-import VisualProof.Concrete.Elaboration.Traversal
-import VisualProof.Concrete.Elaboration.Context
-import VisualProof.Concrete.Elaboration.Compile
-import VisualProof.Concrete.Elaboration.Compiled
-import VisualProof.Concrete.Elaboration.Splice
-import VisualProof.Concrete.Elaboration.SpliceRootCompilation
-import VisualProof.Concrete.Elaboration.SelectionFrameCompilation
-import VisualProof.Concrete.Elaboration.SelectionReplacementSiteCompilation

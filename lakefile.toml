@@ -4,7 +4,3 @@ defaultTargets = ["VisualProof"]
 
 [[lean_lib]]
 name = "VisualProof"
-
-[[lean_exe]]
-name = "visualproof_step_tags"
-root = "VisualProof.Concrete.StepTagsMain"

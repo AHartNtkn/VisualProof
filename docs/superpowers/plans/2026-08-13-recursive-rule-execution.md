@@ -90,7 +90,7 @@
 - Consumes: recursive diagram syntax, the five rule relations, and semantic soundness.
 - Produces: a recursive-only build with no reachable graph execution, refinement, replay, or step-tag authority.
 
-- [ ] **Step 1: Establish the dependency and deletion boundary**
+- [x] **Step 1: Establish the dependency and deletion boundary**
 
   Run:
 
@@ -102,15 +102,15 @@
 
   Classify every match as retained mathematical/semantic authority or obsolete execution-dependent material. Add every obsolete importer, build target, audit, and document to this task; do not leave unreachable source behind.
 
-- [ ] **Step 2: Remove the complete obsolete closure**
+- [x] **Step 2: Remove the complete obsolete closure**
 
   Use `git rm` for the graph, refinement, graph-backed proof, step-tag, and obsolete audit modules established in Step 1. Remove the `visualproof_step_tags` executable from `lakefile.toml`. Remove their imports from `VisualProof.lean` and all retained aggregators.
 
-- [ ] **Step 3: Narrow the retained audits and documentation**
+- [x] **Step 3: Narrow the retained audits and documentation**
 
   Make `VisualProof/Audit.lean` cover only retained recursive rules and semantic soundness. Rewrite the authority audit and active goal document around the five recursive executors and the exactness contract in this plan.
 
-- [ ] **Step 4: Validate the recursive-only boundary**
+- [x] **Step 4: Validate the recursive-only boundary**
 
   ```bash
   lake env lean -DwarningAsError=true VisualProof/Rule/Step.lean
@@ -122,7 +122,7 @@
 
   Expected: builds pass and the final search is empty.
 
-- [ ] **Step 5: Commit the removal boundary**
+- [x] **Step 5: Commit the removal boundary**
 
   Stage only the files classified in this task and commit as `remove graph execution closure`.
 
