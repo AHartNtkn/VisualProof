@@ -177,20 +177,30 @@ its entire subtree.
 **Bias.** In the forward direction `atomSpawn` is the junk source (it is
 insertion, seen from the user's backward proof). Move weights favor
 iteration, deiteration, and double-cut moves over spawn and erasure. Weights
-are explicit named constants on the family definition; they shape the
-sampling distribution only — legality always comes from enumerating
-actually-applicable moves, and correctness never depends on the weights.
+are explicit named constants on the family definition and are **per class**:
+a move class with at least one applicable candidate participates with its
+class weight, then a candidate is drawn uniformly within the chosen class.
+(Summing weight per candidate instead was measured to let the
+combinatorially-growing double-cut/iteration candidate counts drown spawn
+entirely.) Weights shape the sampling distribution only — legality always
+comes from enumerating actually-applicable moves, and correctness never
+depends on the weights.
 
-**Filters.** After the walk, a prop-fragment diagram→formula reader
-(cuts→¬, juxtaposition→∧, atom nodes→atoms) converts the result back to a
-formula. This serves two purposes: the UI gets a readable `statement` for
-family B, and the family A minimality check runs on it — outputs whose
-weakening test finds dead weight (including any ∀-wire with no surviving
-occurrences) are rejected and the walk reruns with the same knobs; exceeding
-the attempt cap throws with a clear message.
+**Cleanup and filters.** After the walk, ∀-wires with no surviving atom
+occurrences (bare wires — all endpoints are pins) are removed by recorded
+forward vacuity-delete steps, so the atoms knob is an upper bound and the
+derivation still certifies the cleaned diagram. (Rejecting walks with
+unused wires instead was measured to make multi-atom generation practically
+never succeed.) Then a prop-fragment diagram→formula reader (cuts→¬,
+juxtaposition→∧, atom nodes→atoms) converts the result back to a formula.
+This serves two purposes: the UI gets a readable `statement` for family B,
+and the family A minimality check runs on it — outputs whose weakening test
+finds dead weight are rejected and the walk reruns with the same knobs;
+exceeding the attempt cap throws with a clear message.
 
-**Knobs.** Atom count (number of ∀ wires; min 1, default 2), walk length
-(moves after the prelude; min 1, default 12), and attempt cap (min 1,
+**Knobs.** Atoms (max) — the number of ∀ wires the prelude declares, an
+upper bound on the atoms of the resulting theorem (min 1, default 2); walk
+length (moves after the prelude; min 1, default 12); attempt cap (min 1,
 default 1,000). Walk length is an upper bound on difficulty, not a
 guarantee; the honest number comes from the search.
 
