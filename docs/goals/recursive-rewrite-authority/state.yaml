@@ -2,7 +2,7 @@ version: 1
 goal: recursive-rule-execution
 status: active
 plan: docs/superpowers/plans/2026-08-13-recursive-rule-execution.md
-active_task: execute-iteration
+active_task: execute-wire-sever
 tasks:
   - id: remove-obsolete-execution-closure
     status: done
@@ -13,8 +13,8 @@ tasks:
   - id: execute-double-cut-and-vacuity
     status: done
   - id: execute-iteration
-    status: active
+    status: done
   - id: execute-wire-sever
-    status: pending
+    status: active
   - id: validate-recursive-execution
     status: pending

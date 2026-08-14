@@ -79,6 +79,20 @@ def Local.copy
   copyWires := copyWires
   after_eq := rfl
 
+def copied
+    (descendant : DiagramContext (ancestorWires + anchorLocal)
+      descendantWires ancestorRels descendantRels)
+    (selected : Region (ancestorWires + anchorLocal) ancestorRels)
+    (remainder : Region descendantWires descendantRels)
+    (copyLocal : Nat)
+    (copyWires : WireFreshening
+      (ancestorWires + anchorLocal) descendantWires copyLocal
+      descendant.outerWire) :
+    Region descendantWires descendantRels :=
+  ((Region.adjoinAt copyLocal .nil
+    ((selected.renameWires copyWires.wire).renameRelations
+      descendant.outerRelation)).conjoin remainder)
+
 end Iteration
 
 def Iteration : Rule :=
@@ -100,6 +114,20 @@ theorem Iteration.iso
       rcases backward with ⟨replacement, ⟨localEvidence⟩⟩
       exact Or.inr ⟨replacement.iso targetIso.symm sourceIso,
         ⟨localEvidence⟩⟩
+
+theorem Iteration.respectsTargetIso
+    (step : Iteration source target)
+    (isomorphic : OpenDiagram.Isomorphic target target') :
+    Iteration source target' := by
+  rcases isomorphic with ⟨targetIso⟩
+  exact Iteration.iso (OpenDiagramIso.refl source) step targetIso
+
+theorem Iteration.backward_respectsTargetIso
+    (step : Iteration target source)
+    (isomorphic : OpenDiagram.Isomorphic target target') :
+    Iteration target' source := by
+  rcases isomorphic with ⟨targetIso⟩
+  exact Iteration.iso targetIso step (OpenDiagramIso.refl source)
 
 theorem Iteration.symm
     {arity : Nat}

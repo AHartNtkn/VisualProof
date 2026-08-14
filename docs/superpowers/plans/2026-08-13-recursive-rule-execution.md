@@ -261,23 +261,23 @@
 - Create: `VisualProof/Rule/Executable/Iteration.lean`
 - Modify: `VisualProof/Rule/Iteration.lean`
 
-- [ ] **Step 1: Define the local copied body**
+- [x] **Step 1: Define the local copied body**
 
   Add one computable helper equal to the right-hand side of `Iteration.Local.after_eq`, using the supplied `selected`, `descendant`, `copyLocal`, and `WireFreshening`.
 
-- [ ] **Step 2: Define asymmetric source-indexed data**
+- [x] **Step 2: Define asymmetric source-indexed data**
 
   A copy constructor stores `NestedOccurrence selected remainder source`, `copyLocal`, and `copyWires`. An uncopy constructor stores `NestedOccurrence selected copied source` plus the same data needed to identify the exact copied instance. Define both forward and backward index types explicitly.
 
-- [ ] **Step 3: Define both runners**
+- [x] **Step 3: Define both runners**
 
   Copy calls `NestedOccurrence.replace` with the computed copied body. Uncopy calls it with the remainder. There is no nested-site discovery or comparison against a proposed target.
 
-- [ ] **Step 4: Prove closure and exactness**
+- [x] **Step 4: Prove closure and exactness**
 
   Derive both target-isomorphism closure laws from `Iteration.iso`; prove the two exact iff theorems sequentially using `NestedContextReplacement.lift` only in proof code.
 
-- [ ] **Step 5: Validate and commit**
+- [x] **Step 5: Validate and commit**
 
   Strict-check, scan for admissions and raised limits, run the focused build, and commit as `execute iteration recursively`.
 
