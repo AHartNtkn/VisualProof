@@ -1,64 +1,59 @@
-import VisualProof.Diagram.Replacement
+import VisualProof.Diagram.Algebra
+import VisualProof.Diagram.Occurrence
 
 namespace VisualProof.Diagram
 
-open Theory
+open VisualProof.Theory
 
-/-- A selected ancestor and descendant hole in one source diagram.  This is
-the source half of `NestedContextReplacement`; it contains no target. -/
+/-- The exact body assembled from one selected ancestor and one descendant
+hole. This is the sole recursive presentation used by nested rules. -/
+def nestedBody
+    (outer : DiagramContext interfaceWires ancestorWires)
+    (anchorLocals : List Sig)
+    (selected : Region (ancestorWires ++ anchorLocals))
+    (descendant : DiagramContext (ancestorWires ++ anchorLocals)
+      descendantWires)
+    (body : Region descendantWires) : Region interfaceWires :=
+  outer.fill
+    (Region.adjoinAt anchorLocals .nil
+      (selected.conjoin (descendant.fill body)))
+
+/-- A selected ancestor and descendant hole in one canonical source diagram.
+It contains only source evidence; replacement bodies are supplied directly. -/
 structure NestedOccurrence
-    (selected : Region (ancestorWires + anchorLocal) ancestorRels)
-    (before : Region descendantWires descendantRels)
-    (source : OpenDiagram arity) where
-  interface : OpenDiagram arity
-  outer : DiagramContext interface.externalClasses ancestorWires
-    [] ancestorRels
-  descendant : DiagramContext (ancestorWires + anchorLocal)
-    descendantWires ancestorRels descendantRels
+    (selected : Region (ancestorWires ++ anchorLocals))
+    (before : Region descendantWires)
+    (source : OpenDiagram boundary) where
+  interface : OpenDiagram boundary
+  outer : DiagramContext interface.external ancestorWires
+  descendant : DiagramContext (ancestorWires ++ anchorLocals)
+    descendantWires
+  sourceCanonical :
+    (nestedBody outer anchorLocals selected descendant before).Canonical
   source_iso : OpenDiagramIso source
     (interface.withBody
-      (outer.fill
-        (Region.adjoinAt anchorLocal .nil
-          (selected.conjoin (descendant.fill before)))))
+      (nestedBody outer anchorLocals selected descendant before)
+      sourceCanonical)
+
+namespace NestedOccurrence
 
 /-- Replace the selected descendant body without searching the source. -/
-def NestedOccurrence.replace
-    {ancestorWires anchorLocal descendantWires : Nat}
-    {ancestorRels descendantRels : RelCtx}
-    {selected : Region (ancestorWires + anchorLocal) ancestorRels}
-    {before : Region descendantWires descendantRels}
-    {source : OpenDiagram arity}
+def replace
+    {ancestorWires anchorLocals descendantWires boundary : List Sig}
+    {selected : Region (ancestorWires ++ anchorLocals)}
+    {before : Region descendantWires}
+    {source : OpenDiagram boundary}
     (occurrence : NestedOccurrence selected before source)
-    (after : Region descendantWires descendantRels) :
-    OpenDiagram arity :=
+    (after : Region descendantWires)
+    (targetCanonical :
+      (nestedBody occurrence.outer anchorLocals selected
+        occurrence.descendant after).Canonical) :
+    OpenDiagram boundary :=
   occurrence.interface.withBody
-    (occurrence.outer.fill
-      (Region.adjoinAt anchorLocal .nil
-        (selected.conjoin (occurrence.descendant.fill after))))
+    (nestedBody occurrence.outer anchorLocals selected
+      occurrence.descendant after)
+    targetCanonical
 
-/-- Package a direct nested replacement after execution.  This theorem-facing
-view is not evaluated by the executable runner. -/
-noncomputable def NestedOccurrence.replacement
-    {ancestorWires anchorLocal descendantWires : Nat}
-    {ancestorRels descendantRels : RelCtx}
-    {selected : Region (ancestorWires + anchorLocal) ancestorRels}
-    {before : Region descendantWires descendantRels}
-    {source : OpenDiagram arity}
-    (occurrence : NestedOccurrence selected before source)
-    (after : Region descendantWires descendantRels) :
-    NestedContextReplacement source (occurrence.replace after) where
-  interface := occurrence.interface
-  ancestorWires := ancestorWires
-  anchorLocal := anchorLocal
-  descendantWires := descendantWires
-  ancestorRels := ancestorRels
-  descendantRels := descendantRels
-  outer := occurrence.outer
-  descendant := occurrence.descendant
-  selected := selected
-  before := before
-  after := after
-  source_iso := occurrence.source_iso
-  target_iso := OpenDiagramIso.refl _
+end NestedOccurrence
 
 end VisualProof.Diagram
