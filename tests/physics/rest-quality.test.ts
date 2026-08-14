@@ -125,17 +125,45 @@ describe('rest quality — the search crosses the junction cusp (plan Task 10)',
     // calibrating (T = 0) and the hop phase it exists to test had not begun.
     // Nodes are pinned and content is junction-invariant, so a published
     // score improvement IS a wire-energy improvement — drive on the score.
+    // fixture sanity: the local rest must actually sit in a cusp — a zero gap
+    // means the fixture no longer manufactures the defect and the test is vacuous
+    expect(barrierGap, 'fixture manufactures a junction cusp').toBeGreaterThan(0)
+
     const pinned = new Set([...e.bodies.keys()])
     const opt = new LayoutOptimizer(0xbeef)
     opt.sync(e, pinned)
     const target = opt.best()!.score - barrierGap
-    const t0 = performance.now()
-    while (opt.best()!.score > target && performance.now() - t0 < 20_000) opt.tick(null, 0)
-    const best = opt.best()!
 
-    const probe = mkEngine(identityJunctionScene(), [])
-    applyLayoutSnapshot(probe, best)
-    const bestWire = (recomputeRegions(probe), wireEnergy(probe))
+    // The behavioral target is BOTH halves of the law: the published best has
+    // crossed the measured barrier gap AND its own residual sweep finds no
+    // improvement as large as that gap — i.e. the best does not itself sit in
+    // a cusp of the scale the search just proved it can cross. Both sides of
+    // every comparison are measured in-test, so the contract self-calibrates
+    // to the current energy (USER ruling: no measured-constant pins). The
+    // sweep is evaluated lazily, only when a new best at/below the score
+    // target is published.
+    const t0 = performance.now()
+    let bestWire = Infinity
+    let residual = Infinity
+    let detail = ''
+    let lastScore = Infinity
+    for (;;) {
+      const best = opt.best()!
+      if (best.score !== lastScore) {
+        lastScore = best.score
+        if (best.score <= target) {
+          const probe = mkEngine(identityJunctionScene(), [])
+          applyLayoutSnapshot(probe, best)
+          bestWire = (recomputeRegions(probe), wireEnergy(probe))
+          const s = junctionSweep(probe)
+          residual = s.best
+          detail = s.detail
+          if (residual < barrierGap) break
+        }
+      }
+      if (performance.now() - t0 >= 20_000) break
+      opt.tick(null, 0)
+    }
 
     // (1) BEHAVIORAL — the search crossed the barrier: the best is below the cuspy
     // local rest by at least the measured barrier gap. Pins THE defect directly,
@@ -143,15 +171,12 @@ describe('rest quality — the search crosses the junction cusp (plan Task 10)',
     expect(cuspWire - bestWire, `search must cross the cusp: cusp wireE ${cuspWire.toFixed(1)}, best ${bestWire.toFixed(1)}, barrier gap ${barrierGap.toFixed(2)}`)
       .toBeGreaterThanOrEqual(barrierGap)
 
-    // (2) RESIDUAL — the best admits no MACROSCOPIC junction improvement. The
-    // threshold 1e-2·wireEnergy is a MEASURED-CLASS PIN, not a derived constant:
-    // it sits between the measured barrier-cusp class (1.8% of wireE) and the
-    // measured irreducible Weiszfeld-relaxation residual (0.4% — the walk settles
-    // junctions to the length-constrained rest, not the full-energy min, by the
-    // anneal-preservation ruling), catching the former with ~1.8× margin and
-    // accepting the latter with ~2.5×. Re-derive if either class moves.
-    const { best: residual, detail } = junctionSweep(probe)
-    expect(residual, `best junction residual ${residual.toFixed(2)} at ${detail}; pin 1e-2·wireE=${(1e-2 * bestWire).toFixed(2)}`)
-      .toBeLessThanOrEqual(1e-2 * bestWire)
+    // (2) RESIDUAL — the best admits no junction improvement at the cusp scale:
+    // anything the sweep still finds is smaller than the barrier the search
+    // demonstrably crosses, leaving only the sub-gap relaxation residual (the
+    // walk settles junctions to the length-constrained rest, not the
+    // full-energy min, by the anneal-preservation ruling).
+    expect(residual, `best junction residual ${residual.toFixed(2)} at ${detail} is not below the measured barrier gap ${barrierGap.toFixed(2)}`)
+      .toBeLessThan(barrierGap)
   })
 })
