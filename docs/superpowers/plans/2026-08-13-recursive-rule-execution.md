@@ -4,7 +4,7 @@
 
 **Goal:** Replace graph-based execution with computable indexed functional relations defined directly on recursive `OpenDiagram` syntax, proving that the union of each rule's forward family equals that rule and the union of its backward family equals the rule's converse.
 
-**Architecture:** An `ExecutableFamily` contains only an index family and an ordinary computable `run` function. Its union relation is defined by existentially quantifying an index whose function result is the target; each rule exports one theorem equating that union with the rule (or its converse). Indices contain only recursive source decompositions and operation operands, while the existing `OpenDiagram.Isomorphic` quotient accounts for the rules' presentation invariance without adding a runtime normalization pass.
+**Architecture:** An `ExecutableFamily` contains a source-dependent type of valid execution choices and one ordinary computable dependent function. For a source diagram, `Index direction source` is the domain of valid rule applications and `run source index` is their target; the union relation existentially quantifies that index. Each rule exports one theorem equating this union with the rule (or its converse), while the existing `OpenDiagram.Isomorphic` quotient accounts for presentation invariance without runtime normalization.
 
 **Tech Stack:** Lean 4.30.0, Lake, the existing intrinsic `Region`/`Item`/`ItemSeq`/`OpenDiagram` syntax, `DiagramContext`, the five existing `Rule` relations, and their existing semantic soundness theorems.
 
@@ -12,8 +12,9 @@
 
 - Interpret the requested reverse/“contrapositive” executable as the existing relational `Rule.converse R`; do not introduce a second notion of reverse execution.
 - Remove the graph representation and its execution/refinement dependents before adding recursive executables. Do not retain aliases, adapters, re-exports, compatibility modules, or dual authorities.
+- `Index direction source` is the computable type of valid choices available at that particular source. It is not a global label for a partial endofunction. Applicability belongs in this dependent domain, so `run` does not return `Option`.
 - An executable index may contain source decomposition evidence, finite maps, and rule operands. It must not contain a target `OpenDiagram`, `Rule`/`Rule.Step` evidence, a `ContextReplacement`, or an `OpenDiagramIso`.
-- The executable authority is the function itself: `run` is a total function from a source-indexed operation index to a recursive target representative. Do not define or prove a separate `Functional` predicate.
+- The executable authority is the dependent function itself: `run source : Index direction source → OpenDiagram arity`. Lean's function type supplies functionality; do not define or prove a separate `Functional` predicate.
 - `run` definitions must be ordinary computable `def`s. `noncomputable`, `Classical.choice`, target search, target occurrence discovery, and semantic denotation are forbidden in executable modules.
 - Soundness may construct proof-only `ContextReplacement`, `NestedContextReplacement`, and isomorphism witnesses after the target has been computed.
 - Prove one owning equality theorem for every direction. Its forward implication excludes extra function results; its reverse implication proves every rule witness is the result of some indexed function.
@@ -26,7 +27,7 @@
 
 - **Essential behavior:** five recursive rule relations; a computable forward family whose union equals each relation; a computable backward family whose union equals its converse; aggregate one-step execution; proof replay; semantic soundness through the existing `Rule.Step.sound`.
 - **Essential state:** the recursive source diagram, execution direction, an exact recursive site/nested-site decomposition, and the operands that select one member of a nondeterministic rule family.
-- **Integrity constraints:** Lean's function type makes one index determine one target; the union contains exactly the selected directed rule; boundaries remain ordered; wire/relation renamings remain well typed; contextual polarity is derived from the supplied recursive context.
+- **Integrity constraints:** Lean's dependent function type makes one valid source/index pair determine one target; the union contains exactly the selected directed rule; boundaries remain ordered; wire/relation renamings remain well typed; contextual polarity is derived from the supplied recursive context.
 - **Derived data:** target diagrams, filled contexts, local before/after regions, `ContextReplacement` witnesses, aggregate `Rule.Step` evidence, replay endpoints, and theorem validity.
 - **Accidental state to remove:** graph identifiers, checked graph wrappers, receipts, survivor domains, allocation layouts, compiler results, encoded/elaborated mirrors, and representation witnesses.
 - **Accidental control to remove:** graph selection/removal/splice pipelines, compilation replay, target reconstruction, refinement dispatch, operation error plumbing, and generated step-tag execution.
@@ -210,7 +211,7 @@ def ExecutableDirection.relation
 structure ExecutableFamily where
   Index : (direction : ExecutableDirection) →
     {arity : Nat} → OpenDiagram arity → Type
-  run : ∀ {direction arity source},
+  run : ∀ {direction arity} (source : OpenDiagram arity),
     Index direction source → OpenDiagram arity
 ```
 
@@ -226,8 +227,12 @@ def ExecutableFamily.Member
   ∃ (canonicalSource : OpenDiagram arity)
     (index : family.Index direction canonicalSource),
     source = Quotient.mk _ canonicalSource ∧
-    target = Quotient.mk _ (family.run index)
+    target = Quotient.mk _ (family.run canonicalSource index)
 ```
+
+The source argument is explicit on purpose. The index is allowed to depend on
+that source because it represents a valid application choice, while `run` is
+the requested computable function from that choice to its unique target.
 
 - [ ] **Step 4: Compile the function family and quotient relation**
 
@@ -254,7 +259,7 @@ git add VisualProof/Diagram/Rewrite.lean VisualProof/Rule/Executable/Core.lean V
 git commit -m "define recursive executable families"
 ```
 
-**Architecture check:** `ExecutableFamily` is only data (`Index` and `run`), and the recursive isomorphism quotient is only the extensional theorem carrier. If the core grows a functionality predicate, proof fields, simulation, route, receipt, or runtime normalization, remove it and redesign the rule-specific index around `ExactSite`/`ExactNestedSite`.
+**Architecture check:** `ExecutableFamily` is only the dependent domain `Index direction source` and the function `run source`. The recursive isomorphism quotient is only the extensional theorem carrier. If the core grows `Option`, a functionality predicate, proof fields, simulation, route, receipt, or runtime normalization, remove it and redesign the rule-specific index around `ExactSite`/`ExactNestedSite`.
 
 ---
 
@@ -602,7 +607,7 @@ inductive Program (direction : ExecutableDirection) :
   | done (source) : Program direction source
   | step {source}
       (index : ExecutableStep.Index direction source)
-      (next : Program direction (ExecutableStep.run index)) :
+      (next : Program direction (ExecutableStep.run source index)) :
       Program direction source
 
 def replay : Program direction source → OpenDiagram arity
@@ -653,7 +658,7 @@ git add VisualProof/Proof VisualProof.lean
 git commit -m "replay proofs on recursive executables"
 ```
 
-**Architecture check:** `Program` stores only operation indices and continuation structure. If it stores targets, equalities, receipts, or rule proofs, remove that duplicated state and derive it from `ExecutableStep.run`/`executable_eq_rule`.
+**Architecture check:** `Program` stores only valid source-dependent operation indices and continuation structure. If it stores targets, equalities, receipts, or rule proofs, remove that duplicated state and derive it from `ExecutableStep.run source`/`executable_eq_rule`.
 
 ---
 
@@ -755,6 +760,6 @@ git commit -m "audit recursive rule execution"
 
 - **Spec coverage:** Task 1 removes the representation split. Tasks 2–6 define a computable indexed function family for every mathematical rule and its relational converse, with one exact equality theorem per family. Task 7 proves exact equality for aggregate directed `Rule.Step`. Task 8 rebuilds the proof consumer directly on recursive execution. Task 9 proves computability, equality, semantic soundness, dependency direction, and absence of the displaced authority.
 - **Anti-vacuity:** Indices cannot contain `R` evidence or a target, every rule exports concrete indices in both directions, the reverse implication extracts those indices from every rule witness, and the compiler audit checks the actual functions.
-- **Exact adequacy:** Each family union is defined directly from successful `run` equations and equals the corresponding quotient-lifted rule relation. Neither missing valid rule instances nor extra executable transitions can pass.
-- **Type consistency:** Every `run` returns an `OpenDiagram arity` representative; every exported equality is between the function-family union and the rule relation on `OpenDiagramClass arity`; aggregate indices preserve source/arity indices; replay endpoints are definitionally produced by aggregate `run`.
+- **Exact adequacy:** Each family union is defined directly from equations `run source index = target` and equals the corresponding quotient-lifted rule relation. Neither missing valid rule instances nor extra executable transitions can pass.
+- **Type consistency:** Every `Index direction source` is a type of valid choices for that source; every `run source` is an ordinary computable function from such a choice to an `OpenDiagram arity`; every exported equality is between the resulting union and the rule relation on `OpenDiagramClass arity`; replay endpoints are definitionally produced by aggregate `run source`.
 - **Architecture discipline:** Deletion occurs before replacement. There is one generic family contract, one recursive isomorphism quotient matching the rules' existing invariance, one direct exact-site boundary, no representation/refinement bridge, no target search, no second recursive syntax, and explicit stop/rethink gates after every implementation task.
