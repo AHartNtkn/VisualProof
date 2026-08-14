@@ -1344,6 +1344,41 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
     }
     const c0 = clampToFrame(e, b, { x, y })
     x = c0.x; y = c0.y
+    if (wall !== null) {
+      // SIZE WALL: an ancestor circle the drag has GROWN past the frame's
+      // inscribed radius cannot fit at ANY position, so the translation pull
+      // below has no valid direction — its no-progress guard fires and the
+      // drag would be accepted with the cut past the hard border. Shrinking
+      // an enclosing circle takes retreating its dragged support toward the
+      // circle's centre. Newton step from the diametral model (a retreat of δ
+      // moves the far edge by δ and shrinks the radius by δ/2, so δ =
+      // 2·excess targets exact fit), capped at the centre distance, and
+      // undone if the radius does not actually shrink — a circle whose size
+      // is held by OTHER members is not this drag's to fix (the same
+      // no-progress rule the position pull applies).
+      b.pos = { x, y }
+      recomputeRegions(e, dirty)
+      for (const rid of ancestors) {
+        if (e.d.regions[rid]!.kind === 'sheet') continue
+        const g = e.regions.get(rid)
+        if (g === undefined) continue
+        const excess = g.radius - wall.half
+        if (excess <= 0) continue
+        const cdx = g.center.x - x, cdy = g.center.y - y
+        const cd = Math.hypot(cdx, cdy)
+        if (cd < 1e-9) continue
+        const step = Math.min(2 * excess, cd)
+        const rx = x + (cdx / cd) * step, ry = y + (cdy / cd) * step
+        b.pos = { x: rx, y: ry }
+        recomputeRegions(e, dirty)
+        if (e.regions.get(rid)!.radius >= g.radius - 0.01) {
+          b.pos = { x, y }
+          recomputeRegions(e, dirty)
+        } else {
+          x = rx; y = ry
+        }
+      }
+    }
     if (wall !== null && pull) {
       b.pos = { x, y }
       recomputeRegions(e, dirty)
@@ -1397,6 +1432,56 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
     if (Math.hypot(x - px, y - py) < 0.05) break
   }
   if (wall !== null) {
+    // BACKSTOP: the alternation above is a heuristic-free but LOCAL scheme —
+    // when the drag couples circle SIZE and POSITION (a two-support circle at
+    // the frame's inscribed bound bulges past the wall on the side its OTHER
+    // support holds), every single pull direction is vetoed by another
+    // constraint and the loop stalls at a residual. The hard law admits no
+    // residual the drag created, so project onto the feasible set directly:
+    // bisect along the segment from the PRE-DRAG pose (feasible by the law's
+    // own invariant) to the alternation's answer, keeping the furthest point
+    // whose ancestor circles overshoot no more than max(the pre-drag
+    // overshoot, the cut-wall tolerance) — a spill held up by content this
+    // drag does not move stays exempt (it is not this drag's to fix), without
+    // ratcheting the tolerance across frames — and which stays clear of every
+    // foreign circle.
+    const ancestorOver = (px: number, py: number): number => {
+      b.pos = { x: px, y: py }
+      recomputeRegions(e, dirty)
+      let over = 0
+      for (const rid of ancestors) {
+        if (e.d.regions[rid]!.kind === 'sheet') continue
+        const g = e.regions.get(rid)
+        if (g === undefined) continue
+        over = Math.max(
+          over,
+          g.center.x + g.radius - (wall.center.x + wall.half),
+          (wall.center.x - wall.half) - (g.center.x - g.radius),
+          g.center.y + g.radius - (wall.center.y + wall.half),
+          (wall.center.y - wall.half) - (g.center.y - g.radius),
+        )
+      }
+      return over
+    }
+    const foreignClear = (px: number, py: number): boolean => {
+      for (const [rid, g] of e.regions) {
+        if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
+        if (Math.hypot(px - g.center.x, py - g.center.y) < b.discR * e.scale + g.radius - 1e-6) return false
+      }
+      return true
+    }
+    const allow = Math.max(ancestorOver(saved.x, saved.y), 0.05)
+    if (ancestorOver(x, y) > allow) {
+      let lo = 0, hi = 1
+      for (let k = 0; k < 24; k++) {
+        const t = (lo + hi) / 2
+        const px = saved.x + (x - saved.x) * t, py = saved.y + (y - saved.y) * t
+        if (ancestorOver(px, py) <= allow && foreignClear(px, py)) lo = t
+        else hi = t
+      }
+      x = saved.x + (x - saved.x) * lo
+      y = saved.y + (y - saved.y) * lo
+    }
     b.pos = saved
     recomputeRegions(e, dirty)
   }
