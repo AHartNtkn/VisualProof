@@ -518,6 +518,28 @@ theorem originOccurrence_indexOccurrence
   rw [indexOccurrence, targetEq]
   exact (domains.indexOccurrence?_eq_some_iff occurrence target).1 targetEq
 
+@[simp] theorem indexOccurrence_node
+    (domains : FrameDomains d selection) (node : Fin d.nodeCount)
+    (survives : domains.nodes.survives node = true) :
+    domains.indexOccurrence (.node node) =
+      .node (domains.nodes.index node survives) := by
+  unfold indexOccurrence indexOccurrence?
+  change ((domains.nodes.index? node).map LocalOccurrence.node).getD
+      (.child domains.root) = _
+  rw [domains.nodes.index?_index node survives]
+  rfl
+
+@[simp] theorem indexOccurrence_child
+    (domains : FrameDomains d selection) (region : Fin d.regionCount)
+    (survives : domains.regions.survives region = true) :
+    domains.indexOccurrence (.child region) =
+      .child (domains.regions.index region survives) := by
+  unfold indexOccurrence indexOccurrence?
+  change ((domains.regions.index? region).map LocalOccurrence.child).getD
+      (.child domains.root) = _
+  rw [domains.regions.index?_index region survives]
+  rfl
+
 theorem originOccurrence_injective
     (domains : FrameDomains d selection) :
     Function.Injective domains.originOccurrence := by
