@@ -402,6 +402,12 @@ export type PropagationContext = {
   readonly hostFingerprint: ReadonlyMap<RegionId, string>
   readonly patternFingerprint: ReadonlyMap<RegionId, string>
   readonly boundarySet: ReadonlySet<WireId>
+  /** Every propagation arc, built once (`buildArcs` is pure in the fields
+   *  above) and reused by every `__propagate` call over this context, along
+   *  with the arcs-by-dependency index `__propagate` re-derives on every
+   *  call otherwise. */
+  readonly arcs: readonly Arc[]
+  readonly arcsByDep: ReadonlyMap<string, readonly Arc[]>
 }
 
 /**
@@ -444,6 +450,15 @@ export function __makePropagationContext(
   const patternIdx = buildRefineIndex(pattern.diagram, pattern.boundary)
   const hostScopes = derivedScopes(host)
   const patternScopes = derivedScopes(pattern.diagram, pattern.boundary)
+  const boundarySet = new Set(pattern.boundary)
+  const arcs = buildArcs({ pattern, hostIdx, patternIdx, patternScopes, hostScopes, boundarySet })
+  const arcsByDep = new Map<string, Arc[]>()
+  for (const arc of arcs) {
+    const key = depKey(arc.dep)
+    const list = arcsByDep.get(key)
+    if (list === undefined) arcsByDep.set(key, [arc])
+    else list.push(arc)
+  }
   return {
     host,
     pattern,
@@ -454,7 +469,9 @@ export function __makePropagationContext(
     hostScopes,
     hostFingerprint: subtreeFingerprints(host, hostIdx, hostScopes),
     patternFingerprint: subtreeFingerprints(pattern.diagram, patternIdx, patternScopes),
-    boundarySet: new Set(pattern.boundary),
+    boundarySet,
+    arcs,
+    arcsByDep,
   }
 }
 
@@ -566,6 +583,10 @@ type Arc = {
   readonly compute: (cands: CandidateSets) => ReadonlySet<string>
 }
 
+function depKey(ref: ElementRef): string {
+  return `${ref.sort}:${ref.id}`
+}
+
 function candidateSet(cands: CandidateSets, ref: ElementRef): Set<string> {
   const map = ref.sort === 'region' ? cands.region : ref.sort === 'node' ? cands.node : cands.wire
   return map.get(ref.id)!
@@ -591,7 +612,12 @@ function setSingleton(cands: CandidateSets, ref: ElementRef, image: string): voi
  * endpoint support, and internal-wire scope transport. Boundary-wire scope
  * is deliberately absent — it needs the chosen root, assigned during search.
  */
-function buildArcs(ctx: PropagationContext): Arc[] {
+type ArcContext = Pick<
+  PropagationContext,
+  'pattern' | 'hostIdx' | 'patternIdx' | 'patternScopes' | 'hostScopes' | 'boundarySet'
+>
+
+function buildArcs(ctx: ArcContext): Arc[] {
   const { hostIdx, patternIdx, patternScopes, boundarySet, hostScopes } = ctx
   const arcs: Arc[] = []
 
@@ -741,21 +767,17 @@ function buildArcs(ctx: PropagationContext): Arc[] {
  * them later stays deterministic. Returns `false` the moment any set empties.
  */
 export function __propagate(ctx: PropagationContext, cands: CandidateSets): boolean {
-  const arcs = buildArcs(ctx)
-  const depKey = (ref: ElementRef): string => `${ref.sort}:${ref.id}`
-  const arcsByDep = new Map<string, Arc[]>()
-  for (const arc of arcs) {
-    const key = depKey(arc.dep)
-    const list = arcsByDep.get(key)
-    if (list === undefined) arcsByDep.set(key, [arc])
-    else list.push(arc)
-  }
+  const { arcs, arcsByDep } = ctx
 
+  // Index cursor, not `shift()`: `queue` only ever grows (arcs are re-queued,
+  // never removed early), so an advancing read index keeps every dequeue
+  // O(1) instead of the O(n) re-index `Array.shift()` would do each time.
   const queue: Arc[] = [...arcs]
   const queued = new Set<Arc>(queue)
+  let head = 0
 
-  while (queue.length > 0) {
-    const arc = queue.shift()!
+  while (head < queue.length) {
+    const arc = queue[head++]!
     queued.delete(arc)
     const target = candidateSet(cands, arc.target)
     const allowed = arc.compute(cands)

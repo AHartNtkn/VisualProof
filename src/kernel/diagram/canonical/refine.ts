@@ -281,10 +281,25 @@ function refine(indexes: readonly RefineIndex[], c0: readonly MutableColors[]): 
   }
 }
 
+/** Every side's `RefineIndex`, built once and reused across every
+ *  `refineJointlyIndexed` call over the same sides — indexes are pure in
+ *  (diagram, pins), so a caller re-refining under many different `marks`
+ *  (individualization search) never needs to rebuild them per attempt. */
+export function buildRefineIndexes(sides: readonly RefinementSide[]): RefineIndex[] {
+  return sides.map((s) => buildRefineIndex(s.diagram, s.pins))
+}
+
+/** The joint refinement core: colors `indexes` (already built) under `marks`. */
+export function refineJointlyIndexed(
+  indexes: readonly RefineIndex[],
+  marks: readonly Mark[] = [],
+): SideColors[] {
+  return refine(indexes, initialColors(indexes, marks))
+}
+
 export function refineJointly(
   sides: readonly RefinementSide[],
   marks: readonly Mark[] = [],
 ): SideColors[] {
-  const indexes = sides.map((s) => buildRefineIndex(s.diagram, s.pins))
-  return refine(indexes, initialColors(indexes, marks))
+  return refineJointlyIndexed(buildRefineIndexes(sides), marks)
 }

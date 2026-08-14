@@ -1,5 +1,5 @@
 import type { Diagram, WireId } from '../diagram'
-import { buildRefineIndex, refineJointly, type Mark, type RefineIndex, type SideColors } from './refine'
+import { buildRefineIndex, refineJointlyIndexed, type Mark, type RefineIndex, type SideColors } from './refine'
 
 /**
  * Discrete canonical wire ordinals — the definition-argument order.
@@ -21,7 +21,7 @@ export function canonicalWireOrder(d: Diagram): Map<WireId, number> {
   return ordinalize(idx.wireIds, best.colors.wire)
 
   function search(marks: readonly Mark[]): { form: string; colors: SideColors } {
-    const [colors] = refineJointly([{ diagram: d, pins: [] }], marks)
+    const [colors] = refineJointlyIndexed([idx], marks)
     const tied = firstTiedClass(colors!)
     if (tied === null) return { form: serialize(idx, colors!), colors: colors! }
     let best: { form: string; colors: SideColors } | null = null

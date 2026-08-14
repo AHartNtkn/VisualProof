@@ -1,13 +1,16 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../diagram'
 import { DiagramError, endpointPositionKey } from '../diagram'
 import { sigEquals } from '../sig'
-import { refineJointly, type Mark, type Sort, type SideColors } from './refine'
+import { buildRefineIndexes, refineJointlyIndexed, type Mark, type Sort, type SideColors } from './refine'
 
 /**
  * PAIRWISE ISOMORPHISM WITH VERIFIED WITNESS.
  *
- * `refineJointly` colors two diagrams' regions/nodes/wires by content; equal
- * colors on both sides mean corresponding structure. When refinement alone
+ * Joint refinement colors two diagrams' regions/nodes/wires by content; equal
+ * colors on both sides mean corresponding structure. Each side's `RefineIndex`
+ * is built once (`buildRefineIndexes`) and reused across every individualized
+ * recursion (`refineJointlyIndexed`), since only the color-seeding `marks`
+ * change between attempts, never the diagrams. When refinement alone
  * leaves every class a singleton pair, the coloring already IS the bijection
  * — build it and verify it transports every piece of structure (a
  * `DiagramError` on verification failure is an engine bug, never "not
@@ -78,13 +81,11 @@ export function diagramIso(
   aPins: readonly WireId[] = [], bPins: readonly WireId[] = [],
 ): DiagramIso | null {
   if (aPins.length !== bPins.length) return null
+  const indexes = buildRefineIndexes([{ diagram: a, pins: aPins }, { diagram: b, pins: bPins }])
   return attempt([])
 
   function attempt(marks: readonly Mark[]): DiagramIso | null {
-    const [ca, cb] = refineJointly(
-      [{ diagram: a, pins: aPins }, { diagram: b, pins: bPins }],
-      marks,
-    )
+    const [ca, cb] = refineJointlyIndexed(indexes, marks)
     const groups = buildGroups(ca!, cb!)
 
     for (const g of groups) {
