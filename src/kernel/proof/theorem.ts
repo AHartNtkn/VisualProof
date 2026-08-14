@@ -110,7 +110,8 @@ export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
   const bwd = replayActions(pinnedForReplay(thm.rhs), backActions, ctx, bwdInterface.afterStep, 'backward')
   if (!sameDiagram(fwd, bwd, fwdInterface.boundary(), bwdInterface.boundary())) {
     const detail = process.env.THEOREM_DEBUG
-      ? `\n-- forward:\n${JSON.stringify(diagramToJson(fwd))}\n-- stated/backward:\n${JSON.stringify(diagramToJson(bwd))}`
+      ? `\n-- forward:\n${JSON.stringify({ diagram: diagramToJson(fwd), boundary: fwdInterface.boundary() })}`
+        + `\n-- stated/backward:\n${JSON.stringify({ diagram: diagramToJson(bwd), boundary: bwdInterface.boundary() })}`
       : ''
     throw new ProofError((backActions.length === 0
       ? `theorem '${thm.name}': the proof does not arrive at the stated right-hand side`
