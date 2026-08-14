@@ -452,4 +452,162 @@ describe('__verifyIso direct branch tests', () => {
     const reason = __verifyIso(a, b, [], [], iso)
     expect(reason).toContain("regions map is not injective: 'root' has more than one preimage")
   })
+
+  it('rejects a checkBijection map with a key outside its domain', () => {
+    const a = mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' }, c: { kind: 'cut', parent: 'root' } },
+    })
+    const b = mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' }, c: { kind: 'cut', parent: 'root' } },
+    })
+    const iso: DiagramIso = {
+      regions: new Map([['root', 'root'], ['extra', 'c']]),
+      nodes: new Map(),
+      wires: new Map(),
+    }
+    const reason = __verifyIso(a, b, [], [], iso)
+    expect(reason).toContain("regions map has unexpected key 'extra'")
+  })
+
+  it('rejects a checkBijection map with a value outside its codomain', () => {
+    const a = mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' }, c: { kind: 'cut', parent: 'root' } },
+    })
+    const b = mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' }, c: { kind: 'cut', parent: 'root' } },
+    })
+    const iso: DiagramIso = {
+      regions: new Map([['root', 'bogus'], ['c', 'root']]),
+      nodes: new Map(),
+      wires: new Map(),
+    }
+    const reason = __verifyIso(a, b, [], [], iso)
+    expect(reason).toContain("regions map targets unknown 'bogus'")
+  })
+
+  it('rejects a checkBijection map that is injective but not onto (smaller domain)', () => {
+    const a = mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' } },
+    })
+    const b = mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' }, c: { kind: 'cut', parent: 'root' } },
+    })
+    const iso: DiagramIso = {
+      regions: new Map([['root', 'root']]),
+      nodes: new Map(),
+      wires: new Map(),
+    }
+    const reason = __verifyIso(a, b, [], [], iso)
+    expect(reason).toContain('regions map is not onto its codomain')
+  })
+
+  it('rejects a node kind mismatch (atom mapped to identity)', () => {
+    const a = mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' } },
+      nodes: {
+        atomA: { kind: 'atom', region: 'root', sig: relSig([]) },
+        pinA: { kind: 'identity', region: 'root', sig: relSig([]), arity: 1 },
+      },
+      wires: {
+        headA: { sig: relSig([]), endpoints: [
+          { node: 'atomA', port: { kind: 'head' } },
+          { node: 'pinA', port: { kind: 'identity', index: 0 } },
+        ] },
+      },
+    })
+    const b = mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' } },
+      nodes: {
+        idB: { kind: 'identity', region: 'root', sig: relSig([]), arity: 1 },
+        extraB: { kind: 'identity', region: 'root', sig: relSig([]), arity: 1 },
+      },
+      wires: {
+        wB: { sig: relSig([]), endpoints: [
+          { node: 'idB', port: { kind: 'identity', index: 0 } },
+          { node: 'extraB', port: { kind: 'identity', index: 0 } },
+        ] },
+      },
+    })
+    const iso: DiagramIso = {
+      regions: new Map([['root', 'root']]),
+      nodes: new Map([['atomA', 'idB'], ['pinA', 'extraB']]),
+      wires: new Map([['headA', 'wB']]),
+    }
+    const reason = __verifyIso(a, b, [], [], iso)
+    expect(reason).toContain("node 'atomA' kind 'atom' does not match 'idB' kind 'identity'")
+  })
+
+  it('rejects a ref sig mismatch with an equal defId', () => {
+    const nested = relSig([])
+    const make = (argSig: typeof IOTA | typeof nested) => mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' } },
+      nodes: {
+        ref: { kind: 'ref', region: 'root', defId: 'P', sig: relSig([argSig]) },
+        argPin: { kind: 'identity', region: 'root', sig: argSig, arity: 1 },
+      },
+      wires: {
+        arg: { sig: argSig, endpoints: [
+          { node: 'ref', port: { kind: 'arg', index: 0 } },
+          { node: 'argPin', port: { kind: 'identity', index: 0 } },
+        ] },
+      },
+    })
+    const a = make(IOTA)
+    const b = make(nested)
+    const iso: DiagramIso = {
+      regions: new Map([['root', 'root']]),
+      nodes: new Map([['ref', 'ref'], ['argPin', 'argPin']]),
+      wires: new Map([['arg', 'arg']]),
+    }
+    const reason = __verifyIso(a, b, [], [], iso)
+    expect(reason).toContain("ref 'ref' sig does not match 'ref' sig")
+  })
+
+  it('rejects an identity sig mismatch with an equal arity', () => {
+    const a = mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' } },
+      nodes: {
+        idA: { kind: 'identity', region: 'root', sig: IOTA, arity: 1 },
+        helperA: { kind: 'identity', region: 'root', sig: IOTA, arity: 1 },
+      },
+      wires: {
+        wA: { sig: IOTA, endpoints: [
+          { node: 'idA', port: { kind: 'identity', index: 0 } },
+          { node: 'helperA', port: { kind: 'identity', index: 0 } },
+        ] },
+      },
+    })
+    const nested = relSig([])
+    const b = mkDiagram({
+      root: 'root',
+      regions: { root: { kind: 'sheet' } },
+      nodes: {
+        idB: { kind: 'identity', region: 'root', sig: nested, arity: 1 },
+        helperB: { kind: 'identity', region: 'root', sig: nested, arity: 1 },
+      },
+      wires: {
+        wB: { sig: nested, endpoints: [
+          { node: 'idB', port: { kind: 'identity', index: 0 } },
+          { node: 'helperB', port: { kind: 'identity', index: 0 } },
+        ] },
+      },
+    })
+    const iso: DiagramIso = {
+      regions: new Map([['root', 'root']]),
+      nodes: new Map([['idA', 'idB'], ['helperA', 'helperB']]),
+      wires: new Map([['wA', 'wB']]),
+    }
+    const reason = __verifyIso(a, b, [], [], iso)
+    expect(reason).toContain("identity 'idA' sig does not match 'idB' sig")
+  })
 })
