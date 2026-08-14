@@ -480,49 +480,6 @@ structure SelectionReplacement (input : Checked)
   binderSpine : BinderSpine pattern.val.diagram
   binderTarget : Fin binderSpine.proxyCount → Fin input.val.regionCount
 
-private def replacementSpliceInput?
-    (input : Checked) (selection : CheckedSelection input.val)
-    (replacement : SelectionReplacement input selection)
-    (domains : FrameDomains input.val selection)
-    (frame : Checked)
-    (frameEq : frame.val = input.val.removeRaw selection domains) :
-    Option { spliceInput : Splice.Input //
-      spliceInput.frame = frame ∧ spliceInput.AttachmentConsistent } :=
-  match domains.regions.index? selection.val.anchor with
-  | none => none
-  | some site =>
-      match hattachment : sequenceFin fun position =>
-          domains.wires.index? (replacement.attachment position) with
-      | none => none
-      | some attachment =>
-          match sequenceFin fun index =>
-              domains.regions.index? (replacement.binderTarget index) with
-          | none => none
-          | some binderTarget =>
-              let regionCountEq : frame.val.regionCount =
-                  domains.regions.count :=
-                (congrArg Concrete.Diagram.regionCount frameEq).trans rfl
-              let wireCountEq : frame.val.wireCount = domains.wires.count :=
-                (congrArg Concrete.Diagram.wireCount frameEq).trans rfl
-              some ⟨{
-                  frame
-                  pattern := replacement.pattern
-                  site := Fin.cast regionCountEq.symm site
-                  attachment := fun position =>
-                    Fin.cast wireCountEq.symm (attachment position)
-                  binderSpine := replacement.binderSpine
-                  binderTarget := fun index =>
-                    Fin.cast regionCountEq.symm (binderTarget index)
-                }, rfl, by
-                  intro left right boundaryEq
-                  have sourceEq := replacement.attachment_consistent
-                    left right boundaryEq
-                  have denseEq : attachment left = attachment right := by
-                    apply Option.some.inj
-                    rw [← sequenceFin_sound hattachment left,
-                      ← sequenceFin_sound hattachment right, sourceEq]
-                  exact congrArg (Fin.cast wireCountEq.symm) denseEq⟩
-
 /-- The canonical checked survivor frame.  Selection validity already proves
 this graph well formed, so preparation does not retain a second checked
 presentation of the same diagram. -/
@@ -537,14 +494,36 @@ structure PreparedSelectionReplacement (input : Checked)
     (selection : CheckedSelection input.val)
     (replacement : SelectionReplacement input selection) where
   domains : FrameDomains input.val selection
-  spliceInput : Splice.Input
-  spliceFrameEq : spliceInput.frame =
-    selectionReplacementFrame input selection domains
-  spliceAttachmentConsistent : spliceInput.AttachmentConsistent
+  site : Fin (selectionReplacementFrame input selection domains).val.regionCount
+  attachment : Fin replacement.pattern.val.boundary.length →
+    Fin (selectionReplacementFrame input selection domains).val.wireCount
+  binderTarget : Fin replacement.binderSpine.proxyCount →
+    Fin (selectionReplacementFrame input selection domains).val.regionCount
+  attachmentConsistent : ∀ left right,
+    replacement.pattern.val.boundary.get left =
+        replacement.pattern.val.boundary.get right →
+      attachment left = attachment right
 
-def PreparedSelectionReplacement.frame
+abbrev PreparedSelectionReplacement.frame
     (prepared : PreparedSelectionReplacement input selection replacement) :
-    Checked := selectionReplacementFrame input selection prepared.domains
+  Checked := selectionReplacementFrame input selection prepared.domains
+
+/-- The prepared splice input uses the canonical survivor frame
+definitionally.  Preparation stores only the dense site and attachment maps. -/
+abbrev PreparedSelectionReplacement.spliceInput
+    (prepared : PreparedSelectionReplacement input selection replacement) :
+    Splice.Input where
+  frame := prepared.frame
+  pattern := replacement.pattern
+  site := prepared.site
+  attachment := prepared.attachment
+  binderSpine := replacement.binderSpine
+  binderTarget := prepared.binderTarget
+
+theorem PreparedSelectionReplacement.spliceAttachmentConsistent
+    (prepared : PreparedSelectionReplacement input selection replacement) :
+    prepared.spliceInput.AttachmentConsistent :=
+  prepared.attachmentConsistent
 
 def prepareSelectionReplacement (input : Checked)
     (selection : CheckedSelection input.val)
@@ -552,88 +531,37 @@ def prepareSelectionReplacement (input : Checked)
     Except Error (PreparedSelectionReplacement input selection replacement) :=
   let domains : FrameDomains input.val selection := {}
   let frame := selectionReplacementFrame input selection domains
-  match replacementSpliceInput? input selection replacement domains frame rfl with
+  match domains.regions.index? selection.val.anchor with
   | none => .error .invalidSelection
-  | some prepared => .ok {
-      domains
-      spliceInput := prepared.val
-      spliceFrameEq := prepared.property.1
-      spliceAttachmentConsistent := prepared.property.2
-    }
-
-private theorem replacementSpliceInput?_pattern_spine
-    (input : Checked) (selection : CheckedSelection input.val)
-    (replacement : SelectionReplacement input selection)
-    (domains : FrameDomains input.val selection)
-    (frame : Checked)
-    (frameEq : frame.val = input.val.removeRaw selection domains)
-    (prepared : { spliceInput : Splice.Input //
-      spliceInput.frame = frame ∧ spliceInput.AttachmentConsistent })
-    (success : replacementSpliceInput? input selection replacement domains
-      frame frameEq = some prepared) :
-    prepared.val.pattern = replacement.pattern ∧
-      HEq prepared.val.binderSpine replacement.binderSpine ∧
-      HEq prepared.val.binderSpine.bodyContainer
-        replacement.binderSpine.bodyContainer := by
-  unfold replacementSpliceInput? at success
-  split at success <;> try contradiction
-  split at success <;> try contradiction
-  split at success <;> try contradiction
-  cases success
-  exact ⟨rfl, .rfl, .rfl⟩
-
-private theorem prepareSelectionReplacement_pattern_spine
-    {input : Checked} {selection : CheckedSelection input.val}
-    {replacement : SelectionReplacement input selection}
-    {prepared : PreparedSelectionReplacement input selection replacement}
-    (success : prepareSelectionReplacement input selection replacement =
-      .ok prepared) :
-    prepared.spliceInput.pattern = replacement.pattern ∧
-      HEq prepared.spliceInput.binderSpine replacement.binderSpine ∧
-      HEq prepared.spliceInput.binderSpine.bodyContainer
-        replacement.binderSpine.bodyContainer := by
-  unfold prepareSelectionReplacement at success
-  dsimp only at success
-  split at success <;> try contradiction
-  rename_i preparedInput preparedInputSuccess
-  cases success
-  exact replacementSpliceInput?_pattern_spine input selection replacement _
-    (selectionReplacementFrame input selection _) rfl preparedInput
-      preparedInputSuccess
-
-/-- The prepared splice uses exactly the replacement pattern supplied to the
-flat primitive; successful preparation selects only its dense frame maps. -/
-theorem prepareSelectionReplacement_spliceInput_pattern
-    {input : Checked} {selection : CheckedSelection input.val}
-    {replacement : SelectionReplacement input selection}
-    {prepared : PreparedSelectionReplacement input selection replacement}
-    (success : prepareSelectionReplacement input selection replacement =
-      .ok prepared) :
-    prepared.spliceInput.pattern = replacement.pattern :=
-  (prepareSelectionReplacement_pattern_spine success).1
-
-/-- The prepared splice retains the supplied binder spine exactly, modulo the
-dependent pattern equality exposed above. -/
-theorem prepareSelectionReplacement_spliceInput_binderSpine
-    {input : Checked} {selection : CheckedSelection input.val}
-    {replacement : SelectionReplacement input selection}
-    {prepared : PreparedSelectionReplacement input selection replacement}
-    (success : prepareSelectionReplacement input selection replacement =
-      .ok prepared) :
-    HEq prepared.spliceInput.binderSpine replacement.binderSpine :=
-  (prepareSelectionReplacement_pattern_spine success).2.1
-
-/-- The material compiler site selected by preparation is the supplied
-replacement spine's body container. -/
-theorem prepareSelectionReplacement_spliceInput_bodyContainer
-    {input : Checked} {selection : CheckedSelection input.val}
-    {replacement : SelectionReplacement input selection}
-    {prepared : PreparedSelectionReplacement input selection replacement}
-    (success : prepareSelectionReplacement input selection replacement =
-      .ok prepared) :
-    HEq prepared.spliceInput.binderSpine.bodyContainer
-      replacement.binderSpine.bodyContainer :=
-  (prepareSelectionReplacement_pattern_spine success).2.2
+  | some site =>
+      match hattachment : sequenceFin fun position =>
+          domains.wires.index? (replacement.attachment position) with
+      | none => .error .invalidSelection
+      | some attachment =>
+          match sequenceFin fun index =>
+              domains.regions.index? (replacement.binderTarget index) with
+          | none => .error .invalidSelection
+          | some binderTarget =>
+              let regionCountEq : frame.val.regionCount =
+                  domains.regions.count := rfl
+              let wireCountEq : frame.val.wireCount = domains.wires.count := rfl
+              .ok {
+                domains
+                site := Fin.cast regionCountEq.symm site
+                attachment := fun position =>
+                  Fin.cast wireCountEq.symm (attachment position)
+                binderTarget := fun index =>
+                  Fin.cast regionCountEq.symm (binderTarget index)
+                attachmentConsistent := by
+                  intro left right boundaryEq
+                  have sourceEq := replacement.attachment_consistent
+                    left right boundaryEq
+                  have denseEq : attachment left = attachment right := by
+                    apply Option.some.inj
+                    rw [← sequenceFin_sound hattachment left,
+                      ← sequenceFin_sound hattachment right, sourceEq]
+                  exact congrArg (Fin.cast wireCountEq.symm) denseEq
+              }
 
 /-- Preparation reindexes the selected anchor into the dense survivor frame;
 no independent target-site choice is made. -/
@@ -643,22 +571,17 @@ theorem prepareSelectionReplacement_spliceInput_site_origin
     {prepared : PreparedSelectionReplacement input selection replacement}
     (success : prepareSelectionReplacement input selection replacement =
       .ok prepared) :
-    prepared.domains.regions.origin
-        (Fin.cast (congrArg (fun checked : Checked => checked.val.regionCount)
-          prepared.spliceFrameEq) prepared.spliceInput.site) =
+    prepared.domains.regions.origin prepared.spliceInput.site =
       selection.val.anchor := by
   unfold prepareSelectionReplacement at success
   dsimp only at success
   split at success <;> try contradiction
-  rename_i preparedInput preparedInputSuccess
-  cases success
-  unfold replacementSpliceInput? at preparedInputSuccess
-  split at preparedInputSuccess <;> try contradiction
   rename_i site siteFound
-  split at preparedInputSuccess <;> try contradiction
-  split at preparedInputSuccess <;> try contradiction
-  cases preparedInputSuccess
-  simpa [selectionReplacementFrame] using
+  split at success <;> try contradiction
+  split at success <;> try contradiction
+  cases success
+  simpa [PreparedSelectionReplacement.spliceInput,
+    selectionReplacementFrame] using
     (SurvivorDomain.index?_eq_some_iff _ selection.val.anchor site).mp
       siteFound
 
@@ -694,11 +617,10 @@ def PreparedSelectionReplacement.composeReceipt
     (prepared : PreparedSelectionReplacement input selection replacement)
     (spliced : OperationReceipt prepared.spliceInput.frame) :
     OperationReceipt input :=
-  let splicedAtFrame := spliced.castInput prepared.spliceFrameEq
   {
-    result := splicedAtFrame.result
-    provenance := prepared.frameProvenance.compose splicedAtFrame.provenance
-    interface := prepared.frameTransport.compose splicedAtFrame.interface
+    result := spliced.result
+    provenance := prepared.frameProvenance.compose spliced.provenance
+    interface := prepared.frameTransport.compose spliced.interface
   }
 
 /-- Replace one checked selection by one checked open pattern. Removal, dense

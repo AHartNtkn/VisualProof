@@ -114,7 +114,9 @@ noncomputable def replaceSelectionRaw_decomposition
   split at packed <;> try contradiction
   rename_i finalBoundary finalTransport
   cases packed
-  let splicedAtFrame := spliced.castInput prepared.spliceFrameEq
+  let splicedAtFrame : OperationReceipt prepared.frame := by
+    simpa [PreparedSelectionReplacement.spliceInput,
+      PreparedSelectionReplacement.frame] using spliced
   have composedTransport :
       (prepared.frameTransport.compose
         splicedAtFrame.interface).transportBoundary
@@ -175,8 +177,9 @@ noncomputable def replaceSelectionRaw_decomposition
       rfl
   have preparedFrameEq : prepared.frame = frameReceipt.target.diagram := rfl
   have spliceFrameEq : prepared.spliceInput.frame =
-      frameReceipt.target.diagram :=
-    prepared.spliceFrameEq.trans preparedFrameEq
+      frameReceipt.target.diagram := by
+    simpa [PreparedSelectionReplacement.spliceInput,
+      PreparedSelectionReplacement.frame] using preparedFrameEq
   let splicedAtIntermediate := spliced.castInput spliceFrameEq
   have spliceTransportAtIntermediate :
       splicedAtIntermediate.interface.transportBoundary
