@@ -75,7 +75,7 @@ Kernel facts the design relies on (verified against the code):
 ## Family registry (`src/generate/index.ts`)
 
 ```ts
-type KnobSpec = { id: string; label: string; min: number; max: number; default: number }
+type KnobSpec = { id: string; label: string; min: number; default: number }
 type GeneratedProblem = {
   diagram: Diagram          // becomes the edit diagram
   statement: string         // formula source text, shown to the user
@@ -92,6 +92,11 @@ The registry exports the ordered family list:
 
 - `prop-shrink` — "Random tautology (shrunk)"
 - `prop-walk` — "Random tautology (rule walk)"
+
+Knobs are free-form number inputs with defaults — no maxima. `min` exists
+only for validity lower bounds (values below it are meaningless, not merely
+inadvisable); cost at large values is governed by the attempt-cap and
+search-fuel knobs, never by clamping inputs.
 
 All randomness flows through the injected `rng: () => number`; generators are
 deterministic given a seed. The UI seeds from `crypto.getRandomValues`; tests
@@ -123,11 +128,11 @@ is falsifiable. The both-polarities-per-atom prefilter from the source notes
 is intentionally omitted — at puzzle sizes the full check is already
 instant, so the prefilter buys nothing.
 
-**Accept/reject loop.** Knobs: atom count (2–5, default 3) and minimum core
-size in connectives (default 6). Sample → reject non-tautologies → shrink →
-accept if the core meets the minimum size, else resample. A hard attempt cap
-(10,000) throws with a clear message rather than spinning on an
-unsatisfiable knob combination.
+**Accept/reject loop.** Knobs: atom count (min 1, default 3), minimum core
+size in connectives (min 1, default 6), and attempt cap (min 1, default
+10,000). Sample → reject non-tautologies → shrink → accept if the core meets
+the minimum size, else resample. Exceeding the attempt cap throws with a
+clear message rather than spinning on an unsatisfiable knob combination.
 
 **Output.** The core prints as `∀P Q R:o. <formula>`, quantifying exactly the
 atoms that survived shrinking, and runs through the existing
@@ -174,14 +179,15 @@ actually-applicable moves, and correctness never depends on the weights.
 formula. This serves two purposes: the UI gets a readable `statement` for
 family B, and the family A minimality check runs on it — outputs whose
 weakening test finds dead weight (including any ∀-wire with no surviving
-occurrences) are rejected and the walk reruns with the same knobs, under a
-loud attempt cap (1,000 walks, then throw with a clear message).
+occurrences) are rejected and the walk reruns with the same knobs; exceeding
+the attempt cap throws with a clear message.
 
-**Knobs.** Atom count (number of ∀ wires; 1–4, default 2) and walk length
-(moves after the prelude; 3–40, default 12). Defaults are validated by the
-integration test: default-knob problems must be solved by the search within
-default fuel. Walk length is an upper bound on difficulty, not a guarantee;
-the honest number comes from the search.
+**Knobs.** Atom count (number of ∀ wires; min 1, default 2), walk length
+(moves after the prelude; min 1, default 12), and attempt cap (min 1,
+default 1,000). Defaults are validated by the integration test: default-knob
+problems must be solved by the search within default fuel. Walk length is an
+upper bound on difficulty, not a guarantee; the honest number comes from the
+search.
 
 ## Minimal-proof search (`src/generate/search/`)
 
