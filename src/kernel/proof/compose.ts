@@ -1,6 +1,6 @@
 import type { Diagram, Endpoint, WireId } from '../diagram/diagram'
-import type { DiagramIso } from '../diagram/canonical/explore'
-import { exploreIso } from '../diagram/canonical/explore'
+import type { DiagramIso } from '../diagram/canonical/iso'
+import { diagramIso } from '../diagram/canonical/iso'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { allocationReservation, type ProofAction } from './action'
@@ -327,7 +327,7 @@ export function composeActions(
 
   let sourceBoundary = boundaries.source
   let targetBoundary = boundaries.target
-  let iso = exploreIso(
+  let iso = diagramIso(
     meetSource,
     meetTarget,
     sourceBoundary,
@@ -405,7 +405,7 @@ export function composeActions(
         )
       }
 
-      iso = exploreIso(
+      iso = diagramIso(
         currentSource,
         currentTarget,
         sourceBoundary,
