@@ -130,6 +130,15 @@ is falsifiable. The both-polarities-per-atom prefilter from the source notes
 is intentionally omitted — at puzzle sizes the full check is already
 instant, so the prefilter buys nothing.
 
+Minimality under weakening does NOT exclude doubled negations (¬¬ψ is
+minimal whenever ψ is), so both families additionally reject any candidate
+whose formula contains `not(not(_))` — a doubled negation is always
+trivially removable structure and would hand the player a free opening
+move. This is a syntactic definition, not a tuned heuristic. The one
+eliminable double-cut pair that remains is intrinsic: the ∀ shell's inner
+cut plus a ¬-headed body form a real pair in almost every theorem of this
+fragment, and removing it is part of unwrapping the quantifier.
+
 **Accept/reject loop.** Knobs: atom count (min 1, default 3), sample size in
 connectives (min 1, default 12 — the size formulas are sampled at, before
 shrinking), minimum core size in connectives (min 1, default 6), and attempt
