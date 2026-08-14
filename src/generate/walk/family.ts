@@ -35,9 +35,18 @@ export const propWalkFamily: GeneratorFamily = {
   id: 'prop-walk',
   label: 'Random tautology (rule walk)',
   description: 'Applies real kernel rules forward from the blank sheet; every problem carries a checked derivation.',
+  // Walk length default measured, not guessed (final-review fix wave): at
+  // length 12 (the originally specified default), 10 seeds against
+  // all-default knobs took 0.8-28.8s to generate and one of them exceeded
+  // the attempt cap outright — unworkable inside any reasonable test
+  // timeout. At length 8, the same measurement (10 seeds, atoms 2,
+  // attempts 1,000) generated every seed in 0.1-4.3s (avg ~2s), 0/10
+  // failures — comfortably inside a 10s timeout. Atoms doesn't materially
+  // affect the cost (measured equal at length 6 for atoms 1 vs 2), so it
+  // keeps its original default.
   knobs: [
     { id: 'atoms', label: 'Atoms (max)', min: 1, default: 2 },
-    { id: 'length', label: 'Walk length', min: 1, default: 12 },
+    { id: 'length', label: 'Walk length', min: 1, default: 8 },
     { id: 'attempts', label: 'Attempt cap', min: 1, default: 1_000 },
   ],
   generate(params, rng): GeneratedProblem {
@@ -147,7 +156,6 @@ function applyWeightedRandomMove(
   while (byClass.size > 0) {
     const classes = [...byClass.keys()]
     const total = classes.reduce((sum, cls) => sum + WALK_CLASS_WEIGHTS[cls], 0)
-    if (total <= 0) return false
     let draw = rng() * total
     let chosenClass = classes[classes.length - 1]!
     for (const cls of classes) {

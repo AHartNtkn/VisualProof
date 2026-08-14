@@ -33,8 +33,8 @@ function difficultyLine(outcome: SearchOutcome, walkUpperBound: number | undefin
       : ''
     return base + requires
   }
-  const bound = walkUpperBound !== undefined ? ` · provable in ${walkUpperBound}` : ''
-  return `requires insertion · no proof within ${outcome.noProofWithin} moves (search fuel exhausted)${bound}`
+  const bound = walkUpperBound !== undefined ? ` · provable in ${walkUpperBound} walk actions` : ''
+  return `no deletions-only proof · no proof within ${outcome.noProofWithin} moves (search fuel exhausted)${bound}`
 }
 
 /** Random-problem generation panel: samples a problem from a chosen
@@ -116,8 +116,9 @@ export function mountGenerateEntry(
   root.append(form)
   host.append(root)
 
-  let currentFamily: GeneratorFamily = GENERATOR_FAMILIES[0]!
-  if (currentFamily === undefined) throw new Error('mountGenerateEntry: GENERATOR_FAMILIES is empty')
+  const initialFamily = GENERATOR_FAMILIES[0]
+  if (initialFamily === undefined) throw new Error('mountGenerateEntry: GENERATOR_FAMILIES is empty')
+  let currentFamily: GeneratorFamily = initialFamily
   const knobInputs = new Map<string, HTMLInputElement>()
   let current: GeneratedProblem | null = null
 

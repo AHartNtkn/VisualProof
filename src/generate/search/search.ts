@@ -3,6 +3,7 @@ import { sameDiagram } from '../../kernel/diagram'
 import { applyStep, EMPTY_PROOF_CONTEXT, ProofError, type ProofStep } from '../../kernel/proof'
 import { RuleError } from '../../kernel/rules'
 import { ScopePreservationError } from '../../kernel/rules/wire-ends'
+import { pinStep } from '../../theories/record'
 import { enumerateMoves, type CandidateMove, type MoveClass } from '../moves'
 import { diagramDigest } from './digest'
 
@@ -13,19 +14,25 @@ export type SearchOutcome =
        *  phase 2 (the full atomic alphabet). */
       readonly mode: 'deletion-only' | 'full'
       /** Move count — one user gesture each, including an auto-pin bundled
-       *  with its delete (see `applyCandidate`). `steps.length` may exceed
-       *  this: a bundled pin contributes two `ProofStep`s to one move. */
+       *  with its delete (see `applyCandidateWithPins`). `steps.length` may
+       *  exceed this: a bundled pin contributes two `ProofStep`s to one
+       *  move. */
       readonly length: number
       /** Classes proven to appear in every minimal-length proof. */
       readonly requires: readonly MoveClass[]
       readonly steps: readonly ProofStep[]
     }
   | {
-      /** Phase 1 proved insertion is required, and phase 2's fuel ran out.
-       *  `noProofWithin` is the deepest FULLY exhausted depth: the honest
-       *  claim is "no proof of ≤ noProofWithin moves exists". */
+      /** Phase 1 proved no deletion-only proof exists (every proof needs at
+       *  least one growing move — spawn, double-cut intro, iteration copy,
+       *  or vacuity insert), and phase 2's fuel ran out before solving or
+       *  exhausting the full alphabet. `noProofWithin` is the deepest FULLY
+       *  exhausted depth over the full alphabet: the honest claim is "no
+       *  proof of ≤ noProofWithin moves exists". This does NOT by itself
+       *  prove any specific class (e.g. insertion) is required — only that
+       *  no deletion-only proof exists. */
       readonly status: 'exhausted'
-      readonly requiresInsertion: true
+      readonly noDeletionOnlyProof: true
       readonly noProofWithin: number
     }
 
@@ -96,27 +103,14 @@ class DiagramMemo {
   }
 }
 
-/**
- * The pin step a `ScopePreservationError` asks for, transcribed from
- * `PrimitiveStepRecorder#recordPin` (src/theories/record.ts): a fresh
- * arity-1 identity node at the error's `scope`, attached to the error's
- * wire via `attachments` (stub growth onto an existing wire, not a new
- * one). The node id is a mint label — `applyVacuityInsert` freshens it.
- */
-function pinStepFor(diagram: Diagram, error: ScopePreservationError): ProofStep {
-  const wire = diagram.wires[error.wireId]
-  if (wire === undefined) throw new Error(`minimalProofSearch: cannot pin unknown wire '${error.wireId}'`)
-  const label = `hold_${error.wireId}`
-  return {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: {
-      nodes: { [label]: { region: error.scope, sig: wire.sig, arity: 1 } },
-      wires: {},
-      attachments: { [error.wireId]: [{ node: label, port: { kind: 'identity', index: 0 } }] },
-    },
-  }
-}
+/** Bound on consecutive auto-pins within one bundled move, mirroring the
+ *  kernel content compiler's own pin-retry loop (`compileContent`'s `apply`
+ *  helper, src/kernel/proof/compile-content.ts: guard bound at line ~703,
+ *  pin-step construction at lines 727-735) — a cut subtree can strand
+ *  several wires in turn, so one candidate may need several pins, but an
+ *  unbounded loop would hide a real bug as an infinite retry. Exceeding it
+ *  throws loudly rather than looping forever. */
+const PIN_BUNDLE_GUARD = 64
 
 /**
  * Apply a candidate backward; a rule/proof refusal withdraws it (the
@@ -124,38 +118,44 @@ function pinStepFor(diagram: Diagram, error: ScopePreservationError): ProofStep 
  * is a genuine bug and propagates.
  *
  * Auto-pin bundling (spec, search section): an erasure/deiteration
- * candidate that strands its wire below the two-end floor raises
- * `ScopePreservationError` — the app's real erase gesture resolves this by
- * inserting a pin step first, in the same action; the search models the
- * same gesture. The pin and the retried candidate count as ONE move (the
- * caller advances its depth/path counters once) but both `ProofStep`s are
- * returned so the full derivation replays.
+ * candidate that strands a wire below the two-end floor raises
+ * `ScopePreservationError` — the app's real erase gesture (and the walk's
+ * `PrimitiveStepRecorder`) resolve this by inserting a pin step first, in
+ * the same action; the search models the same gesture, looping pin-then-
+ * retry because a single cut-subtree candidate can strand more than one
+ * wire in turn (`PIN_BUNDLE_GUARD` bounds it). All pins plus the retried
+ * candidate count as ONE move (the caller advances its depth/path counters
+ * once) but every `ProofStep` is returned so the full derivation replays.
  */
-function applyCandidate(
+export function applyCandidateWithPins(
   diagram: Diagram,
   step: ProofStep,
 ): { readonly diagram: Diagram; readonly steps: readonly ProofStep[] } | null {
-  try {
-    return { diagram: applyStep(diagram, step, EMPTY_PROOF_CONTEXT, 'backward'), steps: [step] }
-  } catch (error) {
-    if (error instanceof ScopePreservationError) {
-      const pinStep = pinStepFor(diagram, error)
-      let pinned: Diagram
-      try {
-        pinned = applyStep(diagram, pinStep, EMPTY_PROOF_CONTEXT, 'backward')
-      } catch (pinError) {
-        if (pinError instanceof RuleError || pinError instanceof ProofError) return null
-        throw pinError
-      }
-      try {
-        return { diagram: applyStep(pinned, step, EMPTY_PROOF_CONTEXT, 'backward'), steps: [pinStep, step] }
-      } catch (retryError) {
-        if (retryError instanceof RuleError || retryError instanceof ProofError) return null
-        throw retryError
-      }
+  let current = diagram
+  const steps: ProofStep[] = []
+  for (let guard = 0; ; guard += 1) {
+    if (guard > PIN_BUNDLE_GUARD) {
+      throw new Error(`applyCandidateWithPins: pinned ${PIN_BUNDLE_GUARD} wires without progress`)
     }
-    if (error instanceof RuleError || error instanceof ProofError) return null
-    throw error
+    try {
+      const result = applyStep(current, step, EMPTY_PROOF_CONTEXT, 'backward')
+      steps.push(step)
+      return { diagram: result, steps }
+    } catch (error) {
+      if (error instanceof ScopePreservationError) {
+        const pin = pinStep(current, error.wireId, error.scope)
+        try {
+          current = applyStep(current, pin, EMPTY_PROOF_CONTEXT, 'backward')
+        } catch (pinError) {
+          if (pinError instanceof RuleError || pinError instanceof ProofError) return null
+          throw pinError
+        }
+        steps.push(pin)
+        continue
+      }
+      if (error instanceof RuleError || error instanceof ProofError) return null
+      throw error
+    }
   }
 }
 
@@ -182,7 +182,7 @@ function deletionSearch(start: Diagram, excluded: MoveClass | null): DeletionRes
       for (const candidate of enumerateMoves(diagram, 'backward', ALL_CLASSES)) {
         if (!isDeletionMove(candidate)) continue
         if (excluded !== null && candidate.moveClass === excluded) continue
-        const applied = applyCandidate(diagram, candidate.step)
+        const applied = applyCandidateWithPins(diagram, candidate.step)
         if (applied === null) continue
         if (memo.visitedAtLeast(applied.diagram, 0)) continue
         states += 1
@@ -213,7 +213,7 @@ function dfs(
   if (budget.remaining <= 0) throw new FuelExhausted()
   budget.remaining -= 1
   for (const candidate of enumerateMoves(diagram, 'backward', classes)) {
-    const applied = applyCandidate(diagram, candidate.step)
+    const applied = applyCandidateWithPins(diagram, candidate.step)
     if (applied === null) continue
     trail.push(...applied.steps)
     if (dfs(applied.diagram, remaining - 1, classes, memo, budget, trail)) return true
@@ -254,7 +254,7 @@ export function minimalProofSearch(start: Diagram, fuel: number): SearchOutcome 
     }
   }
 
-  // Phase 2: insertion is PROVEN required; full alphabet under fuel.
+  // Phase 2: no deletion-only proof exists (proven); full alphabet under fuel.
   const budget: Budget = { remaining: fuel }
   for (let depth = 0; ; depth += 1) {
     let steps: ProofStep[] | null
@@ -262,13 +262,13 @@ export function minimalProofSearch(start: Diagram, fuel: number): SearchOutcome 
       steps = solveAtDepth(start, depth, ALL_CLASSES, budget)
     } catch (error) {
       if (error instanceof FuelExhausted) {
-        return { status: 'exhausted', requiresInsertion: true, noProofWithin: depth - 1 }
+        return { status: 'exhausted', noDeletionOnlyProof: true, noProofWithin: depth - 1 }
       }
       throw error
     }
     if (steps === null) continue
-    const requires: MoveClass[] = ['spawn'] // proven by phase 1's exhaustion
-    for (const excluded of ['iteration', 'doubleCut'] as const) {
+    const requires: MoveClass[] = []
+    for (const excluded of ['spawn', 'iteration', 'doubleCut'] as const) {
       const reduced = new Set(ALL_CLASSES)
       reduced.delete(excluded)
       try {

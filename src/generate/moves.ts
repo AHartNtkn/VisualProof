@@ -5,6 +5,7 @@ import type { ProofStep } from '../kernel/proof'
 import { applyStep, EMPTY_PROOF_CONTEXT } from '../kernel/proof'
 import type { SubgraphSelection } from '../kernel/diagram'
 import { bareWireAssembly, bareWireDescription, RuleError } from '../kernel/rules'
+import { ScopePreservationError } from '../kernel/rules/wire-ends'
 import { deiterationStep, erasureStep } from '../app/interact/moves'
 import { bareWires, childCuts, nodesIn, propWires } from './diagram-scan'
 
@@ -63,11 +64,14 @@ export function enumerateMoves(
         // invisible to that direct-nodes check, so it is never added to the
         // erasure's `wires` and never pinned. Erasing then leaves it with a
         // single end, and applyErasure correctly refuses with
-        // ScopePreservationError. There is no atomic-selection-level fix
-        // that stays within this file's scope (the interior walk lives in
-        // the shared app-level rider helper), so such candidates are probed
-        // and dropped here; every other RuleError is a real gate-mirroring
-        // bug and is rethrown.
+        // ScopePreservationError — but that is exactly the case the auto-pin
+        // bundle exists to rescue (spec, search section): consumers pin the
+        // stranded wire and retry (the search's `applyCandidateWithPins`,
+        // the walk's `PrimitiveStepRecorder`), so this candidate is still
+        // legitimate and is emitted rather than dropped. Any other
+        // RuleError here is a real gate-mirroring bug for this branch and is
+        // probed and dropped; anything that isn't a RuleError at all is
+        // rethrown.
         //
         // Atom-node selections (`sel.nodes = [nodeId]`, the `else` branch)
         // are exactly what `orphanedWires` handles correctly — a node's own
@@ -77,11 +81,15 @@ export function enumerateMoves(
         // silently swallowed by this catch.
         try {
           applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
+          out.push({ moveClass: 'erasure', step })
         } catch (error) {
+          if (error instanceof ScopePreservationError) {
+            out.push({ moveClass: 'erasure', step })
+            continue
+          }
           if (error instanceof RuleError) continue
           throw error
         }
-        out.push({ moveClass: 'erasure', step })
       } else {
         out.push({ moveClass: 'erasure', step })
       }

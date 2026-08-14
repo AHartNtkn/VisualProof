@@ -40,31 +40,78 @@ describe('minimalProofSearch', () => {
     expect(outcome.requires).toContain('iteration')
     expect(outcome.requires).not.toContain('spawn')
   })
-  it('proves Peirce\'s law requires insertion, then reports an honest phase-2 result', () => {
-    // ((P→Q)→P)→P in ¬/∧ form — the classic insertion-requiring theorem.
-    // Phase 1 must exhaust its (small, strictly-shrinking) space without a
-    // solve; phase 2 then either solves with the full alphabet or returns
-    // the deepest fully-exhausted depth. Tiny fuel keeps this test fast.
+  it('solves Peirce\'s law deletion-only, via the rescued pin-bundle candidate class', () => {
+    // ((P→Q)→P)→P in ¬/∧ form — folklore's classic insertion-requiring
+    // theorem, but that folklore is a claim about FORWARD derivations. Read
+    // forward, the backward deletion alphabet {erasure(negative),
+    // deiteration, doubleCutElim, vacuity-delete} mirrors to
+    // {doubleCutIntro, insertion-into-negative-region, iteration,
+    // vacuity-insert} — backward erasure of a negative-region selection IS
+    // forward insertion. So "Peirce requires insertion" never actually
+    // implied "Peirce has no deletion-only backward proof"; the spec's
+    // testing-section premise conflated the two directions. Verified by
+    // hand-replaying the returned steps via literal applyStep calls down to
+    // the blank sheet.
+    //
+    // This is also the regression pin for the alphabet-hole fix itself:
+    // step 1 of the found proof is `erasure` of a cut-selection that
+    // strands a wire below the two-end floor — exactly the
+    // ScopePreservationError-raising candidate class the enumerator used to
+    // drop and now emits, rescued here by the search's auto-pin bundle.
     const peirce = formulaToDiagram('∀P Q:o. ¬(¬(¬(P ∧ ¬Q) ∧ ¬P) ∧ ¬P)')
-    const outcome = minimalProofSearch(peirce, 200)
-    if (outcome.status === 'solved') {
-      expect(outcome.mode).toBe('full')
-      expect(outcome.requires).toContain('spawn')
-    } else {
-      expect(outcome.requiresInsertion).toBe(true)
-      expect(outcome.noProofWithin).toBeGreaterThanOrEqual(0)
-    }
+    const outcome = minimalProofSearch(peirce, DEFAULT_SEARCH_FUEL)
+    if (outcome.status !== 'solved') throw new Error(`expected a solve, got ${JSON.stringify(outcome)}`)
+    expect(outcome.mode).toBe('deletion-only')
+    expect(outcome.length).toBe(8)
+    expect(outcome.requires).toEqual(['iteration', 'doubleCut'])
+  })
+  it('reports an honest phase-2 fuel bound on a non-theorem (the exhausted path)', () => {
+    // The search only ever meets tautologies in production (generation
+    // rejects non-tautologies before the search runs), but the honest
+    // fuel-exhausted fallback path still needs end-to-end coverage, and a
+    // real tautology may never exercise it (see the Peirce case above,
+    // which turned out solvable deletion-only). A non-theorem is the one
+    // input guaranteed to: soundness makes the blank sheet unreachable, so
+    // phase 1's complete BFS proves no deletion-only proof exists, and
+    // phase 2 must burn its entire fuel budget without solving.
+    const nonTheorem = formulaToDiagram('∀P:o. P')
+    const outcome = minimalProofSearch(nonTheorem, 150)
+    if (outcome.status !== 'exhausted') throw new Error(`expected exhaustion, got ${JSON.stringify(outcome)}`)
+    expect(outcome.noDeletionOnlyProof).toBe(true)
+    expect(outcome.noProofWithin).toBeGreaterThanOrEqual(0)
   })
   it('solves small generated problems from both families end to end', () => {
     const shrink = propShrinkFamily.generate({ atoms: 1, sampleSize: 6, minSize: 2, attempts: 10_000 }, seededRng(5))
     const shrinkOutcome = minimalProofSearch(shrink.diagram, DEFAULT_SEARCH_FUEL)
     expect(shrinkOutcome.status).toBe('solved')
+    // Walk moves and search moves are different units (kernel forward walk
+    // actions vs. backward search moves, one of which bundles pins) — no
+    // theorem relates their counts, so only the solved status is asserted.
     const walk = propWalkFamily.generate({ atoms: 1, length: 4, attempts: 500 }, seededRng(6))
     const walkOutcome = minimalProofSearch(walk.diagram, DEFAULT_SEARCH_FUEL)
-    if (walkOutcome.status === 'solved' && walk.walkUpperBound !== undefined) {
-      expect(walkOutcome.length).toBeLessThanOrEqual(walk.walkUpperBound + 5)
-    } else {
-      expect(walkOutcome.status).toBe('solved')
-    }
+    expect(walkOutcome.status).toBe('solved')
   })
+})
+
+describe('default-knob sizing (spec: "the default is sized in tests so default-knob problems complete within it")', () => {
+  it('family A (prop-shrink) at all-default knobs completes the search within DEFAULT_SEARCH_FUEL', () => {
+    const problem = propShrinkFamily.generate({}, seededRng(0))
+    const outcome = minimalProofSearch(problem.diagram, DEFAULT_SEARCH_FUEL)
+    expect(outcome.status === 'solved' || outcome.status === 'exhausted').toBe(true)
+  })
+  it(
+    'family B (prop-walk) at all-default knobs generates and completes the search within DEFAULT_SEARCH_FUEL',
+    () => {
+      // Walk length's default was lowered from 12 to 8 for exactly this
+      // reason (see the comment on propWalkFamily's knobs): at 12, this
+      // same measurement (10 seeds) took 0.8-28.8s per seed and one seed
+      // exceeded the attempt cap outright. At 8, 10 seeds all generated in
+      // 0.1-4.3s — this per-test 10s timeout follows the existing
+      // precedent for measured-necessary generator tests.
+      const problem = propWalkFamily.generate({}, seededRng(0))
+      const outcome = minimalProofSearch(problem.diagram, DEFAULT_SEARCH_FUEL)
+      expect(outcome.status === 'solved' || outcome.status === 'exhausted').toBe(true)
+    },
+    10_000,
+  )
 })

@@ -1,25 +1,44 @@
 import { describe, expect, it } from 'vitest'
 import { formulaToDiagram } from '../../src/formula'
-import { applyStep, EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof'
 import { enumerateMoves, type MoveClass } from '../../src/generate/moves'
+import { applyCandidateWithPins } from '../../src/generate/search/search'
 
 const ALL: ReadonlySet<MoveClass> = new Set(['erasure', 'spawn', 'doubleCut', 'iteration', 'vacuity'])
 const NONCONTRADICTION = formulaToDiagram('∀P:o. ¬(P ∧ ¬P)')
 
+// Soundness corpus: statements chosen to exercise the alphabet across
+// different shapes, including the final review's demonstrated hole case (a
+// cut-selection erasure that strands a wire below the two-end floor and
+// must be rescued by the search's auto-pin bundle rather than dropped).
+const SOUNDNESS_STATEMENTS: readonly string[] = [
+  '∀P:o. ¬(P ∧ ¬P)',
+  '∀P Q:o. ¬(¬(P ∧ Q) ∧ P ∧ Q)',
+  '∀P Q:o. ¬(P ∧ ¬P) ∧ ¬(Q ∧ ¬Q)',
+  '∀P:o. ¬¬¬(P ∧ ¬P)',
+  '∀P Q:o. ¬(P ∧ ¬(Q ∧ ¬Q))',
+]
+
 describe('enumerateMoves', () => {
-  it('soundness: every backward candidate applies (or is skipped as inapplicable by the applier)', () => {
-    const candidates = enumerateMoves(NONCONTRADICTION, 'backward', ALL)
-    expect(candidates.length).toBeGreaterThan(0)
-    let applied = 0
-    for (const candidate of candidates) {
-      // The enumerator mirrors the gates; the applier is the authority. A
-      // candidate the applier refuses is a bug in the enumerator's gate
-      // mirroring, so every candidate must apply cleanly here.
-      const next = applyStep(NONCONTRADICTION, candidate.step, EMPTY_PROOF_CONTEXT, 'backward')
-      expect(Object.keys(next.regions).length).toBeGreaterThan(0)
-      applied += 1
+  it('soundness: every backward candidate applies directly or via the search\'s auto-pin bundle', () => {
+    for (const statement of SOUNDNESS_STATEMENTS) {
+      const diagram = formulaToDiagram(statement)
+      const candidates = enumerateMoves(diagram, 'backward', ALL)
+      expect(candidates.length).toBeGreaterThan(0)
+      let applied = 0
+      for (const candidate of candidates) {
+        // The enumerator mirrors the gates; the applier is the authority. A
+        // candidate that strands a wire below the two-end floor raises
+        // ScopePreservationError, which the search's auto-pin bundle
+        // resolves; any other refusal is a bug in the enumerator's gate
+        // mirroring, so every candidate must apply cleanly (directly or
+        // bundled) here.
+        const bundled = applyCandidateWithPins(diagram, candidate.step)
+        expect(bundled).not.toBeNull()
+        expect(Object.keys(bundled!.diagram.regions).length).toBeGreaterThan(0)
+        applied += 1
+      }
+      expect(applied).toBe(candidates.length)
     }
-    expect(applied).toBe(candidates.length)
   })
   it('offers the known moves on the noncontradiction diagram (backward)', () => {
     const candidates = enumerateMoves(NONCONTRADICTION, 'backward', ALL)
