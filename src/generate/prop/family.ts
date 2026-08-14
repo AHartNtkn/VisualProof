@@ -1,7 +1,7 @@
 import type { PropFormula } from './formula'
 import { formulaToDiagram } from '../../formula'
 import { readKnobs, type GeneratedProblem, type GeneratorFamily } from '../index'
-import { connectiveCount, isTautology, printTheorem, usedAtoms } from './formula'
+import { connectiveCount, containsDoubleNegation, isTautology, printTheorem, usedAtoms } from './formula'
 import { samplePropFormula } from './sample'
 import { shrinkToCore } from './shrink'
 
@@ -55,6 +55,7 @@ export const propShrinkFamily: GeneratorFamily = {
       if (!isTautology(sampled, knobs.atoms!)) continue
       const core = shrinkToCore(sampled, knobs.atoms!)
       if (connectiveCount(core) < knobs.minSize!) continue
+      if (containsDoubleNegation(core)) continue
       const normalized = normalizeAtoms(core)
       const statement = printTheorem(normalized)
       return { diagram: formulaToDiagram(statement), statement }

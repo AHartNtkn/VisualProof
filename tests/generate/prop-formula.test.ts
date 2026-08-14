@@ -3,6 +3,7 @@ import { seededRng } from '../../src/generate/rng'
 import {
   atomName,
   connectiveCount,
+  containsDoubleNegation,
   evaluate,
   isTautology,
   printFormula,
@@ -76,6 +77,21 @@ describe('counting helpers', () => {
     expect(connectiveCount(NONCONTRADICTION)).toBe(3)
     expect(connectiveCount(P)).toBe(0)
     expect([...usedAtoms(and(P, and(Q, P)))].sort()).toEqual([0, 1])
+  })
+})
+
+describe('containsDoubleNegation', () => {
+  it('detects a direct not(not(_))', () => {
+    expect(containsDoubleNegation(not(not(P)))).toBe(true)
+  })
+  it('is false for a single negation beside its atom', () => {
+    expect(containsDoubleNegation(not(and(P, not(P))))).toBe(false)
+  })
+  it('detects a double negation nested under ∧', () => {
+    expect(containsDoubleNegation(and(P, not(not(Q))))).toBe(true)
+  })
+  it('is false for two single negations side by side', () => {
+    expect(containsDoubleNegation(not(and(not(P), not(Q))))).toBe(false)
   })
 })
 

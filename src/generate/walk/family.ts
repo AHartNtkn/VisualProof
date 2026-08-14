@@ -6,7 +6,7 @@ import { emptyGraph, finishDiagramWithBoundary } from '../../theories/graph'
 import { PrimitiveStepRecorder, onlyNewCut } from '../../theories/record'
 import { bareWires } from '../diagram-scan'
 import { readKnobs, type GeneratedProblem, type GeneratorFamily } from '../index'
-import { atomName, printTheorem, usedAtoms } from '../prop/formula'
+import { atomName, containsDoubleNegation, printTheorem, usedAtoms } from '../prop/formula'
 import { isMinimalTautology } from '../prop/shrink'
 import { readPropTheorem } from '../prop/read'
 import { enumerateMoves, type CandidateMove, type MoveClass } from '../moves'
@@ -118,6 +118,7 @@ function tryWalk(atoms: number, length: number, rng: () => number): GeneratedPro
     )
   }
   if (!isMinimalTautology(reading.formula, reading.wires.length)) return null
+  if (containsDoubleNegation(reading.formula)) return null
   return { diagram, statement: printTheorem(reading.formula), walkUpperBound: recorder.actions.length }
 }
 

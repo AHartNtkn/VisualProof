@@ -64,6 +64,21 @@ export function usedAtoms(formula: PropFormula): ReadonlySet<number> {
   return atoms
 }
 
+/** True when the formula contains not(not(_)) anywhere — trivially
+ *  removable structure the generators must never ship. */
+export function containsDoubleNegation(formula: PropFormula): boolean {
+  switch (formula.kind) {
+    case 'atom':
+    case 'top':
+    case 'bot':
+      return false
+    case 'not':
+      return formula.body.kind === 'not' || containsDoubleNegation(formula.body)
+    case 'and':
+      return containsDoubleNegation(formula.left) || containsDoubleNegation(formula.right)
+  }
+}
+
 const ATOM_LETTERS = ['P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W'] as const
 
 export function atomName(index: number): string {

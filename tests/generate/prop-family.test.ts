@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { seededRng } from '../../src/generate/rng'
 import { GENERATOR_FAMILIES, readKnobs } from '../../src/generate'
 import { propShrinkFamily } from '../../src/generate/prop/family'
-import { connectiveCount, isTautology } from '../../src/generate/prop/formula'
+import { connectiveCount, containsDoubleNegation, isTautology } from '../../src/generate/prop/formula'
 import { isMinimalTautology } from '../../src/generate/prop/shrink'
 import { parseFormula } from '../../src/formula/parse'
 import type { Formula } from '../../src/formula/syntax'
@@ -49,6 +49,7 @@ describe('propShrinkFamily', () => {
       expect(isTautology(body, parsed.binders.length)).toBe(true)
       expect(isMinimalTautology(body, parsed.binders.length)).toBe(true)
       expect(connectiveCount(body)).toBeGreaterThanOrEqual(3)
+      expect(containsDoubleNegation(body)).toBe(false)
       expect(problem.diagram.root).toBeDefined()
       expect(problem.walkUpperBound).toBeUndefined()
     }
