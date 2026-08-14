@@ -17,6 +17,23 @@ def index : Var context signature → Fin context.length
   | .here => 0
   | .there tail => tail.index.succ
 
+/-- Recover the intrinsically typed wire at a context position. -/
+def ofIndex (position : Fin context.length) :
+    Var context (context.get position) :=
+  match context with
+  | [] => Fin.elim0 position
+  | _ :: _ => Fin.cases .here (fun tail => .there (ofIndex tail)) position
+
+@[simp] theorem index_ofIndex {context : List Sig}
+    (position : Fin context.length) :
+    (ofIndex position).index = position := by
+  induction context with
+  | nil => exact Fin.elim0 position
+  | cons head tail induction =>
+      exact Fin.cases rfl (fun rest => by
+        change (ofIndex rest).index.succ = rest.succ
+        exact congrArg Fin.succ (induction rest)) position
+
 /-- Embed a wire from the left side of an appended context. -/
 def appendLeft (wire : Var left signature) (right : List Sig) :
     Var (left ++ right) signature :=
@@ -30,6 +47,16 @@ def appendRight (left : List Sig) (wire : Var right signature) :
   match left with
   | [] => wire
   | _ :: tail => .there (appendRight tail wire)
+
+@[simp] theorem index_appendRight
+    (left : List Sig) (wire : Var right signature) :
+    (appendRight left wire).index.val = left.length + wire.index.val := by
+  induction left with
+  | nil => simp [appendRight]
+  | cons head tail induction =>
+      simp only [appendRight, index, List.length_cons, Fin.val_succ]
+      rw [induction]
+      omega
 
 /-- Eliminate an appended context by supplying a map for each side. -/
 def appendMap

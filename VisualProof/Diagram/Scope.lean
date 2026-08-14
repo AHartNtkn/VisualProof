@@ -66,6 +66,30 @@ private theorem dcaFrom_nil (rest : List RegionPath) :
   simp only [deepestCommonAncestor]
   exact dcaFrom_nil rest
 
+private theorem dcaFrom_eq_nil_of_mem_nil
+    (first : RegionPath) (rest : List RegionPath) (contains : [] ∈ rest) :
+    dcaFrom first rest = [] := by
+  induction rest generalizing first with
+  | nil => simp at contains
+  | cons next rest induction =>
+      simp only [List.mem_cons] at contains
+      rcases contains with rfl | contains
+      · simp only [dcaFrom, commonPrefix]
+        exact dcaFrom_nil rest
+      · simp only [dcaFrom]
+        exact induction (first := first.commonPrefix next) contains
+
+theorem deepestCommonAncestor_eq_nil_of_mem_nil
+    (paths : List RegionPath) (contains : [] ∈ paths) :
+    deepestCommonAncestor paths = [] := by
+  cases paths with
+  | nil => simp at contains
+  | cons first rest =>
+      simp only [List.mem_cons] at contains
+      rcases contains with rfl | contains
+      · exact deepestCommonAncestor_cons_nil rest
+      · exact dcaFrom_eq_nil_of_mem_nil first rest contains
+
 @[simp] theorem commonPrefix_cons_same
     (index : Nat) (left right : RegionPath) :
     commonPrefix (index :: left) (index :: right) =
@@ -82,6 +106,27 @@ private theorem dcaFrom_map_cons
       simp only [List.map_cons, dcaFrom, commonPrefix_cons_same]
       exact induction (first := first.commonPrefix next)
 
+private theorem dcaFrom_append
+    (first : RegionPath) (left right : List RegionPath) :
+    dcaFrom first (left ++ right) = dcaFrom (dcaFrom first left) right := by
+  induction left generalizing first with
+  | nil => rfl
+  | cons next rest induction =>
+      simp only [List.cons_append, dcaFrom]
+      exact induction (first := first.commonPrefix next)
+
+theorem deepestCommonAncestor_append_eq_nil
+    (left right : List RegionPath) (nonempty : left ≠ [])
+    (leftDca : deepestCommonAncestor left = []) :
+    deepestCommonAncestor (left ++ right) = [] := by
+  cases left with
+  | nil => exact False.elim (nonempty rfl)
+  | cons first rest =>
+      simp only [deepestCommonAncestor] at leftDca ⊢
+      change dcaFrom first (rest ++ right) = []
+      rw [dcaFrom_append, leftDca]
+      exact dcaFrom_nil right
+
 theorem deepestCommonAncestor_map_cons
     (index : Nat) (paths : List RegionPath) (nonempty : paths ≠ []) :
     deepestCommonAncestor (paths.map (List.cons index)) =
@@ -93,6 +138,35 @@ theorem deepestCommonAncestor_map_cons
       exact dcaFrom_map_cons index first rest
 
 end RegionPath
+
+theorem ItemSeq.incidencePaths_append
+    (first second : ItemSeq wires) (wireIndex itemIndex : Nat) :
+    (first.append second).incidencePaths wireIndex itemIndex =
+      first.incidencePaths wireIndex itemIndex ++
+        second.incidencePaths wireIndex (itemIndex + first.length) := by
+  let regionMotive : ∀ context, Region context → Prop := fun _ _ => True
+  let itemMotive : ∀ context, Item context → Prop := fun _ _ => True
+  let itemsMotive := fun (context : List Sig) (items : ItemSeq context) =>
+    ∀ (second : ItemSeq context) (wireIndex itemIndex : Nat),
+      (items.append second).incidencePaths wireIndex itemIndex =
+        items.incidencePaths wireIndex itemIndex ++
+          second.incidencePaths wireIndex (itemIndex + items.length)
+  exact ItemSeq.rec (motive_1 := regionMotive) (motive_2 := itemMotive)
+    (motive_3 := itemsMotive)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (by intro second wireIndex itemIndex; simp [ItemSeq.append,
+      ItemSeq.incidencePaths, ItemSeq.length])
+    (by
+      intro _ head tail _ tailIH second wireIndex itemIndex
+      simp only [ItemSeq.append, ItemSeq.incidencePaths, ItemSeq.length,
+        List.append_assoc]
+      rw [tailIH second wireIndex (itemIndex + 1)]
+      congr 2
+      simp [Nat.add_assoc, Nat.add_comm])
+    first second wireIndex itemIndex
 
 mutual
   /-- Every local wire is used at this region's DCA, recursively. -/
@@ -113,6 +187,40 @@ mutual
     | .nil => True
     | .cons head tail => head.ChildrenCanonical ∧ tail.ChildrenCanonical
 end
+
+theorem ItemSeq.childrenCanonical_append
+    (first second : ItemSeq wires) :
+    (first.append second).ChildrenCanonical ↔
+      first.ChildrenCanonical ∧ second.ChildrenCanonical := by
+  let regionMotive : ∀ context, Region context → Prop := fun _ _ => True
+  let itemMotive : ∀ context, Item context → Prop := fun _ _ => True
+  let itemsMotive := fun (context : List Sig) (items : ItemSeq context) =>
+    ∀ second : ItemSeq context,
+      (items.append second).ChildrenCanonical ↔
+        items.ChildrenCanonical ∧ second.ChildrenCanonical
+  exact ItemSeq.rec (motive_1 := regionMotive) (motive_2 := itemMotive)
+    (motive_3 := itemsMotive)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (by
+      intro _ second
+      constructor
+      · intro secondCanonical
+        exact ⟨True.intro, secondCanonical⟩
+      · intro bothCanonical
+        exact bothCanonical.2)
+    (by
+      intro _ head tail _ tailIH second
+      simp only [ItemSeq.append, ItemSeq.ChildrenCanonical]
+      rw [tailIH second]
+      constructor
+      · rintro ⟨headCanonical, tailCanonical, secondCanonical⟩
+        exact ⟨⟨headCanonical, tailCanonical⟩, secondCanonical⟩
+      · rintro ⟨⟨headCanonical, tailCanonical⟩, secondCanonical⟩
+        exact ⟨headCanonical, tailCanonical, secondCanonical⟩)
+    first second
 
 mutual
   /-- A typed wire introduced somewhere inside a recursive region. -/
