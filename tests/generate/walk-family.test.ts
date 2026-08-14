@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { seededRng } from '../../src/generate/rng'
 import { GENERATOR_FAMILIES } from '../../src/generate'
-import { findDoubleCutToNormalize, propWalkFamily } from '../../src/generate/walk/family'
+import { findDoubleCutToNormalize, findDuplicateToNormalize, propWalkFamily } from '../../src/generate/walk/family'
 import { readPropTheorem } from '../../src/generate/prop/read'
 import { isMinimalTautology } from '../../src/generate/prop/shrink'
-import { containsDoubleNegation, usedAtoms } from '../../src/generate/prop/formula'
+import { containsDoubleNegation, containsDuplicateConjunct, usedAtoms } from '../../src/generate/prop/formula'
+import { deiterationStep } from '../../src/app/interact/moves'
 import { formulaToDiagram } from '../../src/formula'
 import { applyStep, EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof'
 import { isAncestorOrEqual, sameDiagram } from '../../src/kernel/diagram'
@@ -35,16 +36,18 @@ describe('propWalkFamily', () => {
     expect(GENERATOR_FAMILIES.map(({ id }) => id)).toEqual(['prop-shrink', 'prop-walk'])
   })
   it('generates certified, minimal, readable theorems (seed batch)', () => {
-    // Measured (¬¬-repair wave): with the 'atoms' knob as an upper bound
-    // (unused declared propositions are cleaned up, not rejected — see
-    // family.ts) and doubled negation now REPAIRED by normalization
-    // (recorded doubleCutElim steps) rather than rejected, seeds 1/2/3 at
-    // length 6 first succeed at attempt 1/10/48 respectively — far fewer
-    // than the pre-repair 54/205/539, since the ¬¬-rejection source of
-    // failed candidates is gone (a walk is now rejected for containing ¬¬
-    // only in the rare case a pin sits inside the pair's annulus). A wider
-    // sweep over seeds 1-10 puts the worst case at attempt 48 (seed 3);
-    // attempts:100 gives ~2x headroom over that worst case.
+    // Measured (¬¬-repair wave, re-measured for the duplicate-repair wave):
+    // with the 'atoms' knob as an upper bound (unused declared propositions
+    // are cleaned up, not rejected — see family.ts) and both doubled
+    // negation AND same-region duplicate conjuncts now REPAIRED by joint
+    // normalization (recorded doubleCutElim/deiteration steps) rather than
+    // rejected, seeds 1/2/3 at length 6 first succeed at attempt 2/11/49
+    // respectively — re-measuring after adding the duplicate finder found
+    // this within noise of the pre-duplicate-repair 1/10/48 (a walk is now
+    // rejected for containing ¬¬ or a duplicate only in the rare case a pin
+    // sits inside the removed content's scope). A wider sweep over seeds
+    // 1-10 puts the worst case at attempt 49 (seed 3); attempts:100 gives
+    // ~2x headroom over that worst case.
     for (const seed of [1, 2, 3]) {
       const problem = propWalkFamily.generate(
         { atoms: 2, length: 6, attempts: 100 },
@@ -56,6 +59,7 @@ describe('propWalkFamily', () => {
       expect(usedAtoms(reading.formula).size).toBe(reading.wires.length)
       expect(isMinimalTautology(reading.formula, reading.wires.length)).toBe(true)
       expect(containsDoubleNegation(reading.formula)).toBe(false)
+      expect(containsDuplicateConjunct(reading.formula)).toBe(false)
       expect(hasEmptyDoubleCutBelow(problem.diagram, findBodyRegion(problem.diagram))).toBe(false)
       expect(sameDiagram(formulaToDiagram(problem.statement), problem.diagram)).toBe(true)
       expect(problem.walkUpperBound).toBeGreaterThan(0)
@@ -94,4 +98,56 @@ describe('findDoubleCutToNormalize', () => {
       expect(sameDiagram(diagram, formulaToDiagram('∀P:o. ¬(P ∧ ¬P)'))).toBe(true)
     },
   )
+})
+
+describe('findDuplicateToNormalize', () => {
+  it(
+    'eliminates the duplicate P in ¬(P ∧ P ∧ ¬P) down to ¬(P ∧ ¬P) in exactly one deiteration',
+    () => {
+      // formulaToDiagram draws exactly what is written — it does not itself
+      // dedupe — so this genuinely produces two distinct atom nodes heading
+      // the same wire in the same region (verified by reading the diagram
+      // directly: both P occurrences in 'P ∧ P ∧ ¬P' sit as sibling atom
+      // nodes in the cut region that is the ¬'s argument).
+      let diagram = formulaToDiagram('∀P:o. ¬(P ∧ P ∧ ¬P)')
+      const body = findBodyRegion(diagram)
+      let target = findDuplicateToNormalize(diagram, body)
+      expect(target, 'expected a same-region duplicate in ¬(P ∧ P ∧ ¬P)').not.toBeNull()
+      let steps = 0
+      while (target !== null) {
+        diagram = applyStep(diagram, deiterationStep(diagram, target), EMPTY_PROOF_CONTEXT, 'forward')
+        steps += 1
+        target = findDuplicateToNormalize(diagram, body)
+      }
+      expect(steps).toBe(1)
+      expect(sameDiagram(diagram, formulaToDiagram('∀P:o. ¬(P ∧ ¬P)'))).toBe(true)
+    },
+  )
+  it('finds no duplicate in a theorem with no same-region repeat (broken-finder check)', () => {
+    // If the finder always returned a hit, this would wrongly pass the
+    // "not null" branch above too; this case pins the negative side down —
+    // a genuinely duplicate-free theorem must report null.
+    const diagram = formulaToDiagram('∀P Q:o. ¬(P ∧ ¬Q)')
+    expect(findDuplicateToNormalize(diagram, findBodyRegion(diagram))).toBeNull()
+  })
+  it('does not flag two distinct cuts with different underlying wires as duplicates', () => {
+    // ¬(¬P ∧ ¬Q): two sibling cuts, same SHAPE (¬atom) but different wires —
+    // must not be treated as a duplicate.
+    const diagram = formulaToDiagram('∀P Q:o. ¬(¬P ∧ ¬Q)')
+    expect(findDuplicateToNormalize(diagram, findBodyRegion(diagram))).toBeNull()
+  })
+  it('finds a duplicate cut pair (¬P ∧ ¬P) and normalizes it to ¬P', () => {
+    let diagram = formulaToDiagram('∀P:o. ¬(¬P ∧ ¬P)')
+    const body = findBodyRegion(diagram)
+    let target = findDuplicateToNormalize(diagram, body)
+    expect(target, 'expected the duplicate ¬P cut pair to be found').not.toBeNull()
+    let steps = 0
+    while (target !== null) {
+      diagram = applyStep(diagram, deiterationStep(diagram, target), EMPTY_PROOF_CONTEXT, 'forward')
+      steps += 1
+      target = findDuplicateToNormalize(diagram, body)
+    }
+    expect(steps).toBe(1)
+    expect(sameDiagram(diagram, formulaToDiagram('∀P:o. ¬¬P'))).toBe(true)
+  })
 })

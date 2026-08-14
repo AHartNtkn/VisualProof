@@ -1,14 +1,18 @@
-import { isTautology, type PropFormula } from './formula'
+import { flattenAnd, isTautology, sameFormula, type PropFormula } from './formula'
 
 const TOP: PropFormula = { kind: 'top' }
 const BOT: PropFormula = { kind: 'bot' }
 
 /**
- * Constant elimination (⊤∧φ≡φ, ⊥∧φ≡⊥, ¬⊤≡⊥, ¬⊥≡⊤) plus doubled-negation
- * collapse (¬¬ψ≡ψ), bottom-up. The collapse must live here rather than in
- * the caller because constant elimination can itself create a doubled
- * negation (¬(⊤∧¬P) → ¬¬P), so by induction this function's output is
- * always ¬¬-free.
+ * Constant elimination (⊤∧φ≡φ, ⊥∧φ≡⊥, ¬⊤≡⊥, ¬⊥≡⊤), doubled-negation
+ * collapse (¬¬ψ≡ψ), and ∧-idempotence dedup (φ∧φ≡φ, flattened so a
+ * non-adjacent duplicate like A∧B∧A is caught too), bottom-up. The collapse
+ * must live here rather than in the caller because constant elimination can
+ * itself create a doubled negation (¬(⊤∧¬P) → ¬¬P), so by induction this
+ * function's output is always ¬¬-free. Dedup runs on the flattened list
+ * AFTER every member has been recursively simplified (so ¬¬A next to A
+ * dedupes once the ¬¬ has collapsed), so by the same induction this
+ * function's output never has duplicate ∧-siblings.
  */
 export function simplify(formula: PropFormula): PropFormula {
   switch (formula.kind) {
@@ -24,12 +28,16 @@ export function simplify(formula: PropFormula): PropFormula {
       return body === formula.body ? formula : { kind: 'not', body }
     }
     case 'and': {
-      const left = simplify(formula.left)
-      const right = simplify(formula.right)
-      if (left.kind === 'bot' || right.kind === 'bot') return BOT
-      if (left.kind === 'top') return right
-      if (right.kind === 'top') return left
-      return left === formula.left && right === formula.right ? formula : { kind: 'and', left, right }
+      const simplified = flattenAnd(formula).map(simplify)
+      if (simplified.some((conjunct) => conjunct.kind === 'bot')) return BOT
+      const deduped: PropFormula[] = []
+      for (const conjunct of simplified) {
+        if (conjunct.kind === 'top') continue
+        if (deduped.some((kept) => sameFormula(kept, conjunct))) continue
+        deduped.push(conjunct)
+      }
+      if (deduped.length === 0) return TOP
+      return deduped.reduce((left, right) => ({ kind: 'and', left, right }))
     }
   }
 }

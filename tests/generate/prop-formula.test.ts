@@ -4,6 +4,7 @@ import {
   atomName,
   connectiveCount,
   containsDoubleNegation,
+  containsDuplicateConjunct,
   evaluate,
   isTautology,
   printFormula,
@@ -92,6 +93,21 @@ describe('containsDoubleNegation', () => {
   })
   it('is false for two single negations side by side', () => {
     expect(containsDoubleNegation(not(and(not(P), not(Q))))).toBe(false)
+  })
+})
+
+describe('containsDuplicateConjunct', () => {
+  it('detects a direct repeated conjunct', () => {
+    expect(containsDuplicateConjunct(and(P, P))).toBe(true)
+  })
+  it('is false for two distinct conjuncts', () => {
+    expect(containsDuplicateConjunct(and(P, Q))).toBe(false)
+  })
+  it('detects a non-adjacent duplicate across a flattened ∧-chain', () => {
+    expect(containsDuplicateConjunct(and(and(P, Q), P))).toBe(true)
+  })
+  it('detects a duplicate nested under ¬', () => {
+    expect(containsDuplicateConjunct(not(and(P, P)))).toBe(true)
   })
 })
 

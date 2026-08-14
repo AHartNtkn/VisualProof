@@ -1,15 +1,24 @@
 import { EMPTY_PROOF_CONTEXT, checkTheorem } from '../../kernel/proof'
 import { isAncestorOrEqual, mkDiagramWithBoundary } from '../../kernel/diagram'
 import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
+import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { relSig } from '../../kernel/diagram/sig'
 import { bareWireAssembly, bareWireDescription, RuleError } from '../../kernel/rules'
 import { emptyGraph, finishDiagramWithBoundary } from '../../theories/graph'
 import { PrimitiveStepRecorder, onlyNewCut } from '../../theories/record'
-import { bareWires, childCuts, nodesIn } from '../diagram-scan'
+import { deiterationStep } from '../../app/interact/moves'
+import { bareWires, childCuts, headWireOf, nodesIn } from '../diagram-scan'
 import { readKnobs, type GeneratedProblem, type GeneratorFamily } from '../index'
-import { atomName, containsDoubleNegation, printTheorem, usedAtoms } from '../prop/formula'
+import {
+  atomName,
+  containsDoubleNegation,
+  containsDuplicateConjunct,
+  printTheorem,
+  sameFormula,
+  usedAtoms,
+} from '../prop/formula'
 import { isMinimalTautology } from '../prop/shrink'
-import { readPropTheorem } from '../prop/read'
+import { propWireIndex, readPropRegion, readPropTheorem } from '../prop/read'
 import { enumerateMoves, type CandidateMove, type MoveClass } from '../moves'
 
 /**
@@ -102,17 +111,27 @@ function tryWalk(atoms: number, length: number, rng: () => number): GeneratedPro
       assembly: bareWireDescription(recorder.diagram, wireId),
     })
   }
-  // ¬¬ repair: eliminate every empty-annulus double-cut pair strictly
-  // inside the body (the shell's own intrinsic pair, at 'inner' itself, is
-  // excluded — unwrapping it is not part of this cleanup). doubleCutElim is
-  // an ungated equivalence, so this never changes what the derivation
-  // certifies, only its presentation.
-  for (
-    let target = findDoubleCutToNormalize(recorder.diagram, inner);
-    target !== null;
-    target = findDoubleCutToNormalize(recorder.diagram, inner)
-  ) {
-    recorder.record('normalize double cut', { rule: 'doubleCutElim', region: target })
+  // Normalization: a JOINT fixpoint of two ungated-equivalence rewrites,
+  // repeated until neither finder fires. Each rewrite strictly shrinks the
+  // diagram (doubleCutElim removes two cut regions; a duplicate deiteration
+  // removes at least one node or region), and the diagram's (regions +
+  // nodes + wires) count is bounded below by zero, so the loop terminates.
+  // Interleaving matters: eliminating an empty-annulus double-cut pair
+  // beside an occurrence can splice a fresh same-region duplicate up into
+  // the parent region (e.g. A ∧ ¬¬A′, A′=A: removing the ¬¬ promotes A′
+  // up beside A, exposing A ∧ A), so each pass re-checks double-cut first.
+  for (;;) {
+    const doubleCut = findDoubleCutToNormalize(recorder.diagram, inner)
+    if (doubleCut !== null) {
+      recorder.record('normalize double cut', { rule: 'doubleCutElim', region: doubleCut })
+      continue
+    }
+    const duplicate = findDuplicateToNormalize(recorder.diagram, inner)
+    if (duplicate !== null) {
+      recorder.record('normalize duplicate', deiterationStep(recorder.diagram, duplicate))
+      continue
+    }
+    break
   }
   const diagram = recorder.diagram
   // Certification: replay the recorded derivation from the blank sheet.
@@ -146,6 +165,22 @@ function tryWalk(atoms: number, length: number, rng: () => number): GeneratedPro
   // since erasing it would strand the pin below the two-end floor) — a
   // rare legitimate rejection of this walk, not a bug.
   if (containsDoubleNegation(reading.formula)) return null
+  // Unlike the ¬¬ case above, this is a BUG backstop, not a legitimate
+  // rejection: findDoubleCutToNormalize structurally excludes pin-holding
+  // annuli from its own candidates (doubleCutElim would destroy the pin —
+  // no rescue is possible), but findDuplicateToNormalize excludes nothing
+  // on pin grounds, and every step recorder.record applies (including the
+  // 'deiteration' this loop records) already auto-pins through
+  // ScopePreservationError universally (#recordAction, src/theories/
+  // record.ts — not specific to erasure/vacuity). A genuine same-region
+  // duplicate the finder reports is therefore always removable; surviving
+  // to here means the finder or the joint loop above missed a fixpoint.
+  if (containsDuplicateConjunct(reading.formula)) {
+    throw new Error(
+      'prop-walk: internal error — a same-region duplicate conjunct survived normalization to '
+      + 'fixpoint; findDuplicateToNormalize or the joint normalization loop is broken',
+    )
+  }
   return { diagram, statement: printTheorem(reading.formula), walkUpperBound: recorder.actions.length }
 }
 
@@ -163,6 +198,50 @@ export function findDoubleCutToNormalize(diagram: Diagram, inner: RegionId): Reg
     if (childCuts(diagram, id).length !== 1) continue
     if (nodesIn(diagram, id).length !== 0) continue
     return id
+  }
+  return null
+}
+
+/**
+ * Find a same-region duplicate strictly at-or-below `inner` (the body): a
+ * pair of siblings in one region that are exactly the same content, with no
+ * cut boundary between them — a free, uninteresting deiteration for the
+ * backward player (a positive-polarity analogue of the ¬¬ repair above; see
+ * the design doc's idempotence-repair motivation). Two shapes qualify:
+ *
+ *   (a) two atom nodes in the same region heading the SAME wire;
+ *   (b) two child cuts of the same region whose content — read via
+ *       `readPropRegion` against a shared, whole-diagram wire index, so
+ *       comparison is keyed by wire identity, not just shape — is exactly
+ *       equal (`sameFormula`). Two cuts that merely look alike (¬P and ¬Q,
+ *       distinct wires) are NOT duplicates: their read formulas carry
+ *       different atom indices because the index is per-wire.
+ *
+ * Returns a selection for the SECOND occurrence found (id-sorted within its
+ * region) — the "copy" — leaving the first as the deiteration's implicit
+ * justifier (`findDeiterationEvidence` locates it structurally).
+ */
+export function findDuplicateToNormalize(diagram: Diagram, inner: RegionId): SubgraphSelection | null {
+  const regions = Object.keys(diagram.regions)
+    .filter((region) => isAncestorOrEqual(diagram, inner, region))
+    .sort()
+  const wireIndex = propWireIndex(diagram)
+  for (const region of regions) {
+    const seenAtomWires = new Map<string, string>()
+    for (const nodeId of nodesIn(diagram, region)) {
+      if (diagram.nodes[nodeId]!.kind !== 'atom') continue
+      const wire = headWireOf(diagram, nodeId)
+      if (seenAtomWires.has(wire)) return { region, regions: [], nodes: [nodeId], wires: [] }
+      seenAtomWires.set(wire, nodeId)
+    }
+    const seenCutFormulas: { readonly formula: ReturnType<typeof readPropRegion> }[] = []
+    for (const cut of childCuts(diagram, region)) {
+      const formula = readPropRegion(diagram, cut, wireIndex)
+      if (seenCutFormulas.some((seen) => sameFormula(seen.formula, formula))) {
+        return { region, regions: [cut], nodes: [], wires: [] }
+      }
+      seenCutFormulas.push({ formula })
+    }
   }
   return null
 }

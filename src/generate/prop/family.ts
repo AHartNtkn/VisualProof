@@ -1,7 +1,14 @@
 import type { PropFormula } from './formula'
 import { formulaToDiagram } from '../../formula'
 import { readKnobs, type GeneratedProblem, type GeneratorFamily } from '../index'
-import { connectiveCount, containsDoubleNegation, isTautology, printTheorem, usedAtoms } from './formula'
+import {
+  connectiveCount,
+  containsDoubleNegation,
+  containsDuplicateConjunct,
+  isTautology,
+  printTheorem,
+  usedAtoms,
+} from './formula'
 import { samplePropFormula } from './sample'
 import { shrinkToCore } from './shrink'
 
@@ -58,6 +65,11 @@ export const propShrinkFamily: GeneratorFamily = {
       if (containsDoubleNegation(core)) {
         throw new Error(
           'prop-shrink: shrinker emitted a doubled negation — the ¬¬ collapse in simplify is broken',
+        )
+      }
+      if (containsDuplicateConjunct(core)) {
+        throw new Error(
+          'prop-shrink: shrinker emitted a duplicate ∧-conjunct — the idempotence dedup in simplify is broken',
         )
       }
       const normalized = normalizeAtoms(core)

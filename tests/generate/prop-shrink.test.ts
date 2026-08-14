@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { seededRng } from '../../src/generate/rng'
-import { containsDoubleNegation, isTautology, type PropFormula } from '../../src/generate/prop/formula'
+import { containsDoubleNegation, containsDuplicateConjunct, isTautology, type PropFormula } from '../../src/generate/prop/formula'
 import { samplePropFormula } from '../../src/generate/prop/sample'
 import { isMinimalTautology, shrinkToCore, simplify, weakenings } from '../../src/generate/prop/shrink'
 
@@ -32,6 +32,20 @@ describe('simplify', () => {
     // ¬(⊤ ∧ ¬P) simplifies its body to ¬P (⊤∧¬P≡¬P), leaving ¬¬P, which
     // must then collapse to P rather than surviving as a doubled negation.
     expect(simplify(not(and(TOP, not(P))))).toEqual(P)
+  })
+  it('dedupes a directly repeated conjunct', () => {
+    expect(simplify(and(P, P))).toEqual(P)
+  })
+  it('dedupes a non-adjacent duplicate across a flattened ∧-chain', () => {
+    expect(simplify(and(and(P, Q), P))).toEqual(and(P, Q))
+  })
+  it('dedupes a duplicate nested under ¬', () => {
+    expect(simplify(not(and(P, P)))).toEqual(not(P))
+  })
+  it('dedupes after the ¬¬ collapse (interaction case)', () => {
+    // and(P, not(not(P))): not(not(P)) collapses to P before dedupe sees the
+    // conjunct list, so the ∧-chain is [P, P] and reduces to P alone.
+    expect(simplify(and(P, not(not(P))))).toEqual(P)
   })
 })
 
@@ -69,6 +83,7 @@ describe('shrinkToCore', () => {
       const core = shrinkToCore(sampled, 3)
       expect(isMinimalTautology(core, 3), `core of sample ${round} not minimal`).toBe(true)
       expect(containsDoubleNegation(core), `core of sample ${round} contains ¬¬`).toBe(false)
+      expect(containsDuplicateConjunct(core), `core of sample ${round} contains a duplicate conjunct`).toBe(false)
     }
     expect(tautologies, 'sampler produced too few tautologies for the property test').toBeGreaterThan(10)
   })

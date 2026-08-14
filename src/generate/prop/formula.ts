@@ -79,6 +79,46 @@ export function containsDoubleNegation(formula: PropFormula): boolean {
   }
 }
 
+/** Structural (deep) equality on PropFormula. */
+export function sameFormula(a: PropFormula, b: PropFormula): boolean {
+  if (a.kind !== b.kind) return false
+  if (a.kind === 'atom' && b.kind === 'atom') return a.index === b.index
+  if (a.kind === 'not' && b.kind === 'not') return sameFormula(a.body, b.body)
+  if (a.kind === 'and' && b.kind === 'and') return sameFormula(a.left, b.left) && sameFormula(a.right, b.right)
+  return true // top/bot, kinds already matched above
+}
+
+/** Flatten a chain of ∧-nodes into its list of conjuncts, in left-to-right
+ *  pre-order. A non-∧ formula flattens to the singleton list [formula]. */
+export function flattenAnd(formula: PropFormula): readonly PropFormula[] {
+  if (formula.kind !== 'and') return [formula]
+  return [...flattenAnd(formula.left), ...flattenAnd(formula.right)]
+}
+
+/** True when some ∧-chain anywhere in the formula holds two structurally
+ *  identical conjuncts (after flattening — the duplicate need not be
+ *  syntactically adjacent, e.g. A ∧ B ∧ A) — trivially removable structure
+ *  (a free same-region deiteration) the generators must never ship. */
+export function containsDuplicateConjunct(formula: PropFormula): boolean {
+  switch (formula.kind) {
+    case 'atom':
+    case 'top':
+    case 'bot':
+      return false
+    case 'not':
+      return containsDuplicateConjunct(formula.body)
+    case 'and': {
+      const conjuncts = flattenAnd(formula)
+      for (let i = 0; i < conjuncts.length; i += 1) {
+        for (let j = i + 1; j < conjuncts.length; j += 1) {
+          if (sameFormula(conjuncts[i]!, conjuncts[j]!)) return true
+        }
+      }
+      return conjuncts.some(containsDuplicateConjunct)
+    }
+  }
+}
+
 const ATOM_LETTERS = ['P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W'] as const
 
 export function atomName(index: number): string {

@@ -9,6 +9,49 @@ export type PropTheoremReading = {
 }
 
 /**
+ * Read one region of a propositional-fragment diagram into a PropFormula,
+ * against a caller-supplied wire→index map: cuts are ¬, juxtaposition is
+ * ∧, and atom heads are proposition occurrences keyed by their head wire's
+ * index. Pins (arity-1 identity nodes) are presentational and skipped;
+ * anything else is a loud error. Exported so callers that need to compare
+ * two regions' content for exact structural sameness (walk normalization's
+ * same-region duplicate finder) share this reader with `readPropTheorem`
+ * rather than reimplementing it — comparing the resulting PropFormulas with
+ * `sameFormula` (over a shared wire index) is sameness of content AND of
+ * underlying wire identity, since the index is keyed by wire, not shape.
+ */
+export function readPropRegion(
+  diagram: Diagram,
+  region: RegionId,
+  wireIndex: ReadonlyMap<WireId, number>,
+): PropFormula {
+  const fail = (message: string): never => {
+    throw new Error(`readPropRegion: ${message}`)
+  }
+  const items: PropFormula[] = []
+  for (const nodeId of nodesIn(diagram, region)) {
+    const node = diagram.nodes[nodeId]!
+    if (node.kind === 'identity' && node.arity === 1) continue
+    if (node.kind !== 'atom') fail(`region holds unsupported node '${nodeId}' (${node.kind})`)
+    if (!sigEquals(node.sig, relSig([]))) fail(`atom '${nodeId}' is not propositional`)
+    const index = wireIndex.get(headWireOf(diagram, nodeId))
+    if (index === undefined) fail(`atom '${nodeId}' heads an unindexed wire`)
+    items.push({ kind: 'atom', index: index! })
+  }
+  for (const cut of childCuts(diagram, region)) {
+    items.push({ kind: 'not', body: readPropRegion(diagram, cut, wireIndex) })
+  }
+  if (items.length === 0) return { kind: 'top' }
+  return items.reduce((left, right) => ({ kind: 'and', left, right }))
+}
+
+/** The id-sorted proposition-wire index `readPropRegion` reads atoms
+ *  against — the same indexing `readPropTheorem` uses for its output. */
+export function propWireIndex(diagram: Diagram): ReadonlyMap<WireId, number> {
+  return new Map(propWires(diagram).map((id, index) => [id, index]))
+}
+
+/**
  * Read a closed propositional ∀-shell diagram back into a PropFormula:
  * root sheet holds exactly the shell's outer cut; the annulus holds the
  * proposition wires' pins; the inner cut is the body; inside, cuts are ¬,
@@ -33,23 +76,12 @@ export function readPropTheorem(diagram: Diagram): PropTheoremReading {
     const node = diagram.nodes[nodeId]!
     if (!(node.kind === 'identity' && node.arity === 1)) fail(`annulus holds a non-pin node '${nodeId}'`)
   }
-  const wireIndex = new Map(wires.map((id, index) => [id, index]))
   const readRegion = (region: RegionId): PropFormula => {
-    const items: PropFormula[] = []
-    for (const nodeId of nodesIn(diagram, region)) {
-      const node = diagram.nodes[nodeId]!
-      if (node.kind === 'identity' && node.arity === 1) continue
-      if (node.kind !== 'atom') fail(`body holds unsupported node '${nodeId}' (${node.kind})`)
-      if (!sigEquals(node.sig, relSig([]))) fail(`atom '${nodeId}' is not propositional`)
-      const index = wireIndex.get(headWireOf(diagram, nodeId))
-      if (index === undefined) fail(`atom '${nodeId}' heads an unknown wire`)
-      items.push({ kind: 'atom', index: index! })
+    try {
+      return readPropRegion(diagram, region, propWireIndex(diagram))
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : String(error))
     }
-    for (const cut of childCuts(diagram, region)) {
-      items.push({ kind: 'not', body: readRegion(cut) })
-    }
-    if (items.length === 0) return { kind: 'top' }
-    return items.reduce((left, right) => ({ kind: 'and', left, right }))
   }
   return { formula: readRegion(outerCuts[0]!), wires }
 }
