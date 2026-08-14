@@ -147,10 +147,8 @@ export function ascaleOf(kind: BodyKind): number {
   return kind === 'atom' ? 2 : 1
 }
 
-/** Shared layout clearance derived from a small body's circular anatomy. */
-function smallBodyDiscR(geometry: NodeGeometry): number {
-  return geometry.outerRadius + 2
-}
+/** Shared layout clearance for point nodes: dangling quantifiers and equality. */
+export const POINT_NODE_DISC_R = 4.5
 
 export function pkey(p: Port): string {
   return portKey(p)
@@ -210,7 +208,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     const discR = n.kind === 'ref'
       ? DISC_R + 1.5
       : n.kind === 'identity'
-        ? smallBodyDiscR(g)
+        ? POINT_NODE_DISC_R
         : anatomyR + 2
     const ang = i * 2.399963, rad = 6 + 5 * i
     bodies.set(id, {
@@ -450,9 +448,10 @@ export function worldAnchor(e: Engine, b: Body, key: string | null): Vec2 {
     the wire a pad-width off the rendered rim (USER report: floating attachments).
 
     A ref uses a readable labelled disc drawn at DISC_R, so its wire meets that
-    drawn rim at DISC_R along the port direction. Every other keyed bind sits
-    on its anatomy rail rim. */
+    drawn rim at DISC_R along the port direction. Atom ports sit on their rail
+    rim. Identity ports share the body centre — the point IS the drawing. */
 export function worldBindAnchor(e: Engine, b: Body, key: string): Vec2 {
+  if (b.kind === 'identity') return b.pos
   const a0 = b.localAnchor.get(key)!
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
   if (b.kind === 'ref') {
@@ -465,9 +464,10 @@ export function worldBindAnchor(e: Engine, b: Body, key: string): Vec2 {
   return { x: b.pos.x + a.x * c - a.y * s, y: b.pos.y + a.x * s + a.y * c }
 }
 
-/** The outward normal at (body, port key), in world radians. */
+/** The outward normal at (body, port key), in world radians. A point node has
+    no rim, so its "normal" is the direction toward the far endpoint. */
 export function portNormal(b: Body, key: string | null, toward: Vec2): number {
-  if (key === null) {
+  if (key === null || b.kind === 'identity') {
     return Math.atan2(toward.y - b.pos.y, toward.x - b.pos.x)
   }
   const a = b.localAnchor.get(key)!
@@ -561,8 +561,11 @@ export function routeBounds(e: Engine): { minX: number; maxX: number; minY: numb
   return { minX: fb.minX, maxX: fb.maxX, minY: fb.minY, maxY: fb.maxY }
 }
 
-/** A body is a routing/energy obstacle exactly when it has rendered geometry. */
-export const isBodyObstacle = (body: Body): boolean => body.geometry !== null
+/** A body is a routing/energy obstacle exactly when it has a drawn outline.
+    Point nodes (zero-radius identity geometry) are wire terminals, not
+    obstacles — a wire must be able to reach the point it ends at. */
+export const isBodyObstacle = (body: Body): boolean =>
+  body.geometry !== null && body.geometry.arcs.length > 0
 
 /** The inflated hard-obstacle discs for every rendered body. */
 export function routeObstacles(e: Engine): Disc[] {
@@ -672,11 +675,13 @@ export function wireRouteSpaces(e: Engine): WireSpaces {
   }
 }
 
-/** The fixed escape stub of a keyed bind: from the rim anchor outward
+/** The fixed escape stub of a rail/disc port bind: from the rim anchor outward
     along the port normal to just past the inflated obstacle disc. The optimized
-    network begins at the escape point; the stub itself is fixed geometry. */
+    network begins at the escape point; the stub itself is fixed geometry.
+    Identity point nodes instead terminate freely at the body centre. */
 export function escapePoint(e: Engine, bd: WireBind): { anchor: Vec2; escape: Vec2 } {
   const b = e.bodies.get(bd.body)!
+  if (b.kind === 'identity') return { anchor: b.pos, escape: b.pos }
   const anchor = worldBindAnchor(e, b, bd.key)
   const la = b.localAnchor.get(bd.key)!
   const n = Math.atan2(la.y, la.x) + b.theta
@@ -713,10 +718,15 @@ function bindBC(e: Engine, body: Body, key: string): CurveBC {
 
 /** Curve boundary condition per terminal, in network vertex order: the fixed
     anchor point and the unit direction the drawn curve LEAVES it (a port's
-    outward normal; a frame slot's inward normal). The drawn curve of a terminal-incident edge
-    is CLAMPED here — perpendicular port/frame meetings by energy. */
+    outward normal; a frame slot's inward normal), or null for a free point
+    node (identity, with a natural end at the pip). The drawn curve of a
+    terminal-incident edge is CLAMPED here — perpendicular port/frame meetings
+    by energy. */
 export function wireTerminalBCs(e: Engine, w: WireView): CurveBC[] {
-  const out: CurveBC[] = w.binds.map((bd) => bindBC(e, e.bodies.get(bd.body)!, bd.key))
+  const out: CurveBC[] = w.binds.map((bd) => {
+    const b = e.bodies.get(bd.body)!
+    return b.kind === 'identity' ? null : bindBC(e, b, bd.key)
+  })
   for (const position of w.slots) {
     const s = resolvedFrameSlot(e, position)
     out.push(s === null ? null : { p: s.point, n: { x: -Math.cos(s.normal), y: -Math.sin(s.normal) } })

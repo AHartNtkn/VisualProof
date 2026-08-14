@@ -64,8 +64,16 @@ export function refGeometry(arity: number): NodeGeometry {
   return circularGeometry(Array.from({ length: arity }, (_, index) => `a:${index}`))
 }
 
-/** Equality uses the same circular geometry as a dangling existential. */
+/**
+ * Equality is a point node: every storage port is co-located at the body
+ * centre. Port indices remain incidence locators, never visible geometry or
+ * an ordering around the node.
+ */
 export function identityGeometry(arity: number): NodeGeometry {
-  return circularGeometry(Array.from({ length: arity }, (_, index) => `i:${index}`))
+  const portAnchors: Record<string, Vec2> = {}
+  for (let index = 0; index < arity; index++) {
+    portAnchors[`i:${index}`] = { x: 0, y: 0 }
+  }
+  return { outerRadius: 0, arcs: [], headAnchor: null, portAnchors }
 }
 

@@ -103,13 +103,10 @@ describe('formulaToDiagram', () => {
     body!.pos = { x: 13, y: -7 }
     body!.theta = Math.PI / 4
     engine.scale = 1.5
+    // every identity incidence shares the point-node centre, at any pose/scale
     for (const bind of identityBinds) {
-      const local = body!.localAnchor.get(bind.key)!
-      const c = Math.cos(body!.theta), s = Math.sin(body!.theta)
-      const world = worldBindAnchor(engine, body!, bind.key)
-      expect(Math.hypot(local.x, local.y)).toBeGreaterThan(0)
-      expect(world.x).toBeCloseTo(body!.pos.x + engine.scale * (local.x * c - local.y * s), 9)
-      expect(world.y).toBeCloseTo(body!.pos.y + engine.scale * (local.x * s + local.y * c), 9)
+      expect(body!.localAnchor.get(bind.key)).toEqual({ x: 0, y: 0 })
+      expect(worldBindAnchor(engine, body!, bind.key)).toEqual(body!.pos)
     }
   })
 
@@ -163,13 +160,10 @@ describe('formulaToDiagram', () => {
     body!.pos = { x: -9, y: 5 }
     body!.theta = -Math.PI / 6
     engine.scale = 2
+    // every identity incidence shares the point-node centre, at any pose/scale
     for (const bind of identityBinds) {
-      const local = body!.localAnchor.get(bind.key)!
-      const c = Math.cos(body!.theta), s = Math.sin(body!.theta)
-      const world = worldBindAnchor(engine, body!, bind.key)
-      expect(Math.hypot(local.x, local.y)).toBeGreaterThan(0)
-      expect(world.x).toBeCloseTo(body!.pos.x + engine.scale * (local.x * c - local.y * s), 9)
-      expect(world.y).toBeCloseTo(body!.pos.y + engine.scale * (local.x * s + local.y * c), 9)
+      expect(body!.localAnchor.get(bind.key)).toEqual({ x: 0, y: 0 })
+      expect(worldBindAnchor(engine, body!, bind.key)).toEqual(body!.pos)
     }
   })
 

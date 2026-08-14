@@ -28,7 +28,7 @@ describe('authoritative content scale', () => {
 })
 
 describe('identity paint ownership', () => {
-  it('paints identity and existential arcs in the body pass at one scaled radius', () => {
+  it('paints every identity as the two-dot point glyph with no drawn rail', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const identity = builder.identity(cut, IOTA, 3)
@@ -47,24 +47,30 @@ describe('identity paint ownership', () => {
     settle(engine, 200)
     const identityBody = engine.bodies.get(identity)!
     // the dangling wire's free tip is the pin build() attached at its region
-    const endBody = engine.bodies.get(engine.wires.get(danglingWire)!.binds[1]!.body)!
+    const pinBody = engine.bodies.get(engine.wires.get(danglingWire)!.binds[1]!.body)!
     const bodiesOnly = paint(engine, LIGHT, () => [])
     const arcsAt = (center: { readonly x: number; readonly y: number }) => bodiesOnly
-      .filter((shape): shape is Extract<(typeof bodiesOnly)[number], { kind: 'arc' }> => shape.kind === 'arc'
+      .filter((shape) => shape.kind === 'arc'
         && shape.center.x === center.x
         && shape.center.y === center.y)
     const dotsAt = (center: { readonly x: number; readonly y: number }) => bodiesOnly
-      .filter((shape) => shape.kind === 'dot'
+      .filter((shape): shape is Extract<(typeof bodiesOnly)[number], { kind: 'dot' }> => shape.kind === 'dot'
         && shape.center.x === center.x
         && shape.center.y === center.y)
 
-    expect(arcsAt(identityBody.pos)).toHaveLength(1)
-    expect(arcsAt(endBody.pos)).toHaveLength(1)
-    expect(arcsAt(identityBody.pos)[0]!.r).toBe(arcsAt(endBody.pos)[0]!.r)
-    expect(arcsAt(identityBody.pos)[0]!.r)
-      .toBe(identityBody.geometry!.arcs[0]!.r * engine.scale)
-    expect(dotsAt(identityBody.pos)).toHaveLength(0)
-    expect(dotsAt(endBody.pos)).toHaveLength(0)
+    for (const body of [identityBody, pinBody]) {
+      expect(arcsAt(body.pos), 'a point node draws no rail arc').toHaveLength(0)
+      const dots = dotsAt(body.pos)
+      expect(dots, 'a point node is exactly the paper halo plus the filled pip').toHaveLength(2)
+      const [halo, pip] = [...dots].sort((a, b) => b.rPx - a.rPx)
+      expect(halo!.fill).toBe(LIGHT.paper)
+      expect(pip!.rPx).toBeLessThan(halo!.rPx)
+      expect(pip!.fill).not.toBe(LIGHT.paper)
+    }
+    // the pip is a fixed device-pixel glyph, small like the port dots — never
+    // a world-scaled medium circle
+    const pip = dotsAt(identityBody.pos).sort((a, b) => a.rPx - b.rPx)[0]!
+    expect(pip.rPx).toBeLessThanOrEqual(3)
   })
 })
 

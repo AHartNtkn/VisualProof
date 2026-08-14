@@ -91,6 +91,8 @@ export type Shape =
 const FRAME_STROKE_W = 2
 const DISC_RIM_W = 1.4
 const PORT_DOT_R = 2.6
+const JUNCTION_OUTER_R = 3.6
+const JUNCTION_INNER_R = 2.6
 /** Device-pixel radius of the port-order pip (junction-dot family). */
 const PIP_R = 3.2
 /** The sheet's port-0 origin must dominate ordinary existential-sized ports. */
@@ -98,6 +100,15 @@ const FRAME_ORIGIN_R = 5.2
 /** Hover-group highlight: lightness bump and extra stroke width over the base. */
 const HL_BRIGHT = 18
 const HL_WIDTH = 0.8
+
+/** The point-node glyph: a paper halo under a filled pip in the wire's colour.
+    Fixed device-pixel radii — a point node never scales into a medium circle. */
+function pointNode(center: Vec2, fill: string, paper: string): Shape[] {
+  return [
+    { kind: 'dot', center, rPx: JUNCTION_OUTER_R, fill: paper },
+    { kind: 'dot', center, rPx: JUNCTION_INNER_R, fill },
+  ]
+}
 
 /** Full user-facing name of a reference. Namespace qualification identifies the
     definition semantically; the disc displays its complete final path segment. */
@@ -250,9 +261,14 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
   }
 
   // Every materialized body owns its anatomy here. Wire ownership selects only
-  // stroke hue; the wire pass never synthesizes small-body geometry.
+  // stroke hue; the wire pass never synthesizes small-body geometry. An
+  // identity is a point node: the two-dot pip glyph, never a stroked rail.
   for (const b of e.bodies.values()) {
     if (b.kind === 'anchor') continue
+    if (b.kind === 'identity') {
+      shapes.push(...pointNode(b.pos, bodyStroke(b), st.paper))
+      continue
+    }
     const node = b.node
     if (node?.kind === 'ref') {
       const discR = DISC_R * e.scale
