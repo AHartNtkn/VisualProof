@@ -34,6 +34,20 @@ def needsRootPin (items : ItemSeq wires)
   let paths := items.incidencePaths wire.index.val 0
   decide (¬RegionPath.RootedTwo paths)
 
+/-- Directly complete selected wires against their actual incidence paths.
+The first batch emits one unary pin for every wire that is not already
+`RootedTwo`; the second emits the distinct additional pin needed only when
+there are no existing incidences. -/
+def rootedTwoPins
+    (source : List Sig) (renameWires : WireRenaming source target)
+    (paths : ∀ {signature}, Var source signature → List RegionPath) :
+    ItemSeq target :=
+  let primary := pinWires source renameWires
+    (fun wire => decide (¬RegionPath.RootedTwo (paths wire)))
+  let extra := pinWires source renameWires
+    (fun wire => decide (paths wire = []))
+  primary.append extra
+
 theorem pinWires_childrenCanonical
     (source : List Sig) (renameWires : WireRenaming source target)
     (selected : ∀ {signature}, Var source signature → Bool) :
@@ -50,6 +64,14 @@ theorem pinWires_childrenCanonical
       · exact induction
           ⟨fun wire => renameWires (.there wire)⟩
           (fun wire => selected (.there wire))
+
+theorem rootedTwoPins_childrenCanonical
+    (source : List Sig) (renameWires : WireRenaming source target)
+    (paths : ∀ {signature}, Var source signature → List RegionPath) :
+    (rootedTwoPins source renameWires paths).ChildrenCanonical := by
+  apply (ItemSeq.childrenCanonical_append _ _).mpr
+  exact ⟨pinWires_childrenCanonical _ _ _,
+    pinWires_childrenCanonical _ _ _⟩
 
 theorem pinWires_mem_nil
     (source : List Sig) (renameWires : WireRenaming source target)

@@ -42,17 +42,10 @@ def freshPins
     (freshening : WireFreshening sourceWires targetWires freshWires
       inherited) : ItemSeq (targetWires ++ freshWires) :=
   let copied := freshenedSelected selected freshening
-  let primary := ItemSeq.pinWires freshWires
+  ItemSeq.rootedTwoPins freshWires
     ⟨fun wire => Var.appendRight targetWires wire⟩
-    (fun wire =>
-      let paths := copied.incidencePaths
-        (targetWires.length + wire.index.val)
-      decide (¬RegionPath.RootedTwo paths))
-  let extra := ItemSeq.pinWires freshWires
-    ⟨fun wire => Var.appendRight targetWires wire⟩
-    (fun wire => decide (copied.incidencePaths
-      (targetWires.length + wire.index.val) = []))
-  primary.append extra
+    (fun wire => copied.incidencePaths
+      (targetWires.length + wire.index.val))
 
 /-- The independently scoped copied block before it is conjoined with the
 descendant remainder. -/

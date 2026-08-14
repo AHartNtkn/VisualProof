@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Semantics
+import VisualProof.Diagram.Semantics.Context
 import VisualProof.Diagram.UnaryIdentity
 
 namespace VisualProof.Diagram
@@ -22,5 +22,14 @@ theorem ItemSeq.pinWires_denotes
       · exact induction
           ⟨fun wire => renameWires (.there wire)⟩
           (fun wire => selected (.there wire))
+
+theorem ItemSeq.rootedTwoPins_denotes
+    (source : List Sig) (renameWires : WireRenaming source target)
+    (paths : ∀ {signature}, Var source signature → List RegionPath)
+    (model : Model) (env : Values model target) :
+    denoteItemSeq model env (ItemSeq.rootedTwoPins source renameWires paths) := by
+  rw [ItemSeq.rootedTwoPins, denoteItemSeq_append]
+  exact ⟨ItemSeq.pinWires_denotes _ _ _ _ _,
+    ItemSeq.pinWires_denotes _ _ _ _ _⟩
 
 end VisualProof.Diagram

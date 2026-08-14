@@ -53,9 +53,7 @@ theorem copyBlock_denotes
     (freshPins selected freshening)
     (freshenedSelected selected freshening)).mpr
   refine ⟨freshEnv, ?_, ?_⟩
-  · simp only [freshPins, denoteItemSeq_append]
-    exact ⟨ItemSeq.pinWires_denotes _ _ _ _ _,
-      ItemSeq.pinWires_denotes _ _ _ _ _⟩
+  · exact ItemSeq.rootedTwoPins_denotes _ _ _ _ _
   apply (denoteRegion_renameWires model freshening.wire
     (targetEnv.append freshEnv) selected).mpr
   rw [combinedEq]
