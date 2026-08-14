@@ -134,7 +134,11 @@
 
 - [ ] Define the local-context split and typed removal renaming for the selected relation wire.
 - [ ] Port the mutual `RegionResult`/`ItemsResult`/`ItemResult` instantiation evidence. Atom-head selection is explicit; identities may not mention the selected wire; cuts recurse; other atoms rename structurally.
-- [ ] Prove output canonicality and two-incidence validity from the evidence, then define the contextual comprehension relation.
+- [ ] Define the contextual comprehension relation with the existing explicit
+  canonicality and external-two-ended evidence for both endpoints. Do not claim
+  instantiation preserves validity automatically: aliased pattern-boundary ports
+  can remove multiple incidences from one retained host wire, so that statement is
+  false without an additional semantic restriction.
 - [ ] Port semantic soundness by the same mutual induction, interpreting the selected relation wire as the open pattern denotation.
 - [ ] Strict-check, focused-build, scan for relation-binder syntax and raised limits, then commit.
 
