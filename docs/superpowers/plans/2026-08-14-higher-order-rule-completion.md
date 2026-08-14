@@ -110,9 +110,10 @@
 **Interfaces:**
 - Vacuity describes computable identity/fresh-wire assemblies whose connected components touch at most one surviving wire, whose fresh wires are bare or absorbable at the equality home, and which preserve every touched wire’s DCA and two-end floor.
 - Presentation replaces one-region, one-signature identity configurations that generate the same finite equivalence relation on the same wires, preserving at least one regional port per member and two incidences per wire.
-- Identification collapses or exposes one or more wires at an equality node, retaining that node, with absorbed wire DCA exactly the node region and nonempty transferred incidence sets.
+- Identification collapses or exposes one or more wires at an equality node, retaining that node, with absorbed wire DCA exactly the node region and a nonempty set of non-identity incidences transferred for every absorbed wire. A wire whose only incidences are duplicate ports on that identity node belongs to vacuity instead; redundant same-wire ports whose removal leaves the wire valid belong to presentation invariance.
 
 - [ ] Define the weakest recursive operation data that computes each endpoint. Use structural item/region focuses and typed port partitions; do not store an endpoint `Region` or rule proof in an index.
+- [ ] Keep the three families disjoint by effect at the duplicate-port boundary: presentation contracts redundant ports while retaining the wire; vacuity removes a two-port-only identity loop; identification requires actual away incidences to transfer and never handles the zero-transfer case.
 - [ ] Define each local/global relation from the same operation data consumed by its runner so exact coverage is structural rather than reconstructed by search.
 - [ ] Implement two direct runner directions for each family and prove exact iff coverage plus both target-isomorphism closure laws.
 - [ ] Prove semantic equivalence: inhabitedness for vacuity, equality-relation invariance for presentation, and the one-point principle for identification.
@@ -154,4 +155,3 @@
 - [ ] Remove obsolete relation-context, bubble, and unreachable replacement/context-path authorities rather than preserving adapters or aliases.
 - [ ] Run strict owner checks, `lake build`, all authority audits, admission/displaced-model/raised-limit scans, and `git diff --check`.
 - [ ] Review the final complexity ledger: one recursive syntax, one DCA scope, one validity authority, direct runners, and no search/normalization/parallel authority. Commit the integrated closure.
-
