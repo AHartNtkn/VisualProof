@@ -38,6 +38,7 @@ import {
 import { proofSnapshot as serializeProofSnapshot } from './proof-snapshot'
 import type { Companion } from './companion'
 import { companionFor } from './companion'
+import { mountView3, type View3 } from '../view3d/index'
 import { sessionTheory } from './persist'
 import { theoryToJson } from '../kernel/proof/store'
 import type { Hit } from './hittest'
@@ -304,6 +305,28 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return proof.kind === 'track' ? trackBoundary(proof.track) : sideBoundary(proof.session, proof.side)
     }
     return []
+  }
+
+  // ---- 3D view (view-only presentation of the focused diagram) ----
+  let view3: View3 | null = null
+  let view3Wrap: HTMLDivElement | null = null
+  function toggleView3(): void {
+    if (view3 === null) {
+      const wrap = document.createElement('div')
+      wrap.style.cssText = 'position:fixed;inset:0;'
+      // Directly after the canvas, so the chrome (later in the DOM) stays on top.
+      canvas.parentElement!.insertBefore(wrap, canvas.nextSibling)
+      view3 = mountView3(wrap, { diagram: currentDiagram(), theme })
+      view3Wrap = wrap
+      view3Btn.textContent = '2D view'
+    } else {
+      view3.dispose()
+      view3 = null
+      view3Wrap?.remove()
+      view3Wrap = null
+      canvas.hidden = false
+      view3Btn.textContent = '3D view'
+    }
   }
 
   // ---- chrome ----
@@ -1194,6 +1217,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       raf = requestAnimationFrame(frame)
       return
     }
+    if (view3 !== null) {
+      canvas.hidden = true
+      view3.update({ diagram: currentDiagram(), theme })
+      raf = requestAnimationFrame(frame)
+      return
+    }
     canvas.hidden = false
     const comp = companionFor({ mode, replay })
     const companionVisible = comp !== null && companionMode !== 'hidden'
@@ -1403,8 +1432,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   motionGroup.append(speedRow)
   const motionControls = [ghostMotion, hoverMotion, motionSpeed]
   compass.lifecycle.append(backwardBtn, forwardBtn, setLhsBtn, setRhsBtn, dualBtn, formulaBtn, randomBtn, leaveBtn, nameInput, declareBtn, helpBtn, helpText)
+  const view3Btn = button('3D view', toggleView3)
   compass.utilities.append(
     themeBtn,
+    view3Btn,
     companionBtn,
     fuel.wrap,
     button('Open folder…', onOpenFolder),
@@ -1711,6 +1742,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     mainMotion.dispose()
     fixedWorkspace?.dispose()
     fixedWorkspace = null
+    view3?.dispose()
+    view3Wrap?.remove()
     temporal?.dispose()
     temporal = null
     window.clearTimeout(refusalTimer)
