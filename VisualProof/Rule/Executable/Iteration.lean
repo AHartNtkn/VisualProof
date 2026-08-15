@@ -78,7 +78,7 @@ inductive ForwardIndex {boundary : List Sig}
 
 /-- The rule is symmetric, so its backward computational choices are exactly
 the same four source-indexed choices. -/
-abbrev BackwardIndex {boundary : List Sig}
+def BackwardIndex {boundary : List Sig}
     (source : OpenDiagram boundary) := ForwardIndex source
 
 def runForward (source : OpenDiagram boundary) :
