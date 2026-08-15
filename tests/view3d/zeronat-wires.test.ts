@@ -37,6 +37,19 @@ describe('zeroIsNat wire quality', () => {
         for (const pt of st.pts) dev = Math.max(dev, segPointDist(pt, p, q))
         expect(len / chord, `${st.key} length/chord`).toBeLessThanOrEqual(2.0)
         expect(dev, `${st.key} deviation from chord`).toBeLessThanOrEqual(2.5)
+        // Anti-tangle laws (USER report 2026-08-15: the strand at the fan
+        // point doubled back on itself, almost a loop — a Steiner junction
+        // parked in the congested fan crotch). Pre-fix: sharpest turn dot
+        // −0.76 and self-proximity 0.39; post-fix 0.07 and 0.55.
+        for (let i = 1; i < st.pts.length - 1; i++) {
+          const u = sub3(st.pts[i]!, st.pts[i - 1]!), w = sub3(st.pts[i + 1]!, st.pts[i]!)
+          const lu = dist3(st.pts[i]!, st.pts[i - 1]!), lw = dist3(st.pts[i + 1]!, st.pts[i]!)
+          if (lu < 1e-9 || lw < 1e-9) continue
+          expect(dot3(u, w) / (lu * lw), `${st.key} doubling back at sample ${i}`).toBeGreaterThanOrEqual(-0.3)
+        }
+        for (let i = 0; i < st.pts.length; i++) for (let j = i + 6; j < st.pts.length; j++) {
+          expect(dist3(st.pts[i]!, st.pts[j]!), `${st.key} self-loop between samples ${i},${j}`).toBeGreaterThanOrEqual(0.45)
+        }
         for (const pr of tl.regions.values()) {
           const n1 = pr.ref, n2 = norm3(cross3(pr.dir, n1))
           let wind = 0

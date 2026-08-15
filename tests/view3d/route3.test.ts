@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { routeAll, clearPoint, type Capsule, type NetIn } from '../../src/view3d/route3'
-import { dist3, norm3, segPointDist, segSegClosest, segSegDist, sub3, v3, type Vec3 } from '../../src/view3d/vec3'
+import { routeAll, type Capsule, type NetIn } from '../../src/view3d/route3'
+import { dist3, segPointDist, segSegClosest, segSegDist, sub3, v3, type Vec3 } from '../../src/view3d/vec3'
 
 const DELTA = 0.3
 const trunk: Capsule[] = [{ a: v3(0, 0, 0), b: v3(0, 10, 0), r: 0, g: 'reg:t' }]
 
 /** A plain two-anchor net (no junctions). */
-const straightNet = (id: string, p: Vec3, q: Vec3, tp: Vec3 | null = null, tq: Vec3 | null = null): NetIn =>
-  ({ id, anchors: [p, q], tangents: [tp, tq], junctions: [], edges: [[0, 1]] })
+const straightNet = (id: string, p: Vec3, q: Vec3): NetIn =>
+  ({ id, anchors: [p, q], freeJunctionCount: 0, fixedJunctions: [], edges: [[0, 1]], stubs: [] })
 
 const minDistToCaps = (pts: Vec3[], caps: Capsule[], exempt: Vec3[]): number => {
   let m = Infinity
@@ -19,13 +19,10 @@ const minDistToCaps = (pts: Vec3[], caps: Capsule[], exempt: Vec3[]): number => 
 }
 
 describe('routeAll', () => {
-  it('a sample inside an exemption ball still moves to clear a real hit', () => {
-    // Exemption means ALLOWED to be close, never PINNED: an edge whose one
-    // end sits just inside the anchor ball (0.60 from E) while its true
-    // closest approach to the obstacle lies just outside (at 0.75+) is a
-    // real violation, and the ball-side end must be free to move — pinning
-    // it leaves the edge permanently 0.29 from the capsule, unclearable by
-    // any motion of the other end alone.
+  it('sub-clearance approaches to an obstacle occur only inside the anchor ball', () => {
+    // The exemption ball licenses closeness only AT the meeting zone: any
+    // part of the curve outside the ball keeps full clearance from C, even
+    // when the chord would pass close just beyond the ball's edge.
     const E = v3(0, 0, 0)
     const C: Capsule = { a: v3(0.85, 0.15, 0), b: v3(1.05, 0.15, 0), r: 0, g: 'other' }
     const routed = routeAll([straightNet('wx', E, v3(3, 0, 0))], [C], DELTA)
@@ -86,27 +83,20 @@ describe('routeAll', () => {
   })
   it('an anchored wire may hug the tree inside its exemption ball, not outside', () => {
     const anchor = v3(0, 3, 0) // ON the trunk
-    const routed = routeAll([straightNet('wa', anchor, v3(3, 3, 0), v3(1, 0, 0))], trunk, DELTA)
+    const routed = routeAll([straightNet('wa', anchor, v3(3, 3, 0))], trunk, DELTA)
     const pts = routed.get('wa')![0]!
     expect(minDistToCaps(pts, trunk, [anchor])).toBeGreaterThanOrEqual(DELTA * 0.999)
-  })
-  it('respects a start tangent', () => {
-    const p = v3(2, 0, 0), q = v3(2, 6, 0)
-    const routed = routeAll([straightNet('wt', p, q, v3(1, 0, 0))], [], DELTA)
-    const pts = routed.get('wt')![0]!
-    const d0 = norm3(sub3(pts[1]!, pts[0]!))
-    expect(d0.x).toBeGreaterThan(0.7) // leaves along +x before bending toward q
   })
   it('is deterministic', () => {
     const nets: NetIn[] = [straightNet('w', v3(-2, 3, 0), v3(2, 3.05, 0.02))]
     expect(routeAll(nets, trunk, DELTA)).toEqual(routeAll(nets, trunk, DELTA))
   })
-  it('penetrations next to a fixed endpoint are caught and repaired', () => {
+  it('an anchor just outside the licensed distance still yields a fully clear curve', () => {
     // The start anchor sits 0.31 from the trunk — just OUTSIDE the licensed
-    // meeting distance — so the tangent-into-the-trunk approach must be
-    // repaired to full clearance everywhere.
+    // meeting distance — so the whole curve, endpoint zone included, must
+    // keep full clearance.
     const p = v3(0.31, 3, 0), q = v3(3, 3, 0)
-    const routed = routeAll([straightNet('we', p, q, v3(-1, 0, 0))], trunk, DELTA)
+    const routed = routeAll([straightNet('we', p, q)], trunk, DELTA)
     const pts = routed.get('we')![0]!
     expect(dist3(pts[0]!, p)).toBeLessThan(1e-9)
     expect(minDistToCaps(pts, trunk, [])).toBeGreaterThanOrEqual(DELTA * 0.999)
@@ -118,9 +108,10 @@ describe('routeAll', () => {
     const net: NetIn = {
       id: 'wy',
       anchors: [t0, t1, t2],
-      tangents: [null, null, null],
-      junctions: [junction],
+      freeJunctionCount: 0,
+      fixedJunctions: [junction],
       edges: [[0, 3], [1, 3], [2, 3]],
+      stubs: [],
     }
     const exemptPts = [t0, t1, t2, junction]
     const routed = routeAll([net], trunk, DELTA)
@@ -185,14 +176,5 @@ describe('routeAll', () => {
       }
     }
     expect(worst).toBeGreaterThanOrEqual(DELTA * 0.95)
-  })
-})
-
-describe('clearPoint', () => {
-  it('pushes an embedded point out to δ clearance deterministically', () => {
-    const p = v3(0.01, 5, 0)
-    const out = clearPoint(p, trunk, [], DELTA)
-    expect(segPointDist(out, trunk[0]!.a, trunk[0]!.b)).toBeGreaterThanOrEqual(DELTA * 0.999)
-    expect(clearPoint(p, trunk, [], DELTA)).toEqual(out)
   })
 })

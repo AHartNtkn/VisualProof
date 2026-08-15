@@ -94,8 +94,14 @@ export function scene3(d: Diagram): Scene3 {
     // wire falls back to the region's reference normal, shared by both
     // ends so its arch bows to one side (USER law: a wire is never
     // parallel-and-overlapping with a branch).
+    const freeJunctionCount = junctions.length
+    const fixedJunctions: Vec3[] = []
     const basePos = (v: number): Vec3 =>
-      v < anchors.length ? anchors[v]! : junctions[v - anchors.length]!
+      v < anchors.length
+        ? anchors[v]!
+        : v < anchors.length + freeJunctionCount
+          ? junctions[v - anchors.length]!
+          : fixedJunctions[v - anchors.length - freeJunctionCount]!
     const departure = (t: number): Vec3 => {
       const term = w.terminals[t]!
       const ring = tl.rings.get(term.node)
@@ -118,20 +124,24 @@ export function scene3(d: Diagram): Scene3 {
       const perp = sub3(raw, scale3(pr.dir, dot3(raw, pr.dir)))
       return len3(perp) > 1e-9 ? norm3(perp) : pr.ref
     }
-    const tangents = w.terminals.map((_, t) => departure(t))
     // USER law (2026-08-15): a terminal always connects at the END of a
     // branch, from the exterior. EVERY terminal hangs off a standoff
     // junction two clearances out along its departure normal, joined by a
     // short straight leaf — the visible connection at a rim or line is
     // always an outward stub, and the routed web only ever meets the
-    // stub's outer end.
+    // stub's outer end. Junction indices split into bands: the FREE Steiner
+    // vertices first (positions chosen by the router's obstacle-aware
+    // 1-median — the free-space Steiner positions only fix the TOPOLOGY),
+    // then the construction-fixed stub tips, one per terminal.
+    const stubs: (readonly [number, number])[] = []
     for (let t = 0; t < anchors.length; t++) {
-      const jv = anchors.length + junctions.length
-      junctions.push(add3(anchors[t]!, scale3(departure(t), 2 * CLEARANCE)))
+      const jv = anchors.length + freeJunctionCount + fixedJunctions.length
+      stubs.push([t, fixedJunctions.length] as const)
+      fixedJunctions.push(add3(anchors[t]!, scale3(departure(t), 2 * CLEARANCE)))
       edges = edges.map(([u, vv]) => [u === t ? jv : u, vv === t ? jv : vv] as const)
       edges.push([t, jv] as const)
     }
-    nets.push({ id: w.id, anchors, tangents, junctions, edges })
+    nets.push({ id: w.id, anchors, freeJunctionCount, fixedJunctions, edges, stubs })
   }
   const routed = routeAll(nets, tree, CLEARANCE)
 
