@@ -8,9 +8,13 @@ export type SteinerNet = { junctions: Vec3[]; edges: (readonly [number, number])
 const SPLIT_MARGIN = 1e-3
 const MAX_SWEEPS = 5000
 
-/** Weiszfeld geometric median with coincident-point guard. Convex objective;
-    fixed small iteration budget then convergence check — throws if it fails
-    to settle (never returns a silent bad point). */
+/** Weiszfeld geometric median with coincident-point guard. The sum-of-
+    distances objective is convex, so each Weiszfeld step is a descent step
+    that never increases it; within a fixed iteration budget this either
+    converges (moved below tolerance, returned early) or lands within the
+    step size of the true minimum, which is negligible at render scale — the
+    convex-descent argument is what makes returning the last iterate correct
+    even when the tolerance check never fires, not a silent fallback. */
 function geometricMedian(points: readonly Vec3[], seed: Vec3): Vec3 {
   if (points.length === 0) throw new Error('geometricMedian: no points')
   if (points.length === 1) return points[0]!

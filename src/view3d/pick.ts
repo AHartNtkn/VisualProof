@@ -27,6 +27,10 @@ export function expandHover(key: string, spec: DiagramSpec, entities: readonly E
   }
   if (tag === 'r' || tag === 'l') {
     for (const e of entities) if ((e.kind === 'ring' || e.kind === 'label') && e.node === id) out.add(e.key)
+    // Spec: "a node hit highlights its ring plus incident wire anchors" —
+    // light every strand of every wire with a terminal at this node.
+    const incidentWires = new Set(spec.wires.filter((w) => w.terminals.some((t) => t.node === id)).map((w) => w.id))
+    for (const e of entities) if (e.kind === 'strand' && incidentWires.has(e.wire)) out.add(e.key)
     return out
   }
   return out
