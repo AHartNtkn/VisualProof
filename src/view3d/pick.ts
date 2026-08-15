@@ -1,0 +1,33 @@
+import type { RegionId } from '../kernel/diagram/diagram'
+import type { DiagramSpec } from './spec'
+import type { Entity } from './scene'
+
+/** The full highlight group for a hit entity key: a strand lights its whole
+    wire network; a branch or bead lights its subtree's lines and beads; a
+    ring or label lights the node's ring and label. */
+export function expandHover(key: string, spec: DiagramSpec, entities: readonly Entity[]): Set<string> {
+  const out = new Set<string>([key])
+  const [tag, id] = [key.slice(0, 1), key.slice(2)]
+  if (tag === 's') {
+    const wid = id.slice(0, id.lastIndexOf(':'))
+    for (const e of entities) if (e.kind === 'strand' && e.wire === wid) out.add(e.key)
+    return out
+  }
+  if (tag === 'b' || tag === 'd') {
+    const inSubtree = (r: RegionId): boolean => {
+      for (let cur: RegionId | null = r; cur !== null; cur = spec.regions.get(cur)!.parent) if (cur === id) return true
+      return false
+    }
+    for (const rid of spec.regions.keys()) {
+      if (!inSubtree(rid)) continue
+      out.add(`b:${rid}`)
+      if (spec.regions.get(rid)!.parent !== null) out.add(`d:${rid}`)
+    }
+    return out
+  }
+  if (tag === 'r' || tag === 'l') {
+    for (const e of entities) if ((e.kind === 'ring' || e.kind === 'label') && e.node === id) out.add(e.key)
+    return out
+  }
+  return out
+}
