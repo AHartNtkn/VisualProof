@@ -38,7 +38,7 @@ import {
 import { proofSnapshot as serializeProofSnapshot } from './proof-snapshot'
 import type { Companion } from './companion'
 import { companionFor } from './companion'
-import { mountView3, type View3 } from '../view3d/index'
+import type { View3 } from '../view3d/index'
 import { sessionTheory } from './persist'
 import { theoryToJson } from '../kernel/proof/store'
 import type { Hit } from './hittest'
@@ -308,17 +308,27 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   // ---- 3D view (view-only presentation of the focused diagram) ----
+  // three.js is loaded lazily on first use, not bundled into the main
+  // chunk, so opening the app never pays for a renderer most sessions
+  // never touch.
   let view3: View3 | null = null
   let view3Wrap: HTMLDivElement | null = null
+  let view3Loading = false
   function toggleView3(): void {
+    if (view3Loading) return
     if (view3 === null) {
+      view3Loading = true
       const wrap = document.createElement('div')
       wrap.style.cssText = 'position:fixed;inset:0;'
       // Directly after the canvas, so the chrome (later in the DOM) stays on top.
       canvas.parentElement!.insertBefore(wrap, canvas.nextSibling)
-      view3 = mountView3(wrap, { diagram: currentDiagram(), theme })
-      view3Wrap = wrap
-      view3Btn.textContent = '2D view'
+      void (async () => {
+        const { mountView3 } = await import('../view3d/index')
+        view3 = mountView3(wrap, { diagram: currentDiagram(), theme })
+        view3Wrap = wrap
+        view3Btn.textContent = '2D view'
+        view3Loading = false
+      })()
     } else {
       view3.dispose()
       view3 = null
@@ -1003,6 +1013,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     backwardBtn.hidden = mode !== 'edit'
     forwardBtn.hidden = mode !== 'edit'
     dualBtn.hidden = mode !== 'edit'
+    // A dual (fixed-sides) proof owns the canvas via FixedSideWorkspace, so
+    // the 3D view has no diagram to present alongside it: disable entry,
+    // and leave 3D if a dual proof begins while it's already open.
+    view3Btn.disabled = proof?.kind === 'dual'
+    if (proof?.kind === 'dual' && view3 !== null) toggleView3()
     leaveBtn.hidden = mode === 'edit'
     leaveBtn.textContent = mode === 'replay' ? 'Exit replay' : 'Return to editing'
     nameInput.hidden = mode === 'edit'
