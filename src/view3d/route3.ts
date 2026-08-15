@@ -381,6 +381,61 @@ function repair(seed: Vec3[], obstacles: readonly Capsule[], lic: License, delta
   throw new Error(`route3: clearance not achieved for ${label} after ${MAX_ROUNDS} rounds`)
 }
 
+/** Subdivide a waypoint path to ~delta/2 sample spacing (points on a
+    straight leg inherit its clearance). */
+function densifyWaypoints(way: readonly Vec3[], delta: number): Vec3[] {
+  const out: Vec3[] = [way[0]!]
+  for (let k = 1; k < way.length; k++) {
+    const a = way[k - 1]!, b = way[k]!
+    const pieces = Math.max(1, Math.ceil(dist3(a, b) / (delta / 2)))
+    for (let t = 1; t <= pieces; t++) out.push(lerpPt(a, b, t / pieces))
+  }
+  return out
+}
+
+/** Shortest-detour seed: resolve a blocked chord by recursively inserting a
+    via point beside the WORST blocking capsule, trying both perpendicular
+    sides (and both transverse directions) ordered by resulting path length.
+    The side of an obstacle is thereby chosen by LENGTH, never by an escape
+    step's accident — a wire no longer wraps a branch it could pass beside
+    (the measured 1.3π spiral) or keeps a detour class it was flung into
+    (the measured 9.5-unit jut); the repair loop only verifies and fixes
+    residual interactions afterwards. Deterministic: fixed candidate order,
+    fixed call budget; null on exhaustion (caller falls back to the chord). */
+function viaSeed(
+  p: Vec3, q: Vec3, obstacles: readonly Capsule[], lic: License, delta: number,
+  budget: { calls: number }, depth: number,
+): Vec3[] | null {
+  if (budget.calls-- <= 0 || depth <= 0) return null
+  const hits = edgeHits(p, q, obstacles, lic, delta)
+  if (hits.length === 0) return [p, q]
+  let worst = hits[0]!
+  let worstD = segSegDist(p, q, worst.a, worst.b)
+  for (const c of hits) {
+    const d = segSegDist(p, q, c.a, c.b)
+    if (d < worstD) { worstD = d; worst = c }
+  }
+  const [onEdge, onCap] = segSegClosest(p, q, worst.a, worst.b)
+  const axis = capDir(worst)
+  const radialRaw = sub3(onEdge, onCap)
+  const radialPerp = sub3(radialRaw, scale3(axis, dot3(radialRaw, axis)))
+  const r1 = len3(radialPerp) > 1e-9 ? norm3(radialPerp) : anyPerp(axis)
+  const r2 = norm3(cross3(axis, r1))
+  const standoff = worst.r + 2 * delta
+  const vias = [r1, scale3(r1, -1), r2, scale3(r2, -1)]
+    .map((dir) => add3(onCap, scale3(dir, standoff)))
+    .filter((via) => pointOk(via, obstacles, lic, delta))
+    .sort((a, b) => dist3(p, a) + dist3(a, q) - (dist3(p, b) + dist3(b, q)))
+  for (const via of vias) {
+    const left = viaSeed(p, via, obstacles, lic, delta, budget, depth - 1)
+    if (left === null) continue
+    const right = viaSeed(via, q, obstacles, lic, delta, budget, depth - 1)
+    if (right === null) continue
+    return [...left, ...right.slice(1)]
+  }
+  return null
+}
+
 /** Repair output is CLEAR but carries its history — every push, march, and
     scale survives as spikes, zigzags, and obstacle-hugging wander. The
     drawn curve should instead read as the design's "distortion applied to
@@ -410,12 +465,7 @@ function beautify(pts: Vec3[], obstacles: readonly Capsule[], lic: License, delt
   taut.push(pts[last]!)
   // 2) Densify: subdivide each chord to ~delta/2 spacing (points on a clear
   //    chord stay clear), giving the rounding pass room to bend.
-  const dense: Vec3[] = [taut[0]!]
-  for (let k = 1; k < taut.length; k++) {
-    const a = taut[k - 1]!, b = taut[k]!
-    const pieces = Math.max(1, Math.ceil(dist3(a, b) / (delta / 2)))
-    for (let s = 1; s <= pieces; s++) dense.push(lerpPt(a, b, s / pieces))
-  }
+  const dense = densifyWaypoints(taut, delta)
   // 3) Round: guarded smoothing to a movement fixpoint. Purely cosmetic —
   //    each accepted move is edge-verified, so stopping at the round cap
   //    leaves a fully valid (just less smooth) curve; no throw needed.
@@ -469,7 +519,15 @@ export function routeAll(nets: NetIn[], tree: Capsule[], delta: number): Map<Wir
     const ownCaps: Capsule[] = []
     net.edges.forEach(([u, w], i) => {
       const edge: EdgeIn = { p: posOf(u), q: posOf(w), tp: tanOf(u), tq: tanOf(w) }
-      const pts = repair(hermiteSeed(edge, delta), [...obstacles, ...ownCaps], lic, delta, `${net.id}[${i}]`)
+      const live = [...obstacles, ...ownCaps]
+      // Tangent-free edges (junction-to-junction spans) seed on the
+      // shortest-detour via path so their homotopy class is length-chosen;
+      // tangent-carrying edges (the short anchor stubs) keep the Hermite
+      // seed that honors their departure direction.
+      const seed = edge.tp === null && edge.tq === null
+        ? densifyWaypoints(viaSeed(edge.p, edge.q, live, lic, delta, { calls: 200 }, 10) ?? [edge.p, edge.q], delta)
+        : hermiteSeed(edge, delta)
+      const pts = repair(seed, live, lic, delta, `${net.id}[${i}]`)
       curves.push(pts)
       ownCaps.push(...chainOf(pts, own))
     })

@@ -77,31 +77,6 @@ export function scene3(d: Diagram): Scene3 {
     // scope — see the plan's closing notes.)
     if (w.terminals.length < 2) continue
     const anchors = w.terminals.map((t) => tl.anchorOf(t))
-    // Departure normal per terminal. Ring anchors leave along the OUTWARD
-    // radial (USER law 2026-08-15: the branch-facing side of an application
-    // circle is its interior — wires connect only from outside). Identity
-    // anchors leave perpendicular to their line, toward the wire's other
-    // content when that direction exists; a same-line wire falls back to
-    // the region's reference normal, shared by both ends so its arch bows
-    // to one side (USER law: a wire is never parallel-and-overlapping with
-    // a branch).
-    const departure = (t: number): Vec3 => {
-      const term = w.terminals[t]!
-      const ring = tl.rings.get(term.node)
-      if (ring !== undefined) return norm3(sub3(anchors[t]!, ring.center))
-      const pr = tl.regions.get(spec.nodes.get(term.node)!.region)!
-      let cen = v3(0, 0, 0)
-      let n = 0
-      for (let o = 0; o < anchors.length; o++) {
-        if (o === t) continue
-        cen = add3(cen, anchors[o]!)
-        n++
-      }
-      const raw = sub3(scale3(cen, 1 / n), anchors[t]!)
-      const perp = sub3(raw, scale3(pr.dir, dot3(raw, pr.dir)))
-      return len3(perp) > 1e-9 ? norm3(perp) : pr.ref
-    }
-    const tangents = w.terminals.map((_, t) => departure(t))
     let junctions: Vec3[] = []
     let edges: (readonly [number, number])[] = [[0, 1]]
     if (w.terminals.length > 2) {
@@ -109,6 +84,41 @@ export function scene3(d: Diagram): Scene3 {
       junctions = [...net.junctions]
       edges = net.edges.map(([u, vv]) => [u, vv] as const)
     }
+    // Departure normal per terminal. Ring anchors leave along the OUTWARD
+    // radial (USER law 2026-08-15: the branch-facing side of an application
+    // circle is its interior — wires connect only from outside). Identity
+    // anchors leave perpendicular to their line, aimed at the terminal's
+    // ACTUAL network neighbors (the junction or anchor its stub routes
+    // toward) — aiming at the all-partner centroid could point away from
+    // the route's real target and force it to wrap the branch. A same-line
+    // wire falls back to the region's reference normal, shared by both
+    // ends so its arch bows to one side (USER law: a wire is never
+    // parallel-and-overlapping with a branch).
+    const basePos = (v: number): Vec3 =>
+      v < anchors.length ? anchors[v]! : junctions[v - anchors.length]!
+    const departure = (t: number): Vec3 => {
+      const term = w.terminals[t]!
+      const ring = tl.rings.get(term.node)
+      if (ring !== undefined) return norm3(sub3(anchors[t]!, ring.center))
+      const pr = tl.regions.get(spec.nodes.get(term.node)!.region)!
+      let cen = v3(0, 0, 0)
+      let n = 0
+      for (const [u, vv] of edges) {
+        if (u === t) { cen = add3(cen, basePos(vv)); n++ }
+        else if (vv === t) { cen = add3(cen, basePos(u)); n++ }
+      }
+      if (n === 0) {
+        for (let o = 0; o < anchors.length; o++) {
+          if (o === t) continue
+          cen = add3(cen, anchors[o]!)
+          n++
+        }
+      }
+      const raw = sub3(scale3(cen, 1 / n), anchors[t]!)
+      const perp = sub3(raw, scale3(pr.dir, dot3(raw, pr.dir)))
+      return len3(perp) > 1e-9 ? norm3(perp) : pr.ref
+    }
+    const tangents = w.terminals.map((_, t) => departure(t))
     // USER law (2026-08-15): a terminal always connects at the END of a
     // branch, from the exterior. EVERY terminal hangs off a standoff
     // junction two clearances out along its departure normal, joined by a
