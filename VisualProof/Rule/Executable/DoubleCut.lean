@@ -5,142 +5,117 @@ namespace VisualProof.Rule.DoubleCut
 open Theory
 open Diagram
 
-inductive ForwardIndex {arity : Nat} (source : OpenDiagram arity) : Type
+inductive ForwardIndex {boundary : List Sig}
+    (source : OpenDiagram boundary) : Type
   | introduce
-      (hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (body : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels)
+      (hostLocals : List Sig)
+      (hostItems : ItemSeq (wires ++ hostLocals))
+      (selected : Region (wires ++ hostLocals))
       (occurrence : Occurrence
-        (Region.spliceAt hostLocal hostItems body wireMap relationMap) source) :
+        (Region.adjoinAt hostLocals hostItems selected) source)
+      (targetCanonical : (occurrence.context.fill
+        (introducedAt hostLocals hostItems selected)).Canonical)
+      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+        occurrence.interface.boundaryWire (occurrence.context.fill
+          (introducedAt hostLocals hostItems selected))) :
       ForwardIndex source
   | eliminate
-      (hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (body : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels)
+      (hostLocals : List Sig)
+      (hostItems : ItemSeq (wires ++ hostLocals))
+      (selected : Region (wires ++ hostLocals))
       (occurrence : Occurrence
-        (Region.spliceAt hostLocal hostItems (wrap body) wireMap relationMap)
-        source) :
+        (introducedAt hostLocals hostItems selected) source)
+      (targetCanonical : (occurrence.context.fill
+        (Region.adjoinAt hostLocals hostItems selected)).Canonical)
+      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+        occurrence.interface.boundaryWire (occurrence.context.fill
+          (Region.adjoinAt hostLocals hostItems selected))) :
       ForwardIndex source
 
-inductive BackwardIndex {arity : Nat} (source : OpenDiagram arity) : Type
-  | introduce
-      (hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (body : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels)
-      (occurrence : Occurrence
-        (Region.spliceAt hostLocal hostItems body wireMap relationMap) source) :
-      BackwardIndex source
-  | eliminate
-      (hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (body : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels)
-      (occurrence : Occurrence
-        (Region.spliceAt hostLocal hostItems (wrap body) wireMap relationMap)
-        source) :
-      BackwardIndex source
+def BackwardIndex {boundary : List Sig}
+    (source : OpenDiagram boundary) := ForwardIndex source
 
-def runForward (source : OpenDiagram arity) :
-    ForwardIndex source → OpenDiagram arity
-  | .introduce hostLocal hostItems body wireMap relationMap occurrence =>
+def runForward (source : OpenDiagram boundary) :
+    ForwardIndex source → OpenDiagram boundary
+  | .introduce hostLocals hostItems selected occurrence targetCanonical
+      targetExternalTwoEnded =>
       occurrence.interface.withBody
         (occurrence.context.fill
-          (Region.spliceAt hostLocal hostItems (wrap body) wireMap relationMap))
-  | .eliminate hostLocal hostItems body wireMap relationMap occurrence =>
+          (introducedAt hostLocals hostItems selected))
+        targetCanonical targetExternalTwoEnded
+  | .eliminate hostLocals hostItems selected occurrence targetCanonical
+      targetExternalTwoEnded =>
       occurrence.interface.withBody
         (occurrence.context.fill
-          (Region.spliceAt hostLocal hostItems body wireMap relationMap))
+          (Region.adjoinAt hostLocals hostItems selected))
+        targetCanonical targetExternalTwoEnded
 
-def runBackward (source : OpenDiagram arity) :
-    BackwardIndex source → OpenDiagram arity
-  | .introduce hostLocal hostItems body wireMap relationMap occurrence =>
-      occurrence.interface.withBody
-        (occurrence.context.fill
-          (Region.spliceAt hostLocal hostItems (wrap body) wireMap relationMap))
-  | .eliminate hostLocal hostItems body wireMap relationMap occurrence =>
-      occurrence.interface.withBody
-        (occurrence.context.fill
-          (Region.spliceAt hostLocal hostItems body wireMap relationMap))
+def runBackward (source : OpenDiagram boundary) :
+    BackwardIndex source → OpenDiagram boundary :=
+  runForward source
 
-theorem forward_exact (source target : OpenDiagram arity) :
+theorem forward_exact (source target : OpenDiagram boundary) :
     (∃ index : ForwardIndex source,
       OpenDiagram.Isomorphic (runForward source index) target) ↔
-    Rule.DoubleCut source target := by
+      Rule.DoubleCut source target := by
   constructor
   · rintro ⟨index, isomorphic⟩
-    apply respectsTargetIso (target' := target) ?_ isomorphic
+    apply Rule.DoubleCut.respectsTargetIso (target' := target) ?_ isomorphic
     cases index with
-    | introduce hostLocal hostItems body wireMap relationMap occurrence =>
-        refine ⟨_, _, _, _, occurrence, OpenDiagramIso.refl _, ?_⟩
+    | introduce hostLocals hostItems selected occurrence targetCanonical
+        targetExternalTwoEnded =>
+        refine ⟨_, _, _, occurrence, targetCanonical,
+          targetExternalTwoEnded, OpenDiagramIso.refl _, ?_⟩
         exact atPolarity_symmetric_of occurrence.context.polarity
-          (Local.introduce hostLocal hostItems body wireMap relationMap)
-    | eliminate hostLocal hostItems body wireMap relationMap occurrence =>
-        refine ⟨_, _, _, _, occurrence, OpenDiagramIso.refl _, ?_⟩
+          (Local.introduce hostLocals hostItems selected)
+    | eliminate hostLocals hostItems selected occurrence targetCanonical
+        targetExternalTwoEnded =>
+        refine ⟨_, _, _, occurrence, targetCanonical,
+          targetExternalTwoEnded, OpenDiagramIso.refl _, ?_⟩
         cases occurrence.context.polarity <;>
           simp only [atPolarity, symmetric, converse]
-        · exact Or.inr
-            (Local.introduce hostLocal hostItems body wireMap relationMap)
-        · exact Or.inl
-            (Local.introduce hostLocal hostItems body wireMap relationMap)
-  · rintro ⟨wires, rels, before, after, occurrence, targetIso,
-      localEvidence⟩
+        · exact Or.inr (Local.introduce hostLocals hostItems selected)
+        · exact Or.inl (Local.introduce hostLocals hostItems selected)
+  · rintro ⟨wires, before, after, occurrence, targetCanonical,
+      targetExternalTwoEnded, targetIso, localEvidence⟩
     cases polarity : occurrence.context.polarity with
     | positive =>
         simp only [polarity, atPolarity, symmetric] at localEvidence
         rcases localEvidence with direct | reverse
         · cases direct with
-          | introduce hostLocal hostItems body wireMap relationMap =>
-              exact ⟨.introduce hostLocal hostItems body wireMap relationMap
-                occurrence, ⟨targetIso.symm⟩⟩
+          | introduce hostLocals hostItems selected =>
+              exact ⟨.introduce hostLocals hostItems selected occurrence
+                targetCanonical targetExternalTwoEnded, ⟨targetIso.symm⟩⟩
         · cases reverse with
-          | introduce hostLocal hostItems body wireMap relationMap =>
-              exact ⟨.eliminate hostLocal hostItems body wireMap relationMap
-                occurrence, ⟨targetIso.symm⟩⟩
+          | introduce hostLocals hostItems selected =>
+              exact ⟨.eliminate hostLocals hostItems selected occurrence
+                targetCanonical targetExternalTwoEnded, ⟨targetIso.symm⟩⟩
     | negative =>
         simp only [polarity, atPolarity, symmetric, converse] at localEvidence
         rcases localEvidence with reverse | direct
         · cases reverse with
-          | introduce hostLocal hostItems body wireMap relationMap =>
-              exact ⟨.eliminate hostLocal hostItems body wireMap relationMap
-                occurrence, ⟨targetIso.symm⟩⟩
+          | introduce hostLocals hostItems selected =>
+              exact ⟨.eliminate hostLocals hostItems selected occurrence
+                targetCanonical targetExternalTwoEnded, ⟨targetIso.symm⟩⟩
         · cases direct with
-          | introduce hostLocal hostItems body wireMap relationMap =>
-              exact ⟨.introduce hostLocal hostItems body wireMap relationMap
-                occurrence, ⟨targetIso.symm⟩⟩
+          | introduce hostLocals hostItems selected =>
+              exact ⟨.introduce hostLocals hostItems selected occurrence
+                targetCanonical targetExternalTwoEnded, ⟨targetIso.symm⟩⟩
 
-theorem backward_exact (source target : OpenDiagram arity) :
+theorem backward_exact (source target : OpenDiagram boundary) :
     (∃ index : BackwardIndex source,
       OpenDiagram.Isomorphic (runBackward source index) target) ↔
-    Rule.DoubleCut target source := by
+      Rule.DoubleCut target source := by
   constructor
-  · rintro ⟨index, isomorphic⟩
-    have forwardWitness :
-        ∃ forwardIndex : ForwardIndex source,
-          OpenDiagram.Isomorphic (runForward source forwardIndex) target := by
-      cases index with
-      | introduce hostLocal hostItems body wireMap relationMap occurrence =>
-          exact ⟨.introduce hostLocal hostItems body wireMap relationMap
-            occurrence, isomorphic⟩
-      | eliminate hostLocal hostItems body wireMap relationMap occurrence =>
-          exact ⟨.eliminate hostLocal hostItems body wireMap relationMap
-            occurrence, isomorphic⟩
-    exact Rule.DoubleCut.symm ((forward_exact source target).mp forwardWitness)
+  · intro witness
+    have forwardWitness : ∃ index : ForwardIndex source,
+        OpenDiagram.Isomorphic (runForward source index) target := by
+      simpa only [BackwardIndex, runBackward] using witness
+    exact Rule.DoubleCut.symm
+      ((forward_exact source target).mp forwardWitness)
   · intro step
-    rcases (forward_exact source target).mpr (Rule.DoubleCut.symm step) with
-      ⟨index, isomorphic⟩
-    cases index with
-    | introduce hostLocal hostItems body wireMap relationMap occurrence =>
-        exact ⟨.introduce hostLocal hostItems body wireMap relationMap
-          occurrence, isomorphic⟩
-    | eliminate hostLocal hostItems body wireMap relationMap occurrence =>
-        exact ⟨.eliminate hostLocal hostItems body wireMap relationMap
-          occurrence, isomorphic⟩
+    have forwardWitness :=
+      (forward_exact source target).mpr (Rule.DoubleCut.symm step)
+    simpa only [BackwardIndex, runBackward] using forwardWitness
 
 end VisualProof.Rule.DoubleCut

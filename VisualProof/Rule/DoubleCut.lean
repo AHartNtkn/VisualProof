@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Algebra
+import VisualProof.Diagram.UnaryIdentity
 import VisualProof.Rule.Relation
 
 namespace VisualProof.Rule
@@ -8,24 +9,50 @@ open Diagram
 
 namespace DoubleCut
 
-def wrap (body : Region wires rels) :
-    Region wires rels :=
-  .mk 0
-    (.cons
-      (.cut (.mk 0 (.cons (.cut body) .nil)))
-      .nil)
+private def siteLocalTarget (outer hostLocals : List Sig) :
+    WireRenaming hostLocals (outer ++ hostLocals) :=
+  ⟨fun wire => Var.appendRight outer wire⟩
+
+/-- Exactly the site-owned wires whose selected incidences would otherwise
+move wholly below the new outer cut. -/
+def passPins (hostLocals : List Sig)
+    (hostItems : ItemSeq (outer ++ hostLocals))
+    (selected : Region (outer ++ hostLocals)) :
+    ItemSeq (outer ++ hostLocals) :=
+  ItemSeq.pinWires hostLocals (siteLocalTarget outer hostLocals)
+    (fun localWire => decide
+      (selected.incidencePaths
+          (outer.length + localWire.index.val) ≠ [] ∧
+        hostItems.incidencePaths
+          (outer.length + localWire.index.val) 0 = []))
+
+/-- The zero-local material inserted at the selected site. -/
+def wrappedMaterial (hostLocals : List Sig)
+    (hostItems : ItemSeq (outer ++ hostLocals))
+    (selected : Region (outer ++ hostLocals)) :
+    Region (outer ++ hostLocals) :=
+  let appendNil : WireRenaming (outer ++ hostLocals)
+      ((outer ++ hostLocals) ++ []) :=
+    ⟨fun wire => wire.appendLeft []⟩
+  let inner : Region (outer ++ hostLocals) :=
+    .mk [] ((ItemSeq.cons (.cut selected) .nil).renameWires appendNil)
+  .mk [] (((passPins hostLocals hostItems selected).append
+    (.cons (.cut inner) .nil)).renameWires appendNil)
+
+def introducedAt (hostLocals : List Sig)
+    (hostItems : ItemSeq (outer ++ hostLocals))
+    (selected : Region (outer ++ hostLocals)) : Region outer :=
+  Region.adjoinAt hostLocals hostItems
+    (wrappedMaterial hostLocals hostItems selected)
 
 inductive Local : LocalRule
   | introduce
-      (hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (body : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels) :
+      (hostLocals : List Sig)
+      (hostItems : ItemSeq (outer ++ hostLocals))
+      (selected : Region (outer ++ hostLocals)) :
       Local
-        (Region.spliceAt hostLocal hostItems body wireMap relationMap)
-        (Region.spliceAt hostLocal hostItems
-          (wrap body) wireMap relationMap)
+        (Region.adjoinAt hostLocals hostItems selected)
+        (introducedAt hostLocals hostItems selected)
 
 end DoubleCut
 
@@ -33,8 +60,6 @@ def DoubleCut : Rule :=
   Contextual (symmetric DoubleCut.Local)
 
 theorem DoubleCut.iso
-    {arity : Nat}
-    {source source' target target' : OpenDiagram arity}
     (sourceIso : OpenDiagramIso source source')
     (step : DoubleCut source target)
     (targetIso : OpenDiagramIso target target') :
@@ -56,18 +81,18 @@ theorem DoubleCut.backward_respectsTargetIso
   exact DoubleCut.iso targetIso step (OpenDiagramIso.refl source)
 
 theorem DoubleCut.symm
-    {arity : Nat}
-    {source target : OpenDiagram arity}
-    (step : DoubleCut source target) :
-    DoubleCut target source := by
-  rcases step with ⟨wires, rels, before, after, occurrence, targetIso,
-    localEvidence⟩
+    (step : DoubleCut source target) : DoubleCut target source := by
+  rcases step with ⟨wires, before, after, occurrence, targetCanonical,
+    targetExternalTwoEnded, targetIso, localEvidence⟩
   let reverseOccurrence : Occurrence after target := {
     interface := occurrence.interface
     context := occurrence.context
+    sourceCanonical := targetCanonical
+    sourceExternalTwoEnded := targetExternalTwoEnded
     host_iso := targetIso
   }
-  refine ⟨wires, rels, after, before, reverseOccurrence,
+  refine ⟨wires, after, before, reverseOccurrence,
+    occurrence.sourceCanonical, occurrence.sourceExternalTwoEnded,
     occurrence.host_iso, ?_⟩
   cases polarity : occurrence.context.polarity <;>
     simp only [polarity, atPolarity, converse, symmetric] at localEvidence ⊢
