@@ -43,6 +43,12 @@ describe('planTransition / sceneAt', () => {
     expect(sceneAt(plan, 0).radius).toBeCloseTo(4, 9)
     expect(sceneAt(plan, 1).radius).toBeCloseTo(8, 9)
   })
+  it('throws loudly when a key changes entity shape between scenes', () => {
+    const prev = sc([{ kind: 'bead', key: 'd:r1', pos: v3(0, 1, 0) }])
+    const next = sc([{ kind: 'branch', key: 'd:r1', pts: [v3(0, 0, 0), v3(0, 2, 0)] }])
+    const plan = planTransition(prev, next)
+    expect(() => sceneAt(plan, 0.5)).toThrow('changed entity shape')
+  })
 })
 
 describe('resample', () => {
