@@ -49,6 +49,35 @@ describe('planTransition / sceneAt', () => {
     const plan = planTransition(prev, next)
     expect(() => sceneAt(plan, 0.5)).toThrow('changed entity shape')
   })
+  it('plans from an interrupted-tween scene (a sceneAt output) without popping', () => {
+    // An interrupted tween: while animating prev -> mid, a new target (next)
+    // arrives. The correct "from" scene for the new plan is the currently
+    // DISPLAYED interpolated scene (sceneAt at the current t), not the
+    // original prev — otherwise the entity visibly jumps back to prev's
+    // geometry before animating onward.
+    const prev = sc([
+      { kind: 'branch', key: 'b:r0', pts: [v3(0, 0, 0), v3(0, 5, 0)] },
+    ])
+    const mid = sc([
+      { kind: 'branch', key: 'b:r0', pts: [v3(0, 0, 0), v3(0, 8, 0)] },
+      { kind: 'bead', key: 'd:r1', pos: v3(0, 3, 0) },
+    ])
+    const interrupted = sceneAt(planTransition(prev, mid), 0.5) // mid-tween snapshot
+    const next = sc([{ kind: 'branch', key: 'b:r0', pts: [v3(0, 0, 0), v3(0, 2, 0)] }])
+    const resumed = planTransition(interrupted, next)
+    const move = resumed.moves.find((m) => m.from.key === 'b:r0')!
+    const interruptedBranch = interrupted.entities.find((e) => e.key === 'b:r0')!
+    expect(
+      'pts' in move.from && 'pts' in interruptedBranch
+      && dist3(move.from.pts[0]!, interruptedBranch.pts[0]!),
+    ).toBeLessThan(1e-9)
+    // the bead that was fading in mid-tween now exits from its CURRENT
+    // partial-alpha state, not reset to prev's full alpha.
+    expect(resumed.exits.map((e) => e.key)).toEqual(['d:r1'])
+    const interruptedBead = interrupted.entities.find((e) => e.key === 'd:r1')!
+    const exitedBead = resumed.exits[0]! as { alpha?: number }
+    expect(exitedBead.alpha).toBeCloseTo(interruptedBead.alpha!, 9)
+  })
 })
 
 describe('resample', () => {

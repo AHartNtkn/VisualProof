@@ -10,12 +10,22 @@ const PITCH_MAX = 1.45         // keep off the poles so the up vector stays vali
 const ZOOM_RATE = 0.0012       // exponent per wheel unit
 const MIN_DIST = 0.05            // hard floor so zoom can never collapse the eye onto the target
 
-export const fitPose = (center: Vec3, radius: number): CamPose => ({
-  target: center,
-  dist: (Math.max(radius, 1e-6) / Math.sin(HALF_FOV)) * FIT_MARGIN,
-  yaw: 0.6,
-  pitch: 0.35,
-})
+/** `aspect`: viewport width / height. The camera's vertical half-FOV is
+    fixed at HALF_FOV; the horizontal half-FOV follows from aspect
+    (`atan(tan(HALF_FOV) * aspect)`, matching three.js's PerspectiveCamera).
+    Framing must satisfy whichever is smaller — a narrow (portrait)
+    viewport is bound by its horizontal FOV, a wide one by its vertical —
+    so fitting uses the smaller of the two half-angles. */
+export function fitPose(center: Vec3, radius: number, aspect = 1): CamPose {
+  const hHalf = Math.atan(Math.tan(HALF_FOV) * aspect)
+  const binding = Math.min(HALF_FOV, hHalf)
+  return {
+    target: center,
+    dist: (Math.max(radius, 1e-6) / Math.sin(binding)) * FIT_MARGIN,
+    yaw: 0.6,
+    pitch: 0.35,
+  }
+}
 
 export const orbited = (p: CamPose, dxPx: number, dyPx: number): CamPose => ({
   ...p,

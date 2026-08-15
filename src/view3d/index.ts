@@ -28,7 +28,8 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
   let theme = initial.theme
   let spec: DiagramSpec = diagramSpec(diagram)
   let scene: Scene3 = scene3(diagram)
-  let pose: CamPose = fitPose(scene.center, scene.radius)
+  const aspectOf = (): number => container.clientWidth / Math.max(1, container.clientHeight)
+  let pose: CamPose = fitPose(scene.center, scene.radius, aspectOf())
   let tween: { plan: TweenPlan; poseFrom: CamPose; poseTo: CamPose; start: number } | null = null
   let hoverKey: string | null = null
   container.dataset['view3Hover'] = ''
@@ -53,10 +54,17 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
     if (tween !== null) {
       const t = Math.min(1, (now - tween.start) / TWEEN_MS)
       const e = t * t * (3 - 2 * t)
-      renderer.setEntities(sceneAt(tween.plan, t).entities)
       pose = mixPose(tween.poseFrom, tween.poseTo, e)
-      if (t >= 1) tween = null
-      else schedule()
+      if (t >= 1) {
+        // The clean target list, not sceneAt's interpolated frame — that
+        // still carries alpha-0 exits, which would otherwise linger in the
+        // scene (and stay pickable) forever after the tween ends.
+        renderer.setEntities(scene.entities)
+        tween = null
+      } else {
+        renderer.setEntities(sceneAt(tween.plan, t).entities)
+        schedule()
+      }
     }
     renderer.setPose(pose)
     renderer.render()
@@ -120,9 +128,16 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
         const nextSpec = diagramSpec(diagram)
         const nextScene = scene3(diagram)
         const poseTo = escapesFraming(pose, nextScene.center, nextScene.radius)
-          ? { ...fitPose(nextScene.center, nextScene.radius), yaw: pose.yaw, pitch: pose.pitch }
+          ? { ...fitPose(nextScene.center, nextScene.radius, aspectOf()), yaw: pose.yaw, pitch: pose.pitch }
           : pose
-        tween = { plan: planTransition(scene, nextScene), poseFrom: pose, poseTo, start: performance.now() }
+        // If a tween is already in flight, the scene currently ON SCREEN is
+        // the interpolated frame at its current t, not `scene` (the last
+        // COMPLETED scene) — planning from `scene` would pop the display
+        // back to that stale geometry for one frame before animating on.
+        const fromScene = tween === null
+          ? scene
+          : sceneAt(tween.plan, Math.min(1, (performance.now() - tween.start) / TWEEN_MS))
+        tween = { plan: planTransition(fromScene, nextScene), poseFrom: pose, poseTo, start: performance.now() }
         spec = nextSpec
         scene = nextScene
         hoverKey = null

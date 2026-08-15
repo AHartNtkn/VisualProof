@@ -6,6 +6,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import type { WireId } from '../kernel/diagram/diagram'
+import type { Entity } from './scene'
 import type { FadedEntity } from './transition'
 import { FOV_DEG, eyeOf, type CamPose } from './camera'
 
@@ -29,7 +30,27 @@ export type Renderer3 = {
   dispose(): void
 }
 
-const LINE_W: Record<'branch' | 'ring' | 'strand', number> = { branch: 3.5, ring: 2.2, strand: 2.2 }
+type LineKind = 'branch' | 'ring' | 'strand'
+type SpriteKind = 'bead' | 'label'
+
+type LineRec = {
+  kind: LineKind
+  obj: Line2
+  geo: LineGeometry
+  mat: LineMaterial
+  pick: THREE.Line
+  pickGeo: THREE.BufferGeometry
+  n: number // point count, to detect when setEntities needs a full rebuild
+  baseColor: string
+}
+type SpriteRec = {
+  kind: SpriteKind
+  obj: THREE.Sprite
+  baseTex: THREE.Texture
+  hoverTex: THREE.Texture
+}
+
+const LINE_W: Record<LineKind, number> = { branch: 3.5, ring: 2.2, strand: 2.2 }
 const HOVER_EXTRA_W = 1.2
 const BEAD_SCALE = 0.18
 const BLOOM = { strength: 0.9, radius: 0.6, threshold: 0.15 }
@@ -46,7 +67,7 @@ function discTexture(color: string): THREE.CanvasTexture {
   return new THREE.CanvasTexture(c)
 }
 
-function textSprite(text: string, color: string): THREE.Sprite {
+function textTexture(text: string, color: string): { tex: THREE.CanvasTexture; w: number; h: number } {
   const c = document.createElement('canvas')
   const ctx = c.getContext('2d')!
   ctx.font = '48px Georgia, serif'
@@ -57,14 +78,16 @@ function textSprite(text: string, color: string): THREE.Sprite {
   ctx2.fillStyle = color
   ctx2.textBaseline = 'middle'
   ctx2.fillText(text, 4, 32)
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true }))
-  sprite.scale.set(0.9 * (c.width / c.height), 0.9, 1)
-  return sprite
+  return { tex: new THREE.CanvasTexture(c), w: c.width, h: c.height }
 }
+
+const isLineEntity = (e: FadedEntity): e is FadedEntity & { kind: LineKind; pts: import('./vec3').Vec3[] } =>
+  e.kind === 'branch' || e.kind === 'ring' || e.kind === 'strand'
 
 export function mountRender(container: HTMLElement, theme: RenderTheme): Renderer3 {
   let th = theme
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
+  renderer.setPixelRatio(window.devicePixelRatio)
   renderer.domElement.dataset['view3'] = ''
   renderer.domElement.style.cssText = 'width:100%;height:100%;display:block;'
   container.appendChild(renderer.domElement)
@@ -75,13 +98,14 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), BLOOM.strength, BLOOM.radius, BLOOM.threshold)
   const group = new THREE.Group()
   scene.add(group)
-  const lineMaterials = new Set<LineMaterial>()
-  const pickables: THREE.Line[] = []
   const raycaster = new THREE.Raycaster()
   raycaster.params.Line = { threshold: PICK_THRESHOLD }
   let size = { w: 1, h: 1 }
-  let entities: readonly FadedEntity[] = []
   let hoverKeys: ReadonlySet<string> = new Set()
+  let lastEntities: readonly FadedEntity[] = []
+
+  const lineRecs = new Map<string, LineRec>()
+  const spriteRecs = new Map<string, SpriteRec>()
 
   const applyBackground = (): void => {
     scene.background = new THREE.Color(th.background)
@@ -91,92 +115,169 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
   }
   applyBackground()
 
-  const colorOf = (e: FadedEntity): string =>
+  const colorOf = (e: Entity): string =>
     e.kind === 'strand' ? (th.hues.get(e.wire) ?? th.baseWire) : th.line
 
-  const disposeObject = (o: THREE.Object3D): void => {
-    o.traverse((c) => {
-      const anyC = c as unknown as { geometry?: { dispose(): void }; material?: THREE.Material & { map?: THREE.Texture | null } }
-      anyC.geometry?.dispose()
-      if (anyC.material !== undefined) {
-        anyC.material.map?.dispose()
-        anyC.material.dispose()
-      }
-    })
+  const disposeLine = (r: LineRec): void => {
+    group.remove(r.obj)
+    group.remove(r.pick)
+    r.geo.dispose()
+    r.mat.dispose()
+    r.pickGeo.dispose()
+  }
+  const disposeSprite = (r: SpriteRec): void => {
+    group.remove(r.obj)
+    r.baseTex.dispose()
+    r.hoverTex.dispose()
+    ;(r.obj.material as THREE.SpriteMaterial).dispose()
   }
 
-  const rebuild = (): void => {
-    for (const child of [...group.children]) { group.remove(child); disposeObject(child) }
-    lineMaterials.clear()
-    pickables.length = 0
-    for (const e of entities) {
-      const hovered = hoverKeys.has(e.key)
-      const color = hovered ? th.hover : colorOf(e)
-      const alpha = e.alpha ?? 1
-      if (e.kind === 'bead') {
-        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: discTexture(color), transparent: true, opacity: alpha }))
-        sprite.position.set(e.pos.x, e.pos.y, e.pos.z)
-        sprite.scale.set(BEAD_SCALE, BEAD_SCALE, 1)
-        sprite.userData['key'] = e.key
-        group.add(sprite)
-        continue
-      }
-      if (e.kind === 'label') {
-        const sprite = textSprite(e.text, color)
-        sprite.material.opacity = alpha
-        sprite.position.set(e.pos.x, e.pos.y, e.pos.z)
-        sprite.userData['key'] = e.key
-        group.add(sprite)
-        continue
-      }
-      const width = LINE_W[e.kind] + (hovered ? HOVER_EXTRA_W : 0)
-      const geo = new LineGeometry()
-      geo.setPositions(e.pts.flatMap((p) => [p.x, p.y, p.z]))
-      const mat = new LineMaterial({ color, linewidth: width, transparent: true, opacity: alpha })
-      mat.resolution.set(size.w, size.h)
-      lineMaterials.add(mat)
-      const line = new Line2(geo, mat)
-      line.computeLineDistances()
-      line.userData['key'] = e.key
-      group.add(line)
-      const pickGeo = new THREE.BufferGeometry().setFromPoints(e.pts.map((p) => new THREE.Vector3(p.x, p.y, p.z)))
-      const pick = new THREE.Line(pickGeo, new THREE.LineBasicMaterial({ visible: false }))
-      pick.userData['key'] = e.key
-      group.add(pick)
-      pickables.push(pick)
+  const makeLine = (e: FadedEntity & { kind: LineKind }): LineRec => {
+    const color = colorOf(e)
+    const width = LINE_W[e.kind]
+    const geo = new LineGeometry()
+    geo.setPositions(e.pts.flatMap((p) => [p.x, p.y, p.z]))
+    const mat = new LineMaterial({ color, linewidth: width, transparent: true, opacity: e.alpha ?? 1 })
+    mat.resolution.set(size.w, size.h)
+    const obj = new Line2(geo, mat)
+    obj.computeLineDistances()
+    obj.userData['key'] = e.key
+    group.add(obj)
+    const pickGeo = new THREE.BufferGeometry().setFromPoints(e.pts.map((p) => new THREE.Vector3(p.x, p.y, p.z)))
+    const pick = new THREE.Line(pickGeo, new THREE.LineBasicMaterial({ visible: false }))
+    pick.userData['key'] = e.key
+    group.add(pick)
+    return { kind: e.kind, obj, geo, mat, pick, pickGeo, n: e.pts.length, baseColor: color }
+  }
+
+  const makeSprite = (e: FadedEntity & { kind: SpriteKind }): SpriteRec => {
+    const baseColor = colorOf(e)
+    if (e.kind === 'bead') {
+      const baseTex = discTexture(baseColor)
+      const hoverTex = discTexture(th.hover)
+      const mat = new THREE.SpriteMaterial({ map: baseTex, transparent: true, opacity: e.alpha ?? 1 })
+      const obj = new THREE.Sprite(mat)
+      obj.position.set(e.pos.x, e.pos.y, e.pos.z)
+      obj.scale.set(BEAD_SCALE, BEAD_SCALE, 1)
+      obj.userData['key'] = e.key
+      group.add(obj)
+      return { kind: 'bead', obj, baseTex, hoverTex }
+    }
+    const base = textTexture(e.text, baseColor)
+    const hover = textTexture(e.text, th.hover)
+    const mat = new THREE.SpriteMaterial({ map: base.tex, transparent: true, opacity: e.alpha ?? 1 })
+    const obj = new THREE.Sprite(mat)
+    obj.scale.set(0.9 * (base.w / base.h), 0.9, 1)
+    obj.position.set(e.pos.x, e.pos.y, e.pos.z)
+    obj.userData['key'] = e.key
+    group.add(obj)
+    return { kind: 'label', obj, baseTex: base.tex, hoverTex: hover.tex }
+  }
+
+  // Hover thickens/brightens by swapping material parameters (color,
+  // linewidth, sprite texture), never by rebuilding geometry.
+  const applyHover = (): void => {
+    for (const [key, r] of lineRecs) {
+      const hovered = hoverKeys.has(key)
+      r.mat.color.set(hovered ? th.hover : r.baseColor)
+      r.mat.linewidth = LINE_W[r.kind] + (hovered ? HOVER_EXTRA_W : 0)
+    }
+    for (const [key, r] of spriteRecs) {
+      const hovered = hoverKeys.has(key)
+      const mat = r.obj.material as THREE.SpriteMaterial
+      mat.map = hovered ? r.hoverTex : r.baseTex
+      mat.needsUpdate = true
     }
   }
 
+  const rebuildAll = (list: readonly FadedEntity[]): void => {
+    for (const r of lineRecs.values()) disposeLine(r)
+    for (const r of spriteRecs.values()) disposeSprite(r)
+    lineRecs.clear()
+    spriteRecs.clear()
+    for (const e of list) {
+      if (e.kind === 'bead' || e.kind === 'label') spriteRecs.set(e.key, makeSprite(e))
+      else lineRecs.set(e.key, makeLine(e))
+    }
+    applyHover()
+  }
+
   return {
-    setEntities(next) { entities = next; rebuild() },
-    setTheme(next) { th = next; applyBackground(); rebuild() },
+    setEntities(next) {
+      lastEntities = next
+      const nextByKey = new Map(next.map((e) => [e.key, e]))
+      const curKeys = [...lineRecs.keys(), ...spriteRecs.keys()]
+      let compatible = curKeys.length === next.length
+      if (compatible) {
+        for (const k of curKeys) if (!nextByKey.has(k)) { compatible = false; break }
+      }
+      if (compatible) {
+        for (const [k, e] of nextByKey) {
+          const lr = lineRecs.get(k)
+          if (lr !== undefined) {
+            if (lr.kind !== e.kind || !isLineEntity(e) || e.pts.length !== lr.n) { compatible = false; break }
+            continue
+          }
+          const sr = spriteRecs.get(k)
+          if (sr === undefined || sr.kind !== e.kind) { compatible = false; break }
+        }
+      }
+      if (!compatible) { rebuildAll(next); return }
+      for (const [k, e] of nextByKey) {
+        const lr = lineRecs.get(k)
+        if (lr !== undefined && isLineEntity(e)) {
+          lr.geo.setPositions(e.pts.flatMap((p) => [p.x, p.y, p.z]))
+          lr.obj.computeLineDistances()
+          lr.pickGeo.setFromPoints(e.pts.map((p) => new THREE.Vector3(p.x, p.y, p.z)))
+          lr.mat.opacity = e.alpha ?? 1
+          continue
+        }
+        const sr = spriteRecs.get(k)!
+        if ('pos' in e) sr.obj.position.set(e.pos.x, e.pos.y, e.pos.z)
+        ;(sr.obj.material as THREE.SpriteMaterial).opacity = e.alpha ?? 1
+      }
+    },
+    setTheme(next) {
+      th = next
+      applyBackground()
+      rebuildAll(lastEntities) // colors and hover textures depend on the theme
+    },
     setPose(p) {
       const eye = eyeOf(p)
       camera.position.set(eye.x, eye.y, eye.z)
       camera.up.set(0, 1, 0)
       camera.lookAt(p.target.x, p.target.y, p.target.z)
     },
-    setHoverKeys(keys) { hoverKeys = keys; rebuild() },
+    setHoverKeys(keys) { hoverKeys = keys; applyHover() },
     pickAt(ndcX, ndcY) {
       raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
-      const hits = raycaster.intersectObjects(pickables, false)
+      const objs: THREE.Object3D[] = [
+        ...[...lineRecs.values()].map((r) => r.pick),
+        ...[...spriteRecs.values()].map((r) => r.obj),
+      ]
+      const hits = raycaster.intersectObjects(objs, false)
       const key = hits[0]?.object.userData['key']
       return typeof key === 'string' ? key : null
     },
     render() { composer.render() },
     resize(w, h) {
       size = { w, h }
+      renderer.setPixelRatio(window.devicePixelRatio)
       renderer.setSize(w, h, false)
       composer.setSize(w, h)
       camera.aspect = w / Math.max(1, h)
       camera.updateProjectionMatrix()
-      for (const m of lineMaterials) m.resolution.set(w, h)
+      for (const r of lineRecs.values()) r.mat.resolution.set(w, h)
     },
     dispose() {
-      for (const child of [...group.children]) { group.remove(child); disposeObject(child) }
+      for (const r of lineRecs.values()) disposeLine(r)
+      for (const r of spriteRecs.values()) disposeSprite(r)
+      lineRecs.clear()
+      spriteRecs.clear()
       bloom.dispose()
       composer.dispose()
       renderer.dispose()
+      renderer.forceContextLoss()
       renderer.domElement.remove()
     },
   }

@@ -43,4 +43,16 @@ describe('camera pose', () => {
     expect(escapesFraming(p, v3(0, 0, 0), 4)).toBe(true)
     expect(escapesFraming(p, v3(10, 0, 0), 2)).toBe(true)
   })
+  it('fitPose accounts for aspect: a narrow (portrait) viewport needs more distance to fit the same sphere, and the sphere still fits', () => {
+    const square = fitPose(v3(0, 0, 0), 5, 1)
+    const narrow = fitPose(v3(0, 0, 0), 5, 0.3) // width/height < 1: portrait
+    expect(narrow.dist).toBeGreaterThan(square.dist)
+    // still fits: the horizontal half-FOV (the binding, narrower one here)
+    // subtends an angle no larger than itself at the fitted distance.
+    const hHalf = Math.atan(Math.tan(HALF_FOV) * 0.3)
+    expect(Math.asin(5 / narrow.dist)).toBeLessThanOrEqual(hHalf + 1e-9)
+  })
+  it('fitPose with the default aspect (1) matches passing 1 explicitly', () => {
+    expect(fitPose(v3(1, 2, 3), 5)).toEqual(fitPose(v3(1, 2, 3), 5, 1))
+  })
 })
