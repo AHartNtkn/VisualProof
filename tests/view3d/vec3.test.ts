@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   v3, add3, sub3, scale3, dot3, cross3, len3, dist3, norm3, lerp3,
-  anyPerp, rotateAbout, segClosest, segPointDist,
+  anyPerp, rotateAbout, segClosest, segPointDist, segSegDist,
 } from '../../src/view3d/vec3'
 
 describe('vec3', () => {
@@ -38,5 +38,24 @@ describe('vec3', () => {
     expect(segClosest(v3(5, 3, 0), a, b)).toEqual(v3(5, 0, 0))
     expect(segPointDist(v3(-4, 3, 0), a, b)).toBeCloseTo(5, 12)
     expect(segPointDist(v3(2, 0, 0), a, a)).toBeCloseTo(2, 12) // degenerate segment
+  })
+  it('segSegDist: parallel, crossing, skew, and degenerate-point segments', () => {
+    // Parallel segments offset by 3 on y: closest approach is the perpendicular gap.
+    expect(segSegDist(v3(0, 0, 0), v3(10, 0, 0), v3(0, 3, 0), v3(10, 3, 0))).toBeCloseTo(3, 9)
+    // Crossing segments (in-plane, forming an X): distance is 0.
+    expect(segSegDist(v3(-1, -1, 0), v3(1, 1, 0), v3(-1, 1, 0), v3(1, -1, 0))).toBeCloseTo(0, 9)
+    // Skew segments (classic case: along x at z=0, along y at z=1, both through origin-ish):
+    // closest approach is the common perpendicular, length 1.
+    expect(segSegDist(v3(-5, 0, 0), v3(5, 0, 0), v3(0, -5, 1), v3(0, 5, 1))).toBeCloseTo(1, 9)
+    // Both segments degenerate to points.
+    expect(segSegDist(v3(1, 2, 3), v3(1, 2, 3), v3(4, 6, 3), v3(4, 6, 3))).toBeCloseTo(5, 9)
+    // One segment degenerate to a point, the other a real segment (point-to-segment).
+    expect(segSegDist(v3(5, 3, 0), v3(5, 3, 0), v3(0, 0, 0), v3(10, 0, 0))).toBeCloseTo(3, 9)
+    // Non-crossing finite segments whose infinite-line closest points fall
+    // outside both segments: distance is between the nearest endpoints.
+    expect(segSegDist(v3(0, 0, 0), v3(1, 0, 0), v3(3, 1, 0), v3(4, 1, 0))).toBeCloseTo(Math.hypot(2, 1), 9)
+    // Symmetric: order of the two segments must not matter.
+    const a1 = v3(-2, 3, 0), a2 = v3(2, 3.1, 0.5), b1 = v3(-1, 3.2, -0.3), b2 = v3(1, 2.9, 0.1)
+    expect(segSegDist(a1, a2, b1, b2)).toBeCloseTo(segSegDist(b1, b2, a1, a2), 9)
   })
 })

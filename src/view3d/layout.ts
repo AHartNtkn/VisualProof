@@ -8,7 +8,13 @@ export const UNIT = 1
 export const CLEARANCE = 0.3 * UNIT
 export const BRANCH_ANGLE = 0.6
 export const AZ_GAP = 0.12
-export const RING_MIN_R = 0.25 * UNIT
+// A ring's center sits ON its own region's branch axis, so a rim anchor's
+// distance to that branch is exactly the ring's radius. Wires terminate at
+// rim anchors, so the radius must clear the branch by at least CLEARANCE, or
+// every low-arity node's own wire terminal would sit inside its own
+// region's clearance envelope by construction — unroutable no matter how
+// the wire is pushed, since the violating endpoint itself never moves.
+export const RING_MIN_R = CLEARANCE + 0.1 * UNIT
 export const PORT_ARC = 0.35 * UNIT
 export const TIP_PAD = 0.5 * UNIT
 

@@ -47,3 +47,54 @@ export function segClosest(p: Vec3, a: Vec3, b: Vec3): Vec3 {
 }
 
 export const segPointDist = (p: Vec3, a: Vec3, b: Vec3): number => dist3(p, segClosest(p, a, b))
+
+const clamp01 = (x: number): number => Math.min(1, Math.max(0, x))
+
+/** Closest-approach points between two segments [p1,q1] and [p2,q2]:
+    [pointOnFirst, pointOnSecond]. Standard robust closest-point-between-
+    segments construction (Ericson, Real-Time Collision Detection §5.1.9):
+    parametrize each segment by s, t ∈ [0,1], minimize the squared distance
+    of a convex quadratic over the unit square, degenerate-safe when either
+    segment collapses to a point. */
+export function segSegClosest(p1: Vec3, q1: Vec3, p2: Vec3, q2: Vec3): [Vec3, Vec3] {
+  const d1 = sub3(q1, p1)
+  const d2 = sub3(q2, p2)
+  const r = sub3(p1, p2)
+  const a = dot3(d1, d1)
+  const e = dot3(d2, d2)
+  const f = dot3(d2, r)
+  const EPS = 1e-12
+  let s: number, t: number
+  if (a <= EPS && e <= EPS) {
+    s = 0
+    t = 0
+  } else if (a <= EPS) {
+    s = 0
+    t = clamp01(f / e)
+  } else {
+    const c = dot3(d1, r)
+    if (e <= EPS) {
+      t = 0
+      s = clamp01(-c / a)
+    } else {
+      const b = dot3(d1, d2)
+      const denom = a * e - b * b
+      s = denom > EPS ? clamp01((b * f - c * e) / denom) : 0
+      t = (b * s + f) / e
+      if (t < 0) {
+        t = 0
+        s = clamp01(-c / a)
+      } else if (t > 1) {
+        t = 1
+        s = clamp01((b - c) / a)
+      }
+    }
+  }
+  return [add3(p1, scale3(d1, s)), add3(p2, scale3(d2, t))]
+}
+
+/** Closest-approach distance between two segments [p1,q1] and [p2,q2]. */
+export function segSegDist(p1: Vec3, q1: Vec3, p2: Vec3, q2: Vec3): number {
+  const [c1, c2] = segSegClosest(p1, q1, p2, q2)
+  return dist3(c1, c2)
+}

@@ -55,11 +55,20 @@ describe('scene3', () => {
     const s = scene3(d)
     const branches = s.entities.filter((e): e is Extract<Entity, { kind: 'branch' }> => e.kind === 'branch')
     const strands = s.entities.filter((e): e is Extract<Entity, { kind: 'strand' }> => e.kind === 'strand')
-    const anchorish: Vec3[] = strands.flatMap((e) => [e.pts[0]!, e.pts[e.pts.length - 1]!])
-    const nearAnchor = (p: Vec3): boolean => anchorish.some((a) => dist3(p, a) < 2.5 * CLEARANCE)
+    // Exemption is per-wire (I7): derive each wire's OWN anchor set from its
+    // OWN strands only — a point on wire A is never exempted by wire B's
+    // endpoints.
+    const anchorsByWire = new Map<string, Vec3[]>()
+    for (const e of strands) {
+      const list = anchorsByWire.get(e.wire) ?? []
+      list.push(e.pts[0]!, e.pts[e.pts.length - 1]!)
+      anchorsByWire.set(e.wire, list)
+    }
+    const nearAnchor = (wire: string, p: Vec3): boolean =>
+      (anchorsByWire.get(wire) ?? []).some((a) => dist3(p, a) < 2.5 * CLEARANCE)
     for (const st of strands) {
       for (const p of st.pts) {
-        if (nearAnchor(p)) continue
+        if (nearAnchor(st.wire, p)) continue
         for (const br of branches) {
           expect(segPointDist(p, br.pts[0]!, br.pts[br.pts.length - 1]!)).toBeGreaterThanOrEqual(CLEARANCE * 0.95)
         }
@@ -67,9 +76,9 @@ describe('scene3', () => {
     }
     for (let i = 0; i < strands.length; i++) for (let j = i + 1; j < strands.length; j++) {
       for (const p of strands[i]!.pts) {
-        if (nearAnchor(p)) continue
+        if (nearAnchor(strands[i]!.wire, p)) continue
         for (let k = 1; k < strands[j]!.pts.length; k++) {
-          if (nearAnchor(strands[j]!.pts[k]!)) continue
+          if (nearAnchor(strands[j]!.wire, strands[j]!.pts[k]!)) continue
           expect(segPointDist(p, strands[j]!.pts[k - 1]!, strands[j]!.pts[k]!)).toBeGreaterThanOrEqual(CLEARANCE * 0.95)
         }
       }
@@ -88,5 +97,22 @@ describe('scene3', () => {
   it('is deterministic', () => {
     const { d } = fixture()
     expect(scene3(d)).toEqual(scene3(d))
+  })
+  it('a 0-ary ref renders as a plain ring plus label, no anchors, no throw', () => {
+    const b = new DiagramBuilder()
+    const R = b.ref(b.root, 'Prop', relSig([]))
+    const d = b.build()
+    expect(() => scene3(d)).not.toThrow()
+    const s = scene3(d)
+    const ring = s.entities.find(
+      (e): e is Extract<Entity, { kind: 'ring' }> => e.kind === 'ring' && e.node === R,
+    )
+    expect(ring).toBeDefined()
+    expect(ring!.pts.length).toBeGreaterThan(0)
+    const label = s.entities.find(
+      (e): e is Extract<Entity, { kind: 'label' }> => e.kind === 'label' && e.node === R,
+    )
+    expect(label).toBeDefined()
+    expect(label!.text).toBe('Prop')
   })
 })

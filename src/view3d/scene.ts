@@ -3,7 +3,7 @@ import { diagramSpec, type Terminal } from './spec'
 import { CLEARANCE, UNIT, layoutTree, type TreeLayout } from './layout'
 import { steinerNet } from './steiner'
 import { clearPoint, routeAll, type Capsule, type EdgeIn, type NetIn } from './route3'
-import { add3, cross3, dist3, norm3, scale3, sub3, type Vec3 } from './vec3'
+import { add3, anyPerp, cross3, dist3, norm3, scale3, sub3, type Vec3 } from './vec3'
 
 export const RING_SEGMENTS = 32
 
@@ -18,10 +18,11 @@ export type Scene3 = { entities: Entity[]; center: Vec3; radius: number }
 function ringPolyline(tl: TreeLayout, node: NodeId): Vec3[] {
   const ring = tl.rings.get(node)!
   const anchors = [...ring.anchors.values()]
-  if (anchors.length === 0) throw new Error(`scene3: ring ${node} has no anchors`)
-  // Reconstruct the rim from center/axis via two rim frame vectors derived
-  // from the first anchor (exact: anchors lie on the rim by construction).
-  const n1 = norm3(sub3(anchors[0]!, ring.center))
+  // Reconstruct the rim from center/axis via two rim frame vectors. A ring
+  // with anchors derives its frame from the first anchor (exact: anchors lie
+  // on the rim by construction); a 0-ary node has no anchors, so the frame
+  // falls back to an arbitrary perpendicular of the branch axis.
+  const n1 = anchors.length === 0 ? anyPerp(ring.axis) : norm3(sub3(anchors[0]!, ring.center))
   const n2 = norm3(cross3(ring.axis, n1))
   const pts: Vec3[] = []
   for (let i = 0; i <= RING_SEGMENTS; i++) {
@@ -50,7 +51,6 @@ export function scene3(d: Diagram): Scene3 {
     return norm3(sub3(tl.anchorOf(t), ring.center))
   }
 
-  const exempt: Vec3[] = []
   const nets: NetIn[] = []
   for (const w of spec.wires) {
     // A wire can have fewer than two NODE endpoints when its remaining ends
@@ -60,9 +60,17 @@ export function scene3(d: Diagram): Scene3 {
     // scope — see the plan's closing notes.)
     if (w.terminals.length < 2) continue
     const anchors = w.terminals.map((t) => tl.anchorOf(t))
-    anchors.forEach((a) => exempt.push(a))
+    // Exemption is per-net (I7): only THIS wire's own anchors and junctions
+    // may be hugged within a clearance ball. A later wire gets no exemption
+    // near an earlier wire's anchors — it must clear them like any other
+    // obstacle.
+    const exempt: Vec3[] = [...anchors]
     if (w.terminals.length === 2) {
-      nets.push({ id: w.id, edges: [{ p: anchors[0]!, q: anchors[1]!, tp: tangentAt(w.terminals[0]!), tq: tangentAt(w.terminals[1]!) }] })
+      nets.push({
+        id: w.id,
+        edges: [{ p: anchors[0]!, q: anchors[1]!, tp: tangentAt(w.terminals[0]!), tq: tangentAt(w.terminals[1]!) }],
+        exempt,
+      })
       continue
     }
     const net = steinerNet(anchors)
@@ -74,9 +82,9 @@ export function scene3(d: Diagram): Scene3 {
       tp: u < anchors.length ? tangentAt(w.terminals[u]!) : null,
       tq: v < anchors.length ? tangentAt(w.terminals[v]!) : null,
     }))
-    nets.push({ id: w.id, edges })
+    nets.push({ id: w.id, edges, exempt })
   }
-  const routed = routeAll(nets, tree, exempt, CLEARANCE)
+  const routed = routeAll(nets, tree, CLEARANCE)
 
   const entities: Entity[] = []
   for (const pr of tl.regions.values()) entities.push({ kind: 'branch', key: `b:${pr.region}`, pts: [pr.base, pr.tip] })
