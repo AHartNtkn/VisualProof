@@ -97,9 +97,13 @@ describe('layoutTree', () => {
     expect(mk(6)).toBeGreaterThan(mk(1))
   })
   it('a wire escaping a cut widens that cut’s berth (longer stem)', () => {
+    // c1 needs a sibling: a lone child continues collinearly with a fixed
+    // stem, so the escape-driven clearance only shows on a fanned branch.
     const mk = (cross: boolean): number => {
       const b = new DiagramBuilder()
       const c1 = b.cut(b.root)
+      const c2 = b.cut(b.root)
+      b.point(c2)
       const P = b.atom(b.root, relSig([IOTA]))
       const Q = b.atom(c1, relSig([IOTA]))
       if (cross) {
@@ -114,6 +118,46 @@ describe('layoutTree', () => {
       return tl.regions.get(c1)!.contentStart
     }
     expect(mk(true)).toBeGreaterThan(mk(false))
+  })
+  it('all sibling branches fan from their parent segment tip', () => {
+    const { d } = busyFixture()
+    const spec = diagramSpec(d)
+    const tl = layoutTree(spec)
+    for (const [rid, pr] of tl.regions) {
+      for (const child of tl.regions.values()) {
+        if (spec.regions.get(child.region)!.parent !== rid) continue
+        expect(dist3(child.base, pr.tip)).toBeLessThan(1e-9)
+      }
+    }
+  })
+  it('a parented segment ends at its fan point — no bare spike past the last node', () => {
+    const { d, c1 } = busyFixture()
+    const spec = diagramSpec(d)
+    const tl = layoutTree(spec)
+    const pr = tl.regions.get(c1)!
+    let nearest = Infinity
+    for (const item of spec.regions.get(c1)!.items) {
+      if (item.kind !== 'node') continue
+      const pos = tl.rings.get(item.id)?.center ?? tl.identityAnchor.get(item.id)!
+      nearest = Math.min(nearest, dist3(pos, pr.tip))
+    }
+    // The tip sits half a spacing past the last node — never a tip pad plus
+    // branch-point spacings beyond it.
+    expect(nearest).toBeLessThanOrEqual(0.7)
+  })
+  it('branch lead-ins stay short — never scaled by subtree size', () => {
+    const b = new DiagramBuilder()
+    const c1 = b.cut(b.root)
+    const c2 = b.cut(b.root)
+    const c3 = b.cut(c1)
+    const c4 = b.cut(c1)
+    b.atom(c3, relSig([IOTA, IOTA, IOTA]))
+    b.atom(c4, relSig([IOTA, IOTA, IOTA]))
+    b.atom(c2, relSig([IOTA]))
+    const tl = layoutOf(b.build())
+    for (const pr of tl.regions.values()) {
+      expect(pr.contentStart).toBeLessThanOrEqual(2)
+    }
   })
   it('ring anchors sit on the rim, in the plane perpendicular to the branch', () => {
     const { d, Q } = busyFixture()
