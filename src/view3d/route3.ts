@@ -29,6 +29,15 @@ function penetrations(p: Vec3, obstacles: readonly Capsule[], delta: number): Ca
   return out
 }
 
+/** An acceptable resting place for a movable sample: point-clear of every
+    obstacle, or inside one of this net's exemption balls (where proximity
+    is licensed). Exemption licenses CLOSENESS — it never pins a sample; a
+    sample inside a ball whose edge still has a real (non-exempt) violation
+    must remain free to move, or that violation can become permanently
+    unclearable (the pinned end alone can sit nearer the obstacle than δ). */
+const pointOk = (p: Vec3, obstacles: readonly Capsule[], exempt: readonly Vec3[], delta: number): boolean =>
+  isExempt(p, exempt, delta) || penetrations(p, obstacles, delta).length === 0
+
 /** Capsules whose clearance is violated by the EDGE [a,b], not just its
     endpoint samples — catches an interior dip toward an obstacle that both
     endpoints individually clear. This is what makes clearance symmetric:
@@ -59,36 +68,37 @@ function edgeHits(a: Vec3, b: Vec3, obstacles: readonly Capsule[], exempt: reado
   return out
 }
 
-/** Deterministic escape: march along ±axis in delta/2 steps until clear. */
-function escape(p: Vec3, axis: Vec3, obstacles: readonly Capsule[], delta: number): Vec3 {
+/** Deterministic escape: march along ±axis in delta/2 steps until the
+    position is acceptable (clear or exempt). */
+function escape(p: Vec3, axis: Vec3, obstacles: readonly Capsule[], exempt: readonly Vec3[], delta: number): Vec3 {
   for (let j = 1; j <= 400; j++) {
     for (const sign of [1, -1]) {
       const cand = add3(p, scale3(axis, sign * j * (delta / 2)))
-      if (penetrations(cand, obstacles, delta).length === 0) return cand
+      if (pointOk(cand, obstacles, exempt, delta)) return cand
     }
   }
   throw new Error('route3: no escape direction cleared the obstacle set')
 }
 
-function pushOut(p: Vec3, hits: Capsule[], obstacles: readonly Capsule[], delta: number): Vec3 {
+function pushOut(p: Vec3, hits: Capsule[], obstacles: readonly Capsule[], exempt: readonly Vec3[], delta: number): Vec3 {
   if (hits.length === 1) {
     const c = hits[0]!
     const closest = segClosest(p, c.a, c.b)
     const radial = sub3(p, closest)
     const dir = len3(radial) < 1e-9 ? anyPerp(capDir(c)) : norm3(radial)
     const cand = add3(closest, scale3(dir, c.r + delta * (1 + 1e-3)))
-    return penetrations(cand, obstacles, delta).length === 0 ? cand : escape(p, dir, obstacles, delta)
+    return pointOk(cand, obstacles, exempt, delta) ? cand : escape(p, dir, obstacles, exempt, delta)
   }
   const ax = cross3(capDir(hits[0]!), capDir(hits[1]!))
   const axis = len3(ax) < 1e-6 ? anyPerp(capDir(hits[0]!)) : norm3(ax)
-  return escape(p, axis, obstacles, delta)
+  return escape(p, axis, obstacles, exempt, delta)
 }
 
 /** Push a point out of the obstacle set to ≥ delta clearance. */
 export function clearPoint(p: Vec3, obstacles: Capsule[], exempt: Vec3[], delta: number): Vec3 {
   if (isExempt(p, exempt, delta)) return p
   const hits = penetrations(p, obstacles, delta)
-  return hits.length === 0 ? p : pushOut(p, hits, obstacles, delta)
+  return hits.length === 0 ? p : pushOut(p, hits, obstacles, exempt, delta)
 }
 
 /** Whether points a and b sit on opposite sides of capsule c's axis — a
@@ -104,38 +114,23 @@ function straddles(a: Vec3, b: Vec3, c: Capsule): boolean {
   return dot3(ra, rb) < 0
 }
 
-/** Jointly escape an edge's two endpoints transverse to the plane the edge
-    and capsule `c`'s axis share (`cross3` of the two directions) — the only
-    direction guaranteed to break a coplanar/threading crossing, since it
-    moves the edge off that shared plane entirely rather than further along
-    a line that already lies in it. Marches both endpoints additively in
-    lockstep (`delta/2` steps, mirroring `escape`) from their CURRENT
-    positions — not from a shared anchor — so nearby samples needing the
-    same escape stay separated along the curve instead of collapsing onto
-    one point. Accepted once the EDGE clears `c` by direct segment-vs-segment
-    distance (the actual invariant, not assumed from point clearance), and
-    each moved endpoint is independently point-clear of the full obstacle
-    list. Only targets `c` — other simultaneous hits on this edge are left
-    for later rounds/edges, matching how the point-based scan converges
-    incrementally rather than solving every constraint in one shot. */
-function escapeEdgeAcross(
-  a: Vec3, b: Vec3, moveA: boolean, moveB: boolean, c: Capsule, obstacles: readonly Capsule[], delta: number,
-): [Vec3, Vec3] {
-  const rawEdge = sub3(b, a)
-  const edgeDir = len3(rawEdge) < 1e-12 ? null : norm3(rawEdge)
-  const cross = edgeDir === null ? v3(0, 0, 0) : cross3(capDir(c), edgeDir)
-  const dir = len3(cross) > 1e-6 ? norm3(cross) : anyPerp(capDir(c))
-  const target = c.r + delta * (1 + 1e-3)
+/** March both movable endpoints in lockstep along ±dir (`delta/2` steps,
+    mirroring `escape`) from their CURRENT positions — not from a shared
+    anchor — so nearby samples needing the same escape stay separated along
+    the curve instead of collapsing onto one point. Returns the first
+    position `accept` blesses, or null when 400 steps never satisfy it. */
+function marchEdge(
+  a: Vec3, b: Vec3, moveA: boolean, moveB: boolean, dir: Vec3, delta: number,
+  accept: (na: Vec3, nb: Vec3) => boolean,
+): [Vec3, Vec3] | null {
   for (let j = 1; j <= 400; j++) {
     for (const sign of [1, -1]) {
       const na = moveA ? add3(a, scale3(dir, sign * j * (delta / 2))) : a
       const nb = moveB ? add3(b, scale3(dir, sign * j * (delta / 2))) : b
-      if (segSegDist(na, nb, c.a, c.b) >= target
-        && (!moveA || penetrations(na, obstacles, delta).length === 0)
-        && (!moveB || penetrations(nb, obstacles, delta).length === 0)) return [na, nb]
+      if (accept(na, nb)) return [na, nb]
     }
   }
-  throw new Error('route3: no transverse escape cleared the edge')
+  return null
 }
 
 /** Two points at the SAME radius from a straight axis but at different
@@ -150,8 +145,8 @@ function escapeEdgeAcross(
     constant). Returns null — never a silently-unresolved position — when
     an endpoint sits exactly on the axis (no radial direction to scale) or
     the bisection's doubling search cannot reach clearance within a
-    generous bound; the caller falls back to `escapeEdgeAcross`. Only
-    targets `c`, mirroring `escapeEdgeAcross`'s incremental scope. */
+    generous bound; the caller falls back to its transverse marches. Only
+    targets `c`; the caller verifies the pose against the full set. */
 function tryScaleEdgeAcross(
   a: Vec3, b: Vec3, moveA: boolean, moveB: boolean, c: Capsule, delta: number,
 ): [Vec3, Vec3] | null {
@@ -191,9 +186,18 @@ function tryScaleEdgeAcross(
     subsequent rounds — the round loop is what converges the full obstacle
     set, one worst-offender resolution at a time, the same incremental
     shape as the original point-based scan. */
+/** Resolve a penetrating edge. The PRIMARY goal is a pose where the edge is
+    fully clear (no edgeHits at all, movable endpoints acceptable): radial
+    scaling first when the worst capsule allows it, then transverse marches
+    along the escape direction of EVERY hit in turn — resolving only the
+    single worst capsule ping-pongs forever when clearing one obstacle
+    re-violates another (measured: a two-state limit cycle under 3
+    simultaneous hits). Only when no direction reaches a fully clear pose
+    does it fall back to single-worst-capsule progress, leaving the rest for
+    later rounds; the round cap stays the loud backstop. */
 function resolveEdge(
   a: Vec3, b: Vec3, moveA: boolean, moveB: boolean, hits: readonly Capsule[],
-  obstacles: readonly Capsule[], delta: number,
+  obstacles: readonly Capsule[], exempt: readonly Vec3[], delta: number,
 ): [Vec3, Vec3] {
   let worst = hits[0]!
   let worstD = segSegDist(a, b, worst.a, worst.b)
@@ -201,11 +205,38 @@ function resolveEdge(
     const d = segSegDist(a, b, c.a, c.b)
     if (d < worstD) { worstD = d; worst = c }
   }
+  const endsOk = (na: Vec3, nb: Vec3): boolean =>
+    (!moveA || pointOk(na, obstacles, exempt, delta)) && (!moveB || pointOk(nb, obstacles, exempt, delta))
+  const fullyClear = (na: Vec3, nb: Vec3): boolean =>
+    edgeHits(na, nb, obstacles, exempt, delta).length === 0 && endsOk(na, nb)
+
   if (!straddles(a, b, worst)) {
     const scaled = tryScaleEdgeAcross(a, b, moveA, moveB, worst, delta)
-    if (scaled !== null) return scaled
+    if (scaled !== null && fullyClear(scaled[0], scaled[1])) return scaled
   }
-  return escapeEdgeAcross(a, b, moveA, moveB, worst, obstacles, delta)
+  // Transverse escape directions: cross of each hit's axis with the edge —
+  // the direction that breaks a coplanar/threading crossing with THAT
+  // capsule by leaving their shared plane — then a deterministic
+  // perpendicular of the worst axis as the degenerate-case fallback.
+  const rawEdge = sub3(b, a)
+  const edgeDir = len3(rawEdge) < 1e-12 ? null : norm3(rawEdge)
+  const dirs: Vec3[] = []
+  for (const c of [worst, ...hits.filter((h) => h !== worst)]) {
+    const cr = edgeDir === null ? v3(0, 0, 0) : cross3(capDir(c), edgeDir)
+    if (len3(cr) > 1e-6) dirs.push(norm3(cr))
+  }
+  dirs.push(anyPerp(capDir(worst)))
+  for (const dir of dirs) {
+    const clear = marchEdge(a, b, moveA, moveB, dir, delta, fullyClear)
+    if (clear !== null) return clear
+  }
+  const target = worst.r + delta * (1 + 1e-3)
+  for (const dir of dirs) {
+    const progress = marchEdge(a, b, moveA, moveB, dir, delta, (na, nb) =>
+      segSegDist(na, nb, worst.a, worst.b) >= target && endsOk(na, nb))
+    if (progress !== null) return progress
+  }
+  throw new Error('route3: no transverse escape cleared the edge')
 }
 
 function hermiteSeed(e: EdgeIn, delta: number): Vec3[] {
@@ -248,20 +279,22 @@ function repair(seed: Vec3[], obstacles: readonly Capsule[], exempt: readonly Ve
       const hits = edgeHits(a, b, obstacles, exempt, delta)
       if (hits.length === 0) continue
       dirty = true
-      // A fixed terminal (index 0 / n) or an exempt sample never moves. A
-      // sample already claimed by an earlier edge THIS round is different:
-      // it WILL move, just via that other edge's own computation — solving
-      // this edge as if it were permanently pinned there is wrong (it can
-      // manufacture an impossible constraint, or waste motion on the other
-      // end for a position that is about to change). Defer to next round,
-      // once the claim has actually been applied, instead.
-      const permFixed = (idx: number): boolean => idx === 0 || idx === snapshot.length - 1 || isExempt(snapshot[idx]!, exempt, delta)
+      // Only the true terminals (index 0 / n) are pinned — exemption
+      // licenses closeness, it never pins (a ball-side sample pinned next
+      // to a real violation makes that violation permanently unclearable).
+      // A sample already claimed by an earlier edge THIS round is
+      // different: it WILL move, just via that other edge's own
+      // computation — solving this edge as if it were permanently pinned
+      // there is wrong (it can manufacture an impossible constraint, or
+      // waste motion on the other end for a position that is about to
+      // change). Defer to next round, once the claim has been applied.
+      const permFixed = (idx: number): boolean => idx === 0 || idx === snapshot.length - 1
       const permFixedA = permFixed(i), permFixedB = permFixed(i + 1)
       if (permFixedA && permFixedB) continue // truly unroutable here; the round cap throws if it never resolves elsewhere
       if (updates.has(i) && !permFixedA) continue
       if (updates.has(i + 1) && !permFixedB) continue
       const moveA = !permFixedA, moveB = !permFixedB
-      const [na, nb] = resolveEdge(a, b, moveA, moveB, hits, obstacles, delta)
+      const [na, nb] = resolveEdge(a, b, moveA, moveB, hits, obstacles, exempt, delta)
       if (moveA) updates.set(i, na)
       if (moveB) updates.set(i + 1, nb)
     }
@@ -270,11 +303,15 @@ function repair(seed: Vec3[], obstacles: readonly Capsule[], exempt: readonly Ve
     for (let i = 2; i < pts.length - 2; i++) {
       const mid = scale3(add3(pts[i - 1]!, pts[i + 1]!), 0.5)
       const cand = add3(pts[i]!, scale3(sub3(mid, pts[i]!), SMOOTH))
-      // Guarded smoothing: accept the smoothed position only if it stays
-      // clear (or sits in an anchor-exemption ball). Smoothing must never
-      // undo the clearance the pushes achieved, or push/smooth cycles
-      // forever without a clean scan.
-      if (isExempt(cand, exempt, delta) || penetrations(cand, obstacles, delta).length === 0) pts[i] = cand
+      // Guarded smoothing must guard the SAME invariant the scan enforces —
+      // EDGE clearance, not point clearance. A point-clear position can
+      // still drag its two edges back under the clearance target, undoing
+      // each round's resolution by exactly the amount it achieved (measured:
+      // a 0.01-per-round limit cycle at the target boundary). Accept the
+      // smoothed position only if both edges it participates in stay clear
+      // of every capsule outside the exemption balls.
+      if (edgeHits(pts[i - 1]!, cand, obstacles, exempt, delta).length === 0
+        && edgeHits(cand, pts[i + 1]!, obstacles, exempt, delta).length === 0) pts[i] = cand
     }
   }
   throw new Error(`route3: clearance not achieved for ${label} after ${MAX_ROUNDS} rounds`)

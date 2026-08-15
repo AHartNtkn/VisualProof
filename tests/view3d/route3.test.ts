@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { routeAll, clearPoint, type Capsule, type NetIn } from '../../src/view3d/route3'
-import { dist3, norm3, segPointDist, segSegDist, sub3, v3, type Vec3 } from '../../src/view3d/vec3'
+import { dist3, norm3, segPointDist, segSegClosest, segSegDist, sub3, v3, type Vec3 } from '../../src/view3d/vec3'
 
 const DELTA = 0.3
 const trunk: Capsule[] = [{ a: v3(0, 0, 0), b: v3(0, 10, 0), r: 0 }]
@@ -15,6 +15,28 @@ const minDistToCaps = (pts: Vec3[], caps: Capsule[], exempt: Vec3[]): number => 
 }
 
 describe('routeAll', () => {
+  it('a sample inside an exemption ball still moves to clear a real hit', () => {
+    // Exemption means ALLOWED to be close, never PINNED: an edge whose one
+    // end sits just inside the anchor ball (0.60 from E) while its true
+    // closest approach to the obstacle lies just outside (at 0.75+) is a
+    // real violation, and the ball-side end must be free to move — pinning
+    // it leaves the edge permanently 0.29 from the capsule, unclearable by
+    // any motion of the other end alone.
+    const E = v3(0, 0, 0)
+    const C: Capsule = { a: v3(0.85, 0.15, 0), b: v3(1.05, 0.15, 0), r: 0 }
+    const routed = routeAll(
+      [{ id: 'wx', edges: [{ p: E, q: v3(3, 0, 0), tp: null, tq: null }], exempt: [E] }],
+      [C], DELTA,
+    )
+    const pts = routed.get('wx')![0]!
+    expect(dist3(pts[0]!, E)).toBeLessThan(1e-9)
+    for (let i = 1; i < pts.length; i++) {
+      const dEdge = segSegDist(pts[i - 1]!, pts[i]!, C.a, C.b)
+      if (dEdge >= DELTA * 0.999) continue
+      const [onEdge] = segSegClosest(pts[i - 1]!, pts[i]!, C.a, C.b)
+      expect(dist3(onEdge, E)).toBeLessThan(2.5 * DELTA)
+    }
+  })
   it('a wire whose chord pierces the trunk detours ≥ δ around it, endpoints fixed', () => {
     const p = v3(-2, 3, 0), q = v3(2, 3, 0)
     const routed = routeAll([{ id: 'w0', edges: [{ p, q, tp: null, tq: null }], exempt: [] }], trunk, DELTA)
