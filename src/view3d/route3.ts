@@ -556,7 +556,10 @@ export function routeAll(nets: NetIn[], tree: Capsule[], delta: number): Map<Wir
   const grid = buildGrid(idx.caps, everyPoint, delta, delta / 2)
   // Junction fields only pick a CELL, not a path — δ resolution suffices
   // and costs 8× less than the path grid.
-  const coarse = buildGrid(idx.caps, everyPoint, delta, delta)
+  // Junction placement tolerance is ~δ — the argmin cell only LOCALIZES
+  // the junction; the A* paths to it run on the fine grid regardless — so
+  // distance fields always run on a 2δ grid (64× fewer cells than fine).
+  const fieldGridG = buildGrid(idx.caps, everyPoint, delta, 2 * delta)
 
   const out = new Map<WireId, Vec3[][]>()
   for (const net of nets) {
@@ -581,8 +584,9 @@ export function routeAll(nets: NetIn[], tree: Capsule[], delta: number): Map<Wir
     // cap leaves positions merely suboptimal, never invalid).
     const junctionPos: Vec3[] = new Array<Vec3>(net.freeJunctionCount)
     if (net.freeJunctionCount > 0) {
-      const coarseOpen = (ci: number): boolean => coarse.blocked[ci] === 0
-      const bs = mkBoxState(boxAround(coarse, [...net.anchors, ...net.fixedJunctions], boxMarginCells(coarse)))
+      const fieldGrid = fieldGridG
+      const coarseOpen = (ci: number): boolean => fieldGrid.blocked[ci] === 0
+      const bs = mkBoxState(boxAround(fieldGrid, [...net.anchors, ...net.fixedJunctions], boxMarginCells(fieldGrid)))
       const posOfVertex = (vv: number): Vec3 | null => {
         if (vv < net.anchors.length) return net.anchors[vv]!
         if (vv >= fixedBase) return net.fixedJunctions[vv - fixedBase]!
@@ -604,7 +608,7 @@ export function routeAll(nets: NetIn[], tree: Capsule[], delta: number): Map<Wir
         const key = `${p.x},${p.y},${p.z}`
         const hit = fieldCache.get(key)
         if (hit !== undefined) return hit
-        const f = distanceField(coarse, coarseOpen, p, bs)
+        const f = distanceField(fieldGrid, coarseOpen, p, bs)
         fieldCache.set(key, f)
         return f
       }
@@ -637,7 +641,7 @@ export function routeAll(nets: NetIn[], tree: Capsule[], delta: number): Map<Wir
           const lx = bestL % bs.bnx
           const ly = ((bestL - lx) / bs.bnx) % bs.bny
           const lz = (bestL - lx - ly * bs.bnx) / (bs.bnx * bs.bny)
-          const cand = centerOf(coarse, lx + bs.box.lo[0], ly + bs.box.lo[1], lz + bs.box.lo[2])
+          const cand = centerOf(fieldGrid, lx + bs.box.lo[0], ly + bs.box.lo[1], lz + bs.box.lo[2])
           if (junctionPos[j] === undefined || dist3(cand, junctionPos[j]!) > 1e-9) movedCells = true
           junctionPos[j] = cand
         }

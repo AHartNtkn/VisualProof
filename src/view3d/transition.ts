@@ -1,5 +1,5 @@
 import type { Entity, Scene3 } from './scene'
-import { add3, dist3, lerp3, scale3, type Vec3 } from './vec3'
+import { add3, dist3, lerp3, scale3, segClosest, type Vec3 } from './vec3'
 
 export type FadedEntity = Entity & { alpha?: number }
 export type TweenPlan = {
@@ -31,15 +31,71 @@ export function resample(pts: Vec3[], m: number): Vec3[] {
 }
 
 const hasPts = (e: Entity): e is Extract<Entity, { pts: Vec3[] }> => 'pts' in e
+const isStrand = (e: Entity): e is Extract<Entity, { kind: 'strand' }> => e.kind === 'strand'
+
+/** Closest point to `p` on any of the given polylines. */
+function projectOntoPolylines(p: Vec3, polys: readonly (readonly Vec3[])[]): Vec3 {
+  let best = polys[0]![0]!
+  let bestD = Infinity
+  for (const pts of polys) {
+    for (let i = 1; i < pts.length; i++) {
+      const c = segClosest(p, pts[i - 1]!, pts[i]!)
+      const d = dist3(p, c)
+      if (d < bestD) { bestD = d; best = c }
+    }
+    if (pts.length === 1) {
+      const d = dist3(p, pts[0]!)
+      if (d < bestD) { bestD = d; best = pts[0]! }
+    }
+  }
+  return best
+}
 
 export function planTransition(prev: Scene3, next: Scene3): TweenPlan {
-  const prevByKey = new Map(prev.entities.map((e) => [e.key, e]))
-  const nextByKey = new Map(next.entities.map((e) => [e.key, e]))
   const moves: { from: Entity; to: Entity }[] = []
   const enters: Entity[] = []
   const exits: Entity[] = []
-  for (const e of next.entities) {
-    const p = prevByKey.get(e.key)
+
+  // Strands morph at the WIRE level: a proof step reshuffles a wire's edge
+  // decomposition, so strand keys pair unrelated segments — the wire is the
+  // persistent object. Every strand of the persisting wire's NEW state
+  // starts from its projection onto the wire's OLD geometry and deforms
+  // outward, so at t=0 the union of strands reads as the old shape and the
+  // wire visibly slides into its new one. Fades happen only when the wire
+  // itself appears or disappears.
+  const strandsByWire = (s: Scene3): Map<string, Extract<Entity, { kind: 'strand' }>[]> => {
+    const out = new Map<string, Extract<Entity, { kind: 'strand' }>[]>()
+    for (const e of s.entities) {
+      if (!isStrand(e)) continue
+      const list = out.get(e.wire) ?? []
+      list.push(e)
+      out.set(e.wire, list)
+    }
+    return out
+  }
+  const prevWires = strandsByWire(prev)
+  const nextWires = strandsByWire(next)
+  for (const [wire, strands] of nextWires) {
+    const old = prevWires.get(wire)
+    if (old === undefined) {
+      enters.push(...strands)
+      continue
+    }
+    const oldPolys = old.map((e) => e.pts)
+    for (const e of strands) {
+      const from: Entity = { ...e, pts: e.pts.map((p) => projectOntoPolylines(p, oldPolys)) }
+      moves.push({ from, to: e })
+    }
+  }
+  for (const [wire, strands] of prevWires) {
+    if (!nextWires.has(wire)) exits.push(...strands)
+  }
+
+  // Everything else keeps identity by key.
+  const prevByKey = new Map(prev.entities.filter((e) => !isStrand(e)).map((e) => [e.key, e]))
+  const nextByKey = new Map(next.entities.filter((e) => !isStrand(e)).map((e) => [e.key, e]))
+  for (const [key, e] of nextByKey) {
+    const p = prevByKey.get(key)
     if (p === undefined) { enters.push(e); continue }
     if (hasPts(p) && hasPts(e)) {
       const m = Math.max(p.pts.length, e.pts.length)
@@ -48,7 +104,7 @@ export function planTransition(prev: Scene3, next: Scene3): TweenPlan {
       moves.push({ from: p, to: e })
     }
   }
-  for (const p of prev.entities) if (!nextByKey.has(p.key)) exits.push(p)
+  for (const [key, p] of prevByKey) if (!nextByKey.has(key)) exits.push(p)
   return {
     moves, enters, exits,
     fromBounds: { center: prev.center, radius: prev.radius },
