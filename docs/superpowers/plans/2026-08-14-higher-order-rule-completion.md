@@ -114,19 +114,25 @@
 - Modify: `VisualProof/Rule/Step.lean`
 
 **Interfaces:**
-- Vacuity describes computable identity/fresh-wire assemblies whose connected components touch at most one surviving wire, whose fresh wires are bare or absorbable at the equality home, and which preserve every touched wire’s DCA and two-end floor.
+- Vacuity has exactly three primitive, ungated, bidirectional instances:
+  - `point`: insert/delete one arity-0 identity node of a declared signature at one selected region;
+  - `stub`: extend one existing identity node by one port and a fresh typed wire ending at one fresh unary identity at-or-below the base node's region, or retract that exact shape;
+  - `pin`: attach one fresh unary identity to one existing visible wire, or detach that exact identity only when the surviving incidences retain the wire's DCA and two-end floor.
+- The general vacuous-assembly result is a decomposition corollary over finite compositions of these primitives, identification exposure/collapse, and presentation invariance. It is not a primitive relation, runner index, or acceptance procedure.
 - Presentation replaces one-region, one-signature identity configurations that generate the same finite equivalence relation on the same wires, preserving at least one regional port per member and two incidences per wire.
 - Identification collapses or exposes one or more wires at an equality node, retaining that node, with absorbed wire DCA exactly the node region and a nonempty set of non-identity incidences transferred for every absorbed wire. A wire whose only incidences are duplicate ports on that identity node belongs to vacuity instead; redundant same-wire ports whose removal leaves the wire valid belong to presentation invariance.
 
-- [ ] Define the weakest recursive operation data that computes each endpoint. Use structural item/region focuses and typed port partitions; do not store an endpoint `Region` or rule proof in an index.
-- [ ] Keep the three families disjoint by effect at the duplicate-port boundary: presentation contracts redundant ports while retaining the wire; vacuity removes a two-port-only identity loop; identification requires actual away incidences to transfer and never handles the zero-transfer case.
+- [ ] Define direct recursive occurrence data for point, stub, and pin. Each constructor selects the exact node/wire/site it changes; no component graph, assembly language, absorption order, target `Region`, or search enters the rule or runner index.
+- [ ] Keep the three families disjoint by effect: vacuity changes only one point/stub/pin primitive; presentation changes an identity presentation while retaining all wires; identification transfers a nonempty set of non-identity incidences between wires; join/sever owns gated quantifier movement.
 - [ ] Define each local/global relation from the same operation data consumed by its runner so exact coverage is structural rather than reconstructed by search.
 - [ ] Implement two direct runner directions for each family and prove exact iff coverage plus both target-isomorphism closure laws.
-- [ ] Prove semantic equivalence: inhabitedness for vacuity, equality-relation invariance for presentation, and the one-point principle for identification.
+- [ ] Prove vacuity equivalence separately for point, stub, and pin: inhabitedness plus truth conjunction for point, one-point existential elimination for stub, and reflexivity for pin. Prove endpoint validity and surviving-wire scope preservation from each primitive's stated conditions.
+- [ ] Prove presentation equality-relation invariance and identification's one-point principle.
+- [ ] After all three primitive families are GREEN, state and prove the generic assembly decomposition as a finite-step corollary by reversing the accepting absorption sequence. The corollary may consume point/stub/pin, identification, and presentation steps; it must not add another executable rule.
 - [ ] Add distinct `Step.vacuity`, `Step.presentation`, and `Step.identification` constructors and update `Step.iso`.
 - [ ] Strict-check each family independently, scan for target/search/normalization/raised limits, and commit each independently.
 
-**Architecture gate:** if the strongest vacuity assembly cannot be computed from one recursive operation description without a second diagram/navigation authority, stop before weakening the rule or introducing a compatibility representation.
+**Architecture gate:** vacuity execution is exactly one point, stub, or pin operation. If implementing it requires a component graph, absorption fixpoint, recursive assembly edit, target search, or overlap with wire join/sever, stop and correct the rule boundary. The assembly theorem belongs only to the later proof closure.
 
 ### Task 5: Replace comprehension with typed relation-wire instantiation
 
