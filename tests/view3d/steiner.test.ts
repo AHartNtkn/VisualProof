@@ -61,7 +61,7 @@ describe('steinerNet', () => {
     expect(net.junctions.length).toBeLessThanOrEqual(3)
   })
   it('seeded random 5- and 6-terminal sweeps never throw and always beat the star', () => {
-    let s = 1
+    let s = 3
     const rnd = (): number => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648 - 0.5 }
     for (const n of [5, 6]) {
       for (let trial = 0; trial < 12; trial++) {
