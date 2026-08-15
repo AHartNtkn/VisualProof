@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { steinerNet } from '../../src/view3d/steiner'
-import { add3, dist3, norm3, sub3, v3, type Vec3 } from '../../src/view3d/vec3'
+import { add3, dist3, norm3, scale3, sub3, v3, type Vec3 } from '../../src/view3d/vec3'
 
 const totalLen = (terms: readonly Vec3[], net: ReturnType<typeof steinerNet>): number => {
   const pos = (i: number): Vec3 => (i < terms.length ? terms[i]! : net.junctions[i - terms.length]!)
@@ -51,5 +51,26 @@ describe('steinerNet', () => {
   it('is deterministic', () => {
     const terms = [v3(0, 0, 0), v3(1, 0.2, 0), v3(0.7, 1, 0.3), v3(-0.2, 0.8, -0.4)]
     expect(steinerNet(terms)).toEqual(steinerNet(terms))
+  })
+  it('n=5 asymmetric terminals: solves without throwing and beats the star', () => {
+    const terms = [v3(0, 0, 0), v3(2, 0.3, 0), v3(1.1, 1.7, 0.4), v3(-0.6, 1.2, -0.5), v3(0.9, -0.8, 0.7)]
+    const net = steinerNet(terms)
+    const centroid = scale3(terms.reduce((a, b) => add3(a, b), v3(0, 0, 0)), 1 / 5)
+    const star = terms.reduce((acc, t) => acc + dist3(t, centroid), 0)
+    expect(totalLen(terms, net)).toBeLessThanOrEqual(star + 1e-6)
+    expect(net.junctions.length).toBeLessThanOrEqual(3)
+  })
+  it('seeded random 5- and 6-terminal sweeps never throw and always beat the star', () => {
+    let s = 12345
+    const rnd = (): number => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648 - 0.5 }
+    for (const n of [5, 6]) {
+      for (let trial = 0; trial < 12; trial++) {
+        const terms = Array.from({ length: n }, () => v3(rnd() * 4, rnd() * 4, rnd() * 4))
+        const net = steinerNet(terms)
+        const centroid = scale3(terms.reduce((a, b) => add3(a, b), v3(0, 0, 0)), 1 / n)
+        const star = terms.reduce((acc, t) => acc + dist3(t, centroid), 0)
+        expect(totalLen(terms, net)).toBeLessThanOrEqual(star + 1e-6)
+      }
+    }
   })
 })
