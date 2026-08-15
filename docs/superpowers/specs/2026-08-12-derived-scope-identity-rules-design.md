@@ -141,10 +141,18 @@ so it was retired for the primitives it was simulating.)
 
 **Presentation invariance (equality has no syntax).** Two
 configurations of identity nodes at one region R, of one sig, over the same
-wire set — every wire of the set holding at least one port in both, every
-wire keeping at least two ends — that generate the same equivalence
-relation, are interchangeable in one step. Which nodes, how many, and with
-what port multiplicities present the relation is syntax, not content.
+wire set — every node covering at least one wire, every wire of the set
+holding at least one port in both, every wire keeping at least two ends —
+that generate the same equivalence relation, are interchangeable in one
+step. Which nodes, how many, and with what port multiplicities present the
+relation is syntax, not content. The every-node-covers-a-wire condition is
+the rule's licence line, not bookkeeping: a wireless node is a point,
+∃x:σ.⊤ — content sound by inhabitedness — and its appearance and
+disappearance belong exclusively to vacuity (2026-08-14: the
+implementation accepted points on either side, since a coverage-empty node
+passes a same-wire-set check vacuously; refused now, keeping §8's
+"vacuity is the only source and sink of nullary nodes" true and the Lean
+presentation lemma free of the inhabitedness axiom).
 
 **Identification (one-point).** A wire quantified exactly at the
 region where it is equated to a survivor is the survivor, mentioned twice:

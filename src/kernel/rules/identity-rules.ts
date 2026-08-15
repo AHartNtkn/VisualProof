@@ -336,6 +336,15 @@ export function applyPresentation(
         + `'${node.region}', not '${input.region}'`,
       )
     }
+    // A wireless node is a point — ∃x:σ.⊤, content whose appearance and
+    // disappearance is vacuity's license (inhabitedness), never a
+    // re-presentation of an equality relation.
+    if (node.arity === 0) {
+      throw new RuleError(
+        `presentation invariance: node '${nodeId}' presents no relation — `
+        + `every node must cover at least one wire; a point is vacuity's business`,
+      )
+    }
     if (sig === null) sig = node.sig
     else if (!sigEquals(sig, node.sig)) {
       throw new RuleError('presentation invariance requires one shared sig')
@@ -359,7 +368,13 @@ export function applyPresentation(
     }
   }
 
-  for (const [, ports] of Object.entries(input.addNodes)) {
+  for (const [label, ports] of Object.entries(input.addNodes)) {
+    if (ports.length === 0) {
+      throw new RuleError(
+        `presentation invariance: node '${label}' presents no relation — `
+        + `every node must cover at least one wire; a point is vacuity's business`,
+      )
+    }
     for (const wireId of ports) {
       const wire = d.wires[wireId]
       if (wire === undefined) throw new DiagramError(`unknown wire '${wireId}'`)

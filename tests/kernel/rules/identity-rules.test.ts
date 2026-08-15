@@ -330,6 +330,27 @@ describe('presentation invariance', () => {
       addNodes: { z: ['s', 'a'] },
     })).toThrow(/homed at/)
   })
+
+  it('refuses to touch a point — a wireless node is content, not presentation', () => {
+    // A point asserts ∃x:σ.⊤; creating or deleting one is vacuity's
+    // license (inhabitedness), not a re-drawing of equality syntax.
+    const withPoint = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: { pt: { kind: 'identity', region: 'r0', sig: IOTA, arity: 0 } },
+      wires: {},
+    })
+    expect(() => applyPresentation(withPoint, {
+      region: 'r0',
+      removeNodes: ['pt'],
+      addNodes: {},
+    })).toThrow(/at least one wire/)
+    expect(() => applyPresentation(withPoint, {
+      region: 'r0',
+      removeNodes: ['pt'],
+      addNodes: { fresh: [] },
+    })).toThrow(/at least one wire/)
+  })
 })
 
 describe('identification', () => {
