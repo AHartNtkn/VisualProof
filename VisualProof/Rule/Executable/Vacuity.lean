@@ -5,155 +5,212 @@ namespace VisualProof.Rule.Vacuity
 open Theory
 open Diagram
 
-inductive ForwardIndex {arity : Nat} (source : OpenDiagram arity) : Type
-  | introduce
-      (binderArity hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (body : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels)
-      (occurrence : Occurrence
-        (Region.spliceAt hostLocal hostItems body wireMap relationMap) source) :
+inductive ForwardIndex {boundary : List Sig}
+    (source : OpenDiagram boundary) : Type
+  | pointIntroduce
+      (locals : List Sig) (items : ItemSeq (wires ++ locals))
+      (signature : Sig)
+      (occurrence : Occurrence (Point.plain locals items) source) :
       ForwardIndex source
-  | eliminate
-      (binderArity hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (body : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels)
-      (occurrence : Occurrence
-        (Region.spliceAt hostLocal hostItems (wrap binderArity body)
-          wireMap relationMap) source) :
+  | pointEliminate
+      (locals : List Sig) (items : ItemSeq (wires ++ locals))
+      (signature : Sig)
+      (occurrence : Occurrence (Point.present locals items signature) source) :
       ForwardIndex source
-
-inductive BackwardIndex {arity : Nat} (source : OpenDiagram arity) : Type
-  | introduce
-      (binderArity hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (body : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels)
+  | stubIntroduce
+      (hostLocals : List Sig)
+      (before after : ItemSeq (wires ++ hostLocals))
+      (signature : Sig) (arity : Nat)
+      (ports : Fin arity → Var (wires ++ hostLocals) signature)
+      (position : Fin (arity + 1))
+      (far : Stub.Far (Stub.freshWire wires hostLocals signature)
+        (Stub.extendedItems hostLocals before after signature arity ports position))
       (occurrence : Occurrence
-        (Region.spliceAt hostLocal hostItems body wireMap relationMap) source) :
-      BackwardIndex source
-  | eliminate
-      (binderArity hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (body : Region materialWires materialRels)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels)
+        (Stub.plain hostLocals before after signature arity ports) source) :
+      ForwardIndex source
+  | stubEliminate
+      (hostLocals : List Sig)
+      (before after : ItemSeq (wires ++ hostLocals))
+      (signature : Sig) (arity : Nat)
+      (ports : Fin arity → Var (wires ++ hostLocals) signature)
+      (position : Fin (arity + 1))
+      (far : Stub.Far (Stub.freshWire wires hostLocals signature)
+        (Stub.extendedItems hostLocals before after signature arity ports position))
       (occurrence : Occurrence
-        (Region.spliceAt hostLocal hostItems (wrap binderArity body)
-          wireMap relationMap) source) :
-      BackwardIndex source
+        (Stub.present hostLocals before after signature arity ports position far) source) :
+      ForwardIndex source
+  | pinIntroduce
+      (locals : List Sig) (items : ItemSeq (wires ++ locals))
+      (signature : Sig) (wire : Var (wires ++ locals) signature)
+      (occurrence : Occurrence (Pin.plain locals items) source) :
+      ForwardIndex source
+  | pinEliminate
+      (locals : List Sig) (items : ItemSeq (wires ++ locals))
+      (signature : Sig) (wire : Var (wires ++ locals) signature)
+      (occurrence : Occurrence
+        (Pin.present locals items signature wire) source)
+      (guard : Pin.DeletionGuard occurrence) : ForwardIndex source
 
-def runForward (source : OpenDiagram arity) :
-    ForwardIndex source → OpenDiagram arity
-  | .introduce binderArity hostLocal hostItems body wireMap relationMap
-      occurrence =>
-      occurrence.interface.withBody
-        (occurrence.context.fill
-          (Region.spliceAt hostLocal hostItems (wrap binderArity body)
-            wireMap relationMap))
-  | .eliminate _ hostLocal hostItems body wireMap relationMap occurrence =>
-      occurrence.interface.withBody
-        (occurrence.context.fill
-          (Region.spliceAt hostLocal hostItems body wireMap relationMap))
+def BackwardIndex {boundary : List Sig}
+    (source : OpenDiagram boundary) := ForwardIndex source
 
-def runBackward (source : OpenDiagram arity) :
-    BackwardIndex source → OpenDiagram arity
-  | .introduce binderArity hostLocal hostItems body wireMap relationMap
-      occurrence =>
+def runForward (source : OpenDiagram boundary) :
+    ForwardIndex source → OpenDiagram boundary
+  | .pointIntroduce locals items signature occurrence =>
+      let validity := Point.introduceValidity occurrence signature
+      occurrence.interface.withBody
+        (occurrence.context.fill (Point.present locals items signature))
+        validity.1 validity.2
+  | .pointEliminate locals items _ occurrence =>
+      let validity := Point.eliminateValidity occurrence
+      occurrence.interface.withBody
+        (occurrence.context.fill (Point.plain locals items))
+        validity.1 validity.2
+  | .stubIntroduce hostLocals before after signature arity ports position far occurrence =>
+      let validity := Stub.introduceValidity position occurrence far
       occurrence.interface.withBody
         (occurrence.context.fill
-          (Region.spliceAt hostLocal hostItems (wrap binderArity body)
-            wireMap relationMap))
-  | .eliminate _ hostLocal hostItems body wireMap relationMap occurrence =>
+          (Stub.present hostLocals before after signature arity ports position far))
+        validity.1 validity.2
+  | .stubEliminate hostLocals before after signature arity ports _ _ occurrence =>
+      let validity := Stub.eliminateValidity occurrence
       occurrence.interface.withBody
         (occurrence.context.fill
-          (Region.spliceAt hostLocal hostItems body wireMap relationMap))
+          (Stub.plain hostLocals before after signature arity ports))
+        validity.1 validity.2
+  | .pinIntroduce locals items signature wire occurrence =>
+      let validity := Pin.introduceValidity occurrence signature wire
+      occurrence.interface.withBody
+        (occurrence.context.fill (Pin.present locals items signature wire))
+        validity.1 validity.2
+  | .pinEliminate locals items _ _ occurrence guard =>
+      let validity := Pin.eliminateValidity occurrence guard
+      occurrence.interface.withBody
+        (occurrence.context.fill (Pin.plain locals items))
+        validity.1 validity.2
 
-theorem forward_exact (source target : OpenDiagram arity) :
+def runBackward (source : OpenDiagram boundary) :
+    BackwardIndex source → OpenDiagram boundary :=
+  runForward source
+
+theorem forward_exact (source target : OpenDiagram boundary) :
     (∃ index : ForwardIndex source,
       OpenDiagram.Isomorphic (runForward source index) target) ↔
-    Rule.Vacuity source target := by
+      Rule.Vacuity source target := by
   constructor
   · rintro ⟨index, isomorphic⟩
-    apply respectsTargetIso (target' := target) ?_ isomorphic
+    apply Rule.Vacuity.respectsTargetIso (target' := target) ?_ isomorphic
     cases index with
-    | introduce binderArity hostLocal hostItems body wireMap relationMap
-        occurrence =>
-        refine ⟨_, _, _, _, occurrence, OpenDiagramIso.refl _, ?_⟩
+    | pointIntroduce locals items signature occurrence =>
+        let validity := Point.introduceValidity occurrence signature
+        refine ⟨_, _, _, occurrence, validity.1, validity.2,
+          OpenDiagramIso.refl _, ?_⟩
         exact atPolarity_symmetric_of occurrence.context.polarity
-          (Local.introduce binderArity hostLocal hostItems body wireMap
-            relationMap)
-    | eliminate binderArity hostLocal hostItems body wireMap relationMap
-        occurrence =>
-        refine ⟨_, _, _, _, occurrence, OpenDiagramIso.refl _, ?_⟩
+          (Local.point locals items signature)
+    | pointEliminate locals items signature occurrence =>
+        let validity := Point.eliminateValidity occurrence
+        refine ⟨_, _, _, occurrence, validity.1, validity.2,
+          OpenDiagramIso.refl _, ?_⟩
+        cases occurrence.context.polarity <;>
+          simp only [atPolarity, symmetric, converse]
+        · exact Or.inr (Local.point locals items signature)
+        · exact Or.inl (Local.point locals items signature)
+    | stubIntroduce hostLocals before after signature arity ports position far occurrence =>
+        let validity := Stub.introduceValidity position occurrence far
+        refine ⟨_, _, _, occurrence, validity.1, validity.2,
+          OpenDiagramIso.refl _, ?_⟩
+        exact atPolarity_symmetric_of occurrence.context.polarity
+          (Local.stub hostLocals before after signature arity ports position far)
+    | stubEliminate hostLocals before after signature arity ports position far occurrence =>
+        let validity := Stub.eliminateValidity occurrence
+        refine ⟨_, _, _, occurrence, validity.1, validity.2,
+          OpenDiagramIso.refl _, ?_⟩
         cases occurrence.context.polarity <;>
           simp only [atPolarity, symmetric, converse]
         · exact Or.inr
-            (Local.introduce binderArity hostLocal hostItems body wireMap
-              relationMap)
+            (Local.stub hostLocals before after signature arity ports position far)
         · exact Or.inl
-            (Local.introduce binderArity hostLocal hostItems body wireMap
-              relationMap)
-  · rintro ⟨wires, rels, before, after, occurrence, targetIso,
-      localEvidence⟩
+            (Local.stub hostLocals before after signature arity ports position far)
+    | pinIntroduce locals items signature wire occurrence =>
+        let validity := Pin.introduceValidity occurrence signature wire
+        refine ⟨_, _, _, occurrence, validity.1, validity.2,
+          OpenDiagramIso.refl _, ?_⟩
+        exact atPolarity_symmetric_of occurrence.context.polarity
+          (Local.pin locals items signature wire)
+    | pinEliminate locals items signature wire occurrence guard =>
+        let validity := Pin.eliminateValidity occurrence guard
+        refine ⟨_, _, _, occurrence, validity.1, validity.2,
+          OpenDiagramIso.refl _, ?_⟩
+        cases occurrence.context.polarity <;>
+          simp only [atPolarity, symmetric, converse]
+        · exact Or.inr (Local.pin locals items signature wire)
+        · exact Or.inl (Local.pin locals items signature wire)
+  · rintro ⟨wires, before, after, occurrence, canonical, twoEnded,
+      targetIso, localEvidence⟩
     cases polarity : occurrence.context.polarity with
     | positive =>
         simp only [polarity, atPolarity, symmetric] at localEvidence
         rcases localEvidence with direct | reverse
         · cases direct with
-          | introduce binderArity hostLocal hostItems body wireMap relationMap =>
-              exact ⟨.introduce binderArity hostLocal hostItems body wireMap
-                relationMap occurrence, ⟨targetIso.symm⟩⟩
+          | point locals items signature =>
+              exact ⟨.pointIntroduce locals items signature occurrence,
+                ⟨targetIso.symm⟩⟩
+          | stub hostLocals leading trailing signature arity ports position far =>
+              exact ⟨.stubIntroduce hostLocals leading trailing signature arity ports
+                position far occurrence, ⟨targetIso.symm⟩⟩
+          | pin locals items signature wire =>
+              exact ⟨.pinIntroduce locals items signature wire occurrence,
+                ⟨targetIso.symm⟩⟩
         · cases reverse with
-          | introduce binderArity hostLocal hostItems body wireMap relationMap =>
-              exact ⟨.eliminate binderArity hostLocal hostItems body wireMap
-                relationMap occurrence, ⟨targetIso.symm⟩⟩
+          | point locals items signature =>
+              exact ⟨.pointEliminate locals items signature occurrence,
+                ⟨targetIso.symm⟩⟩
+          | stub hostLocals leading trailing signature arity ports position far =>
+              exact ⟨.stubEliminate hostLocals leading trailing signature arity ports
+                position far occurrence, ⟨targetIso.symm⟩⟩
+          | pin locals items signature wire =>
+              exact ⟨.pinEliminate locals items signature wire occurrence
+                (Pin.DeletionGuard.ofValidity occurrence canonical twoEnded),
+                ⟨targetIso.symm⟩⟩
     | negative =>
         simp only [polarity, atPolarity, symmetric, converse] at localEvidence
         rcases localEvidence with reverse | direct
         · cases reverse with
-          | introduce binderArity hostLocal hostItems body wireMap relationMap =>
-              exact ⟨.eliminate binderArity hostLocal hostItems body wireMap
-                relationMap occurrence, ⟨targetIso.symm⟩⟩
+          | point locals items signature =>
+              exact ⟨.pointEliminate locals items signature occurrence,
+                ⟨targetIso.symm⟩⟩
+          | stub hostLocals leading trailing signature arity ports position far =>
+              exact ⟨.stubEliminate hostLocals leading trailing signature arity ports
+                position far occurrence, ⟨targetIso.symm⟩⟩
+          | pin locals items signature wire =>
+              exact ⟨.pinEliminate locals items signature wire occurrence
+                (Pin.DeletionGuard.ofValidity occurrence canonical twoEnded),
+                ⟨targetIso.symm⟩⟩
         · cases direct with
-          | introduce binderArity hostLocal hostItems body wireMap relationMap =>
-              exact ⟨.introduce binderArity hostLocal hostItems body wireMap
-                relationMap occurrence, ⟨targetIso.symm⟩⟩
+          | point locals items signature =>
+              exact ⟨.pointIntroduce locals items signature occurrence,
+                ⟨targetIso.symm⟩⟩
+          | stub hostLocals leading trailing signature arity ports position far =>
+              exact ⟨.stubIntroduce hostLocals leading trailing signature arity ports
+                position far occurrence, ⟨targetIso.symm⟩⟩
+          | pin locals items signature wire =>
+              exact ⟨.pinIntroduce locals items signature wire occurrence,
+                ⟨targetIso.symm⟩⟩
 
-theorem backward_exact (source target : OpenDiagram arity) :
+theorem backward_exact (source target : OpenDiagram boundary) :
     (∃ index : BackwardIndex source,
       OpenDiagram.Isomorphic (runBackward source index) target) ↔
-    Rule.Vacuity target source := by
+      Rule.Vacuity target source := by
   constructor
-  · rintro ⟨index, isomorphic⟩
-    have forwardWitness :
-        ∃ forwardIndex : ForwardIndex source,
-          OpenDiagram.Isomorphic (runForward source forwardIndex) target := by
-      cases index with
-      | introduce binderArity hostLocal hostItems body wireMap relationMap
-          occurrence =>
-          exact ⟨.introduce binderArity hostLocal hostItems body wireMap
-            relationMap occurrence, isomorphic⟩
-      | eliminate binderArity hostLocal hostItems body wireMap relationMap
-          occurrence =>
-          exact ⟨.eliminate binderArity hostLocal hostItems body wireMap
-            relationMap occurrence, isomorphic⟩
-    exact Rule.Vacuity.symm ((forward_exact source target).mp forwardWitness)
+  · intro witness
+    have forwardWitness : ∃ index : ForwardIndex source,
+        OpenDiagram.Isomorphic (runForward source index) target := by
+      simpa only [BackwardIndex, runBackward] using witness
+    exact Rule.Vacuity.symm
+      ((forward_exact source target).mp forwardWitness)
   · intro step
-    rcases (forward_exact source target).mpr (Rule.Vacuity.symm step) with
-      ⟨index, isomorphic⟩
-    cases index with
-    | introduce binderArity hostLocal hostItems body wireMap relationMap
-        occurrence =>
-        exact ⟨.introduce binderArity hostLocal hostItems body wireMap
-          relationMap occurrence, isomorphic⟩
-    | eliminate binderArity hostLocal hostItems body wireMap relationMap
-        occurrence =>
-        exact ⟨.eliminate binderArity hostLocal hostItems body wireMap
-          relationMap occurrence, isomorphic⟩
+    have forwardWitness :=
+      (forward_exact source target).mpr (Rule.Vacuity.symm step)
+    simpa only [BackwardIndex, runBackward] using forwardWitness
 
 end VisualProof.Rule.Vacuity

@@ -7,6 +7,109 @@ open VisualProof.Theory
 
 namespace DiagramContext
 
+private def ItemSeq.mapFrameInternalWire
+    (leading trailing : ItemSeq wires)
+    {before after : Region wires}
+    (bodyMap : ∀ {signature}, Region.InternalWire before signature →
+      Region.InternalWire after signature) :
+    ∀ {signature},
+      ItemSeq.InternalWire
+          (leading.append (.cons (.cut before) trailing)) signature →
+        ItemSeq.InternalWire
+          (leading.append (.cons (.cut after) trailing)) signature :=
+  match leading with
+  | .nil => fun wire =>
+      match wire with
+      | .headCut nested => .headCut (bodyMap nested)
+      | .tail nested => .tail nested
+  | .cons (.atom _ _) tail => fun wire =>
+      match wire with
+      | .tail nested => .tail
+          (ItemSeq.mapFrameInternalWire tail trailing bodyMap nested)
+  | .cons (.identity _ _ _) tail => fun wire =>
+      match wire with
+      | .tail nested => .tail
+          (ItemSeq.mapFrameInternalWire tail trailing bodyMap nested)
+  | .cons (.cut _) tail => fun wire =>
+      match wire with
+      | .headCut nested => .headCut nested
+      | .tail nested => .tail
+          (ItemSeq.mapFrameInternalWire tail trailing bodyMap nested)
+
+private theorem ItemSeq.ownerPathFrom_mapFrameInternalWire
+    (leading trailing : ItemSeq wires)
+    {before after : Region wires}
+    (bodyMap : ∀ {signature}, Region.InternalWire before signature →
+      Region.InternalWire after signature)
+    (bodyOwner : ∀ {signature} (wire : Region.InternalWire before signature),
+      (bodyMap wire).ownerPath = wire.ownerPath)
+    {signature}
+    (wire : ItemSeq.InternalWire
+      (leading.append (.cons (.cut before) trailing)) signature)
+    (itemIndex : Nat) :
+    (ItemSeq.mapFrameInternalWire leading trailing bodyMap wire).ownerPathFrom
+        itemIndex =
+      wire.ownerPathFrom itemIndex := by
+  cases leading with
+  | nil =>
+      cases wire with
+      | headCut nested => exact congrArg (List.cons itemIndex) (bodyOwner nested)
+      | tail nested => rfl
+  | cons head tail =>
+      cases head with
+      | atom head ports =>
+          cases wire with
+          | tail nested =>
+              exact ItemSeq.ownerPathFrom_mapFrameInternalWire tail trailing
+                bodyMap bodyOwner nested (itemIndex + 1)
+      | identity signature arity ports =>
+          cases wire with
+          | tail nested =>
+              exact ItemSeq.ownerPathFrom_mapFrameInternalWire tail trailing
+                bodyMap bodyOwner nested (itemIndex + 1)
+      | cut body =>
+          cases wire with
+          | headCut nested => rfl
+          | tail nested =>
+              exact ItemSeq.ownerPathFrom_mapFrameInternalWire tail trailing
+                bodyMap bodyOwner nested (itemIndex + 1)
+
+def mapInternalWire :
+    (context : DiagramContext outer holeWires) →
+    {before after : Region holeWires} →
+    (holeMap : ∀ {signature}, Region.InternalWire before signature →
+      Region.InternalWire after signature) →
+    ∀ {signature}, Region.InternalWire (context.fill before) signature →
+      Region.InternalWire (context.fill after) signature
+  | .hole, _, _, holeMap => holeMap
+  | .cut _ leading trailing child, _, _, holeMap => fun wire =>
+      match wire with
+      | .here localWire => .here localWire
+      | .nested nestedWire =>
+          .nested (ItemSeq.mapFrameInternalWire leading trailing
+            (child.mapInternalWire holeMap) nestedWire)
+
+theorem ownerPath_mapInternalWire
+    (context : DiagramContext outer holeWires)
+    {before after : Region holeWires}
+    (holeMap : ∀ {signature}, Region.InternalWire before signature →
+      Region.InternalWire after signature)
+    (holeOwner : ∀ {signature} (wire : Region.InternalWire before signature),
+      (holeMap wire).ownerPath = wire.ownerPath)
+    {signature}
+    (wire : Region.InternalWire (context.fill before) signature) :
+    (context.mapInternalWire holeMap wire).ownerPath = wire.ownerPath := by
+  cases context with
+  | hole => simpa only [mapInternalWire] using holeOwner wire
+  | @cut currentOuter currentHole locals leading trailing child =>
+      cases wire with
+      | here localWire => rfl
+      | nested nestedWire =>
+          exact ItemSeq.ownerPathFrom_mapFrameInternalWire leading trailing
+            (child.mapInternalWire holeMap)
+            (fun nested => child.ownerPath_mapInternalWire holeMap holeOwner nested)
+            nestedWire 0
+
 theorem holeCanonical
     (context : DiagramContext outer holeWires) (body : Region holeWires)
     (filledCanonical : (context.fill body).Canonical) : body.Canonical := by
