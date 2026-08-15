@@ -50,6 +50,58 @@ mutual
         ItemSeq.Port (.cons item tail) wire
 end
 
+/-! Classification over an existing exact port witness.  This is proof-only:
+it does not traverse syntax or distribute ports. -/
+
+mutual
+  inductive Region.Port.IsNonIdentity :
+      {outer : List Sig} → {region : Region outer} →
+    ∀ {signature} {wire : Var outer signature},
+        Region.Port region wire → Prop
+    | item {outer locals : List Sig}
+        {items : ItemSeq (outer ++ locals)}
+        {signature : Sig} {wire : Var outer signature}
+        {port : ItemSeq.Port items (wire.appendLeft locals)}
+        (nonIdentity : ItemSeq.Port.IsNonIdentity port) :
+        Region.Port.IsNonIdentity (@Region.Port.item outer locals items
+          signature wire port)
+
+  inductive Item.Port.IsNonIdentity :
+      {wires : List Sig} → {item : Item wires} →
+      ∀ {signature} {wire : Var wires signature},
+        Item.Port item wire → Prop
+    | atomHead {wires arguments : List Sig}
+        {head : Var wires (.rel arguments)} {ports : Vars wires arguments} :
+        Item.Port.IsNonIdentity (@Item.Port.atomHead wires arguments head ports)
+    | atomArgument {wires arguments : List Sig}
+        {head : Var wires (.rel arguments)} {ports : Vars wires arguments}
+        (argument : Fin arguments.length) :
+        Item.Port.IsNonIdentity
+          (@Item.Port.atomArgument wires arguments head ports argument)
+    | cut {wires : List Sig} {body : Region wires}
+        {signature : Sig} {wire : Var wires signature}
+        {port : Region.Port body wire}
+        (nonIdentity : Region.Port.IsNonIdentity port) :
+        Item.Port.IsNonIdentity (@Item.Port.cut wires body signature wire port)
+
+  inductive ItemSeq.Port.IsNonIdentity :
+      {wires : List Sig} → {items : ItemSeq wires} →
+      ∀ {signature} {wire : Var wires signature},
+        ItemSeq.Port items wire → Prop
+    | head {wires : List Sig} {item : Item wires} {tail : ItemSeq wires}
+        {signature : Sig} {wire : Var wires signature}
+        {port : Item.Port item wire}
+        (nonIdentity : Item.Port.IsNonIdentity port) :
+        ItemSeq.Port.IsNonIdentity
+          (@ItemSeq.Port.head wires item tail signature wire port)
+    | tail {wires : List Sig} {item : Item wires} {tail : ItemSeq wires}
+        {signature : Sig} {wire : Var wires signature}
+        {port : ItemSeq.Port tail wire}
+        (nonIdentity : ItemSeq.Port.IsNonIdentity port) :
+        ItemSeq.Port.IsNonIdentity
+          (@ItemSeq.Port.tail wires item tail signature wire port)
+end
+
 structure Region.PortPartition
     (collapse : WireRenaming target source) (region : Region source) where
   output : ∀ {signature} (wire : Var source signature),
@@ -208,6 +260,90 @@ mutual
           (ItemSeq.partitionOutput collapse tail {
             output := fun wire port => partition.output wire (.tail port) })
 
+end
+
+/-! A port partition changes only incidence owners, never the recursive
+region skeleton.  These maps transport the corresponding internal-wire
+witnesses through that one structural traversal. -/
+
+mutual
+  def Region.InternalWire.partitionOutput
+      (collapse : WireRenaming target source) :
+      (region : Region source) →
+      (partition : Region.PortPartition collapse region) →
+      ∀ {signature}, Region.InternalWire region signature →
+        Region.InternalWire (region.partitionOutput collapse partition) signature
+    | .mk _locals _items, _partition, _, .here wire => .here wire
+    | .mk locals items, partition, _, .nested wire =>
+        .nested (ItemSeq.InternalWire.partitionOutput
+          (collapse.appendRight locals) items (Region.itemPartition partition) wire)
+
+  def ItemSeq.InternalWire.partitionOutput
+      (collapse : WireRenaming target source) :
+      (items : ItemSeq source) →
+      (partition : ItemSeq.PortPartition collapse items) →
+      ∀ {signature}, ItemSeq.InternalWire items signature →
+        ItemSeq.InternalWire (items.partitionOutput collapse partition) signature
+    | .nil, _, _, wire => nomatch wire
+    | .cons (.atom _head _ports) tail, partition, _, .tail wire =>
+      .tail (ItemSeq.InternalWire.partitionOutput collapse tail
+          { output := fun wire port => partition.output wire (.tail port) } wire)
+    | .cons (.identity _signature _arity _ports) tail, partition, _, .tail wire =>
+      .tail (ItemSeq.InternalWire.partitionOutput collapse tail
+          { output := fun wire port => partition.output wire (.tail port) } wire)
+    | .cons (.cut body) _tail, partition, _, .headCut wire =>
+      .headCut (Region.InternalWire.partitionOutput collapse body
+          { output := fun wire port => partition.output wire (.head (.cut port)) }
+          wire)
+    | .cons (.cut _body) tail, partition, _, .tail wire =>
+      .tail (ItemSeq.InternalWire.partitionOutput collapse tail
+          { output := fun wire port => partition.output wire (.tail port) } wire)
+end
+
+mutual
+  theorem Region.InternalWire.ownerPath_partitionOutput
+      (collapse : WireRenaming target source) (region : Region source)
+      (partition : Region.PortPartition collapse region)
+      (wire : Region.InternalWire region signature) :
+      (wire.partitionOutput collapse region partition).ownerPath = wire.ownerPath := by
+    cases region with
+    | mk locals items =>
+        cases wire with
+        | here wire => rfl
+        | nested wire =>
+            exact ItemSeq.InternalWire.ownerPathFrom_partitionOutput
+              (collapse.appendRight locals) items (Region.itemPartition partition)
+              wire 0
+
+  theorem ItemSeq.InternalWire.ownerPathFrom_partitionOutput
+      (collapse : WireRenaming target source) (items : ItemSeq source)
+      (partition : ItemSeq.PortPartition collapse items)
+      (wire : ItemSeq.InternalWire items signature)
+      (itemIndex : Nat) :
+      (wire.partitionOutput collapse items partition).ownerPathFrom itemIndex =
+        wire.ownerPathFrom itemIndex := by
+    cases items with
+    | nil => exact nomatch wire
+    | cons head tail =>
+        cases head with
+        | atom head ports =>
+            cases wire with
+            | tail wire =>
+                exact ItemSeq.InternalWire.ownerPathFrom_partitionOutput
+                  collapse tail _ wire (itemIndex + 1)
+        | identity signature arity ports =>
+            cases wire with
+            | tail wire =>
+                exact ItemSeq.InternalWire.ownerPathFrom_partitionOutput
+                  collapse tail _ wire (itemIndex + 1)
+        | cut body =>
+            cases wire with
+            | headCut wire =>
+              exact congrArg (List.cons itemIndex)
+                  (Region.InternalWire.ownerPath_partitionOutput collapse body _ wire)
+            | tail wire =>
+                exact ItemSeq.InternalWire.ownerPathFrom_partitionOutput
+                  collapse tail _ wire (itemIndex + 1)
 end
 
 private theorem Vars.partitionOutput_map
