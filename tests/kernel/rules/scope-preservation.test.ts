@@ -64,9 +64,7 @@ describe('erasure scope precondition', () => {
   it('erases the same content once the wire is pinned first', () => {
     const d = sheetAndCutFixture()
     const pinned = applyVacuityInsert(d, {
-      nodes: { hold: { region: 'r0', sig: IOTA, arity: 1 } },
-      wires: {},
-      attachments: { x: [{ node: 'hold', port: { kind: 'identity', index: 0 } }] },
+      kind: 'pin', wire: 'x', node: 'hold', region: 'r0',
     })
     const erased = applyErasure(pinned, {
       region: 'r0',
@@ -124,9 +122,7 @@ describe('double cut and quantifier positions', () => {
       return region.kind === 'cut' && region.parent === 'r0'
     })!
     const annulusPinned = applyVacuityInsert(wrapped, {
-      nodes: { hold: { region: outer, sig: IOTA, arity: 1 } },
-      wires: {},
-      attachments: { x: [{ node: 'hold', port: { kind: 'identity', index: 0 } }] },
+      kind: 'pin', wire: 'x', node: 'hold', region: outer,
     })
     expect(() => applyDoubleCutElim(annulusPinned, outer)).toThrow(/nothing else/)
   })
@@ -177,9 +173,7 @@ describe('remnant completion', () => {
     })
     // P's argument wire needs its scope held before its endpoint erases.
     const prepared = applyVacuityInsert(base, {
-      nodes: { hold: { region: 'cut', sig: IOTA, arity: 1 } },
-      wires: {},
-      attachments: { arg: [{ node: 'hold', port: { kind: 'identity', index: 0 } }] },
+      kind: 'pin', wire: 'arg', node: 'hold', region: 'cut',
     })
     const deleted = applyEndsDelete(prepared, 'h')
     const husk = deleted.wires.h!

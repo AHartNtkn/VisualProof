@@ -33,7 +33,6 @@ import {
   truthReification,
   explicitMaterialOf,
 } from '../../src/theories/reification'
-import { bareWireAssembly } from '../../src/kernel/rules/identity-rules'
 
 const UNARY = relSig([IOTA])
 
@@ -160,18 +159,10 @@ function conjunctionClosureTheorem(): Theorem {
   )
 
   before = recorder.diagram
-  recorder.record('introduce universally scoped R', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('R', relationScope, UNARY),
-  })
+  recorder.recordBareWire('introduce universally scoped R', relationScope, UNARY, 'R')
   const r = onlyNewWire(before, recorder.diagram, relationScope)
   before = recorder.diagram
-  recorder.record('introduce universally scoped S', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('S', relationScope, UNARY),
-  })
+  recorder.recordBareWire('introduce universally scoped S', relationScope, UNARY, 'S')
   const s = onlyNewWire(before, recorder.diagram, relationScope)
 
   before = recorder.diagram
@@ -190,11 +181,7 @@ function conjunctionClosureTheorem(): Theorem {
     'positive individual body',
   )
   before = recorder.diagram
-  recorder.record('introduce universally scoped x', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('x', individualScope, IOTA),
-  })
+  recorder.recordBareWire('introduce universally scoped x', individualScope, IOTA, 'x')
   const x = onlyNewWire(before, recorder.diagram, individualScope)
 
   before = recorder.diagram

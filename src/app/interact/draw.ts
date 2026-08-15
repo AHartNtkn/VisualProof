@@ -6,7 +6,7 @@ import type {
   WireId,
 } from '../../kernel/diagram/diagram'
 import { relSig } from '../../kernel/diagram/sig'
-import { bareWireAssembly } from '../../kernel/rules/identity-rules'
+import { bareWireInsertSteps } from '../../kernel/proof/bare-wire'
 import type { ProofContext } from '../../kernel/proof/context'
 import { applyStep, type ProofStep } from '../../kernel/proof/step'
 import { length, sub } from '../../view/vec'
@@ -358,23 +358,19 @@ export class DrawGestureController {
         const sites = contacts
           .filter((contact) => contact.kind === 'blank')
           .map((contact) => ({ region: contact.region, args: [] }))
-        // The stroke's own region holds the quantifier: the segment's pins
+        // The stroke's own region holds the quantifier: the bare wire's pins
         // stay there while the ends spawn at the touched sites below it.
-        const intro: ProofStep = {
-          rule: 'vacuity',
-          direction: 'insert',
-          assembly: bareWireAssembly('w', scope, relSig([]), ['pin0', 'pin1']),
-        }
-        let fresh: WireId | undefined
+        const intro = bareWireInsertSteps(diagram, scope, relSig([]), 'w', ['pin0', 'pin1'])
         try {
-          const trial = applyStep(
-            diagram,
-            intro,
-            this.#options.context(),
-            this.#options.orientation(),
-          )
-          fresh = Object.keys(trial.wires)
-            .find((id) => diagram.wires[id] === undefined)
+          let trial = diagram
+          for (const step of intro.steps) {
+            trial = applyStep(
+              trial,
+              step,
+              this.#options.context(),
+              this.#options.orientation(),
+            )
+          }
         } catch (error) {
           this.#options.refuse(
             error instanceof Error ? error.message : String(error),
@@ -382,16 +378,9 @@ export class DrawGestureController {
           )
           return null
         }
-        if (fresh === undefined) {
-          this.#options.refuse(
-            'spawning produced no wire to give ends to',
-            sample.client,
-          )
-          return null
-        }
         return {
           label: 'endsSpawn',
-          steps: [intro, { rule: 'endsSpawn', wire: fresh, sites }],
+          steps: [...intro.steps, { rule: 'endsSpawn', wire: intro.wire, sites }],
         }
       }
       case 'end': {

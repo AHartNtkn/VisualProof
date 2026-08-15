@@ -31,7 +31,7 @@ import {
   applyVacuityInsert,
   type IdentificationInput,
   type PresentationInput,
-  type VacuityInput,
+  type VacuityInstance,
 } from '../rules/identity-rules'
 import {
   applyCutAbsorb,
@@ -80,7 +80,7 @@ export type ProofStep =
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
-  | { readonly rule: 'vacuity'; readonly direction: 'insert' | 'delete'; readonly assembly: VacuityInput }
+  | { readonly rule: 'vacuity'; readonly direction: 'insert' | 'delete'; readonly instance: VacuityInstance }
   | { readonly rule: 'presentation'; readonly input: PresentationInput }
   | { readonly rule: 'identification'; readonly input: IdentificationInput }
   | { readonly rule: 'unfold'; readonly nodeId: NodeId }
@@ -225,8 +225,8 @@ function applyStepRaw(
       )
     case 'vacuity':
       return step.direction === 'insert'
-        ? applyVacuityInsert(diagram, step.assembly, reservation)
-        : applyVacuityDelete(diagram, step.assembly)
+        ? applyVacuityInsert(diagram, step.instance, reservation)
+        : applyVacuityDelete(diagram, step.instance)
     case 'presentation':
       return applyPresentation(diagram, step.input, reservation)
     case 'identification':

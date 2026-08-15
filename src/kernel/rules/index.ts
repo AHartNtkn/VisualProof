@@ -23,15 +23,11 @@ export {
   applyPresentation,
   applyVacuityDelete,
   applyVacuityInsert,
-  bareWireAssembly,
-  bareWireDescription,
-  pointAssembly,
 } from './identity-rules'
 export type {
   IdentificationInput,
   PresentationInput,
-  VacuityInput,
-  VacuityNode,
+  VacuityInstance,
 } from './identity-rules'
 export {
   applyCutAbsorb,

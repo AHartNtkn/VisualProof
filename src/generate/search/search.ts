@@ -55,8 +55,12 @@ const ALL_CLASSES: ReadonlySet<MoveClass> = new Set(['erasure', 'spawn', 'double
 const DELETION_RULES = new Set(['erasure', 'deiteration', 'doubleCutElim'])
 
 function isDeletionMove(candidate: CandidateMove): boolean {
-  if (DELETION_RULES.has(candidate.step.rule)) return true
-  return candidate.step.rule === 'vacuity' && candidate.step.direction === 'delete'
+  const first = candidate.steps[0]!
+  if (DELETION_RULES.has(first.rule)) return true
+  // A bare-wire deletion sequence may open with an anchoring pin insert;
+  // its FINAL step (the point deletion) names its direction.
+  const last = candidate.steps[candidate.steps.length - 1]!
+  return last.rule === 'vacuity' && last.direction === 'delete'
 }
 
 /** Phase-1 invariant guard: every deletion move strictly shrinks the
@@ -129,34 +133,38 @@ const PIN_BUNDLE_GUARD = 64
  */
 export function applyCandidateWithPins(
   diagram: Diagram,
-  step: ProofStep,
+  candidateSteps: readonly ProofStep[],
 ): { readonly diagram: Diagram; readonly steps: readonly ProofStep[] } | null {
   let current = diagram
   const steps: ProofStep[] = []
-  for (let guard = 0; ; guard += 1) {
-    if (guard > PIN_BUNDLE_GUARD) {
-      throw new Error(`applyCandidateWithPins: pinned ${PIN_BUNDLE_GUARD} wires without progress`)
-    }
-    try {
-      const result = applyStep(current, step, EMPTY_PROOF_CONTEXT, 'backward')
-      steps.push(step)
-      return { diagram: result, steps }
-    } catch (error) {
-      if (error instanceof ScopePreservationError) {
-        const pin = pinStep(current, error.wireId, error.scope)
-        try {
-          current = applyStep(current, pin, EMPTY_PROOF_CONTEXT, 'backward')
-        } catch (pinError) {
-          if (pinError instanceof RuleError || pinError instanceof ProofError) return null
-          throw pinError
-        }
-        steps.push(pin)
-        continue
+  for (const step of candidateSteps) {
+    let applied = false
+    for (let guard = 0; !applied; guard += 1) {
+      if (guard > PIN_BUNDLE_GUARD) {
+        throw new Error(`applyCandidateWithPins: pinned ${PIN_BUNDLE_GUARD} wires without progress`)
       }
-      if (error instanceof RuleError || error instanceof ProofError) return null
-      throw error
+      try {
+        current = applyStep(current, step, EMPTY_PROOF_CONTEXT, 'backward')
+        steps.push(step)
+        applied = true
+      } catch (error) {
+        if (error instanceof ScopePreservationError) {
+          const pin = pinStep(current, error.wireId, error.scope)
+          try {
+            current = applyStep(current, pin, EMPTY_PROOF_CONTEXT, 'backward')
+          } catch (pinError) {
+            if (pinError instanceof RuleError || pinError instanceof ProofError) return null
+            throw pinError
+          }
+          steps.push(pin)
+          continue
+        }
+        if (error instanceof RuleError || error instanceof ProofError) return null
+        throw error
+      }
     }
   }
+  return { diagram: current, steps }
 }
 
 /** Phase-1 result: `steps` is the full replayable trail (may include
@@ -182,7 +190,7 @@ function deletionSearch(start: Diagram, excluded: MoveClass | null): DeletionRes
       for (const candidate of enumerateMoves(diagram, 'backward', ALL_CLASSES)) {
         if (!isDeletionMove(candidate)) continue
         if (excluded !== null && candidate.moveClass === excluded) continue
-        const applied = applyCandidateWithPins(diagram, candidate.step)
+        const applied = applyCandidateWithPins(diagram, candidate.steps)
         if (applied === null) continue
         if (memo.visitedAtLeast(applied.diagram, 0)) continue
         states += 1
@@ -213,7 +221,7 @@ function dfs(
   if (budget.remaining <= 0) throw new FuelExhausted()
   budget.remaining -= 1
   for (const candidate of enumerateMoves(diagram, 'backward', classes)) {
-    const applied = applyCandidateWithPins(diagram, candidate.step)
+    const applied = applyCandidateWithPins(diagram, candidate.steps)
     if (applied === null) continue
     trail.push(...applied.steps)
     if (dfs(applied.diagram, remaining - 1, classes, memo, budget, trail)) return true

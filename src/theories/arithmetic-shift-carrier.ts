@@ -2,7 +2,6 @@ import type { NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { ProofContext } from '../kernel/proof/context'
-import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   BINARY,
@@ -191,15 +190,7 @@ export function successorShiftCarrierInductive(
   }
 
   let before = forward.diagram
-  forward.record('introduce successorSingleValued hypothesis handle', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly(
-      'successorSingleValued',
-      forwardHypotheses,
-      relSig([]),
-    ),
-  })
+  forward.recordBareWire('introduce successorSingleValued hypothesis handle', forwardHypotheses, relSig([]), 'successorSingleValued')
   const forwardSuccessorFunctional = onlyNewWire(
     before,
     forward.diagram,
@@ -221,11 +212,7 @@ export function successorShiftCarrierInductive(
     labels: readonly string[],
   ): WireId[] => labels.map((label) => {
     const prior = forward.diagram
-    forward.record(`introduce forward ${label}`, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('individual', scope, IOTA),
-    })
+    forward.recordBareWire(`introduce forward ${label}`, scope, IOTA, 'individual')
     return onlyNewWire(prior, forward.diagram, scope)
   })
   const insertForwardIdentity = (
@@ -471,11 +458,7 @@ export function successorShiftCarrierInductive(
       ['closure predecessor', 'closure successor'],
     )
   before = forward.diagram
-  forward.record('introduce temporary direct-E carrier', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('temporaryCarrier', forwardClosure, UNARY),
-  })
+  forward.recordBareWire('introduce temporary direct-E carrier', forwardClosure, UNARY, 'temporaryCarrier')
   const temporaryCarrier = onlyNewWire(
     before,
     forward.diagram,

@@ -30,11 +30,7 @@ export function nextRemovablePinStep(d: Diagram): ProofStep | null {
       return {
         rule: 'vacuity',
         direction: 'delete',
-        assembly: {
-          nodes: { [endpoint.node]: { region: node.region, sig: node.sig, arity: 1 } },
-          wires: {},
-          attachments: { [wireId]: [endpoint] },
-        },
+        instance: { kind: 'pin', wire: wireId, node: endpoint.node, region: node.region },
       }
     }
   }

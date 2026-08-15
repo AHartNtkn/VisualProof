@@ -11,7 +11,6 @@ import {
   type ProofContext,
   type Theory,
 } from '../kernel/proof/context'
-import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   BINARY,
@@ -172,11 +171,7 @@ function plusRightUnit(
   )
 
   let before = forward.diagram
-  forward.record('introduce plusSingleValued hypothesis handle', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('plusSingleValued', forwardHypotheses, relSig([])),
-  })
+  forward.recordBareWire('introduce plusSingleValued hypothesis handle', forwardHypotheses, relSig([]), 'plusSingleValued')
   const plusSingleValued = onlyNewWire(
     before,
     forward.diagram,
@@ -212,11 +207,7 @@ function plusRightUnit(
     'forward claim body',
   )
   for (const label of ['zero value', 'addend', 'output']) {
-    forward.record(`introduce forward claim ${label}`, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('claimVariable', forwardClaimScope, IOTA),
-    })
+    forward.recordBareWire(`introduce forward claim ${label}`, forwardClaimScope, IOTA, 'claimVariable')
   }
   const [forwardClaimZero, forwardAddend, forwardOutput] =
     scopedWires(forward.diagram, forwardClaimScope)

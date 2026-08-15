@@ -357,22 +357,12 @@ describe('checkTheorem', () => {
             wires: [],
           },
         }),
-        // what the erasure would leave behind: the wire held by its pin alone
+        // the retirement tail the erasure would need (never reached: the
+        // erasure above is what the check refuses)
         action('delete the bare remainder', {
           rule: 'vacuity',
           direction: 'delete',
-          assembly: {
-            nodes: {
-              [pin]: { region: rhs.diagram.root, sig: PROPOSITION, arity: 1 },
-            },
-            wires: {
-              [wire]: {
-                sig: PROPOSITION,
-                endpoints: [{ node: pin, port: { kind: 'identity', index: 0 } }],
-              },
-            },
-            attachments: {},
-          },
+          instance: { kind: 'point', node: pin, region: rhs.diagram.root, sig: PROPOSITION },
         }),
       ],
     }, EMPTY_PROOF_CONTEXT)).toThrowError(

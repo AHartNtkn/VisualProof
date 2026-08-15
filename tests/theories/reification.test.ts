@@ -153,9 +153,8 @@ function compiledSeverScope(
       return step.input.scope
     }
     if (step.rule === 'vacuity' && step.direction === 'insert') {
-      // The assembly's own nodes say where the inserted apparatus lives.
-      const node = Object.values(step.assembly.nodes)[0]
-      if (node !== undefined) return node.region
+      // The instance says where the inserted apparatus lives.
+      return step.instance.region
     }
     if (step.rule === 'abstractFormal' || step.rule === 'identityAbstract'
       || step.rule === 'refAbstract') return step.scope

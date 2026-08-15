@@ -169,9 +169,7 @@ describe('identity diagram nodes', () => {
     // Finishing the old normalizer's macro: the leftover pin detaches,
     // because the survivor still has its two real ends.
     const detached = applyVacuityDelete(collapsed, {
-      nodes: { eq: { region: 'r0', sig: IOTA, arity: 1 } },
-      wires: {},
-      attachments: { a: [identityEnd('eq', 0)] },
+      kind: 'pin', wire: 'a', node: 'eq', region: 'r0',
     })
     expect(Object.keys(detached.nodes).sort()).toEqual(['a_pin', 'b_pin'])
     expect(Object.keys(detached.wires)).toEqual(['a'])

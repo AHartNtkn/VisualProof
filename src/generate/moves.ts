@@ -4,7 +4,8 @@ import { relSig } from '../kernel/diagram/sig'
 import type { ProofStep } from '../kernel/proof'
 import { applyStep, EMPTY_PROOF_CONTEXT } from '../kernel/proof'
 import type { SubgraphSelection } from '../kernel/diagram'
-import { bareWireAssembly, bareWireDescription, RuleError } from '../kernel/rules'
+import { RuleError } from '../kernel/rules'
+import { bareWireDeletionSteps, bareWireInsertSteps } from '../kernel/proof/bare-wire'
 import { ScopePreservationError } from '../kernel/rules/wire-ends'
 import { deiterationStep, erasureStep } from '../app/interact/moves'
 import { bareWires, childCuts, nodesIn, propWires } from './diagram-scan'
@@ -12,7 +13,9 @@ import { bareWires, childCuts, nodesIn, propWires } from './diagram-scan'
 export type MoveClass = 'erasure' | 'spawn' | 'doubleCut' | 'iteration' | 'vacuity'
 
 export type CandidateMove = {
-  readonly step: ProofStep
+  /** The move's full primitive sequence — one step for most of the
+      alphabet; a bare-wire insert/delete is its vacuity decomposition. */
+  readonly steps: readonly ProofStep[]
   readonly moveClass: MoveClass
 }
 
@@ -81,17 +84,17 @@ export function enumerateMoves(
         // silently swallowed by this catch.
         try {
           applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
-          out.push({ moveClass: 'erasure', step })
+          out.push({ moveClass: 'erasure', steps: [step] })
         } catch (error) {
           if (error instanceof ScopePreservationError) {
-            out.push({ moveClass: 'erasure', step })
+            out.push({ moveClass: 'erasure', steps: [step] })
             continue
           }
           if (error instanceof RuleError) continue
           throw error
         }
       } else {
-        out.push({ moveClass: 'erasure', step })
+        out.push({ moveClass: 'erasure', steps: [step] })
       }
     }
   }
@@ -100,7 +103,7 @@ export function enumerateMoves(
       if (polarity(diagram, region) !== insertionPolarity) continue
       for (const wire of propWires(diagram)) {
         if (!wireVisibleAt(diagram, wire, region)) continue
-        out.push({ moveClass: 'spawn', step: { rule: 'atomSpawn', region, wire } })
+        out.push({ moveClass: 'spawn', steps: [{ rule: 'atomSpawn', region, wire }] })
       }
     }
   }
@@ -108,11 +111,11 @@ export function enumerateMoves(
     for (const region of regions) {
       out.push({
         moveClass: 'doubleCut',
-        step: { rule: 'doubleCutIntro', sel: { region, regions: [], nodes: [], wires: [] } },
+        steps: [{ rule: 'doubleCutIntro', sel: { region, regions: [], nodes: [], wires: [] } }],
       })
     }
     for (const sel of atomicSelections) {
-      out.push({ moveClass: 'doubleCut', step: { rule: 'doubleCutIntro', sel } })
+      out.push({ moveClass: 'doubleCut', steps: [{ rule: 'doubleCutIntro', sel }] })
     }
     for (const region of regions) {
       // doubleCutElim removes `region` itself, so the frame is excluded; the
@@ -121,7 +124,7 @@ export function enumerateMoves(
       if (diagram.regions[region]!.kind !== 'cut') continue
       if (childCuts(diagram, region).length !== 1) continue
       if (nodesIn(diagram, region).length !== 0) continue
-      out.push({ moveClass: 'doubleCut', step: { rule: 'doubleCutElim', region } })
+      out.push({ moveClass: 'doubleCut', steps: [{ rule: 'doubleCutElim', region }] })
     }
   }
   if (classes.has('iteration')) {
@@ -130,10 +133,10 @@ export function enumerateMoves(
       for (const target of regions) {
         if (!isAncestorOrEqual(diagram, sel.region, target)) continue
         if (copiedCut !== undefined && isAncestorOrEqual(diagram, copiedCut, target)) continue
-        out.push({ moveClass: 'iteration', step: { rule: 'iteration', sel, target } })
+        out.push({ moveClass: 'iteration', steps: [{ rule: 'iteration', sel, target }] })
       }
       try {
-        out.push({ moveClass: 'iteration', step: deiterationStep(diagram, sel) })
+        out.push({ moveClass: 'iteration', steps: [deiterationStep(diagram, sel)] })
       } catch (error) {
         // No exact justifying occurrence — deiteration of this selection is
         // simply not offered. Anything else is a real bug: rethrow.
@@ -143,10 +146,10 @@ export function enumerateMoves(
   }
   if (classes.has('vacuity')) {
     for (const wireId of bareWires(diagram)) {
-      out.push({ moveClass: 'vacuity', step: { rule: 'vacuity', direction: 'delete', assembly: bareWireDescription(diagram, wireId) } })
+      out.push({ moveClass: 'vacuity', steps: bareWireDeletionSteps(diagram, wireId) })
     }
     for (const region of regions) {
-      out.push({ moveClass: 'vacuity', step: { rule: 'vacuity', direction: 'insert', assembly: bareWireAssembly(freshWireLabel(diagram), region, relSig([])) } })
+      out.push({ moveClass: 'vacuity', steps: bareWireInsertSteps(diagram, region, relSig([]), freshWireLabel(diagram)).steps })
     }
   }
   return out

@@ -19,8 +19,6 @@ import {
 import type { ProofStep } from '../../../src/kernel/proof/step'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
 import {
-  bareWireAssembly,
-  pointAssembly,
 } from '../../../src/kernel/rules/identity-rules'
 
 function roundTrip(step: ProofStep): void {
@@ -181,23 +179,17 @@ describe('step JSON', () => {
       {
         rule: 'vacuity',
         direction: 'insert',
-        assembly: pointAssembly('pt', 'r1', IOTA),
+        instance: { kind: 'point', node: 'pt', region: 'r1', sig: IOTA },
       },
       {
         rule: 'vacuity',
         direction: 'delete',
-        assembly: bareWireAssembly('w0', 'r1', IOTA),
+        instance: { kind: 'stub', base: 'n0', wire: 'w0', end: 'n1', region: 'r1' },
       },
       {
         rule: 'vacuity',
         direction: 'insert',
-        assembly: {
-          nodes: { pin: { region: 'r1', sig: IOTA, arity: 1 } },
-          wires: {},
-          attachments: {
-            w0: [{ node: 'pin', port: { kind: 'identity', index: 0 } }],
-          },
-        },
+        instance: { kind: 'pin', wire: 'w0', node: 'pin', region: 'r1' },
       },
       {
         rule: 'presentation',
@@ -420,13 +412,23 @@ describe('step JSON', () => {
     expect(() => stepFromJson({
       rule: 'vacuity',
       direction: 'insert',
-      assembly: { nodes: {}, wires: {}, attachments: {} },
+      instance: { kind: 'point', node: 'pt', region: 'r0', sig: { kind: 'iota' } },
       body: {},
     })).toThrowError(/vacuity step has unknown field 'body'/)
     expect(() => stepFromJson({
       rule: 'vacuity',
+      direction: 'insert',
+      instance: { kind: 'point', node: 'pt', region: 'r0', sig: { kind: 'iota' }, arity: 0 },
+    })).toThrowError(/vacuity point has unknown field 'arity'/)
+    expect(() => stepFromJson({
+      rule: 'vacuity',
+      direction: 'insert',
+      instance: { kind: 'assembly' },
+    })).toThrowError(/unknown vacuity instance kind 'assembly'/)
+    expect(() => stepFromJson({
+      rule: 'vacuity',
       direction: 'sideways',
-      assembly: { nodes: {}, wires: {}, attachments: {} },
+      instance: { kind: 'point', node: 'pt', region: 'r0', sig: { kind: 'iota' } },
     })).toThrowError(/vacuity direction must be 'insert'\|'delete'/)
     expect(() => stepFromJson({
       rule: 'identification',

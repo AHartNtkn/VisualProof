@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
-import { pointAssembly } from '../../../src/kernel/rules/identity-rules'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
@@ -85,7 +84,7 @@ describe('verified ProofContext authority', () => {
     const step = {
       rule: 'vacuity',
       direction: 'insert',
-      assembly: pointAssembly('point', diagram.root, IOTA),
+      instance: { kind: 'point', node: 'point', region: diagram.root, sig: IOTA },
     } as const
 
     for (const forged of [lookalike, prototype]) {

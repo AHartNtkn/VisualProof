@@ -2,7 +2,6 @@ import { IOTA, relSig } from '../kernel/diagram/sig'
 import type { NodeId, Region, RegionId, WireId } from '../kernel/diagram/diagram'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { ProofContext } from '../kernel/proof/context'
-import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   BINARY,
@@ -254,11 +253,7 @@ export function commutativityCarrierInductive(
   const forwardSuccessor = relationWire(forward.diagram, forwardPrimitiveScope, BINARY)
   const forwardPlus = relationWire(forward.diagram, forwardPrimitiveScope, TERNARY)
   let before = forward.diagram
-  forward.record('introduce zeroUnique hypothesis handle', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('zeroUnique', forwardHypotheses, relSig([])),
-  })
+  forward.recordBareWire('introduce zeroUnique hypothesis handle', forwardHypotheses, relSig([]), 'zeroUnique')
   const forwardZeroUnique = onlyNewWire(
     before,
     forward.diagram,
@@ -319,11 +314,7 @@ export function commutativityCarrierInductive(
   })
   const forwardSupportScope = onlyNewCut(before, forward.diagram, forwardConclusion)
   const forwardSupportBody = exactOne(directCuts(forward.diagram, forwardSupportScope), 'support forward body')
-  forward.record('introduce support fixed right', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('supportFixedRight', forwardSupportScope, IOTA),
-  })
+  forward.recordBareWire('introduce support fixed right', forwardSupportScope, IOTA, 'supportFixedRight')
   const forwardFixedRight = exactOne(scopedWires(forward.diagram, forwardSupportScope), 'support forward fixed right')
   before = forward.diagram
   forward.record('open commutativity-support implication', {
@@ -372,11 +363,7 @@ export function commutativityCarrierInductive(
     labels: readonly string[],
   ): WireId[] => labels.map((label) => {
     const prior = forward.diagram
-    forward.record(`introduce ${label}`, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('individual', scope, IOTA),
-    })
+    forward.recordBareWire(`introduce ${label}`, scope, IOTA, 'individual')
     return onlyNewWire(prior, forward.diagram, scope)
   })
   const spawnForward = (
@@ -424,11 +411,7 @@ export function commutativityCarrierInductive(
     parameters: readonly WireId[],
   ): void => {
     let prior = forward.diagram
-    forward.record(`introduce ${label} temporary carrier`, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('temporaryCarrier', region, UNARY),
-    })
+    forward.recordBareWire(`introduce ${label} temporary carrier`, region, UNARY, 'temporaryCarrier')
     const temporary = onlyNewWire(prior, forward.diagram, region)
     prior = forward.diagram
     forward.record(`apply ${label} temporary carrier`, {

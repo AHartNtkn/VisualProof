@@ -118,16 +118,26 @@ A transformation is free — ungated, direction-free at any polarity — exactly
 when it changes none of the three facts. The freedoms those facts leave open
 are the rules, one per freedom, each in its strongest sound form:
 
-**Vacuity (⊤ is free).** Insert or delete any assembly of identity
-nodes and fresh wires such that: (a) each connected component of the
-assembly touches at most one surviving wire; (b) every fresh wire in it is
-either bare at its own scope (a floating existential, wholly inside one
-region — separable ⊤ content by inhabitedness) or **absorbable** — its
-derived scope equals the home region of an identity node equating it onward
-toward the touched wire, so it one-point-eliminates to ⊤; (c) no touched
-wire's derived scope changes; (d) the two-end floor holds throughout.
-Condition (b) is exact, not cautious: a fresh wire quantified above its
-equality is the standing counterexample ∃w@S ¬(w = x), which is not ⊤.
+**Vacuity (⊤ is free).** Exactly three primitive shapes, each an
+insert/delete equivalence with directly checkable conditions and no shape
+search: a **point** (an arity-0 identity node of any sig, at any region,
+no conditions); a **stub** (a fresh wire from a fresh port on an existing
+identity node to a fresh arity-1 far point, the far point at-or-under the
+node's region — the one soundness line: the fresh quantifier is born
+where the equality justifying it lives, since a fresh wire quantified
+above its equality is the standing counterexample ∃w@S ¬(w = x), which is
+not ⊤); and a **pin** (a fresh arity-1 identity node on an existing wire,
+anywhere the wire is visible; detach only where the wire's derived scope
+stays put and two ends remain). Every larger piece of ⊤-apparatus — the
+bare two-pin wire (point, then stub), multi-pin shapes, equated clusters —
+is a COMPOSITION of these plus identification exposure, checked one
+primitive at a time; the general "any ⊤-shaped assembly appears and
+vanishes freely" statement is a THEOREM about the closure of the
+primitives (§6's decomposition corollary), never a kernel acceptance
+condition. (2026-08-14 amendment: an earlier revision made the kernel
+accept whole assemblies through an absorption-fixpoint checker; that
+checker internally computed exactly this decomposition and threw it away,
+so it was retired for the primitives it was simulating.)
 
 **Presentation invariance (equality has no syntax).** Two
 configurations of identity nodes at one region R, of one sig, over the same
@@ -150,14 +160,13 @@ identification split of a freshly pinned mention); the rules are truths a
 step cites, not mechanisms that partition the moves.
 
 A kernel step cites one rule and its parameters, and each rule's
-conditions are mechanically checkable (component analysis and
-absorbability for I; union-find relation equality for II; the co-scope
-check for III). The worked instances below are readings of the rules at
-gesture size, with their conditions specialized and their soundness
-citations spelled out. They carry plain names (point, stub, pin, contract,
-fusion, collapse) used by the rest of this document and by the interaction
-layer; they are not a second rule list, and nothing is normative in them
-beyond what the rules already say.
+conditions are mechanically checkable with no search (three fixed schemas
+for I; union-find relation equality for II; the co-scope check for III).
+For vacuity the worked instances below ARE the rule — one subsection per
+primitive; for the other two rules they are readings at gesture size with
+conditions specialized and soundness citations spelled out. They carry
+plain names (point, stub, pin, contract, fusion, collapse) used by the
+rest of this document and by the interaction layer.
 
 ### Vacuity, worked
 
@@ -463,6 +472,26 @@ isomorphism must already map. "Root-scoped" in step transport becomes
 derived-root-scoped, computable. The soundness statement for each rule is one
 of the citations already in this document (⊤-conjunction and inhabitedness;
 transitivity; one-point).
+
+Vacuity's Lean obligations follow the 2026-08-14 amendment. Per primitive
+and direction, a small equivalence lemma: applying a point, stub, or pin
+insert (or its delete) to a well-formed diagram yields a diagram whose
+interpretation is equivalent at every valuation, with every surviving
+wire's derived scope unchanged (point: ⊤-conjunction under inhabitedness;
+stub: ∃x (x = class) ≡ ⊤ witnessed by any member, the at-or-under
+condition placing the fresh quantifier at the equality's region; pin:
+x = x). Then ONE decomposition corollary replaces the retired monolithic
+assembly theorem: for any assembly A over diagram d satisfying the old
+generic conditions (each connected component touches at most one existing
+item; the absorption fixpoint empties A's wires), there is a finite
+sequence of primitive vacuity steps and identification-exposure steps
+whose composite, applied to d, is isomorphic to d ∪ A — so the generic
+rule's semantic correctness follows from the per-primitive lemmas plus
+the identification lemma by induction on the sequence, and the large
+direct proof is retired. The witness sequence is the accepting fixpoint
+run read backwards: a bare-⊤ absorption reversed is point-then-stub (plus
+pin attaches for extra ends), and an equated absorption with transfer
+reversed is an identification exposure.
 
 Two TypeScript surfaces mirror this exactly: the canonical-form key currently
 includes stored wire scope (`canonical/explore.ts:175-177`) and drops it the

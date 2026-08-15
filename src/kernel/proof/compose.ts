@@ -155,38 +155,45 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
         },
       }
     case 'vacuity': {
-      // Insert-direction node/wire ids are mint labels (absent at the meet)
-      // and pass through; delete-direction ids are real and must map.
+      // Insert-direction fresh ids are mint labels (absent at the meet) and
+      // pass through; delete-direction ids are real and must map. The stub's
+      // base and the pin's host wire are existing things in both directions.
       const maybeNode = (id: string): string =>
         step.direction === 'delete' ? mapId(iso.nodes, id, 'node') : id
       const maybeWire = (id: string): string =>
         step.direction === 'delete' ? mapId(iso.wires, id, 'wire') : id
-      const endpoint = (ep: { node: string; port: Endpoint['port'] }): Endpoint =>
-        step.assembly.nodes[ep.node] !== undefined
-          ? { node: maybeNode(ep.node), port: ep.port }
-          : { node: mapId(iso.nodes, ep.node, 'node'), port: ep.port }
-      return {
-        ...step,
-        assembly: {
-          nodes: Object.fromEntries(
-            Object.entries(step.assembly.nodes).map(([id, node]) => [
-              maybeNode(id),
-              { ...node, region: mapId(iso.regions, node.region, 'region') },
-            ]),
-          ),
-          wires: Object.fromEntries(
-            Object.entries(step.assembly.wires).map(([id, wire]) => [
-              maybeWire(id),
-              { sig: wire.sig, endpoints: wire.endpoints.map(endpoint) },
-            ]),
-          ),
-          attachments: Object.fromEntries(
-            Object.entries(step.assembly.attachments).map(([id, endpoints]) => [
-              mapId(iso.wires, id, 'wire'),
-              endpoints.map(endpoint),
-            ]),
-          ),
-        },
+      const instance = step.instance
+      switch (instance.kind) {
+        case 'point':
+          return {
+            ...step,
+            instance: {
+              ...instance,
+              node: maybeNode(instance.node),
+              region: mapId(iso.regions, instance.region, 'region'),
+            },
+          }
+        case 'stub':
+          return {
+            ...step,
+            instance: {
+              ...instance,
+              base: mapId(iso.nodes, instance.base, 'node'),
+              wire: maybeWire(instance.wire),
+              end: maybeNode(instance.end),
+              region: mapId(iso.regions, instance.region, 'region'),
+            },
+          }
+        case 'pin':
+          return {
+            ...step,
+            instance: {
+              ...instance,
+              wire: mapId(iso.wires, instance.wire, 'wire'),
+              node: maybeNode(instance.node),
+              region: mapId(iso.regions, instance.region, 'region'),
+            },
+          }
       }
     }
     case 'presentation':

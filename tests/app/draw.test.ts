@@ -4,7 +4,7 @@ import type { PointerSample } from '../../src/app/interact/viewport'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Endpoint, Diagram, RegionId } from '../../src/kernel/diagram/diagram'
 import { IOTA, relSig } from '../../src/kernel/diagram/sig'
-import { bareWireAssembly } from '../../src/kernel/rules/identity-rules'
+import { bareWireInsertSteps } from '../../src/kernel/proof/bare-wire'
 import { applyAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import type { ProofStep } from '../../src/kernel/proof/step'
@@ -117,13 +117,11 @@ describe('drawing gesture dispatch', () => {
     expect(h.refusals).toEqual([])
     expect(h.committed).toHaveLength(1)
     const steps = h.committed[0]!.steps
-    expect(steps).toHaveLength(2)
-    expect(steps[0]).toEqual({
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('w', diagram.root, relSig([]), ['pin0', 'pin1']),
-    })
-    expect(steps[1]).toMatchObject({
+    expect(steps).toHaveLength(3)
+    expect(steps.slice(0, 2)).toEqual(
+      [...bareWireInsertSteps(diagram, diagram.root, relSig([]), 'w', ['pin0', 'pin1']).steps],
+    )
+    expect(steps[2]).toMatchObject({
       rule: 'endsSpawn',
       sites: [{ region: cut, args: [] }],
     })

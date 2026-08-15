@@ -29,28 +29,45 @@ import { RuleError } from './error'
  * moving a quantifier) lives in the gated families, not here.
  */
 
-/** One identity node of a vacuity assembly, by explicit id. */
-export type VacuityNode = {
-  readonly region: RegionId
-  readonly sig: Sig
-  readonly arity: number
-}
-
 /**
- * A vacuity assembly: identity nodes and wires that together denote ⊤.
- * `nodes`/`wires` are the assembly's own content; `attachments` lists the
- * assembly nodes' ports on EXISTING wires (a pin attach); assembly wire
- * endpoints may also sit on EXISTING identity nodes as appended ports (stub
- * growth) — their indices must extend the node's current arity contiguously.
- * On INSERT the assembly's node and wire ids are mint labels — fresh ids
- * are minted from them deterministically; on DELETE they are the real ids
- * of the apparatus to remove.
+ * A vacuity instance: exactly one of the rule's three primitive shapes.
+ * There is no assembly language and no shape search — every larger piece of
+ * ⊤-apparatus is a COMPOSITION of these (plus identification exposure),
+ * checked one step at a time. On INSERT the fresh ids (`node`, `wire`,
+ * `end`) are mint labels — fresh ids are minted from them
+ * deterministically; on DELETE they are the real ids of the apparatus to
+ * remove. `base` (stub) and `wire` (pin) always name existing things.
  */
-export type VacuityInput = {
-  readonly nodes: Readonly<Record<NodeId, VacuityNode>>
-  readonly wires: Readonly<Record<WireId, { readonly sig: Sig; readonly endpoints: readonly Endpoint[] }>>
-  readonly attachments: Readonly<Record<WireId, readonly Endpoint[]>>
-}
+export type VacuityInstance =
+  | {
+      /** An arity-0 identity node — ∃x:σ.⊤ — at any region, any polarity. */
+      readonly kind: 'point'
+      readonly node: NodeId
+      readonly region: RegionId
+      readonly sig: Sig
+    }
+  | {
+      /** A fresh wire from a fresh port on the existing identity node
+          `base` to a fresh arity-1 node `end` at `region` — the far point.
+          Sound only with `region` at-or-under the base's region: the fresh
+          quantifier is born exactly where the equality justifying it lives
+          (∃w (w = class) ≡ ⊤); a point above would assert ∃w above its
+          equality, which is gated quantifier movement, not vacuity. */
+      readonly kind: 'stub'
+      readonly base: NodeId
+      readonly wire: WireId
+      readonly end: NodeId
+      readonly region: RegionId
+    }
+  | {
+      /** A fresh arity-1 identity node on the existing wire `wire`, at any
+          `region` where the wire is visible (x = x). Detach only where the
+          wire's derived scope stays put and two ends remain. */
+      readonly kind: 'pin'
+      readonly wire: WireId
+      readonly node: NodeId
+      readonly region: RegionId
+    }
 
 export type PresentationInput = {
   readonly region: RegionId
@@ -77,70 +94,6 @@ export type IdentificationInput =
     }
 
 
-/** A one-node vacuity assembly: the typed point ∃x:σ.⊤ at `region`. */
-export function pointAssembly(
-  label: NodeId,
-  region: RegionId,
-  sig: Sig,
-): VacuityInput {
-  return {
-    nodes: { [label]: { region, sig, arity: 0 } },
-    wires: {},
-    attachments: {},
-  }
-}
-
-/**
- * The bare two-point segment at `region` — the drawable floating
- * existential, and the shape the old endpoint-free vacuous wire becomes.
- */
-export function bareWireAssembly(
-  wireLabel: WireId,
-  region: RegionId,
-  sig: Sig,
-  endLabels: readonly [NodeId, NodeId] = [`${wireLabel}_end0`, `${wireLabel}_end1`],
-): VacuityInput {
-  return {
-    nodes: {
-      [endLabels[0]]: { region, sig, arity: 1 },
-      [endLabels[1]]: { region, sig, arity: 1 },
-    },
-    wires: {
-      [wireLabel]: {
-        sig,
-        endpoints: [
-          { node: endLabels[0], port: { kind: 'identity', index: 0 } },
-          { node: endLabels[1], port: { kind: 'identity', index: 0 } },
-        ],
-      },
-    },
-    attachments: {},
-  }
-}
-
-/**
- * Describe an existing bare (all-pin) wire as the vacuity assembly that
- * deletes it — the successor of the old vacuous elimination.
- */
-export function bareWireDescription(d: Diagram, wireId: WireId): VacuityInput {
-  const wire = d.wires[wireId]
-  if (wire === undefined) throw new DiagramError(`unknown wire '${wireId}'`)
-  const nodes: Record<NodeId, VacuityNode> = {}
-  for (const endpoint of wire.endpoints) {
-    const node = d.nodes[endpoint.node]!
-    if (node.kind !== 'identity' || node.arity !== 1) {
-      throw new RuleError(
-        `wire '${wireId}' is not bare; endpoint '${endpoint.node}' is not a pin`,
-      )
-    }
-    nodes[endpoint.node] = { region: node.region, sig: node.sig, arity: 1 }
-  }
-  return {
-    nodes,
-    wires: { [wireId]: { sig: wire.sig, endpoints: [...wire.endpoints] } },
-    attachments: {},
-  }
-}
 
 function identityNodeAt(d: Diagram, nodeId: NodeId, operation: string): IdentityDiagramNode {
   const node = d.nodes[nodeId]
@@ -190,357 +143,171 @@ function compactIdentityPorts(
   }
 }
 
-/**
- * The ⊤-shape check shared by both vacuity directions. Components of the
- * assembly must each touch at most one existing thing (a wire, or an
- * existing identity node's class), and the assembly must reduce to nothing
- * by one-point absorption. A wire absorbs through an incident identity node
- * ν when every OTHER incidence of the wire lies at-or-under ν's region AND
- * ν equates it onward to a survivor — another live assembly wire (whose
- * incidence list inherits the absorbed wire's mentions) or the contact
- * class itself. A wire whose every node is exclusive to it asserts nothing
- * and is bare-⊤ outright. What survives the fixpoint is not ⊤-shaped —
- * a fresh wire quantified above its equality is the standing
- * counterexample ∃w@S ¬(w = x) — and the rule refuses.
- */
-function requireVacuousShape(
-  d: Diagram,
-  input: VacuityInput,
-  operation: string,
-): void {
-  const nodeRegion = new Map<string, RegionId>()
-  for (const [id, node] of Object.entries(input.nodes)) {
-    if (d.regions[node.region] === undefined) {
-      throw new DiagramError(`unknown region '${node.region}'`)
-    }
-    if (!Number.isSafeInteger(node.arity) || node.arity < 0) {
-      throw new RuleError(`${operation}: node '${id}' arity must be a natural number`)
-    }
-    nodeRegion.set(id, node.region)
-  }
-
-  // Contacts and connectivity. Assembly graph vertices: assembly nodes and
-  // assembly wires. Existing identity nodes reached by assembly wire
-  // endpoints, and existing wires reached by attachments, are CONTACTS.
-  const parent = new Map<string, string>()
-  const find = (x: string): string => {
-    let root = x
-    while (parent.get(root) !== undefined && parent.get(root) !== root) root = parent.get(root)!
-    parent.set(x, root)
-    return root
-  }
-  const union = (a: string, b: string): void => {
-    parent.set(find(a), find(b))
-  }
-  const contacts = new Map<string, Set<string>>()
-  const contactOf = (vertex: string, contact: string): void => {
-    const root = find(vertex)
-    const set = contacts.get(root) ?? new Set()
-    set.add(contact)
-    contacts.set(root, set)
-  }
-
-  for (const id of Object.keys(input.nodes)) parent.set(`n:${id}`, `n:${id}`)
-  for (const id of Object.keys(input.wires)) parent.set(`w:${id}`, `w:${id}`)
-
-  for (const [wireId, wire] of Object.entries(input.wires)) {
-    for (const endpoint of wire.endpoints) {
-      if (input.nodes[endpoint.node] !== undefined) {
-        union(`w:${wireId}`, `n:${endpoint.node}`)
-        continue
-      }
-      const host = d.nodes[endpoint.node]
-      if (host === undefined || host.kind !== 'identity') {
-        throw new RuleError(
-          `${operation}: assembly wire '${wireId}' may end only on identity `
-          + `nodes; '${endpoint.node}' is not one`,
-        )
-      }
-      contactOf(`w:${wireId}`, `class:${endpoint.node}`)
-      nodeRegion.set(endpoint.node, host.region)
-    }
-  }
-  for (const [wireId, endpoints] of Object.entries(input.attachments)) {
-    if (d.wires[wireId] === undefined) throw new DiagramError(`unknown wire '${wireId}'`)
-    for (const endpoint of endpoints) {
-      if (input.nodes[endpoint.node] === undefined) {
-        throw new RuleError(
-          `${operation}: attachment on '${wireId}' must come from an assembly `
-          + `node; '${endpoint.node}' is not one`,
-        )
-      }
-      contactOf(`n:${endpoint.node}`, `wire:${wireId}`)
-    }
-  }
-
-  // Merge contact sets after all unions (roots may have moved).
-  const merged = new Map<string, Set<string>>()
-  for (const [root, set] of contacts) {
-    const canonical = find(root)
-    const target = merged.get(canonical) ?? new Set()
-    for (const contact of set) target.add(contact)
-    merged.set(canonical, target)
-  }
-  for (const set of merged.values()) {
-    if (set.size > 1) {
-      throw new RuleError(
-        `${operation}: an assembly component touches ${set.size} existing `
-        + `things (${[...set].sort().join(', ')}); equating two classes is `
-        + `the gated insertion rule, not vacuity`,
-      )
-    }
-  }
-
-  // Absorption fixpoint with transfer. Incidence lists are live: absorbing
-  // a wire through an assembly node re-homes its other mentions onto a
-  // surviving wire of that node, exactly as an identification collapse
-  // would.
-  type Incidence = { readonly node: string; readonly region: RegionId }
-  const live = new Map<string, Incidence[]>()
-  const wiresOf = new Map<string, Set<string>>() // node → live assembly wires
-  const isContactNode = (node: string): boolean =>
-    input.nodes[node] === undefined
-  for (const [wireId, wire] of Object.entries(input.wires)) {
-    live.set(wireId, wire.endpoints.map((endpoint) => ({
-      node: endpoint.node,
-      region: nodeRegion.get(endpoint.node)!,
-    })))
-    for (const endpoint of wire.endpoints) {
-      const set = wiresOf.get(endpoint.node) ?? new Set()
-      set.add(wireId)
-      wiresOf.set(endpoint.node, set)
-    }
-  }
-  const attachmentHolders = new Set<string>()
-  for (const endpoints of Object.values(input.attachments)) {
-    for (const endpoint of endpoints) attachmentHolders.add(endpoint.node)
-  }
-  const under = (anc: RegionId, desc: RegionId): boolean =>
-    isAncestorOrEqual(d, anc, desc)
-
-  const detach = (wireId: string, incidences: readonly Incidence[]): void => {
-    for (const incidence of incidences) {
-      wiresOf.get(incidence.node)?.delete(wireId)
-    }
-    live.delete(wireId)
-  }
-  for (;;) {
-    let progressed = false
-    for (const [wireId, incidences] of live) {
-      // Bare-⊤: every node of the wire holds nothing else — no other live
-      // wire, no attachment on an existing wire, no contact class.
-      const bare = incidences.every((incidence) =>
-        !isContactNode(incidence.node)
-        && !attachmentHolders.has(incidence.node)
-        && [...(wiresOf.get(incidence.node) ?? [])].every((other) => other === wireId))
-      if (bare) {
-        detach(wireId, incidences)
-        progressed = true
-        break
-      }
-      // Equated absorption through some incident node with a survivor.
-      const candidate = incidences.find((incidence) => {
-        const others = incidences.filter((other) => other.node !== incidence.node)
-        if (!others.every((other) => under(incidence.region, other.region))) return false
-        if (isContactNode(incidence.node)) return true
-        if (attachmentHolders.has(incidence.node)) return true
-        return [...(wiresOf.get(incidence.node) ?? [])].some((other) => other !== wireId)
-      })
-      if (candidate === undefined) continue
-      const others = incidences.filter((other) => other.node !== candidate.node)
-      detach(wireId, incidences)
-      if (!isContactNode(candidate.node) && !attachmentHolders.has(candidate.node)) {
-        const survivor = [...(wiresOf.get(candidate.node) ?? [])][0]!
-        const survivorIncidences = live.get(survivor)!
-        for (const other of others) {
-          survivorIncidences.push(other)
-          const set = wiresOf.get(other.node) ?? new Set()
-          set.add(survivor)
-          wiresOf.set(other.node, set)
-        }
-      }
-      // Contact/attachment absorption: the transferred mentions become pins
-      // on the existing wire, individually ⊤ and at-or-under its scope.
-      progressed = true
-      break
-    }
-    if (!progressed) break
-  }
-  if (live.size > 0) {
-    const stuck = [...live.keys()].sort().join(', ')
-    throw new RuleError(
-      `${operation}: assembly wire(s) ${stuck} are not ⊤-shaped — a fresh `
-      + `wire must be quantified exactly where it is equated (its point may `
-      + `not sit above its equality); quantifier movement is join/sever`,
-    )
-  }
-}
-
-/** Vacuity, insert direction: the assembly appears (ids minted from labels). */
+/** Vacuity, insert direction: the instance appears (fresh ids minted from labels). */
 export function applyVacuityInsert(
   d: Diagram,
-  input: VacuityInput,
+  instance: VacuityInstance,
   reservation?: IdReservation,
 ): Diagram {
-  requireVacuousShape(d, input, 'vacuity insertion')
-
+  if (d.regions[instance.region] === undefined) {
+    throw new DiagramError(`unknown region '${instance.region}'`)
+  }
   const nodes: Record<NodeId, DiagramNode> = { ...d.nodes }
   const wires: Record<WireId, Wire> = { ...d.wires }
-
-  const takenNodes = new Set(Object.keys(nodes))
-  const nodeIdOf = new Map<NodeId, NodeId>()
-  for (const [label, node] of Object.entries(input.nodes)) {
-    const id = freshId(takenNodes, label, reservation?.nodes)
-    takenNodes.add(id)
-    nodeIdOf.set(label, id)
-    nodes[id] = { kind: 'identity', region: node.region, sig: node.sig, arity: node.arity }
+  const mintNode = (label: NodeId): NodeId => {
+    const id = freshId(new Set(Object.keys(nodes)), label, reservation?.nodes)
+    return id
   }
-  const mapEndpoint = (endpoint: Endpoint): Endpoint =>
-    nodeIdOf.has(endpoint.node)
-      ? { node: nodeIdOf.get(endpoint.node)!, port: endpoint.port }
-      : endpoint
 
-  // Stub growth appends ports on existing identity nodes: indices must
-  // extend the current arity contiguously; the arity grows to cover them.
-  const grown = new Map<NodeId, number>()
-  for (const wire of Object.values(input.wires)) {
-    for (const endpoint of wire.endpoints) {
-      if (input.nodes[endpoint.node] !== undefined) continue
-      if (endpoint.port.kind !== 'identity') {
-        throw new RuleError('vacuity insertion: ports on existing nodes must be identity ports')
-      }
-      const host = nodes[endpoint.node] as IdentityDiagramNode
-      const already = grown.get(endpoint.node) ?? host.arity
-      if (endpoint.port.index !== already) {
+  switch (instance.kind) {
+    case 'point': {
+      const id = mintNode(instance.node)
+      nodes[id] = { kind: 'identity', region: instance.region, sig: instance.sig, arity: 0 }
+      return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
+    }
+    case 'stub': {
+      const base = identityNodeAt(d, instance.base, 'vacuity insertion')
+      if (!isAncestorOrEqual(d, base.region, instance.region)) {
         throw new RuleError(
-          `vacuity insertion: new port index ${endpoint.port.index} on `
-          + `'${endpoint.node}' must extend its arity contiguously (expected ${already})`,
+          `vacuity insertion: stub far point at '${instance.region}' is not `
+          + `at-or-under base '${instance.base}' ('${base.region}') — the fresh `
+          + `quantifier must be born where its equality lives; a point above `
+          + `is gated quantifier movement (∃w ¬(w = x) is not ⊤)`,
         )
       }
-      grown.set(endpoint.node, already + 1)
+      const endId = mintNode(instance.end)
+      nodes[endId] = { kind: 'identity', region: instance.region, sig: base.sig, arity: 1 }
+      nodes[instance.base] = {
+        kind: 'identity', region: base.region, sig: base.sig, arity: base.arity + 1,
+      }
+      const wireId = freshId(new Set(Object.keys(wires)), instance.wire, reservation?.wires)
+      wires[wireId] = {
+        sig: base.sig,
+        endpoints: [
+          { node: instance.base, port: { kind: 'identity', index: base.arity } },
+          { node: endId, port: { kind: 'identity', index: 0 } },
+        ],
+      }
+      return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
     }
-  }
-  for (const [nodeId, arity] of grown) {
-    const host = nodes[nodeId] as IdentityDiagramNode
-    nodes[nodeId] = { kind: 'identity', region: host.region, sig: host.sig, arity }
-  }
-  const takenWires = new Set(Object.keys(wires))
-  for (const [label, wire] of Object.entries(input.wires)) {
-    const id = freshId(takenWires, label, reservation?.wires)
-    takenWires.add(id)
-    wires[id] = { sig: wire.sig, endpoints: wire.endpoints.map(mapEndpoint) }
-  }
-  for (const [wireId, endpoints] of Object.entries(input.attachments)) {
-    const wire = wires[wireId]!
-    const scope = derivedScope(d, wireId)
-    for (const endpoint of endpoints) {
-      const region = input.nodes[endpoint.node]!.region
-      if (!isAncestorOrEqual(d, scope, region)) {
+    case 'pin': {
+      const wire = d.wires[instance.wire]
+      if (wire === undefined) throw new DiagramError(`unknown wire '${instance.wire}'`)
+      const scope = derivedScope(d, instance.wire)
+      if (!isAncestorOrEqual(d, scope, instance.region)) {
         throw new RuleError(
-          `vacuity insertion: '${wireId}' (scope '${scope}') is not visible `
-          + `at '${region}' — attaching there would move its quantifier`,
+          `vacuity insertion: wire '${instance.wire}' (scope '${scope}') is not `
+          + `visible at '${instance.region}' — attaching there would move its quantifier`,
         )
       }
-    }
-    wires[wireId] = {
-      sig: wire.sig,
-      endpoints: [...wire.endpoints, ...endpoints.map(mapEndpoint)],
+      const id = mintNode(instance.node)
+      nodes[id] = { kind: 'identity', region: instance.region, sig: wire.sig, arity: 1 }
+      wires[instance.wire] = {
+        sig: wire.sig,
+        endpoints: [...wire.endpoints, { node: id, port: { kind: 'identity', index: 0 } }],
+      }
+      return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
     }
   }
-
-  return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
 }
 
-/** Vacuity, delete direction: the described assembly vanishes. */
+/** Vacuity, delete direction: the described instance vanishes. */
 export function applyVacuityDelete(
   d: Diagram,
-  input: VacuityInput,
+  instance: VacuityInstance,
 ): Diagram {
-  requireVacuousShape(d, input, 'vacuity deletion')
-
   const nodes: Record<NodeId, DiagramNode> = { ...d.nodes }
   const wires: Record<WireId, Wire> = { ...d.wires }
 
-  for (const [id, expected] of Object.entries(input.nodes)) {
-    const node = identityNodeAt(d, id, 'vacuity deletion')
-    if (
-      node.region !== expected.region
-      || !sigEquals(node.sig, expected.sig)
-      || node.arity !== expected.arity
-    ) {
-      throw new RuleError(
-        `vacuity deletion: node '${id}' does not match the described assembly`,
+  switch (instance.kind) {
+    case 'point': {
+      const node = identityNodeAt(d, instance.node, 'vacuity deletion')
+      if (
+        node.region !== instance.region
+        || !sigEquals(node.sig, instance.sig)
+        || node.arity !== 0
+      ) {
+        throw new RuleError(
+          `vacuity deletion: '${instance.node}' does not match the described point`,
+        )
+      }
+      delete nodes[instance.node]
+      return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
+    }
+    case 'stub': {
+      const base = identityNodeAt(d, instance.base, 'vacuity deletion')
+      const end = identityNodeAt(d, instance.end, 'vacuity deletion')
+      const wire = d.wires[instance.wire]
+      if (wire === undefined) throw new DiagramError(`unknown wire '${instance.wire}'`)
+      if (end.arity !== 1 || end.region !== instance.region) {
+        throw new RuleError(
+          `vacuity deletion: '${instance.end}' is not the stub's far point`,
+        )
+      }
+      if (!isAncestorOrEqual(d, base.region, end.region)) {
+        throw new RuleError(
+          `vacuity deletion: '${instance.wire}' holds its quantifier at `
+          + `'${derivedScope(d, instance.wire)}', above base '${instance.base}' `
+          + `('${base.region}') — it is not a stub of that node's class; `
+          + `quantifier movement is join/sever`,
+        )
+      }
+      const basePort = wire.endpoints.find((ep) =>
+        ep.node === instance.base && ep.port.kind === 'identity')
+      const endPort = wire.endpoints.find((ep) => ep.node === instance.end)
+      if (wire.endpoints.length !== 2 || basePort === undefined || endPort === undefined) {
+        throw new RuleError(
+          `vacuity deletion: wire '${instance.wire}' is not a stub from `
+          + `'${instance.base}' to '${instance.end}'`,
+        )
+      }
+      delete wires[instance.wire]
+      delete nodes[instance.end]
+      compactIdentityPorts(
+        nodes, wires, instance.base,
+        new Set([(basePort.port as { kind: 'identity'; index: number }).index]),
       )
+      return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
+    }
+    case 'pin': {
+      const node = identityNodeAt(d, instance.node, 'vacuity deletion')
+      const wire = d.wires[instance.wire]
+      if (wire === undefined) throw new DiagramError(`unknown wire '${instance.wire}'`)
+      if (node.arity !== 1 || node.region !== instance.region) {
+        throw new RuleError(
+          `vacuity deletion: '${instance.node}' is not a pin at '${instance.region}'`,
+        )
+      }
+      const surviving = wire.endpoints.filter((ep) => ep.node !== instance.node)
+      if (surviving.length !== wire.endpoints.length - 1) {
+        throw new RuleError(
+          `vacuity deletion: '${instance.node}' is not exactly one end of '${instance.wire}'`,
+        )
+      }
+      if (surviving.length < 2) {
+        throw new RuleError(
+          `vacuity deletion would leave wire '${instance.wire}' with `
+          + `${surviving.length} end(s); a wire end is a node`,
+        )
+      }
+      let after: RegionId | null = null
+      for (const ep of surviving) {
+        const region = nodes[ep.node]!.region
+        after = after === null ? region : deepestCommonAncestor(d, after, region)
+      }
+      const before = derivedScope(d, instance.wire)
+      if (after !== before) {
+        throw new RuleError(
+          `vacuity deletion would move the quantifier of wire '${instance.wire}' `
+          + `from '${before}' to '${String(after)}' — that pin is load-bearing`,
+        )
+      }
+      delete nodes[instance.node]
+      wires[instance.wire] = { sig: wire.sig, endpoints: surviving }
+      return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
     }
   }
-  for (const [id, expected] of Object.entries(input.wires)) {
-    const wire = d.wires[id]
-    if (wire === undefined) throw new DiagramError(`unknown wire '${id}'`)
-    const want = expected.endpoints.map(endpointKeyOf).sort()
-    const have = wire.endpoints.map(endpointKeyOf).sort()
-    if (
-      !sigEquals(wire.sig, expected.sig)
-      || want.length !== have.length
-      || want.some((key, index) => key !== have[index])
-    ) {
-      throw new RuleError(
-        `vacuity deletion: wire '${id}' does not match the described assembly`,
-      )
-    }
-    delete wires[id]
-  }
-  for (const id of Object.keys(input.nodes)) delete nodes[id]
-
-  // Detach the assembly's ports from existing wires and existing nodes,
-  // preserving every survivor's derived scope and its two-end floor.
-  for (const [wireId, endpoints] of Object.entries(input.attachments)) {
-    const wire = wires[wireId]
-    if (wire === undefined) throw new DiagramError(`unknown wire '${wireId}'`)
-    const dropKeys = new Set(endpoints.map(endpointKeyOf))
-    const surviving = wire.endpoints.filter((ep) => !dropKeys.has(endpointKeyOf(ep)))
-    if (surviving.length !== wire.endpoints.length - endpoints.length) {
-      throw new RuleError(
-        `vacuity deletion: attachments on '${wireId}' do not match the diagram`,
-      )
-    }
-    if (surviving.length < 2) {
-      throw new RuleError(
-        `vacuity deletion would leave wire '${wireId}' with `
-        + `${surviving.length} end(s); a wire end is a node`,
-      )
-    }
-    let after: RegionId | null = null
-    for (const ep of surviving) {
-      const region = nodes[ep.node]!.region
-      after = after === null ? region : deepestCommonAncestor(d, after, region)
-    }
-    const before = derivedScope(d, wireId)
-    if (after !== before) {
-      throw new RuleError(
-        `vacuity deletion would move the quantifier of wire '${wireId}' from `
-        + `'${before}' to '${String(after)}' — that pin is load-bearing`,
-      )
-    }
-    wires[wireId] = { sig: wire.sig, endpoints: surviving }
-  }
-  // Ports that assembly wires held on existing identity nodes compact away.
-  const shrink = new Map<NodeId, Set<number>>()
-  for (const wire of Object.values(input.wires)) {
-    for (const endpoint of wire.endpoints) {
-      if (input.nodes[endpoint.node] !== undefined) continue
-      if (endpoint.port.kind !== 'identity') continue
-      const set = shrink.get(endpoint.node) ?? new Set()
-      set.add(endpoint.port.index)
-      shrink.set(endpoint.node, set)
-    }
-  }
-  for (const [nodeId, removedIndices] of shrink) {
-    compactIdentityPorts(nodes, wires, nodeId, removedIndices)
-  }
-
-  return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
 }
-
 
 /**
  * Presentation invariance: replace the identity nodes `removeNodes` (one

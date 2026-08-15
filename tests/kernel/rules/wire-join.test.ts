@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
-import { applyVacuityDelete } from '../../../src/kernel/rules/identity-rules'
+import { applyPresentation, applyVacuityDelete } from '../../../src/kernel/rules/identity-rules'
 import { applyWireJoin } from '../../../src/kernel/rules/wire-quantifier'
 import { bareWire } from '../../fixtures/pins'
 
@@ -86,17 +86,17 @@ describe('iota wire join', () => {
     expect(joined.wires[outer]!.endpoints.filter((endpoint) =>
       endpoint.node === identity)).toHaveLength(2)
 
-    // x = x is ⊤-shaped, so vacuity detaches it — and may, because the merged
-    // wire keeps the two real ends that fix its derived scope at the root.
-    const cleaned = applyVacuityDelete(joined, {
-      nodes: { [identity]: { region: deep, sig: IOTA, arity: 2 } },
-      wires: {},
-      attachments: {
-        [outer]: [
-          { node: identity, port: { kind: 'identity', index: 0 } },
-          { node: identity, port: { kind: 'identity', index: 1 } },
-        ],
-      },
+    // x = x asserts nothing: presentation re-draws the loop as one pin
+    // (same wire set, same trivial relation), and pin detachment retires
+    // it — allowed because the merged wire keeps the two real ends that
+    // fix its derived scope at the root.
+    const repinned = applyPresentation(joined, {
+      region: deep,
+      removeNodes: [identity],
+      addNodes: { solo: [outer] },
+    })
+    const cleaned = applyVacuityDelete(repinned, {
+      kind: 'pin', wire: outer, node: 'solo', region: deep,
     })
 
     expect(cleaned.nodes[identity]).toBeUndefined()

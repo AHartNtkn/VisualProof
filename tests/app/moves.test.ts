@@ -6,7 +6,7 @@ import type { PointerSample } from '../../src/app/interact/viewport'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { IOTA, relSig } from '../../src/kernel/diagram/sig'
-import { bareWireAssembly, bareWireDescription } from '../../src/kernel/rules/identity-rules'
+import { bareWireDeletionSteps, bareWireInsertSteps } from '../../src/kernel/proof/bare-wire'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
@@ -152,11 +152,8 @@ describe('proof move vocabulary', () => {
     expect(bareCase.moves.keyDown(keySample('Delete'))).toBe(true)
     expect(bareCase.refusals).toEqual([])
     expect(bareCase.applied).toHaveLength(1)
-    expect(bareCase.applied[0]!.steps).toEqual([{
-      rule: 'vacuity',
-      direction: 'delete',
-      assembly: bareWireDescription(bareDiagram, bare.wire),
-    }])
+    expect(bareCase.applied[0]!.steps)
+      .toEqual(bareWireDeletionSteps(bareDiagram, bare.wire))
   })
 
   it('Q spawns a bare quantifier wire at the hovered region', () => {
@@ -175,11 +172,9 @@ describe('proof move vocabulary', () => {
     expect(moves.keyDown(keySample('q'))).toBe(true)
 
     expect(applied).toHaveLength(1)
-    expect(applied[0]!.steps).toEqual([{
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('w', cut, IOTA, ['pin0', 'pin1']),
-    }])
+    expect(applied[0]!.steps).toEqual(
+      [...bareWireInsertSteps(diagram, cut, IOTA, 'w', ['pin0', 'pin1']).steps],
+    )
   })
 
   it('Shift+Q spawns a floating proposition quantifier there', () => {
@@ -198,11 +193,9 @@ describe('proof move vocabulary', () => {
     expect(moves.keyDown(keySample('Q', true))).toBe(true)
 
     expect(applied).toHaveLength(1)
-    expect(applied[0]!.steps).toEqual([{
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('w', cut, relSig([]), ['pin0', 'pin1']),
-    }])
+    expect(applied[0]!.steps).toEqual(
+      [...bareWireInsertSteps(diagram, cut, relSig([]), 'w', ['pin0', 'pin1']).steps],
+    )
   })
 
   it('the i key is retired', () => {

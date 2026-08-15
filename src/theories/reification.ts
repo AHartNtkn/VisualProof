@@ -10,7 +10,6 @@ import { derivedScope } from '../kernel/diagram/regions'
 import { IOTA, relSig, type Sig } from '../kernel/diagram/sig'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { verifyTheory } from '../kernel/proof/context'
-import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   atom,
@@ -196,11 +195,7 @@ function openUniversal(
   const variables: WireId[] = []
   for (const [index, signature] of signatures.entries()) {
     const beforeVariable = recorder.diagram
-    recorder.record(`introduce ${label} variable ${index + 1}`, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('universalVariable', scope, signature),
-    })
+    recorder.recordBareWire(`introduce ${label} variable ${index + 1}`, scope, signature, 'universalVariable')
     variables.push(
       onlyNewWire(beforeVariable, recorder.diagram, scope),
     )
@@ -217,15 +212,7 @@ function insertExplicitMaterial(
   parameters: readonly WireId[],
 ) {
   let before = recorder.diagram
-  recorder.record('introduce a temporary material relation', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly(
-      'temporaryMaterial',
-      region,
-      relSig(formalSignatures),
-    ),
-  })
+  recorder.recordBareWire('introduce a temporary material relation', region, relSig(formalSignatures), 'temporaryMaterial')
   const temporary = onlyNewWire(before, recorder.diagram, region)
 
   before = recorder.diagram

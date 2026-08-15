@@ -14,6 +14,7 @@ import { sameDiagram, diagramIso } from '../diagram/canonical/iso'
 import { diagramToJson } from '../diagram/json'
 import { mkDiagram } from '../diagram/diagram'
 import { derivedScope, derivedScopes, isAncestorOrEqual } from '../diagram/regions'
+import { bareWireDeletionSteps } from './bare-wire'
 import type { RelSig, Sig } from '../diagram/sig'
 import { relSig, sigEquals, sigKey } from '../diagram/sig'
 import { extractSubgraph } from '../diagram/subgraph/extract'
@@ -26,7 +27,6 @@ import { removeSubgraph } from '../diagram/subgraph/splice'
 import { freshId } from '../diagram/subgraph/freshId'
 import { polarity } from '../diagram/regions'
 import { RuleError } from '../rules/error'
-import { bareWireDescription } from '../rules/identity-rules'
 import { nextRemovablePinStep } from './pin-sweep'
 import { completeWireEnds, ScopePreservationError } from '../rules/wire-ends'
 import { mapStepIds } from './compose'
@@ -418,12 +418,10 @@ function plumb(
 }
 
 
-/** Vacuity deletion of a bare (all-pin) wire, described from the diagram. */
-function bareWireDeletion(diagram: Diagram, wireId: WireId): ProofStep {
-  return {
-    rule: 'vacuity',
-    direction: 'delete',
-    assembly: bareWireDescription(diagram, wireId),
+/** Retire a bare (all-pin) wire via its primitive vacuity sequence. */
+function emitBareWireDeletion(emitter: Emitter, wireId: WireId): void {
+  for (const step of bareWireDeletionSteps(emitter.current(), wireId)) {
+    emitter.emit(step)
   }
 }
 
@@ -431,34 +429,32 @@ function bareWireDeletion(diagram: Diagram, wireId: WireId): ProofStep {
  * The real ids a vacuity insertion minted, recovered by diffing: the delete
  * direction must name the apparatus as it exists.
  */
-function mintedAssembly(
+function mintedInstance(
   pre: Diagram,
   post: Diagram,
-  assembly: Extract<ProofStep, { rule: 'vacuity' }>['assembly'],
-): Extract<ProofStep, { rule: 'vacuity' }>['assembly'] {
+  instance: Extract<ProofStep, { rule: 'vacuity' }>['instance'],
+): Extract<ProofStep, { rule: 'vacuity' }>['instance'] {
   const newNodeIds = Object.keys(post.nodes).filter((id) => pre.nodes[id] === undefined)
-  const newWireIds = Object.keys(post.wires).filter((id) => pre.wires[id] === undefined)
-  const nodes: Record<NodeId, { region: RegionId; sig: Sig; arity: number }> = {}
-  for (const id of newNodeIds) {
-    const node = post.nodes[id]!
-    if (node.kind !== 'identity') {
-      throw new RuleError(`vacuity inversion: minted node '${id}' is not an identity`)
+  if (newNodeIds.length !== 1) {
+    throw new RuleError(
+      `vacuity inversion: expected one minted node, found ${newNodeIds.length}`,
+    )
+  }
+  const mintedNode = newNodeIds[0]!
+  switch (instance.kind) {
+    case 'point':
+    case 'pin':
+      return { ...instance, node: mintedNode }
+    case 'stub': {
+      const newWireIds = Object.keys(post.wires).filter((id) => pre.wires[id] === undefined)
+      if (newWireIds.length !== 1) {
+        throw new RuleError(
+          `vacuity inversion: expected one minted wire, found ${newWireIds.length}`,
+        )
+      }
+      return { ...instance, wire: newWireIds[0]!, end: mintedNode }
     }
-    nodes[id] = { region: node.region, sig: node.sig, arity: node.arity }
   }
-  const wires: Record<WireId, { sig: Sig; endpoints: readonly Endpoint[] }> = {}
-  for (const id of newWireIds) {
-    const wire = post.wires[id]!
-    wires[id] = { sig: wire.sig, endpoints: [...wire.endpoints] }
-  }
-  const attachments: Record<WireId, Endpoint[]> = {}
-  for (const hostWireId of Object.keys(assembly.attachments)) {
-    const before = new Set(pre.wires[hostWireId]!.endpoints.map((endpoint) =>
-      `${endpoint.node}|${JSON.stringify(endpoint.port)}`))
-    attachments[hostWireId] = post.wires[hostWireId]!.endpoints.filter((endpoint) =>
-      !before.has(`${endpoint.node}|${JSON.stringify(endpoint.port)}`))
-  }
-  return { nodes, wires, attachments }
 }
 
 function endArgs(diagram: Diagram, nodeId: NodeId, arity: number): WireId[] {
@@ -518,7 +514,8 @@ function handleLeaf(
         return
       }
       // A point or a pin in the content is ⊤ apparatus: instantiate it at
-      // every site by one vacuity insertion, then retire the live wire.
+      // every site by one primitive vacuity insertion per site, then
+      // retire the live wire.
       const before = emitter.current()
       const ends = before.wires[residual.wire]!.endpoints
         .map((endpoint) => ({
@@ -529,11 +526,8 @@ function handleLeaf(
           const host = before.nodes[endNode]!
           return !(host.kind === 'identity' && host.arity === 1)
         })
-      const assemblyNodes: Record<NodeId, { region: RegionId; sig: Sig; arity: number }> = {}
-      const assemblyAttachments: Record<WireId, Endpoint[]> = {}
       ends.forEach((end, index) => {
         const label = `leafpt${index}`
-        assemblyNodes[label] = { region: end.region, sig: node.sig, arity: node.arity }
         if (node.arity === 1) {
           const target = attachments.args[0]!
           const host = residual.ambients.get(target)
@@ -549,19 +543,21 @@ function handleLeaf(
               }
               return endArgs(before, end.node, residual.formals)[position]!
             })()
-          assemblyAttachments[host] = [
-            ...(assemblyAttachments[host] ?? []),
-            { node: label, port: { kind: 'identity', index: 0 } },
-          ]
+          emitter.emit({
+            rule: 'vacuity',
+            direction: 'insert',
+            instance: { kind: 'pin', wire: host, node: label, region: end.region },
+          })
+        } else {
+          emitter.emit({
+            rule: 'vacuity',
+            direction: 'insert',
+            instance: { kind: 'point', node: label, region: end.region, sig: node.sig },
+          })
         }
       })
-      emitter.emit({
-        rule: 'vacuity',
-        direction: 'insert',
-        assembly: { nodes: assemblyNodes, wires: {}, attachments: assemblyAttachments },
-      })
       emitter.emit({ rule: 'endsDelete', wire: residual.wire })
-      emitter.emit(bareWireDeletion(emitter.current(), residual.wire))
+      emitBareWireDeletion(emitter, residual.wire)
       return
     }
   }
@@ -601,7 +597,7 @@ function handleResidual(emitter: Emitter, residual: Residual): Residual[] {
 
   if (items === 0) {
     emitter.emit({ rule: 'endsDelete', wire: residual.wire })
-    emitter.emit(bareWireDeletion(emitter.current(), residual.wire))
+    emitBareWireDeletion(emitter, residual.wire)
     return []
   }
 
@@ -722,15 +718,14 @@ export function compileRelationJoin(
         if (cause === null) throw error
         // Pin the named wire where the refusal says, as its own planned
         // step, then retry — old sequences assumed scope rode invisibly.
-        const wire = current.wires[cause.wireId]!
-        const label = `hold_${cause.wireId}`
         const pinStep: ProofStep = {
           rule: 'vacuity',
           direction: 'insert',
-          assembly: {
-            nodes: { [label]: { region: cause.scope, sig: wire.sig, arity: 1 } },
-            wires: {},
-            attachments: { [cause.wireId]: [{ node: label, port: { kind: 'identity', index: 0 } }] },
+          instance: {
+            kind: 'pin',
+            wire: cause.wireId,
+            node: `hold_${cause.wireId}`,
+            region: cause.scope,
           },
         }
         const receipt = applyStepWithReceipt(current, pinStep, context, orientation, reservation)
@@ -1177,9 +1172,9 @@ function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
     }
     case 'vacuity': {
       if (step.direction === 'insert') {
-        return { rule: 'vacuity', direction: 'delete', assembly: mintedAssembly(pre, post, step.assembly) }
+        return { rule: 'vacuity', direction: 'delete', instance: mintedInstance(pre, post, step.instance) }
       }
-      return { rule: 'vacuity', direction: 'insert', assembly: step.assembly }
+      return { rule: 'vacuity', direction: 'insert', instance: step.instance }
     }
     case 'argExtend': {
       const old = preWire(step.wire)

@@ -6,7 +6,7 @@ import type { ProofAction } from '../../kernel/proof/action'
 import type { ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
 import { assertProofContext } from '../../kernel/proof/context'
-import { bareWireAssembly, bareWireDescription } from '../../kernel/rules/identity-rules'
+import { bareWireDeletionSteps, bareWireInsertSteps } from '../../kernel/proof/bare-wire'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
@@ -76,24 +76,20 @@ export function deiterationStep(
   }
 }
 
-export function contextualDeleteStep(
+export function contextualDeleteSteps(
   diagram: Diagram,
   discovery: ProofDiscovery,
-): ProofStep | null {
+): readonly ProofStep[] | null {
   const has = (kind: ActionDescriptor['kind']): boolean =>
     discovery.actions.some((action) => action.kind === kind)
   if (has('doubleCutElim')) {
-    return { rule: 'doubleCutElim', region: discovery.sel.regions[0]! }
+    return [{ rule: 'doubleCutElim', region: discovery.sel.regions[0]! }]
   }
   if (has('vacuityDelete')) {
-    return {
-      rule: 'vacuity',
-      direction: 'delete',
-      assembly: bareWireDescription(diagram, discovery.sel.wires[0]!),
-    }
+    return bareWireDeletionSteps(diagram, discovery.sel.wires[0]!)
   }
-  if (has('erase')) return erasureStep(diagram, discovery.sel)
-  return has('deiterate') ? deiterationStep(diagram, discovery.sel) : null
+  if (has('erase')) return [erasureStep(diagram, discovery.sel)]
+  return has('deiterate') ? [deiterationStep(diagram, discovery.sel)] : null
 }
 
 export type ProofMoveControllerOptions = {
@@ -298,20 +294,17 @@ export class ProofMoveController {
         this.#options.refuse('point at a region first', this.#lastPointer)
         return true
       }
-      this.#commit({
-        rule: 'vacuity',
-        direction: 'insert',
-        assembly: bareWireAssembly(
-          'w',
-          regionAt(
-            this.#options.engine(),
-            this.#options.diagram(),
-            this.#lastWorld,
-          ),
-          sample.shiftKey ? relSig([]) : IOTA,
-          ['pin0', 'pin1'],
+      this.#commitSteps('vacuity', bareWireInsertSteps(
+        this.#options.diagram(),
+        regionAt(
+          this.#options.engine(),
+          this.#options.diagram(),
+          this.#lastWorld,
         ),
-      })
+        sample.shiftKey ? relSig([]) : IOTA,
+        'w',
+        ['pin0', 'pin1'],
+      ).steps)
       return true
     }
     if (
@@ -375,13 +368,13 @@ export class ProofMoveController {
     }
     if (sample.key === 'Delete' || sample.key === 'Backspace') {
       try {
-        const step = contextualDeleteStep(
+        const steps = contextualDeleteSteps(
           this.#options.diagram(),
           discovery,
         )
-        if (step === null) {
+        if (steps === null) {
           this.#options.refuse('nothing here reads as a deletion', this.#lastPointer)
-        } else this.#commit(step)
+        } else this.#commitSteps('delete', steps)
       } catch (error) {
         this.#options.refuse(
           error instanceof Error ? error.message : String(error),
@@ -567,11 +560,10 @@ export class ProofMoveController {
         }))
         return
       case 'vacuityDelete':
-        row(action.label, () => this.#commit({
-          rule: 'vacuity',
-          direction: 'delete',
-          assembly: bareWireDescription(this.#options.diagram(), selection.wires[0]!),
-        }))
+        row(action.label, () => this.#commitSteps(
+          'vacuity',
+          bareWireDeletionSteps(this.#options.diagram(), selection.wires[0]!),
+        ))
         return
       case 'deiterate':
         row(action.label, () => this.#commit(deiterationStep(

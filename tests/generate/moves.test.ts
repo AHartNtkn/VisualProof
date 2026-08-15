@@ -32,7 +32,7 @@ describe('enumerateMoves', () => {
         // resolves; any other refusal is a bug in the enumerator's gate
         // mirroring, so every candidate must apply cleanly (directly or
         // bundled) here.
-        const bundled = applyCandidateWithPins(diagram, candidate.step)
+        const bundled = applyCandidateWithPins(diagram, candidate.steps)
         expect(bundled).not.toBeNull()
         expect(Object.keys(bundled!.diagram.regions).length).toBeGreaterThan(0)
         applied += 1
@@ -42,7 +42,7 @@ describe('enumerateMoves', () => {
   })
   it('offers the known moves on the noncontradiction diagram (backward)', () => {
     const candidates = enumerateMoves(NONCONTRADICTION, 'backward', ALL)
-    const rules = new Set(candidates.map(({ step }) => step.rule))
+    const rules = new Set(candidates.flatMap(({ steps }) => steps.map((step) => step.rule)))
     expect(rules.has('deiteration')).toBe(true)   // inner P justified by outer P
     expect(rules.has('erasure')).toBe(true)       // e.g. P in the negative body cut
     expect(rules.has('doubleCutIntro')).toBe(true)
@@ -58,17 +58,22 @@ describe('enumerateMoves', () => {
     const diagram = NONCONTRADICTION
     const shellRegions = new Set([diagram.root])
     const candidates = enumerateMoves(diagram, 'backward', ALL, bodyRegion(diagram))
-    for (const { step } of candidates) {
-      if ('region' in step) expect(shellRegions.has(step.region)).toBe(false)
-      if ('sel' in step) expect(shellRegions.has(step.sel.region)).toBe(false)
+    for (const { steps } of candidates) {
+      for (const step of steps) {
+        if ('region' in step) expect(shellRegions.has(step.region)).toBe(false)
+        if ('sel' in step) expect(shellRegions.has(step.sel.region)).toBe(false)
+      }
     }
   })
   it('forward orientation flips the deletion/insertion gates', () => {
     const backward = enumerateMoves(NONCONTRADICTION, 'backward', new Set(['erasure', 'spawn']))
     const forward = enumerateMoves(NONCONTRADICTION, 'forward', new Set(['erasure', 'spawn']))
     const regionsOf = (moves: typeof forward, rule: string): Set<string> =>
-      new Set(moves.filter(({ step }) => step.rule === rule)
-        .map(({ step }) => ('region' in step ? step.region : 'sel' in step ? step.sel.region : '')))
+      new Set(moves.filter(({ steps }) => steps[0]!.rule === rule)
+        .map(({ steps }) => {
+          const step = steps[0]!
+          return 'region' in step ? step.region : 'sel' in step ? step.sel.region : ''
+        }))
     // A region offering backward erasure (negative) must not offer forward erasure.
     for (const region of regionsOf(backward, 'erasure')) {
       expect(regionsOf(forward, 'erasure').has(region)).toBe(false)

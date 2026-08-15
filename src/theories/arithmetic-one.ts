@@ -10,7 +10,6 @@ import {
   type ProofContext,
   type Theory,
 } from '../kernel/proof/context'
-import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   atom,
@@ -181,19 +180,11 @@ function buildForward(context: ProofContext) {
   )
 
   before = forward.diagram
-  forward.record('introduce theorem-local zero relation', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('zero', primitiveScope, UNARY),
-  })
+  forward.recordBareWire('introduce theorem-local zero relation', primitiveScope, UNARY, 'zero')
   const zero = onlyNewWire(before, forward.diagram, primitiveScope)
 
   before = forward.diagram
-  forward.record('introduce theorem-local successor relation', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('successor', primitiveScope, BINARY),
-  })
+  forward.recordBareWire('introduce theorem-local successor relation', primitiveScope, BINARY, 'successor')
   const successor = onlyNewWire(before, forward.diagram, primitiveScope)
 
   before = forward.diagram
@@ -213,11 +204,7 @@ function buildForward(context: ProofContext) {
   )
 
   before = forward.diagram
-  forward.record('introduce temporary exact hypotheses handle', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('temporaryHypotheses', antecedent, relSig([])),
-  })
+  forward.recordBareWire('introduce temporary exact hypotheses handle', antecedent, relSig([]), 'temporaryHypotheses')
   const temporaryHypotheses = onlyNewWire(
     before,
     forward.diagram,
@@ -297,11 +284,7 @@ function buildForward(context: ProofContext) {
   )
 
   before = forward.diagram
-  forward.record('introduce arbitrary hereditary property', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('property', propertyScope, UNARY),
-  })
+  forward.recordBareWire('introduce arbitrary hereditary property', propertyScope, UNARY, 'property')
   const property = onlyNewWire(
     before,
     forward.diagram,
@@ -329,11 +312,7 @@ function buildForward(context: ProofContext) {
   )
 
   before = forward.diagram
-  forward.record('introduce temporary hereditary-conditions handle', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('temporaryConditions', hereditary, relSig([])),
-  })
+  forward.recordBareWire('introduce temporary hereditary-conditions handle', hereditary, relSig([]), 'temporaryConditions')
   const temporaryConditions = onlyNewWire(
     before,
     forward.diagram,

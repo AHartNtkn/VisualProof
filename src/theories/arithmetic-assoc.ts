@@ -6,7 +6,6 @@ import {
   type ProofContext,
   type Theory,
 } from '../kernel/proof/context'
-import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   BINARY,
@@ -161,11 +160,7 @@ function plusAssoc(
     'public support conclusion',
   )
   let publicBefore = publicForward.diagram
-  publicForward.record('introduce public zero relation', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('publicZero', publicPrimitiveScope, UNARY),
-  })
+  publicForward.recordBareWire('introduce public zero relation', publicPrimitiveScope, UNARY, 'publicZero')
   const publicZero = onlyNewWire(
     publicBefore,
     publicForward.diagram,
@@ -177,11 +172,7 @@ function plusAssoc(
     TERNARY,
   )
   publicBefore = publicForward.diagram
-  publicForward.record('introduce plusBase hypothesis handle', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('plusBase', publicHypotheses, relSig([])),
-  })
+  publicForward.recordBareWire('introduce plusBase hypothesis handle', publicHypotheses, relSig([]), 'plusBase')
   const plusBase = onlyNewWire(
     publicBefore,
     publicForward.diagram,
@@ -309,11 +300,7 @@ function plusAssoc(
   )
   for (const label of ['left', 'right', 'third', 'first sum', 'output']) {
     publicBefore = publicForward.diagram
-    publicForward.record('introduce public ' + label, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('claimVariable', publicClaimScope, IOTA),
-    })
+    publicForward.recordBareWire('introduce public ' + label, publicClaimScope, IOTA, 'claimVariable')
     onlyNewWire(publicBefore, publicForward.diagram, publicClaimScope)
   }
   publicBefore = publicForward.diagram
@@ -408,22 +395,14 @@ function plusAssoc(
     [forwardFirstSum!, publicForwardThird!, forwardPublicOutput!],
   )
   publicBefore = publicForward.diagram
-  publicForward.record('introduce public inner sum witness', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('innerSumWitness', publicClaimAntecedent, IOTA),
-  })
+  publicForward.recordBareWire('introduce public inner sum witness', publicClaimAntecedent, IOTA, 'innerSumWitness')
   const forwardInnerSum = onlyNewWire(
     publicBefore,
     publicForward.diagram,
     publicClaimAntecedent,
   )
   publicBefore = publicForward.diagram
-  publicForward.record('introduce transport output witness', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('transportOutputWitness', publicClaimAntecedent, IOTA),
-  })
+  publicForward.recordBareWire('introduce transport output witness', publicClaimAntecedent, IOTA, 'transportOutputWitness')
   const forwardTransportOutput = onlyNewWire(
     publicBefore,
     publicForward.diagram,
@@ -483,22 +462,14 @@ function plusAssoc(
     'forward residual A(a) totality body',
   )
   publicBefore = publicForward.diagram
-  publicForward.record('introduce residual A(a) totality input', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('totalityInput', forwardLeftTotality, IOTA),
-  })
+  publicForward.recordBareWire('introduce residual A(a) totality input', forwardLeftTotality, IOTA, 'totalityInput')
   const forwardLeftTotalityInput = onlyNewWire(
     publicBefore,
     publicForward.diagram,
     forwardLeftTotality,
   )
   publicBefore = publicForward.diagram
-  publicForward.record('introduce residual A(a) totality output', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('totalityOutput', forwardLeftTotalityBody, IOTA),
-  })
+  publicForward.recordBareWire('introduce residual A(a) totality output', forwardLeftTotalityBody, IOTA, 'totalityOutput')
   const forwardLeftTotalityOutput = onlyNewWire(
     publicBefore,
     publicForward.diagram,
@@ -535,15 +506,7 @@ function plusAssoc(
   }
 
   publicBefore = publicForward.diagram
-  publicForward.record('introduce temporary A(b) transport', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly(
-      'temporaryRightTransport',
-      publicClaimAntecedent,
-      relSig([]),
-    ),
-  })
+  publicForward.recordBareWire('introduce temporary A(b) transport', publicClaimAntecedent, relSig([]), 'temporaryRightTransport')
   const temporaryRightTransport = onlyNewWire(
     publicBefore,
     publicForward.diagram,

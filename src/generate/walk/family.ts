@@ -4,7 +4,8 @@ import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { relSig } from '../../kernel/diagram/sig'
 import type { ProofStep } from '../../kernel/proof/step'
-import { bareWireAssembly, bareWireDescription, RuleError } from '../../kernel/rules'
+import { RuleError } from '../../kernel/rules'
+import { bareWireDeletionSteps } from '../../kernel/proof/bare-wire'
 import { emptyGraph, finishDiagramWithBoundary } from '../../theories/graph'
 import { PrimitiveStepRecorder, onlyNewCut } from '../../theories/record'
 import { deiterationStep } from '../../app/interact/moves'
@@ -93,11 +94,12 @@ function tryWalk(atoms: number, length: number, fullDeiteration: boolean, rng: (
   const outer = onlyNewCut(before, recorder.diagram, recorder.diagram.root)
   const inner = onlyNewCut(before, recorder.diagram, outer)
   for (let index = 0; index < atoms; index += 1) {
-    recorder.record(`declare proposition ${atomName(index)}`, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly(`genp${index}`, outer, relSig([])),
-    })
+    recorder.recordBareWire(
+      `declare proposition ${atomName(index)}`,
+      outer,
+      relSig([]),
+      `genp${index}`,
+    )
   }
   for (let move = 0; move < length; move += 1) {
     const candidates = enumerateMoves(recorder.diagram, 'forward', WALK_CLASSES, inner)
@@ -112,11 +114,9 @@ function tryWalk(atoms: number, length: number, fullDeiteration: boolean, rng: (
     bare = bareWires(recorder.diagram)
   ) {
     const wireId = bare[0]!
-    recorder.record(`erase unused proposition wire '${wireId}'`, {
-      rule: 'vacuity',
-      direction: 'delete',
-      assembly: bareWireDescription(recorder.diagram, wireId),
-    })
+    for (const step of bareWireDeletionSteps(recorder.diagram, wireId)) {
+      recorder.record(`erase unused proposition wire '${wireId}'`, step)
+    }
   }
   // Normalization: a JOINT fixpoint of two ungated-equivalence rewrites,
   // repeated until neither finder fires. Each rewrite strictly shrinks the
@@ -335,7 +335,8 @@ export function findDeiterationRedex(
 ): { readonly step: Extract<ProofStep, { rule: 'deiteration' }> } | null {
   const candidates = enumerateMoves(diagram, 'forward', new Set(['iteration']), inner)
   for (const candidate of candidates) {
-    if (candidate.step.rule === 'deiteration') return { step: candidate.step }
+    const step = candidate.steps[0]!
+    if (candidate.steps.length === 1 && step.rule === 'deiteration') return { step }
   }
   return null
 }
@@ -378,12 +379,19 @@ function applyWeightedRandomMove(
     const index = Math.floor(rng() * pool.length)
     const candidate = pool.splice(index, 1)[0]!
     if (pool.length === 0) byClass.delete(chosenClass)
+    // A withdrawn candidate must leave no trace, so only the FIRST step's
+    // refusal withdraws. A multi-step candidate is a vacuity sequence built
+    // valid against this very diagram; a later step failing is a real bug.
     try {
-      recorder.record(`walk ${candidate.step.rule}`, candidate.step)
-      return true
+      recorder.record(`walk ${candidate.steps[0]!.rule}`, candidate.steps[0]!)
     } catch (error) {
       if (!(error instanceof RuleError)) throw error
+      continue
     }
+    for (const step of candidate.steps.slice(1)) {
+      recorder.record(`walk ${step.rule}`, step)
+    }
+    return true
   }
   return false
 }

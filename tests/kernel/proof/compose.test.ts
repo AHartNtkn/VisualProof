@@ -5,13 +5,13 @@ import type { DiagramIso } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { replayActions, type ProofAction } from '../../../src/kernel/proof/action'
+import {
+  bareWireDeletionSteps,
+  bareWireInsertSteps,
+} from '../../../src/kernel/proof/bare-wire'
 import { composeActions, mapStepIds } from '../../../src/kernel/proof/compose'
 import { EMPTY_PROOF_CONTEXT } from '../../../src/kernel/proof/context'
 import type { ProofStep } from '../../../src/kernel/proof/step'
-import {
-  bareWireAssembly,
-  bareWireDescription,
-} from '../../../src/kernel/rules/identity-rules'
 import { bareWire } from '../../fixtures/pins'
 
 function action(label: string, steps: readonly ProofStep[]): ProofAction {
@@ -122,11 +122,7 @@ describe('composeActions', () => {
     const target = new DiagramBuilder().build()
     const tail: ProofAction[] = [{
       label: 'reserved vacuity',
-      steps: [{
-        rule: 'vacuity',
-        direction: 'insert',
-        assembly: bareWireAssembly('r0_vac', source.root, IOTA),
-      }],
+      steps: [...bareWireInsertSteps(source, source.root, IOTA, 'r0_vac').steps],
       placements: [],
       allocation: { regions: ['dc'], nodes: ['n'], wires: ['r0_vac'] },
     }]
@@ -207,11 +203,8 @@ describe('composeActions', () => {
     }
     const target = build()
     const source = build()
-    const tail = [action('erase exposed wire', [{
-      rule: 'vacuity',
-      direction: 'delete',
-      assembly: bareWireDescription(source.diagram, source.wire),
-    }])]
+    const tail = [action('erase exposed wire',
+      [...bareWireDeletionSteps(source.diagram, source.wire)])]
 
     expect(() => composeActions(
       target.diagram,
@@ -381,43 +374,35 @@ describe('mapStepIds', () => {
       at: { sel: mappedSelection, args: ['W0', 'W1'] },
       direction: 'forward',
     })
-    // Insert-direction ids are mint labels and pass through unmapped.
+    // Insert-direction fresh ids are mint labels and pass through unmapped;
+    // the region (and a stub's existing base) still map.
     expect(mapStepIds({
       rule: 'vacuity',
       direction: 'insert',
-      assembly: bareWireAssembly('fresh', 'r1', IOTA),
+      instance: { kind: 'point', node: 'fresh', region: 'r1', sig: IOTA },
     }, iso)).toEqual({
       rule: 'vacuity',
       direction: 'insert',
-      assembly: bareWireAssembly('fresh', 'R1', IOTA),
+      instance: { kind: 'point', node: 'fresh', region: 'R1', sig: IOTA },
+    })
+    expect(mapStepIds({
+      rule: 'vacuity',
+      direction: 'insert',
+      instance: { kind: 'stub', base: 'n0', wire: 'w', end: 'tip', region: 'r1' },
+    }, iso)).toEqual({
+      rule: 'vacuity',
+      direction: 'insert',
+      instance: { kind: 'stub', base: 'N0', wire: 'w', end: 'tip', region: 'R1' },
     })
     // Delete-direction ids are real and map with the isomorphism.
     expect(mapStepIds({
       rule: 'vacuity',
       direction: 'delete',
-      assembly: {
-        nodes: { n0: { region: 'r1', sig: IOTA, arity: 1 } },
-        wires: {
-          w0: {
-            sig: IOTA,
-            endpoints: [{ node: 'n0', port: { kind: 'identity', index: 0 } }],
-          },
-        },
-        attachments: {},
-      },
+      instance: { kind: 'pin', wire: 'w0', node: 'n0', region: 'r1' },
     }, iso)).toEqual({
       rule: 'vacuity',
       direction: 'delete',
-      assembly: {
-        nodes: { N0: { region: 'R1', sig: IOTA, arity: 1 } },
-        wires: {
-          W0: {
-            sig: IOTA,
-            endpoints: [{ node: 'N0', port: { kind: 'identity', index: 0 } }],
-          },
-        },
-        attachments: {},
-      },
+      instance: { kind: 'pin', wire: 'W0', node: 'N0', region: 'R1' },
     })
     expect(mapStepIds({
       rule: 'unfold',

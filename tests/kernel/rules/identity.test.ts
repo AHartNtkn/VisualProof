@@ -11,6 +11,7 @@ import { replayProof, type ProofStep } from '../../../src/kernel/proof/step'
 import { checkTheorem, pinnedForReplay, type Theorem } from '../../../src/kernel/proof/theorem'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import * as identityRules from '../../../src/kernel/rules/identity'
+
 import * as rules from '../../../src/kernel/rules'
 import { applyIdentityInsertion } from '../../../src/kernel/rules/identity'
 import {
@@ -62,13 +63,18 @@ describe('the eager identity rewrites, replayed as explicit rule steps', () => {
     })
     expect(diagram.wires[wire]!.endpoints).toEqual(identityPorts)
 
-    // The node asserts only x = x, so vacuity is the rule that would remove
-    // it — but here it is both of the wire's ends, and a wire end is a node.
-    expect(() => applyVacuityDelete(diagram, {
-      nodes: { [identity]: { region: diagram.root, sig: IOTA, arity: 2 } },
-      wires: {},
-      attachments: { [wire]: identityPorts },
-    })).toThrowError(/would leave wire '.*' with 0 end\(s\)/)
+    // The node asserts only x = x, but it is both of the wire's ends, and
+    // a wire end is a node: re-presented as two pins (same trivial
+    // relation), detaching either would leave one end and is refused.
+    void identityPorts
+    const repinned = applyPresentation(diagram, {
+      region: diagram.root,
+      removeNodes: [identity],
+      addNodes: { p0: [wire], p1: [wire] },
+    })
+    expect(() => applyVacuityDelete(repinned, {
+      kind: 'pin', wire, node: 'p0', region: diagram.root,
+    })).toThrowError(/would leave wire '.*' with 1 end\(s\)/)
   })
 
   it('collapses an unconditional same-scope identity by identification', () => {
@@ -115,11 +121,7 @@ describe('the eager identity rewrites, replayed as explicit rule steps', () => {
     expect(derivedScope(collapsed, left)).toBe(cut)
 
     const detached = applyVacuityDelete(collapsed, {
-      nodes: { [identity]: { region: cut, sig: IOTA, arity: 1 } },
-      wires: {},
-      attachments: {
-        [left]: [{ node: identity, port: { kind: 'identity', index: 0 } }],
-      },
+      kind: 'pin', wire: left, node: identity, region: cut,
     })
 
     expect(detached.nodes[identity]).toBeUndefined()
@@ -434,11 +436,7 @@ describe('Rule 5: explicit endpoint-level equals-for-equals evidence', () => {
       // The copy is then a lone pin on a wire that already has two ends at
       // the scope it names, so vacuity detaches it.
       const substituted = applyVacuityDelete(collapsed, {
-        nodes: { [copied]: { region: site, sig: IOTA, arity: 1 } },
-        wires: {},
-        attachments: {
-          [b]: [{ node: copied, port: { kind: 'identity', index: 0 } }],
-        },
+        kind: 'pin', wire: b, node: copied, region: site,
       })
 
       const expectedBuilder = new DiagramBuilder()
@@ -497,13 +495,7 @@ function ordinaryEqualityCutTheorem(): Theorem {
   const dropPoint = (wire: WireId): ProofStep => ({
     rule: 'vacuity',
     direction: 'delete',
-    assembly: {
-      nodes: { [point(wire)]: { region: lhsDiagram.root, sig: IOTA, arity: 1 } },
-      wires: {},
-      attachments: {
-        [wire]: [{ node: point(wire), port: { kind: 'identity', index: 0 } }],
-      },
-    },
+    instance: { kind: 'pin', wire, node: point(wire), region: lhsDiagram.root },
   })
 
   return {

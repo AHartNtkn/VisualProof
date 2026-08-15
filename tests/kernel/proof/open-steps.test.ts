@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { relSig } from '../../../src/kernel/diagram/sig'
-import { replayActions, singleStepAction } from '../../../src/kernel/proof/action'
+import { replayActions } from '../../../src/kernel/proof/action'
 import { composeActions } from '../../../src/kernel/proof/compose'
 import { EMPTY_PROOF_CONTEXT } from '../../../src/kernel/proof/context'
 import { replayProof, type ProofStep } from '../../../src/kernel/proof/step'
 import {
-  bareWireAssembly,
-  bareWireDescription,
-} from '../../../src/kernel/rules/identity-rules'
+  bareWireDeletionSteps,
+  bareWireInsertSteps,
+} from '../../../src/kernel/proof/bare-wire'
 import { bareWire } from '../../fixtures/pins'
 
 describe('atom and vacuous proof steps', () => {
@@ -17,27 +17,25 @@ describe('atom and vacuous proof steps', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const diagram = builder.build()
-    const introduced = replayProof(diagram, [{
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('bare', diagram.root, relSig([])),
-    }], EMPTY_PROOF_CONTEXT)
+    const introduced = replayProof(
+      diagram,
+      [...bareWireInsertSteps(diagram, diagram.root, relSig([]), 'bare').steps],
+      EMPTY_PROOF_CONTEXT,
+    )
     const relationWire = Object.keys(introduced.wires).find((wire) =>
       diagram.wires[wire] === undefined)!
-    const removal = bareWireDescription(introduced, relationWire)
+    const removal = bareWireDeletionSteps(introduced, relationWire)
 
+    // The atom spawn gives the wire a third end, so the stale stub
+    // retraction no longer matches the wire's shape.
     expect(() => replayProof(introduced, [
       { rule: 'atomSpawn', region: cut, wire: relationWire },
-      { rule: 'vacuity', direction: 'delete', assembly: removal },
+      ...removal,
     ], EMPTY_PROOF_CONTEXT)).toThrowError(
-      /step 1 \(vacuity\) failed: vacuity deletion: wire '.*' does not match/,
+      /step 1 \(vacuity\) failed: vacuity deletion: wire '.*' is not a stub/,
     )
 
-    const restored = replayProof(introduced, [{
-      rule: 'vacuity',
-      direction: 'delete',
-      assembly: removal,
-    }], EMPTY_PROOF_CONTEXT)
+    const restored = replayProof(introduced, [...removal], EMPTY_PROOF_CONTEXT)
     expect(sameDiagram(restored, diagram)).toBe(true)
   })
 
@@ -51,14 +49,11 @@ describe('atom and vacuous proof steps', () => {
     }
     const target = build(true)
     const source = build(false)
-    const intro: ProofStep = {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('bare', source.diagram.root, relSig([])),
-    }
+    const intro: readonly ProofStep[] =
+      bareWireInsertSteps(source.diagram, source.diagram.root, relSig([]), 'bare').steps
     const afterIntro = replayProof(
       source.diagram,
-      [intro],
+      [...intro],
       EMPTY_PROOF_CONTEXT,
     )
     const minted = Object.keys(afterIntro.wires).find((wire) =>
@@ -66,7 +61,7 @@ describe('atom and vacuous proof steps', () => {
     const tail = [{
       label: 'introduce and bind atom',
       steps: [
-        intro,
+        ...intro,
         { rule: 'atomSpawn', region: source.cut, wire: minted },
       ] as const,
       placements: [],
@@ -101,11 +96,11 @@ describe('atom and vacuous proof steps', () => {
     }
     const target = build()
     const source = build()
-    const tail = [singleStepAction('remove vacuity', {
-      rule: 'vacuity',
-      direction: 'delete',
-      assembly: bareWireDescription(source.diagram, source.wire),
-    })]
+    const tail = [{
+      label: 'remove vacuity',
+      steps: [...bareWireDeletionSteps(source.diagram, source.wire)],
+      placements: [],
+    }]
     const composed = composeActions(
       target.diagram,
       source.diagram,
@@ -113,10 +108,8 @@ describe('atom and vacuous proof steps', () => {
       EMPTY_PROOF_CONTEXT,
     )
 
-    expect(composed[0]!.steps[0]).toEqual({
-      rule: 'vacuity',
-      direction: 'delete',
-      assembly: bareWireDescription(target.diagram, target.wire),
-    })
+    expect(composed[0]!.steps).toEqual(
+      bareWireDeletionSteps(target.diagram, target.wire),
+    )
   })
 })

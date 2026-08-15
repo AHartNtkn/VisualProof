@@ -15,10 +15,12 @@ import {
   type ProofStep,
 } from '../../../src/kernel/proof/step'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
+import {
+  bareWireDeletionSteps,
+  bareWireInsertSteps,
+} from '../../../src/kernel/proof/bare-wire'
 import { applyIdentityInsertion } from '../../../src/kernel/rules/identity'
 import {
-  bareWireAssembly,
-  bareWireDescription,
 } from '../../../src/kernel/rules/identity-rules'
 
 describe('primitive replay', () => {
@@ -288,13 +290,11 @@ describe('normalized step receipts', () => {
     builder.pin(erased, builder.root)
     builder.pin(erased, builder.root)
     const diagram = builder.build()
+    // The retirement's stub step is where the wire itself dies.
+    const stubDelete = bareWireDeletionSteps(diagram, erased)[0]!
     const receipt = applyStepWithReceipt(
       diagram,
-      {
-        rule: 'vacuity',
-        direction: 'delete',
-        assembly: bareWireDescription(diagram, erased),
-      },
+      stubDelete,
       EMPTY_PROOF_CONTEXT,
     )
 
@@ -308,13 +308,11 @@ describe('normalized step receipts', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const diagram = builder.build()
+    const intro = bareWireInsertSteps(diagram, cut, IOTA, 'bare')
+    const pointed = applyStep(diagram, intro.steps[0]!, EMPTY_PROOF_CONTEXT)
     const receipt = applyStepWithReceipt(
-      diagram,
-      {
-        rule: 'vacuity',
-        direction: 'insert',
-        assembly: bareWireAssembly('bare', cut, IOTA),
-      },
+      pointed,
+      intro.steps[1]!,
       EMPTY_PROOF_CONTEXT,
     )
     const fresh = Object.keys(receipt.result.wires)

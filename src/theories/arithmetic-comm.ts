@@ -11,7 +11,6 @@ import {
   type ProofContext,
   type Theory,
 } from '../kernel/proof/context'
-import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import {
@@ -117,22 +116,14 @@ function plusComm(
     'forward fixed right',
   )
   let before = forward.diagram
-  forward.record('introduce public left', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('publicLeft', forwardClaimScope, IOTA),
-  })
+  forward.recordBareWire('introduce public left', forwardClaimScope, IOTA, 'publicLeft')
   const forwardLeft = onlyNewWire(
     before,
     forward.diagram,
     forwardClaimScope,
   )
   before = forward.diagram
-  forward.record('introduce public output', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('publicOutput', forwardClaimScope, IOTA),
-  })
+  forward.recordBareWire('introduce public output', forwardClaimScope, IOTA, 'publicOutput')
   const forwardOutput = onlyNewWire(
     before,
     forward.diagram,
@@ -262,22 +253,14 @@ function plusComm(
     'forward residual totality body',
   )
   before = forward.diagram
-  forward.record('introduce residual totality input', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('totalityInput', forwardTotality, IOTA),
-  })
+  forward.recordBareWire('introduce residual totality input', forwardTotality, IOTA, 'totalityInput')
   const forwardTotalityInput = onlyNewWire(
     before,
     forward.diagram,
     forwardTotality,
   )
   before = forward.diagram
-  forward.record('introduce residual totality output', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('totalityOutput', forwardTotalityBody, IOTA),
-  })
+  forward.recordBareWire('introduce residual totality output', forwardTotalityBody, IOTA, 'totalityOutput')
   const forwardTotalityOutput = onlyNewWire(
     before,
     forward.diagram,

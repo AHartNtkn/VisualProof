@@ -8,9 +8,12 @@ import { RuleError } from '../../../src/kernel/rules/error'
 import {
   applyVacuityDelete,
   applyVacuityInsert,
-  bareWireAssembly,
-  bareWireDescription,
 } from '../../../src/kernel/rules/identity-rules'
+import {
+  bareWireDeletionSteps,
+  bareWireInsertSteps,
+} from '../../../src/kernel/proof/bare-wire'
+import type { ProofStep } from '../../../src/kernel/proof/step'
 
 // Vacuity on one shape — the bare two-point segment, the drawable floating
 // existential — swept across both signature sorts and both polarities.
@@ -45,6 +48,18 @@ function addedWire(before: Diagram, after: Diagram): string {
   return Object.keys(after.wires).find((wire) => before.wires[wire] === undefined)!
 }
 
+/** Apply a vacuity step sequence (a bare-wire composite) directly. */
+function applyBare(diagram: Diagram, steps: readonly ProofStep[]): Diagram {
+  let current = diagram
+  for (const step of steps) {
+    if (step.rule !== 'vacuity') throw new Error(`unexpected rule '${step.rule}'`)
+    current = step.direction === 'insert'
+      ? applyVacuityInsert(current, step.instance)
+      : applyVacuityDelete(current, step.instance)
+  }
+  return current
+}
+
 describe('bare vacuous wire intro and elim', () => {
   for (const [label, sig] of CASES) {
     describe(label, () => {
@@ -52,9 +67,9 @@ describe('bare vacuous wire intro and elim', () => {
         const diagram = new DiagramBuilder().build()
         expect(polarity(diagram, diagram.root)).toBe('positive')
 
-        const result = applyVacuityInsert(
+        const result = applyBare(
           diagram,
-          bareWireAssembly('bare', diagram.root, sig),
+          bareWireInsertSteps(diagram, diagram.root, sig, 'bare').steps,
         )
         const added = addedWire(diagram, result)
 
@@ -69,7 +84,7 @@ describe('bare vacuous wire intro and elim', () => {
         const diagram = builder.build()
         expect(polarity(diagram, cut)).toBe('negative')
 
-        const result = applyVacuityInsert(diagram, bareWireAssembly('bare', cut, sig))
+        const result = applyBare(diagram, bareWireInsertSteps(diagram, cut, sig, 'bare').steps)
         const added = addedWire(diagram, result)
 
         expect(derivedScope(result, added)).toBe(cut)
@@ -79,35 +94,35 @@ describe('bare vacuous wire intro and elim', () => {
 
       it('round-trips by eliminating the bare wire', () => {
         const diagram = new DiagramBuilder().build()
-        const introduced = applyVacuityInsert(
+        const introduced = applyBare(
           diagram,
-          bareWireAssembly('bare', diagram.root, sig),
+          bareWireInsertSteps(diagram, diagram.root, sig, 'bare').steps,
         )
         const added = addedWire(diagram, introduced)
 
-        expect(applyVacuityDelete(introduced, bareWireDescription(introduced, added)))
+        expect(applyBare(introduced, bareWireDeletionSteps(introduced, added)))
           .toEqual(diagram)
       })
 
       it('refuses every endpoint-bearing wire', () => {
         const { diagram, wire } = wiredWireOf(sig)
 
-        expect(() => bareWireDescription(diagram, wire))
+        expect(() => bareWireDeletionSteps(diagram, wire))
           .toThrowError(/is not bare/)
-        expect(() => bareWireDescription(diagram, wire)).toThrow(RuleError)
+        expect(() => bareWireDeletionSteps(diagram, wire)).toThrow(RuleError)
       })
     })
   }
 
   it('rejects an unknown scope structurally', () => {
     const diagram = new DiagramBuilder().build()
-    expect(() => applyVacuityInsert(diagram, bareWireAssembly('bare', 'ghost', IOTA)))
+    expect(() => applyBare(diagram, bareWireInsertSteps(diagram, 'ghost', IOTA, 'bare').steps))
       .toThrow(DiagramError)
   })
 
   it('rejects an unknown wire structurally', () => {
     const diagram = new DiagramBuilder().build()
-    expect(() => bareWireDescription(diagram, 'ghost'))
+    expect(() => bareWireDeletionSteps(diagram, 'ghost'))
       .toThrow(DiagramError)
   })
 })

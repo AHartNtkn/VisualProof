@@ -5,6 +5,7 @@ import type {
   RegionId,
   WireId,
 } from '../kernel/diagram/diagram'
+import type { Sig } from '../kernel/diagram/sig'
 import { derivedScope } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import {
@@ -98,15 +99,10 @@ export function onlyNewCut(
 export function pinStep(diagram: Diagram, wireId: WireId, scope: RegionId): ProofStep {
   const wire = diagram.wires[wireId]
   if (wire === undefined) throw new Error(`cannot pin unknown wire '${wireId}'`)
-  const label = `hold_${wireId}`
   return {
     rule: 'vacuity',
     direction: 'insert',
-    assembly: {
-      nodes: { [label]: { region: scope, sig: wire.sig, arity: 1 } },
-      wires: {},
-      attachments: { [wireId]: [{ node: label, port: { kind: 'identity', index: 0 } }] },
-    },
+    instance: { kind: 'pin', wire: wireId, node: `hold_${wireId}`, region: scope },
   }
 }
 
@@ -170,6 +166,35 @@ export class PrimitiveStepRecorder {
       && new Set(resolved.wires).size < 2
     ) return
     this.#recordAction(singleStepAction(label, resolved))
+  }
+
+  /**
+   * The drawable bare existential (∃x:σ.⊤) at `region`: a point, then a
+   * stub grown from it — two recorded vacuity steps, the rule's own
+   * decomposition of the old one-step bare-wire insertion. Returns the
+   * real id of the new wire.
+   */
+  recordBareWire(label: string, region: RegionId, sig: Sig, wireLabel = 'bare'): WireId {
+    let before = this.#diagram
+    this.record(label, {
+      rule: 'vacuity',
+      direction: 'insert',
+      instance: { kind: 'point', node: `${wireLabel}_end0`, region, sig },
+    })
+    const point = exactOne(
+      'point',
+      Object.keys(this.#diagram.nodes)
+        .filter((id) => before.nodes[id] === undefined)
+        .sort(),
+      ` for '${label}'`,
+    )
+    before = this.#diagram
+    this.record(label, {
+      rule: 'vacuity',
+      direction: 'insert',
+      instance: { kind: 'stub', base: point, wire: wireLabel, end: `${wireLabel}_end1`, region },
+    })
+    return onlyNewWire(before, this.#diagram, region)
   }
 
   /**

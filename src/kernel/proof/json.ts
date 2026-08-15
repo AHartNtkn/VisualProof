@@ -12,7 +12,7 @@ import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certi
 import type {
   IdentificationInput,
   PresentationInput,
-  VacuityInput,
+  VacuityInstance,
 } from '../rules/identity-rules'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type {
@@ -137,57 +137,64 @@ function wireJoinInputFromJson(value: unknown): WireJoinInput {
   }
 }
 
-function vacuityInputToJson(input: VacuityInput): unknown {
-  return {
-    nodes: Object.fromEntries(Object.entries(input.nodes).map(([id, node]) => [
-      id,
-      { region: node.region, sig: sigToJson(node.sig), arity: node.arity },
-    ])),
-    wires: Object.fromEntries(Object.entries(input.wires).map(([id, wire]) => [
-      id,
-      { sig: sigToJson(wire.sig), endpoints: wire.endpoints.map(endpointToJson) },
-    ])),
-    attachments: Object.fromEntries(Object.entries(input.attachments).map(([id, endpoints]) => [
-      id,
-      endpoints.map(endpointToJson),
-    ])),
+function vacuityInstanceToJson(instance: VacuityInstance): unknown {
+  switch (instance.kind) {
+    case 'point':
+      return {
+        kind: instance.kind,
+        node: instance.node,
+        region: instance.region,
+        sig: sigToJson(instance.sig),
+      }
+    case 'stub':
+      return {
+        kind: instance.kind,
+        base: instance.base,
+        wire: instance.wire,
+        end: instance.end,
+        region: instance.region,
+      }
+    case 'pin':
+      return {
+        kind: instance.kind,
+        wire: instance.wire,
+        node: instance.node,
+        region: instance.region,
+      }
   }
 }
 
-function vacuityInputFromJson(value: unknown): VacuityInput {
-  if (!isRecord(value)) fail('vacuity assembly must be an object')
-  assertOnlyKeys(value, ['nodes', 'wires', 'attachments'], 'vacuity assembly')
-  const { nodes, wires, attachments } = value
-  if (!isRecord(nodes) || !isRecord(wires) || !isRecord(attachments)) {
-    fail('vacuity assembly parts must be objects')
-  }
-  return {
-    nodes: Object.fromEntries(Object.entries(nodes).map(([id, node]) => {
-      if (!isRecord(node)) fail(`vacuity node '${id}' must be an object`)
-      assertOnlyKeys(node, ['region', 'sig', 'arity'], `vacuity node '${id}'`)
-      if (typeof node.arity !== 'number') fail(`vacuity node '${id}' arity must be a number`)
-      return [id, {
-        region: str(node.region, `vacuity node '${id}' region`),
-        sig: sigFromJson(node.sig, `vacuity node '${id}'`),
-        arity: node.arity,
-      }]
-    })),
-    wires: Object.fromEntries(Object.entries(wires).map(([id, wire]) => {
-      if (!isRecord(wire) || !Array.isArray(wire.endpoints)) {
-        fail(`vacuity wire '${id}' has unrecognized shape`)
+function vacuityInstanceFromJson(value: unknown): VacuityInstance {
+  if (!isRecord(value)) fail('vacuity instance must be an object')
+  const kind = str(value.kind, 'vacuity instance kind')
+  switch (kind) {
+    case 'point':
+      assertOnlyKeys(value, ['kind', 'node', 'region', 'sig'], 'vacuity point')
+      return {
+        kind,
+        node: str(value.node, 'vacuity point node'),
+        region: str(value.region, 'vacuity point region'),
+        sig: sigFromJson(value.sig, 'vacuity point'),
       }
-      assertOnlyKeys(wire, ['sig', 'endpoints'], `vacuity wire '${id}'`)
-      return [id, {
-        sig: sigFromJson(wire.sig, `vacuity wire '${id}'`),
-        endpoints: wire.endpoints.map((endpoint, index) =>
-          endpointFromJson(endpoint, `vacuity wire '${id}' endpoint ${index}`)),
-      }]
-    })),
-    attachments: Object.fromEntries(Object.entries(attachments).map(([id, endpoints]) => {
-      if (!Array.isArray(endpoints)) fail(`vacuity attachments on '${id}' must be an array`)
-      return [id, endpoints.map((endpoint, index) =>
-        endpointFromJson(endpoint, `vacuity attachment on '${id}' ${index}`))]
-    })),
+    case 'stub':
+      assertOnlyKeys(value, ['kind', 'base', 'wire', 'end', 'region'], 'vacuity stub')
+      return {
+        kind,
+        base: str(value.base, 'vacuity stub base'),
+        wire: str(value.wire, 'vacuity stub wire'),
+        end: str(value.end, 'vacuity stub end'),
+        region: str(value.region, 'vacuity stub region'),
+      }
+    case 'pin':
+      assertOnlyKeys(value, ['kind', 'wire', 'node', 'region'], 'vacuity pin')
+      return {
+        kind,
+        wire: str(value.wire, 'vacuity pin wire'),
+        node: str(value.node, 'vacuity pin node'),
+        region: str(value.region, 'vacuity pin region'),
+      }
+    default:
+      return fail(`unknown vacuity instance kind '${kind}'`)
   }
 }
 
@@ -393,7 +400,7 @@ export function stepToJson(step: ProofStep): unknown {
       return {
         rule: step.rule,
         direction: step.direction,
-        assembly: vacuityInputToJson(step.assembly),
+        instance: vacuityInstanceToJson(step.instance),
       }
     case 'presentation':
       return { rule: step.rule, input: presentationInputToJson(step.input) }
@@ -544,12 +551,12 @@ export function stepFromJson(value: unknown): ProofStep {
       }
     }
     case 'vacuity': {
-      assertOnlyKeys(value, ['rule', 'direction', 'assembly'], 'vacuity step')
+      assertOnlyKeys(value, ['rule', 'direction', 'instance'], 'vacuity step')
       const direction = str(value.direction, 'direction')
       if (direction !== 'insert' && direction !== 'delete') {
         fail("vacuity direction must be 'insert'|'delete'")
       }
-      return { rule, direction, assembly: vacuityInputFromJson(value.assembly) }
+      return { rule, direction, instance: vacuityInstanceFromJson(value.instance) }
     }
     case 'presentation':
       assertOnlyKeys(value, ['rule', 'input'], 'presentation step')

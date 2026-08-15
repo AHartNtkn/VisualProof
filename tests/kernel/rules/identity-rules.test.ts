@@ -63,65 +63,42 @@ describe('vacuity', () => {
       root: 'r0',
       regions: { r0: { kind: 'sheet' }, cut: { kind: 'cut', parent: 'r0' } },
     })
-    const assembly = {
-      nodes: { pt: { region: 'cut', sig: IOTA, arity: 0 } },
-      wires: {},
-      attachments: {},
-    }
-    const inserted = applyVacuityInsert(base, assembly)
+    const instance = { kind: 'point', node: 'pt', region: 'cut', sig: IOTA } as const
+    const inserted = applyVacuityInsert(base, instance)
     expect(inserted.nodes.pt).toEqual({ kind: 'identity', region: 'cut', sig: IOTA, arity: 0 })
-    const removed = applyVacuityDelete(inserted, assembly)
+    const removed = applyVacuityDelete(inserted, instance)
     expect(Object.keys(removed.nodes)).toHaveLength(0)
   })
 
-  it('grows a bare two-point segment (the drawable floating existential)', () => {
+  it('grows a bare two-point segment as point-then-stub, and retracts it', () => {
     const base = mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } } })
-    const assembly = {
-      nodes: {
-        end1: { region: 'r0', sig: IOTA, arity: 1 },
-        end2: { region: 'r0', sig: IOTA, arity: 1 },
-      },
-      wires: {
-        w: {
-          sig: IOTA,
-          endpoints: [
-            { node: 'end1', port: { kind: 'identity', index: 0 } as const },
-            { node: 'end2', port: { kind: 'identity', index: 0 } as const },
-          ],
-        },
-      },
-      attachments: {},
-    }
-    const inserted = applyVacuityInsert(base, assembly)
+    const pointed = applyVacuityInsert(base, {
+      kind: 'point', node: 'end1', region: 'r0', sig: IOTA,
+    })
+    const inserted = applyVacuityInsert(pointed, {
+      kind: 'stub', base: 'end1', wire: 'w', end: 'end2', region: 'r0',
+    })
     expect(derivedScope(inserted, 'w')).toBe('r0')
-    const removed = applyVacuityDelete(inserted, assembly)
+    expect(inserted.wires.w!.endpoints).toHaveLength(2)
+    const retracted = applyVacuityDelete(inserted, {
+      kind: 'stub', base: 'end1', wire: 'w', end: 'end2', region: 'r0',
+    })
+    const removed = applyVacuityDelete(retracted, {
+      kind: 'point', node: 'end1', region: 'r0', sig: IOTA,
+    })
     expect(Object.keys(removed.wires)).toHaveLength(0)
     expect(Object.keys(removed.nodes)).toHaveLength(0)
   })
 
   it('grows a stub out of an already-wired node, in one step', () => {
     const start = collapseFixture()
-    const assembly = {
-      nodes: { tip: { region: 'r0', sig: IOTA, arity: 1 } },
-      wires: {
-        stub: {
-          sig: IOTA,
-          endpoints: [
-            // A new port on the existing binary node, extending its arity.
-            { node: 'eq', port: { kind: 'identity', index: 2 } as const },
-            { node: 'tip', port: { kind: 'identity', index: 0 } as const },
-          ],
-        },
-      },
-      attachments: {},
-    }
-    const grown = applyVacuityInsert(start, assembly)
+    const instance = {
+      kind: 'stub', base: 'eq', wire: 'stub', end: 'tip', region: 'r0',
+    } as const
+    const grown = applyVacuityInsert(start, instance)
     expect((grown.nodes.eq as { arity: number }).arity).toBe(3)
     expect(derivedScope(grown, 'stub')).toBe('r0')
-    const back = applyVacuityDelete(grown, {
-      ...assembly,
-      nodes: { tip: { region: 'r0', sig: IOTA, arity: 1 } },
-    })
+    const back = applyVacuityDelete(grown, instance)
     expect((back.nodes.eq as { arity: number }).arity).toBe(2)
     expect(back.wires.stub).toBeUndefined()
   })
@@ -153,28 +130,49 @@ describe('vacuity', () => {
       },
     })
     expect(() => applyVacuityInsert(base, {
-      nodes: { tip: { region: 'r0', sig: IOTA, arity: 1 } },
+      kind: 'stub', base: 'deep', wire: 'w', end: 'tip', region: 'r0',
+    })).toThrow(/gated quantifier movement/)
+  })
+
+  it('refuses to retract a two-end wire whose far pin holds the quantifier above the base', () => {
+    // pin at the sheet, base node inside the cut: the wire's quantifier
+    // lives at the sheet — retracting it as a stub would erase that
+    // quantifier position, which is join/sever territory.
+    const d = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' }, cut: { kind: 'cut', parent: 'r0' } },
+      nodes: {
+        deep: { kind: 'identity', region: 'cut', sig: IOTA, arity: 2 },
+        e1: { kind: 'identity', region: 'cut', sig: IOTA, arity: 1 },
+        high: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
+      },
       wires: {
+        x: {
+          sig: IOTA,
+          endpoints: [
+            { node: 'deep', port: { kind: 'identity', index: 0 } },
+            { node: 'e1', port: { kind: 'identity', index: 0 } },
+          ],
+        },
         w: {
           sig: IOTA,
           endpoints: [
-            { node: 'deep', port: { kind: 'identity', index: 2 } },
-            { node: 'tip', port: { kind: 'identity', index: 0 } },
+            { node: 'deep', port: { kind: 'identity', index: 1 } },
+            { node: 'high', port: { kind: 'identity', index: 0 } },
           ],
         },
       },
-      attachments: {},
-    })).toThrow(/not ⊤-shaped/)
+    })
+    expect(() => applyVacuityDelete(d, {
+      kind: 'stub', base: 'deep', wire: 'w', end: 'high', region: 'r0',
+    })).toThrow(/join\/sever/)
   })
 
   it('attaches a pin only where the wire is visible', () => {
     const d = collapseFixture()
-    const pinDeep = {
-      nodes: { pin: { region: 'cut', sig: IOTA, arity: 1 } },
-      wires: {},
-      attachments: { s: [{ node: 'pin', port: { kind: 'identity', index: 0 } as const }] },
-    }
-    const pinned = applyVacuityInsert(d, pinDeep)
+    const pinned = applyVacuityInsert(d, {
+      kind: 'pin', wire: 's', node: 'pin', region: 'cut',
+    })
     expect(derivedScope(pinned, 's')).toBe('r0')
 
     const sOnly = mkDiagram({
@@ -207,33 +205,49 @@ describe('vacuity', () => {
       },
     })
     expect(() => applyVacuityInsert(sOnly, {
-      nodes: { pin: { region: 'other', sig: IOTA, arity: 1 } },
-      wires: {},
-      attachments: { a: [{ node: 'pin', port: { kind: 'identity', index: 0 } }] },
+      kind: 'pin', wire: 'a', node: 'pin', region: 'other',
     })).toThrow(/not visible/)
   })
 
   it('refuses to detach a load-bearing pin, and a last-but-one end', () => {
     const d = collapseFixture()
-    // ppin holds phead's quantifier inside the cut and is also its second
-    // end; qpin holds qhead at the sheet.
+    // qpin is qhead's second end at the sheet: detaching it would leave one end.
     expect(() => applyVacuityDelete(d, {
-      nodes: { qpin: { region: 'r0', sig: P, arity: 1 } },
-      wires: {},
-      attachments: { qhead: [{ node: 'qpin', port: { kind: 'identity', index: 0 } }] },
+      kind: 'pin', wire: 'qhead', node: 'qpin', region: 'r0',
     })).toThrow(/end/)
-  })
-
-  it('refuses an assembly component bridging two existing wires', () => {
-    const d = collapseFixture()
-    expect(() => applyVacuityInsert(d, {
-      nodes: { bridge: { region: 'r0', sig: IOTA, arity: 2 } },
-      wires: {},
-      attachments: {
-        s: [{ node: 'bridge', port: { kind: 'identity', index: 0 } }],
-        a: [{ node: 'bridge', port: { kind: 'identity', index: 1 } }],
+    // Pin s at the sheet twice, then drop one of them freely; the ORIGINAL
+    // sheet position (the eq node) still holds the scope, so this succeeds —
+    // but detaching the pin that alone holds a scope is refused.
+    const deepOnly = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' }, cut: { kind: 'cut', parent: 'r0' } },
+      nodes: {
+        p: { kind: 'atom', region: 'cut', sig: P },
+        hold: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
+        deeppin: { kind: 'identity', region: 'cut', sig: IOTA, arity: 1 },
+        hpin: { kind: 'identity', region: 'cut', sig: P, arity: 1 },
       },
-    })).toThrow(/gated insertion/)
+      wires: {
+        a: {
+          sig: IOTA,
+          endpoints: [
+            { node: 'p', port: { kind: 'arg', index: 0 } },
+            { node: 'hold', port: { kind: 'identity', index: 0 } },
+            { node: 'deeppin', port: { kind: 'identity', index: 0 } },
+          ],
+        },
+        h: {
+          sig: P,
+          endpoints: [
+            { node: 'p', port: { kind: 'head' } },
+            { node: 'hpin', port: { kind: 'identity', index: 0 } },
+          ],
+        },
+      },
+    })
+    expect(() => applyVacuityDelete(deepOnly, {
+      kind: 'pin', wire: 'a', node: 'hold', region: 'r0',
+    })).toThrow(/load-bearing/)
   })
 })
 

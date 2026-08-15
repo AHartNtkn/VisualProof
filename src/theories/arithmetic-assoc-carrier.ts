@@ -1,7 +1,6 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import type { ProofContext } from '../kernel/proof/context'
-import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   BINARY,
@@ -163,11 +162,7 @@ export function associativityCarrierHereditary(
   )
 
   before = forward.diagram
-  forward.record('introduce helper-local successor relation', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('successor', primitiveScope, BINARY),
-  })
+  forward.recordBareWire('introduce helper-local successor relation', primitiveScope, BINARY, 'successor')
   const successor = onlyNewWire(
     before,
     forward.diagram,
@@ -175,11 +170,7 @@ export function associativityCarrierHereditary(
   )
 
   before = forward.diagram
-  forward.record('introduce helper-local addition relation', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('plus', primitiveScope, TERNARY),
-  })
+  forward.recordBareWire('introduce helper-local addition relation', primitiveScope, TERNARY, 'plus')
   const plus = onlyNewWire(before, forward.diagram, primitiveScope)
 
   before = forward.diagram
@@ -199,11 +190,7 @@ export function associativityCarrierHereditary(
   )
 
   before = forward.diagram
-  forward.record('introduce temporary standing hypotheses', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('temporaryHypotheses', hypotheses, relSig([])),
-  })
+  forward.recordBareWire('introduce temporary standing hypotheses', hypotheses, relSig([]), 'temporaryHypotheses')
   const temporaryHypotheses = onlyNewWire(
     before,
     forward.diagram,
@@ -244,11 +231,7 @@ export function associativityCarrierHereditary(
   const hereditaryVariables: WireId[] = []
   for (const label of ['predecessor', 'successor']) {
     before = forward.diagram
-    forward.record(`introduce hereditary ${label}`, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('hereditaryVariable', hereditaryScope, IOTA),
-    })
+    forward.recordBareWire(`introduce hereditary ${label}`, hereditaryScope, IOTA, 'hereditaryVariable')
     hereditaryVariables.push(
       onlyNewWire(before, forward.diagram, hereditaryScope),
     )
@@ -276,11 +259,7 @@ export function associativityCarrierHereditary(
   )
 
   before = forward.diagram
-  forward.record('introduce temporary predecessor carrier', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('temporaryCarrier', hereditaryAntecedent, UNARY),
-  })
+  forward.recordBareWire('introduce temporary predecessor carrier', hereditaryAntecedent, UNARY, 'temporaryCarrier')
   const temporaryCarrier = onlyNewWire(
     before,
     forward.diagram,
@@ -364,11 +343,7 @@ export function associativityCarrierHereditary(
   )
   for (const label of ['right', 'predecessor sum', 'successor sum']) {
     before = forward.diagram
-    forward.record(`introduce successor-totality ${label}`, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('totalityVariable', successorTotalityScope, IOTA),
-    })
+    forward.recordBareWire(`introduce successor-totality ${label}`, successorTotalityScope, IOTA, 'totalityVariable')
   }
   const successorTotalityWires = scopedWires(
     forward.diagram,
@@ -412,11 +387,7 @@ export function associativityCarrierHereditary(
   )
   for (const label of ['right', 'third', 'first sum', 'inner sum']) {
     before = forward.diagram
-    forward.record(`introduce successor-transport ${label}`, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('transportVariable', successorTransportScope, IOTA),
-    })
+    forward.recordBareWire(`introduce successor-transport ${label}`, successorTransportScope, IOTA, 'transportVariable')
   }
   const [
     forwardTransportRight,
@@ -450,15 +421,7 @@ export function associativityCarrierHereditary(
     'successor output',
   ]) {
     before = forward.diagram
-    forward.record(`introduce transport evidence ${label}`, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly(
-        'transportEvidence',
-        forwardSuccessorTransportAntecedent,
-        IOTA,
-      ),
-    })
+    forward.recordBareWire(`introduce transport evidence ${label}`, forwardSuccessorTransportAntecedent, IOTA, 'transportEvidence')
   }
   const [
     forwardTransportPredecessorSum,

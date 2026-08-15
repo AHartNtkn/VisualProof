@@ -1,5 +1,4 @@
 import type { ProofContext } from '../kernel/proof/context'
-import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import type { NodeId } from '../kernel/diagram/diagram'
 import { IOTA, relSig } from '../kernel/diagram/sig'
@@ -122,11 +121,7 @@ export function associativityCarrierBase(
     ['addition', TERNARY],
   ] as const) {
     before = forward.diagram
-    forward.record('introduce base-support ' + label + ' relation', {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly(label, forwardPrimitiveScope, sig),
-    })
+    forward.recordBareWire('introduce base-support ' + label + ' relation', forwardPrimitiveScope, sig, label)
     relationsWires.push(
       onlyNewWire(before, forward.diagram, forwardPrimitiveScope),
     )
@@ -147,11 +142,7 @@ export function associativityCarrierBase(
     'forward conclusion',
   )
   before = forward.diagram
-  forward.record('introduce temporary standing hypotheses', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('temporaryHypotheses', forwardHypotheses, relSig([])),
-  })
+  forward.recordBareWire('introduce temporary standing hypotheses', forwardHypotheses, relSig([]), 'temporaryHypotheses')
   const temporaryHypotheses = onlyNewWire(
     before,
     forward.diagram,
@@ -180,11 +171,7 @@ export function associativityCarrierBase(
     'forward base body',
   )
   before = forward.diagram
-  forward.record('introduce material base value', {
-    rule: 'vacuity',
-    direction: 'insert',
-    assembly: bareWireAssembly('baseValue', forwardBase, IOTA),
-  })
+  forward.recordBareWire('introduce material base value', forwardBase, IOTA, 'baseValue')
   const forwardBaseValue = onlyNewWire(before, forward.diagram, forwardBase)
   before = forward.diagram
   forward.record('open material base implication', {
@@ -254,11 +241,7 @@ export function associativityCarrierBase(
   const transportVariables: string[] = []
   for (const label of ['right', 'third', 'first sum', 'inner sum']) {
     before = forward.diagram
-    forward.record('introduce material transport ' + label, {
-      rule: 'vacuity',
-      direction: 'insert',
-      assembly: bareWireAssembly('transportVariable', forwardTransport, IOTA),
-    })
+    forward.recordBareWire('introduce material transport ' + label, forwardTransport, IOTA, 'transportVariable')
     transportVariables.push(
       onlyNewWire(before, forward.diagram, forwardTransport),
     )
