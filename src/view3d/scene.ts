@@ -1,15 +1,19 @@
 import type { Diagram, NodeId, WireId } from '../kernel/diagram/diagram'
-import { diagramSpec, type Terminal } from './spec'
+import { diagramSpec } from './spec'
 import { CLEARANCE, UNIT, layoutTree, type TreeLayout } from './layout'
 import { steinerNet } from './steiner'
 import { routeAll, type Capsule, type NetIn } from './route3'
-import { add3, anyPerp, cross3, dist3, len3, norm3, scale3, sub3, v3, type Vec3 } from './vec3'
+import { add3, anyPerp, cross3, dist3, dot3, len3, norm3, scale3, sub3, v3, type Vec3 } from './vec3'
 
 export const RING_SEGMENTS = 32
 
 export type Entity =
   | { kind: 'branch'; key: string; pts: Vec3[] }
   | { kind: 'bead'; key: string; pos: Vec3 }
+  /** An identity node's marker on its line (USER law 2026-08-15: identity
+      nodes draw small pips over the branches). `ownerWire`: the first wire
+      bound there — the 2D bodyStroke hue rule. */
+  | { kind: 'pip'; key: string; node: NodeId; ownerWire: WireId | null; pos: Vec3 }
   /** `headWire`: the wire bound to an atom's head port — the ring strokes in
       that wire's order hue, matching the 2D painter. Null for refs. */
   | { kind: 'ring'; key: string; node: NodeId; headWire: WireId | null; pts: Vec3[] }
@@ -64,12 +68,6 @@ export function scene3(d: Diagram): Scene3 {
     }
   }
 
-  const tangentAt = (t: Terminal): Vec3 | null => {
-    const ring = tl.rings.get(t.node)
-    if (ring === undefined) return null
-    return norm3(sub3(tl.anchorOf(t), ring.center))
-  }
-
   const nets: NetIn[] = []
   for (const w of spec.wires) {
     // A wire can have fewer than two NODE endpoints when its remaining ends
@@ -79,22 +77,19 @@ export function scene3(d: Diagram): Scene3 {
     // scope — see the plan's closing notes.)
     if (w.terminals.length < 2) continue
     const anchors = w.terminals.map((t) => tl.anchorOf(t))
-    const tangents = w.terminals.map((t) => tangentAt(t))
-    let junctions: Vec3[] = []
-    let edges: (readonly [number, number])[] = [[0, 1]]
-    if (w.terminals.length > 2) {
-      const net = steinerNet(anchors)
-      junctions = [...net.junctions]
-      edges = net.edges.map(([u, vv]) => [u, vv] as const)
-    }
-    // USER law (2026-08-15): a terminal always connects at the END of a
-    // branch. When the minimal network makes a terminal an interior vertex
-    // (obtuse degeneracy collapses a junction onto it), stand a junction
-    // off along the terminal's departure direction instead and hang the
-    // terminal from it as a leaf — the wire never passes THROUGH an anchor.
-    const standoffDir = (t: number): Vec3 => {
-      const tangent = tangents[t] ?? null
-      if (tangent !== null) return tangent
+    // Departure normal per terminal. Ring anchors leave along the OUTWARD
+    // radial (USER law 2026-08-15: the branch-facing side of an application
+    // circle is its interior — wires connect only from outside). Identity
+    // anchors leave perpendicular to their line, toward the wire's other
+    // content when that direction exists; a same-line wire falls back to
+    // the region's reference normal, shared by both ends so its arch bows
+    // to one side (USER law: a wire is never parallel-and-overlapping with
+    // a branch).
+    const departure = (t: number): Vec3 => {
+      const term = w.terminals[t]!
+      const ring = tl.rings.get(term.node)
+      if (ring !== undefined) return norm3(sub3(anchors[t]!, ring.center))
+      const pr = tl.regions.get(spec.nodes.get(term.node)!.region)!
       let cen = v3(0, 0, 0)
       let n = 0
       for (let o = 0; o < anchors.length; o++) {
@@ -103,18 +98,26 @@ export function scene3(d: Diagram): Scene3 {
         n++
       }
       const raw = sub3(scale3(cen, 1 / n), anchors[t]!)
-      if (len3(raw) > 1e-9) return norm3(raw)
-      return anyPerp(tl.regions.get(spec.nodes.get(w.terminals[t]!.node)!.region)!.dir)
+      const perp = sub3(raw, scale3(pr.dir, dot3(raw, pr.dir)))
+      return len3(perp) > 1e-9 ? norm3(perp) : pr.ref
     }
-    const degree = new Array<number>(anchors.length).fill(0)
-    for (const [u, vv] of edges) {
-      if (u < anchors.length) degree[u]!++
-      if (vv < anchors.length) degree[vv]!++
+    const tangents = w.terminals.map((_, t) => departure(t))
+    let junctions: Vec3[] = []
+    let edges: (readonly [number, number])[] = [[0, 1]]
+    if (w.terminals.length > 2) {
+      const net = steinerNet(anchors)
+      junctions = [...net.junctions]
+      edges = net.edges.map(([u, vv]) => [u, vv] as const)
     }
+    // USER law (2026-08-15): a terminal always connects at the END of a
+    // branch, from the exterior. EVERY terminal hangs off a standoff
+    // junction two clearances out along its departure normal, joined by a
+    // short straight leaf — the visible connection at a rim or line is
+    // always an outward stub, and the routed web only ever meets the
+    // stub's outer end.
     for (let t = 0; t < anchors.length; t++) {
-      if (degree[t]! <= 1) continue
       const jv = anchors.length + junctions.length
-      junctions.push(add3(anchors[t]!, scale3(standoffDir(t), 2 * CLEARANCE)))
+      junctions.push(add3(anchors[t]!, scale3(departure(t), 2 * CLEARANCE)))
       edges = edges.map(([u, vv]) => [u === t ? jv : u, vv === t ? jv : vv] as const)
       edges.push([t, jv] as const)
     }
@@ -125,6 +128,15 @@ export function scene3(d: Diagram): Scene3 {
   const entities: Entity[] = []
   for (const pr of tl.regions.values()) entities.push({ kind: 'branch', key: `b:${pr.region}`, pts: [pr.base, pr.tip] })
   for (const bead of tl.beads) entities.push({ kind: 'bead', key: `d:${bead.region}`, pos: bead.pos })
+  const ownerWireOf = new Map<NodeId, WireId>()
+  for (const w of spec.wires) {
+    for (const t of w.terminals) {
+      if (spec.nodes.get(t.node)!.kind === 'identity' && !ownerWireOf.has(t.node)) ownerWireOf.set(t.node, w.id)
+    }
+  }
+  for (const [nid, pos] of tl.identityAnchor) {
+    entities.push({ kind: 'pip', key: `p:${nid}`, node: nid, ownerWire: ownerWireOf.get(nid) ?? null, pos })
+  }
   const headWireOf = new Map<NodeId, WireId>()
   for (const w of spec.wires) {
     for (const t of w.terminals) if (t.portKey === 'hd') headWireOf.set(t.node, w.id)

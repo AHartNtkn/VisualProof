@@ -31,7 +31,7 @@ export type Renderer3 = {
 }
 
 type LineKind = 'branch' | 'ring' | 'strand'
-type SpriteKind = 'bead' | 'label'
+type SpriteKind = 'bead' | 'label' | 'pip'
 
 type LineRec = {
   kind: LineKind
@@ -53,6 +53,7 @@ type SpriteRec = {
 const LINE_W: Record<LineKind, number> = { branch: 3.5, ring: 2.2, strand: 2.2 }
 const HOVER_EXTRA_W = 1.2
 const BEAD_SCALE = 0.18
+const PIP_SCALE = 0.14
 const BLOOM = { strength: 0.9, radius: 0.6, threshold: 0.15 }
 const PICK_THRESHOLD = 0.12
 
@@ -121,6 +122,7 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
   const colorOf = (e: Entity): string => {
     if (e.kind === 'strand') return th.hues.get(e.wire) ?? th.baseWire
     if (e.kind === 'ring' && e.headWire !== null) return th.hues.get(e.headWire) ?? th.baseWire
+    if (e.kind === 'pip' && e.ownerWire !== null) return th.hues.get(e.ownerWire) ?? th.baseWire
     return th.line
   }
 
@@ -158,6 +160,21 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
 
   const makeSprite = (e: FadedEntity & { kind: SpriteKind }): SpriteRec => {
     const baseColor = colorOf(e)
+    if (e.kind === 'pip') {
+      // Identity pips render OVER the lines they sit on (USER law
+      // 2026-08-15): depth testing off plus a high render order, or the
+      // coincident branch line z-fights them into invisibility.
+      const baseTex = discTexture(baseColor)
+      const hoverTex = discTexture(th.hover)
+      const mat = new THREE.SpriteMaterial({ map: baseTex, transparent: true, opacity: e.alpha ?? 1, depthTest: false })
+      const obj = new THREE.Sprite(mat)
+      obj.renderOrder = 10
+      obj.position.set(e.pos.x, e.pos.y, e.pos.z)
+      obj.scale.set(PIP_SCALE, PIP_SCALE, 1)
+      obj.userData['key'] = e.key
+      group.add(obj)
+      return { kind: 'pip', obj, baseTex, hoverTex }
+    }
     if (e.kind === 'bead') {
       const baseTex = discTexture(baseColor)
       const hoverTex = discTexture(th.hover)
@@ -202,7 +219,7 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
     lineRecs.clear()
     spriteRecs.clear()
     for (const e of list) {
-      if (e.kind === 'bead' || e.kind === 'label') spriteRecs.set(e.key, makeSprite(e))
+      if (e.kind === 'bead' || e.kind === 'label' || e.kind === 'pip') spriteRecs.set(e.key, makeSprite(e))
       else lineRecs.set(e.key, makeLine(e))
     }
     applyHover()

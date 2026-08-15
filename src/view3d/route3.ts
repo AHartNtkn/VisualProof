@@ -62,7 +62,15 @@ export function groupsNear(e: Vec3, obstacles: readonly Capsule[], delta: number
     otherwise be unroutable strangers) — and foreign geometry that merely
     passes near the ball stays a stranger the curve must clear. */
 const licensedHit = (at: Vec3, c: Capsule, lic: License, delta: number): boolean =>
-  lic.balls.some((b) => dist3(at, b.e) < 2.5 * delta && (c.g === lic.own || b.groups.has(c.g)))
+  lic.balls.some((b) => {
+    const d = dist3(at, b.e)
+    // Own strands meet themselves across the wide ball (edges of one wire
+    // share vertices and diverge slowly). Foreign-but-meeting groups are
+    // touched only AT the meeting point — a TIGHT ball — so a wire may
+    // touch its line or ring at the anchor but never run along it (USER
+    // law: a wire is never parallel-and-overlapping with a branch).
+    return c.g === lic.own ? d < 2.5 * delta : d < delta && b.groups.has(c.g)
+  })
 
 /** An acceptable resting place for a movable sample: every capsule it
     penetrates is licensed at that position. Exemption licenses CLOSENESS —

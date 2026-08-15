@@ -140,6 +140,87 @@ describe('scene3', () => {
       }
     }
   })
+  it('a wire between nodes on the SAME branch arches off the line, touching it only at its ends', () => {
+    // USER law 2026-08-15: a wire is NEVER parallel-and-overlapping with a
+    // branch. Two identity nodes on the trunk joined by a wire must produce
+    // strands that leave the line immediately: every sample farther than δ
+    // from both of its strand's endpoints stays ≥ δ·0.95 off the branch.
+    const b = new DiagramBuilder()
+    const i1 = b.identity(b.root, IOTA, 1)
+    const i2 = b.identity(b.root, IOTA, 1)
+    b.wire([
+      { node: i1, port: { kind: 'identity', index: 0 } },
+      { node: i2, port: { kind: 'identity', index: 0 } },
+    ])
+    const d = b.build()
+    const s = scene3(d)
+    const tl = layoutTree(diagramSpec(d))
+    const trunk = tl.regions.get('r0')!
+    const strands = s.entities.filter((e): e is Extract<Entity, { kind: 'strand' }> => e.kind === 'strand')
+    expect(strands.length).toBeGreaterThan(0)
+    let arched = false
+    for (const st of strands) {
+      const first = st.pts[0]!, last = st.pts[st.pts.length - 1]!
+      for (const p of st.pts) {
+        const offLine = segPointDist(p, trunk.base, trunk.tip)
+        if (offLine >= CLEARANCE * 0.95) arched = true
+        if (dist3(p, first) <= CLEARANCE || dist3(p, last) <= CLEARANCE) continue
+        expect(offLine).toBeGreaterThanOrEqual(CLEARANCE * 0.95)
+      }
+    }
+    expect(arched).toBe(true)
+  })
+  it('identity nodes get pip entities carrying their owner wire', () => {
+    // USER law 2026-08-15: identity nodes draw small pips over the branch
+    // lines so they are visible. Owner wire = the first wire bound there
+    // (the 2D bodyStroke rule), for hue-matched stroking.
+    const b = new DiagramBuilder()
+    const i1 = b.identity(b.root, IOTA, 1)
+    const i2 = b.identity(b.root, IOTA, 1)
+    const w = b.wire([
+      { node: i1, port: { kind: 'identity', index: 0 } },
+      { node: i2, port: { kind: 'identity', index: 0 } },
+    ])
+    const d = b.build()
+    const s = scene3(d)
+    const tl = layoutTree(diagramSpec(d))
+    const pips = s.entities.filter((e): e is Extract<Entity, { kind: 'pip' }> => e.kind === 'pip')
+    expect(pips.map((p) => p.key).sort()).toEqual([`p:${i1}`, `p:${i2}`].sort())
+    for (const pip of pips) {
+      expect(dist3(pip.pos, tl.identityAnchor.get(pip.node)!)).toBeLessThan(1e-9)
+      expect(pip.ownerWire).toBe(w)
+    }
+  })
+  it('ring connections depart radially OUTWARD — never from the branch side', () => {
+    // USER law 2026-08-15: the side of an application circle facing its
+    // branch is its interior; wires never connect there. Every strand end
+    // sitting on a ring rim must leave along the outward normal (a straight
+    // radial stub), so the visible connection always comes from outside.
+    const { d } = fixture()
+    const s = scene3(d)
+    const tl = layoutTree(diagramSpec(d))
+    const strands = s.entities.filter((e): e is Extract<Entity, { kind: 'strand' }> => e.kind === 'strand')
+    let checked = 0
+    for (const ring of tl.rings.values()) {
+      for (const anchor of ring.anchors.values()) {
+        for (const st of strands) {
+          const ends: [Vec3, Vec3][] = [
+            [st.pts[0]!, st.pts[1]!],
+            [st.pts[st.pts.length - 1]!, st.pts[st.pts.length - 2]!],
+          ]
+          for (const [end, next] of ends) {
+            if (dist3(end, anchor) > 1e-6) continue
+            checked++
+            const outward = scale3(sub3(anchor, ring.center), 1 / ring.radius)
+            const dep = sub3(next, end)
+            const depLen = Math.hypot(dep.x, dep.y, dep.z)
+            expect(dot3(dep, outward) / depLen).toBeGreaterThanOrEqual(0.9)
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(0)
+  })
   it('rings carry their head wire for order-hue stroking; refs carry null', () => {
     const { d, P, R } = fixture()
     const spec = diagramSpec(d)

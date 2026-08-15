@@ -25,6 +25,14 @@ export function expandHover(key: string, spec: DiagramSpec, entities: readonly E
     }
     return out
   }
+  if (tag === 'p') {
+    // A pip is its identity node: light it with every wire meeting there.
+    for (const w of spec.wires) {
+      if (!w.terminals.some((t) => t.node === id)) continue
+      for (const e of entities) if (e.kind === 'strand' && e.wire === w.id) out.add(e.key)
+    }
+    return out
+  }
   if (tag === 'r' || tag === 'l') {
     for (const e of entities) if ((e.kind === 'ring' || e.kind === 'label') && e.node === id) out.add(e.key)
     // Spec: "a node hit highlights its ring plus incident wire anchors" —
