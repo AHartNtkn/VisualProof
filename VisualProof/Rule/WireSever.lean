@@ -1,4 +1,5 @@
 import VisualProof.Diagram.PortPartition
+import VisualProof.Diagram.UnaryIdentity
 import VisualProof.Rule.Relation
 
 namespace VisualProof.Rule
@@ -42,6 +43,18 @@ private def presentedBoundary (diagram : OpenDiagram boundary)
     Vars represented boundary :=
   diagram.boundaryWire.map (fun wire => external wire)
 
+private theorem presentedBoundary_iso (iso : OpenDiagramIso source target)
+    (external : WireEquiv source.external represented) :
+    presentedBoundary target (iso.external.symm.trans external) =
+      presentedBoundary source external := by
+  apply Vars.eq_of_get_eq_wire
+  intro position
+  simp only [presentedBoundary]
+  rw [Vars.get_map_wire, Vars.get_map_wire]
+  change external (iso.external.symm (target.boundaryWire.get position)) =
+    external (source.boundaryWire.get position)
+  rw [← iso.boundary_eq position, WireEquiv.symm_apply_apply]
+
 def collapseLocal
     (wires localWires : List Sig)
     (joined : Var (wires ++ localWires) signature) :
@@ -78,6 +91,48 @@ def collapseLocal
           Var [signature] signature))) = joined := by
   simp [collapseLocal]
 
+private def inheritedTarget : WireRenaming wires
+    (wires ++ (localWires ++ [signature])) :=
+  ⟨fun wire => wire.appendLeft (localWires ++ [signature])⟩
+
+private def localTarget : WireRenaming (localWires ++ [signature])
+    (wires ++ (localWires ++ [signature])) :=
+  ⟨fun wire => Var.appendRight wires wire⟩
+
+def localCompletion
+    (joined : Var (wires ++ localWires) signature)
+    (raw : ItemSeq (wires ++ (localWires ++ [signature]))) :
+    ItemSeq (wires ++ (localWires ++ [signature])) :=
+  let collapse := collapseLocal wires localWires joined
+  let inheritedPins := ItemSeq.pinWires wires inheritedTarget
+    (fun inherited => decide
+      ((raw.renameWires collapse).incidencePaths inherited.index.val 0 ≠ [] ∧
+        raw.incidencePaths inherited.index.val 0 = []))
+  inheritedPins.append (ItemSeq.rootedTwoPins (localWires ++ [signature])
+    localTarget (fun wire =>
+      raw.incidencePaths (wires.length + wire.index.val) 0))
+
+def completeLocal
+    (joined : Var (wires ++ localWires) signature)
+    (raw : ItemSeq (wires ++ (localWires ++ [signature]))) : Region wires :=
+  .mk (localWires ++ [signature]) (raw.append (localCompletion joined raw))
+
+private def externalTarget (external locals : List Sig) :
+    WireRenaming external (external ++ locals) :=
+  ⟨fun wire => wire.appendLeft locals⟩
+
+def openCompletion (boundaryWire : Vars external boundary)
+    (raw : Region external) : ItemSeq (external ++ raw.locals) :=
+  ItemSeq.rootedTwoPins external (externalTarget external raw.locals)
+    (fun wire => List.replicate (boundaryWire.countIndex wire.index.val) [] ++
+      raw.incidencePaths wire.index.val)
+
+def completeOpen (boundaryWire : Vars external boundary)
+    (raw : Region external) : Region external :=
+  match raw with
+  | .mk locals items =>
+      .mk locals (items.append (openCompletion boundaryWire (.mk locals items)))
+
 inductive Local : LocalRule
   | sever
       (joined : Var (wires ++ localWires) signature)
@@ -86,9 +141,8 @@ inductive Local : LocalRule
         (collapseLocal wires localWires joined) joinedItems) :
       Local
         (.mk localWires joinedItems)
-        (.mk (localWires ++ [signature])
-          (joinedItems.partitionOutput
-            (collapseLocal wires localWires joined) partition))
+        (completeLocal joined (joinedItems.partitionOutput
+          (collapseLocal wires localWires joined) partition))
 
 /-- An open sever step expressed through exact typed presentations of both
 external-wire contexts. The target presentation is the source presentation
@@ -113,11 +167,14 @@ structure Open
       sourceExternal (source.boundaryWire.get position)
   partition : Region.PortPartition collapse sourceBody
   target_body : RegionIso targetExternal target.body
-    (sourceBody.partitionOutput collapse partition)
-  targetCanonical : (sourceBody.partitionOutput collapse partition).Canonical
+    (completeOpen (presentedBoundary target targetExternal)
+      (sourceBody.partitionOutput collapse partition))
+  targetCanonical : (completeOpen (presentedBoundary target targetExternal)
+    (sourceBody.partitionOutput collapse partition)).Canonical
   targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
     (presentedBoundary target targetExternal)
-    (sourceBody.partitionOutput collapse partition)
+    (completeOpen (presentedBoundary target targetExternal)
+      (sourceBody.partitionOutput collapse partition))
 
 noncomputable def Open.iso
     (sourceIso : OpenDiagramIso source source')
@@ -137,22 +194,11 @@ noncomputable def Open.iso
     collapse_surjective := step.collapse_surjective
     boundary := ?_
     partition := step.partition
-    target_body := targetIso.body.symm.trans step.target_body
-    targetCanonical := step.targetCanonical
+    target_body := ?_
+    targetCanonical := ?_
     targetExternalTwoEnded := ?_
   }
-  · have boundaryEq : presentedBoundary source'
-        (sourceIso.external.symm.trans step.sourceExternal) =
-      presentedBoundary source step.sourceExternal := by
-      apply Vars.eq_of_get_eq_wire
-      intro position
-      simp only [presentedBoundary]
-      rw [Vars.get_map_wire, Vars.get_map_wire]
-      change step.sourceExternal
-          (sourceIso.external.symm (source'.boundaryWire.get position)) =
-        step.sourceExternal (source.boundaryWire.get position)
-      rw [← sourceIso.boundary_eq position, WireEquiv.symm_apply_apply]
-    rw [boundaryEq]
+  · rw [presentedBoundary_iso sourceIso step.sourceExternal]
     intro signature wire
     exact step.sourceExternalTwoEnded wire
   · intro position
@@ -164,18 +210,11 @@ noncomputable def Open.iso
     rw [← targetIso.boundary_eq position, WireEquiv.symm_apply_apply,
       ← sourceIso.boundary_eq position, WireEquiv.symm_apply_apply]
     exact step.boundary position
-  · have boundaryEq : presentedBoundary target'
-        (targetIso.external.symm.trans step.targetExternal) =
-      presentedBoundary target step.targetExternal := by
-      apply Vars.eq_of_get_eq_wire
-      intro position
-      simp only [presentedBoundary]
-      rw [Vars.get_map_wire, Vars.get_map_wire]
-      change step.targetExternal
-          (targetIso.external.symm (target'.boundaryWire.get position)) =
-        step.targetExternal (target.boundaryWire.get position)
-      rw [← targetIso.boundary_eq position, WireEquiv.symm_apply_apply]
-    rw [boundaryEq]
+  · rw [presentedBoundary_iso targetIso step.targetExternal]
+    exact targetIso.body.symm.trans step.target_body
+  · rw [presentedBoundary_iso targetIso step.targetExternal]
+    exact step.targetCanonical
+  · rw [presentedBoundary_iso targetIso step.targetExternal]
     intro signature wire
     exact step.targetExternalTwoEnded wire
 

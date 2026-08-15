@@ -1,5 +1,6 @@
 import VisualProof.Rule.Soundness.Contextual
 import VisualProof.Diagram.Semantics.Algebra
+import VisualProof.Diagram.Semantics.UnaryIdentity
 import VisualProof.Rule.WireSever
 
 namespace VisualProof.Rule
@@ -47,11 +48,26 @@ theorem sound
       simp only [Values.lookup_append_right, Values.lookup_rename,
         targetLocal, Values.lookup_ofLookup]
   rw [environmentEq]
-  exact collapsedDenotes
+  rw [denoteItemSeq_append]
+  refine ⟨collapsedDenotes, ?_⟩
+  rw [WireSever.localCompletion, denoteItemSeq_append]
+  exact ⟨ItemSeq.pinWires_denotes _ _ _ _ _,
+    ItemSeq.rootedTwoPins_denotes _ _ _ _ _⟩
 
 end WireSever.Local
 
 namespace WireSever.Open
+
+private theorem completeOpen_denotes
+    (boundaryWire : Vars external boundaryTypes)
+    (raw : Region external) (model : Model) (env : Values model external)
+    (rawDenotes : denoteRegion model env raw) :
+    denoteRegion model env (WireSever.completeOpen boundaryWire raw) := by
+  cases raw with
+  | mk locals items =>
+      rcases rawDenotes with ⟨localEnv, itemsDenote⟩
+      refine ⟨localEnv, (denoteItemSeq_append _ _ _ _).mpr ⟨itemsDenote, ?_⟩⟩
+      exact ItemSeq.rootedTwoPins_denotes _ _ _ _ _
 
 theorem sound
     {source target : OpenDiagram boundaryTypes}
@@ -125,9 +141,12 @@ theorem sound
         separateBody).mp (by
           simpa only [separateBody,
             Region.partitionOutput_renameWires] using representedBody)
+    have completedBody := completeOpen_denotes
+      (target.boundaryWire.map (fun wire => step.targetExternal wire))
+      separateBody model separateEnv separatedBody
     exact (step.target_body.denotation model targetEnv separateEnv (by
       intro wireSignature wire
-      simp only [targetEnv, Values.lookup_rename])).mpr separatedBody
+      simp only [targetEnv, Values.lookup_rename])).mpr completedBody
 
 end WireSever.Open
 

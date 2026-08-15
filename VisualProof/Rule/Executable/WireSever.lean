@@ -85,29 +85,27 @@ inductive ForwardIndex {boundary : List Sig}
       (occurrence : Occurrence (.mk localWires joinedItems) source)
       (polarity : occurrence.context.polarity = .positive)
       (targetCanonical : (occurrence.context.fill
-        (.mk (localWires ++ [signature])
-          (joinedItems.partitionOutput
-            (collapseLocal wires localWires joined) partition))).Canonical)
+        (completeLocal joined (joinedItems.partitionOutput
+          (collapseLocal wires localWires joined) partition))).Canonical)
       (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
         occurrence.interface.boundaryWire
         (occurrence.context.fill
-          (.mk (localWires ++ [signature])
-            (joinedItems.partitionOutput
-              (collapseLocal wires localWires joined) partition)))) :
+          (completeLocal joined (joinedItems.partitionOutput
+            (collapseLocal wires localWires joined) partition)))) :
       ForwardIndex source
   | localJoin
       (joined : Var (wires ++ localWires) signature)
-      (separate : ItemSeq (wires ++ (localWires ++ [signature])))
+      (raw : ItemSeq (wires ++ (localWires ++ [signature])))
       (occurrence : Occurrence
-        (.mk (localWires ++ [signature]) separate) source)
+        (completeLocal joined raw) source)
       (polarity : occurrence.context.polarity = .negative)
       (targetCanonical : (occurrence.context.fill
-        (.mk localWires (separate.renameWires
+        (.mk localWires (raw.renameWires
           (collapseLocal wires localWires joined)))).Canonical)
       (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
         occurrence.interface.boundaryWire
         (occurrence.context.fill
-          (.mk localWires (separate.renameWires
+          (.mk localWires (raw.renameWires
             (collapseLocal wires localWires joined))))) :
       ForwardIndex source
   | openSever
@@ -132,26 +130,28 @@ inductive ForwardIndex {boundary : List Sig}
         collapse (separateBoundary.get position) =
           sourceExternal (source.boundaryWire.get position))
       (partition : Region.PortPartition collapse sourceBody)
-      (targetCanonical : (sourceBody.partitionOutput collapse partition).Canonical)
+      (targetCanonical : (completeOpen separateBoundary
+        (sourceBody.partitionOutput collapse partition)).Canonical)
       (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-        separateBoundary (sourceBody.partitionOutput collapse partition)) :
+        separateBoundary (completeOpen separateBoundary
+          (sourceBody.partitionOutput collapse partition))) :
       ForwardIndex source
 
 inductive BackwardIndex {boundary : List Sig}
     (source : OpenDiagram boundary) : Type
   | localJoin
       (joined : Var (wires ++ localWires) signature)
-      (separate : ItemSeq (wires ++ (localWires ++ [signature])))
+      (raw : ItemSeq (wires ++ (localWires ++ [signature])))
       (occurrence : Occurrence
-        (.mk (localWires ++ [signature]) separate) source)
+        (completeLocal joined raw) source)
       (polarity : occurrence.context.polarity = .positive)
       (targetCanonical : (occurrence.context.fill
-        (.mk localWires (separate.renameWires
+        (.mk localWires (raw.renameWires
           (collapseLocal wires localWires joined)))).Canonical)
       (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
         occurrence.interface.boundaryWire
         (occurrence.context.fill
-          (.mk localWires (separate.renameWires
+          (.mk localWires (raw.renameWires
             (collapseLocal wires localWires joined))))) :
       BackwardIndex source
   | localSever
@@ -162,36 +162,39 @@ inductive BackwardIndex {boundary : List Sig}
       (occurrence : Occurrence (.mk localWires joinedItems) source)
       (polarity : occurrence.context.polarity = .negative)
       (targetCanonical : (occurrence.context.fill
-        (.mk (localWires ++ [signature])
-          (joinedItems.partitionOutput
-            (collapseLocal wires localWires joined) partition))).Canonical)
+        (completeLocal joined (joinedItems.partitionOutput
+          (collapseLocal wires localWires joined) partition))).Canonical)
       (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
         occurrence.interface.boundaryWire
         (occurrence.context.fill
-          (.mk (localWires ++ [signature])
-            (joinedItems.partitionOutput
-              (collapseLocal wires localWires joined) partition)))) :
+          (completeLocal joined (joinedItems.partitionOutput
+            (collapseLocal wires localWires joined) partition)))) :
       BackwardIndex source
   | openJoin
       (joinedWires : List Sig)
       (signature : Sig)
       (sourceExternal : WireEquiv source.external
         (joinedWires ++ [signature]))
-      (sourceBody : Region (joinedWires ++ [signature]))
-      (source_body : RegionIso sourceExternal source.body sourceBody)
-      (sourceCanonical : sourceBody.Canonical)
+      (rawBody : Region (joinedWires ++ [signature]))
+      (source_body : RegionIso sourceExternal source.body
+        (completeOpen (mapBoundary source.boundaryWire
+          sourceExternal.toRenaming) rawBody))
+      (sourceCanonical : (completeOpen (mapBoundary source.boundaryWire
+        sourceExternal.toRenaming) rawBody).Canonical)
       (sourceExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-        (mapBoundary source.boundaryWire sourceExternal.toRenaming) sourceBody)
+        (mapBoundary source.boundaryWire sourceExternal.toRenaming)
+        (completeOpen (mapBoundary source.boundaryWire
+          sourceExternal.toRenaming) rawBody))
       (collapse : WireRenaming (joinedWires ++ [signature]) joinedWires)
       (collapseSurjective : ∀ {wireSignature}
         (wire : Var joinedWires wireSignature),
         ∃ sourceWire : Var (joinedWires ++ [signature]) wireSignature,
           collapse sourceWire = wire)
-      (targetCanonical : (sourceBody.renameWires collapse).Canonical)
+      (targetCanonical : (rawBody.renameWires collapse).Canonical)
       (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
         (mapBoundary source.boundaryWire
           (WireRenaming.comp collapse sourceExternal.toRenaming))
-        (sourceBody.renameWires collapse)) :
+        (rawBody.renameWires collapse)) :
       BackwardIndex source
 
 def runForward (source : OpenDiagram boundary) :
@@ -199,15 +202,15 @@ def runForward (source : OpenDiagram boundary) :
   | .localSever joined joinedItems partition occurrence _ targetCanonical
       targetExternalTwoEnded =>
       occurrence.interface.withBody
-        (occurrence.context.fill (.mk _
+        (occurrence.context.fill (completeLocal joined
           (joinedItems.partitionOutput
             (collapseLocal _ _ joined) partition)))
         targetCanonical targetExternalTwoEnded
-  | .localJoin joined separate occurrence _ targetCanonical
+  | .localJoin joined raw occurrence _ targetCanonical
       targetExternalTwoEnded =>
       occurrence.interface.withBody
         (occurrence.context.fill
-          (.mk _ (separate.renameWires
+          (.mk _ (raw.renameWires
             (collapseLocal _ _ joined))))
         targetCanonical targetExternalTwoEnded
   | .openSever _ _ _ sourceBody _ _ _ separateBoundary
@@ -216,28 +219,29 @@ def runForward (source : OpenDiagram boundary) :
       external := _
       boundaryWire := separateBoundary
       boundarySurjective := separateBoundarySurjective
-      body := sourceBody.partitionOutput collapse partition
+      body := completeOpen separateBoundary
+        (sourceBody.partitionOutput collapse partition)
       canonical := targetCanonical
       externalTwoEnded := targetExternalTwoEnded
     }
 
 def runBackward (source : OpenDiagram boundary) :
     BackwardIndex source → OpenDiagram boundary
-  | .localJoin joined separate occurrence _ targetCanonical
+  | .localJoin joined raw occurrence _ targetCanonical
       targetExternalTwoEnded =>
       occurrence.interface.withBody
         (occurrence.context.fill
-          (.mk _ (separate.renameWires
+          (.mk _ (raw.renameWires
             (collapseLocal _ _ joined))))
         targetCanonical targetExternalTwoEnded
   | .localSever joined joinedItems partition occurrence _ targetCanonical
       targetExternalTwoEnded =>
       occurrence.interface.withBody
-        (occurrence.context.fill (.mk _
+        (occurrence.context.fill (completeLocal joined
           (joinedItems.partitionOutput
             (collapseLocal _ _ joined) partition)))
         targetCanonical targetExternalTwoEnded
-  | .openJoin joinedWires _ sourceExternal sourceBody _ _ _ collapse
+  | .openJoin joinedWires _ sourceExternal rawBody _ _ _ collapse
       collapseSurjective targetCanonical targetExternalTwoEnded => {
       external := joinedWires
       boundaryWire := mapBoundary source.boundaryWire
@@ -266,7 +270,7 @@ def runBackward (source : OpenDiagram boundary) :
           _ = joinedWire.index.val := congrArg (fun wire => wire.index.val)
             collapsed
           _ = joinedIndex.val := by simp only [joinedWire, Var.index_ofIndex]
-      body := sourceBody.renameWires collapse
+      body := rawBody.renameWires collapse
       canonical := targetCanonical
       externalTwoEnded := targetExternalTwoEnded
     }
@@ -295,7 +299,7 @@ theorem forward_exact (source target : OpenDiagram boundary) :
         rw [polarity]
         change Local
           (.mk _ (separate.renameWires (collapseLocal _ _ joined)))
-          (.mk _ separate)
+          (completeLocal joined separate)
         simpa only [outputEq] using
           (Local.sever joined
             (separate.renameWires (collapseLocal _ _ joined)) partition)
@@ -316,12 +320,24 @@ theorem forward_exact (source target : OpenDiagram boundary) :
           collapse_surjective := collapseSurjective
           boundary := boundaryEq
           partition := partition
-          target_body := RegionIso.refl _
-          targetCanonical := targetCanonical
+          target_body := by
+            change RegionIso (WireEquiv.refl _)
+              (completeOpen separateBoundary
+                (sourceBody.partitionOutput collapse partition))
+              (completeOpen (mapBoundary separateBoundary WireRenaming.id)
+                (sourceBody.partitionOutput collapse partition))
+            apply regionIsoOfEq
+            simp only [mapBoundary, Vars.map_id_wire]
+          targetCanonical := by
+            change (completeOpen (mapBoundary separateBoundary
+              WireRenaming.id)
+              (sourceBody.partitionOutput collapse partition)).Canonical
+            simpa only [mapBoundary, Vars.map_id_wire] using targetCanonical
           targetExternalTwoEnded := by
             change OpenDiagram.ExternalTwoEnded
               (mapBoundary separateBoundary WireRenaming.id)
-              (sourceBody.partitionOutput collapse partition)
+              (completeOpen (mapBoundary separateBoundary WireRenaming.id)
+                (sourceBody.partitionOutput collapse partition))
             intro wireSignature wire
             simpa only [mapBoundary, Vars.map_id_wire] using
               targetExternalTwoEnded wire
@@ -445,7 +461,7 @@ theorem backward_exact (source target : OpenDiagram boundary) :
           occurrence.sourceCanonical, occurrence.sourceExternalTwoEnded,
           occurrence.host_iso, ?_⟩
         rw [polarity]
-        change Local joinedBody (.mk _ separate)
+        change Local joinedBody (completeLocal joined separate)
         simpa only [joinedBody, outputEq] using
           (Local.sever joined
             (separate.renameWires (collapseLocal _ _ joined)) partition)
@@ -453,7 +469,7 @@ theorem backward_exact (source target : OpenDiagram boundary) :
         targetCanonical targetExternalTwoEnded =>
         let separate := joinedItems.partitionOutput
           (collapseLocal _ _ joined) partition
-        let separateBody := Region.mk _ separate
+        let separateBody := completeLocal joined separate
         let outputOccurrence : Occurrence separateBody
             (occurrence.interface.withBody
               (occurrence.context.fill separateBody) targetCanonical
@@ -509,8 +525,10 @@ theorem backward_exact (source target : OpenDiagram boundary) :
           targetExternalTwoEnded := by
             change OpenDiagram.ExternalTwoEnded
               (mapBoundary source.boundaryWire sourceExternal.toRenaming)
-              ((sourceBody.renameWires collapse).partitionOutput collapse
-                partition)
+              (completeOpen
+                (mapBoundary source.boundaryWire sourceExternal.toRenaming)
+                ((sourceBody.renameWires collapse).partitionOutput collapse
+                  partition))
             rw [outputEq]
             intro wireSignature wire
             exact sourceExternalTwoEnded wire
@@ -526,7 +544,8 @@ theorem backward_exact (source target : OpenDiagram boundary) :
           | sever joined joinedItems partition =>
               let separate := joinedItems.partitionOutput
                 (collapseLocal _ _ joined) partition
-              let sourceOccurrence : Occurrence (.mk _ separate) source := {
+              let sourceOccurrence : Occurrence
+                  (completeLocal joined separate) source := {
                 interface := occurrence.interface
                 context := occurrence.context
                 sourceCanonical := targetCanonical
