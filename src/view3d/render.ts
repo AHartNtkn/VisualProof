@@ -115,8 +115,14 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
   }
   applyBackground()
 
-  const colorOf = (e: Entity): string =>
-    e.kind === 'strand' ? (th.hues.get(e.wire) ?? th.baseWire) : th.line
+  // Strands stroke in their wire's order hue; an atom's ring strokes in its
+  // HEAD wire's hue (matching the 2D painter's bodyStroke); refs (null
+  // headWire) and structural entities keep the line color.
+  const colorOf = (e: Entity): string => {
+    if (e.kind === 'strand') return th.hues.get(e.wire) ?? th.baseWire
+    if (e.kind === 'ring' && e.headWire !== null) return th.hues.get(e.headWire) ?? th.baseWire
+    return th.line
+  }
 
   const disposeLine = (r: LineRec): void => {
     group.remove(r.obj)

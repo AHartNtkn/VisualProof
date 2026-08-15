@@ -3,13 +3,26 @@ import {
   add3, anyPerp, cross3, dist3, dot3, len3, norm3, scale3, segClosest, segPointDist, segSegClosest, segSegDist, sub3, v3, type Vec3,
 } from './vec3'
 
-export type Capsule = { a: Vec3; b: Vec3; r: number }
+/** `g` names the obstacle GROUP a capsule belongs to (a region line, one
+    ring with its spokes, one wire's strands…). Exemption licenses whole
+    groups: a ball at an anchor licenses every group that passes through the
+    meeting zone — a wire coexists with its own ring, not just with the two
+    chords nearest its anchor. */
+export type Capsule = { a: Vec3; b: Vec3; r: number; g: string }
 export type EdgeIn = { p: Vec3; q: Vec3; tp: Vec3 | null; tq: Vec3 | null }
-/** `exempt`: this net's OWN anchors and junctions — the only points/edges
-    allowed to hug the tree or a sibling wire within an exemption ball.
-    Exemption is never shared across nets: a later wire must clear an
-    earlier wire's anchors just like any other obstacle. */
-export type NetIn = { id: WireId; edges: EdgeIn[]; exempt: Vec3[] }
+/** One wire's network to route: `anchors` are its terminal points (with a
+    departure tangent or null each), `junctions` its branch vertices —
+    positioned by the caller in free space, then CLEARED here against the
+    live obstacle set (tree plus every already-routed wire) so nothing
+    foreign ever sits inside a junction's meeting zone. `edges` reference
+    vertices: index < anchors.length → anchor, else junctions[i-anchors.length]. */
+export type NetIn = {
+  id: WireId
+  anchors: Vec3[]
+  tangents: (Vec3 | null)[]
+  junctions: Vec3[]
+  edges: (readonly [number, number])[]
+}
 
 const MAX_ROUNDS = 60
 const SMOOTH = 0.4
@@ -20,23 +33,44 @@ const capDir = (c: Capsule): Vec3 => {
   return l < 1e-12 ? v3(0, 0, 1) : scale3(d, 1 / l)
 }
 
-const isExempt = (p: Vec3, exempt: readonly Vec3[], delta: number): boolean =>
-  exempt.some((e) => dist3(p, e) < 2.5 * delta)
-
 function penetrations(p: Vec3, obstacles: readonly Capsule[], delta: number): Capsule[] {
   const out: Capsule[] = []
   for (const c of obstacles) if (segPointDist(p, c.a, c.b) < c.r + delta * (1 - 1e-9)) out.push(c)
   return out
 }
 
-/** An acceptable resting place for a movable sample: point-clear of every
-    obstacle, or inside one of this net's exemption balls (where proximity
-    is licensed). Exemption licenses CLOSENESS — it never pins a sample; a
-    sample inside a ball whose edge still has a real (non-exempt) violation
-    must remain free to move, or that violation can become permanently
-    unclearable (the pinned end alone can sit nearer the obstacle than δ). */
-const pointOk = (p: Vec3, obstacles: readonly Capsule[], exempt: readonly Vec3[], delta: number): boolean =>
-  isExempt(p, exempt, delta) || penetrations(p, obstacles, delta).length === 0
+/** One exemption ball: a meeting point (anchor or junction) plus the set of
+    obstacle groups that pass through its meeting zone (within δ) — the
+    geometry the wire legitimately touches there. */
+export type Ball = { e: Vec3; groups: ReadonlySet<string> }
+/** A net's license: its own group (its strands always meet themselves at
+    shared vertices) plus its exemption balls. */
+export type License = { own: string; balls: readonly Ball[] }
+
+export function groupsNear(e: Vec3, obstacles: readonly Capsule[], delta: number): Set<string> {
+  const out = new Set<string>()
+  for (const c of obstacles) if (segPointDist(e, c.a, c.b) < c.r + delta) out.add(c.g)
+  return out
+}
+
+/** Whether a sub-δ approach to capsule `c` at position `at` is licensed:
+    `at` lies inside some ball whose licensed groups include `c`'s group
+    (or `c` belongs to the net's own strands, which meet it at every shared
+    vertex). Licensing is per GROUP, never per capsule — a wire's anchor
+    licenses its whole ring, not just the chords nearest the anchor (the
+    farther chords of the SAME ring sit at knife-edge distances and would
+    otherwise be unroutable strangers) — and foreign geometry that merely
+    passes near the ball stays a stranger the curve must clear. */
+const licensedHit = (at: Vec3, c: Capsule, lic: License, delta: number): boolean =>
+  lic.balls.some((b) => dist3(at, b.e) < 2.5 * delta && (c.g === lic.own || b.groups.has(c.g)))
+
+/** An acceptable resting place for a movable sample: every capsule it
+    penetrates is licensed at that position. Exemption licenses CLOSENESS —
+    it never pins a sample; a sample inside a ball whose edge still has a
+    real (unlicensed) violation must remain free to move, or that violation
+    can become permanently unclearable. */
+const pointOk = (p: Vec3, obstacles: readonly Capsule[], lic: License, delta: number): boolean =>
+  penetrations(p, obstacles, delta).every((c) => licensedHit(p, c, lic, delta))
 
 /** Capsules whose clearance is violated by the EDGE [a,b], not just its
     endpoint samples — catches an interior dip toward an obstacle that both
@@ -57,48 +91,64 @@ const pointOk = (p: Vec3, obstacles: readonly Capsule[], exempt: readonly Vec3[]
     flag it as a real violation with no exempt endpoint able to explain it
     away. Testing the actual closest point is what makes exemption
     well-defined regardless of sampling density. */
-function edgeHits(a: Vec3, b: Vec3, obstacles: readonly Capsule[], exempt: readonly Vec3[], delta: number): Capsule[] {
+function edgeHits(a: Vec3, b: Vec3, obstacles: readonly Capsule[], lic: License, delta: number): Capsule[] {
   const out: Capsule[] = []
   for (const c of obstacles) {
     if (segSegDist(a, b, c.a, c.b) >= c.r + delta * (1 - 1e-9)) continue
     const [onEdge] = segSegClosest(a, b, c.a, c.b)
-    if (isExempt(onEdge, exempt, delta)) continue
+    if (licensedHit(onEdge, c, lic, delta)) continue
     out.push(c)
   }
   return out
 }
 
-/** Deterministic escape: march along ±axis in delta/2 steps until the
-    position is acceptable (clear or exempt). */
-function escape(p: Vec3, axis: Vec3, obstacles: readonly Capsule[], exempt: readonly Vec3[], delta: number): Vec3 {
+/** The 26 unit directions of a 3×3×3 stencil — a fixed, deterministic
+    direction set for local escape searches. */
+const ESCAPE_DIRS: readonly Vec3[] = (() => {
+  const dirs: Vec3[] = []
+  for (const x of [-1, 0, 1]) for (const y of [-1, 0, 1]) for (const z of [-1, 0, 1]) {
+    if (x === 0 && y === 0 && z === 0) continue
+    dirs.push(norm3(v3(x, y, z)))
+  }
+  return dirs
+})()
+
+/** Deterministic LOCAL-FIRST escape: scan candidates on expanding shells
+    (radius j·δ/2 over the fixed direction stencil) and take the first
+    acceptable position — the nearest usable spot. A 1-D march along a
+    single axis is wrong here: in a crowded zone its first clear point can
+    be tens of units away, flinging junctions and samples into space
+    (measured: a standoff junction thrown ~100 units, exploding its leaf
+    edge). */
+function escapeNear(p: Vec3, obstacles: readonly Capsule[], lic: License, delta: number): Vec3 {
   for (let j = 1; j <= 400; j++) {
-    for (const sign of [1, -1]) {
-      const cand = add3(p, scale3(axis, sign * j * (delta / 2)))
-      if (pointOk(cand, obstacles, exempt, delta)) return cand
+    for (const dir of ESCAPE_DIRS) {
+      const cand = add3(p, scale3(dir, j * (delta / 2)))
+      if (pointOk(cand, obstacles, lic, delta)) return cand
     }
   }
-  throw new Error('route3: no escape direction cleared the obstacle set')
+  throw new Error('route3: no escape position cleared the obstacle set')
 }
 
-function pushOut(p: Vec3, hits: Capsule[], obstacles: readonly Capsule[], exempt: readonly Vec3[], delta: number): Vec3 {
+function pushOut(p: Vec3, hits: Capsule[], obstacles: readonly Capsule[], lic: License, delta: number): Vec3 {
   if (hits.length === 1) {
     const c = hits[0]!
     const closest = segClosest(p, c.a, c.b)
     const radial = sub3(p, closest)
     const dir = len3(radial) < 1e-9 ? anyPerp(capDir(c)) : norm3(radial)
     const cand = add3(closest, scale3(dir, c.r + delta * (1 + 1e-3)))
-    return pointOk(cand, obstacles, exempt, delta) ? cand : escape(p, dir, obstacles, exempt, delta)
+    if (pointOk(cand, obstacles, lic, delta)) return cand
   }
-  const ax = cross3(capDir(hits[0]!), capDir(hits[1]!))
-  const axis = len3(ax) < 1e-6 ? anyPerp(capDir(hits[0]!)) : norm3(ax)
-  return escape(p, axis, obstacles, exempt, delta)
+  return escapeNear(p, obstacles, lic, delta)
 }
 
-/** Push a point out of the obstacle set to ≥ delta clearance. */
+/** Push a point out of the obstacle set until every remaining penetration
+    is licensed (usually: none). `exempt` points license the groups passing
+    through their meeting zones, as in routing. */
 export function clearPoint(p: Vec3, obstacles: Capsule[], exempt: Vec3[], delta: number): Vec3 {
-  if (isExempt(p, exempt, delta)) return p
-  const hits = penetrations(p, obstacles, delta)
-  return hits.length === 0 ? p : pushOut(p, hits, obstacles, exempt, delta)
+  const lic: License = { own: '', balls: exempt.map((e) => ({ e, groups: groupsNear(e, obstacles, delta) })) }
+  if (pointOk(p, obstacles, lic, delta)) return p
+  return pushOut(p, penetrations(p, obstacles, delta), obstacles, lic, delta)
 }
 
 /** Whether points a and b sit on opposite sides of capsule c's axis — a
@@ -197,7 +247,7 @@ function tryScaleEdgeAcross(
     later rounds; the round cap stays the loud backstop. */
 function resolveEdge(
   a: Vec3, b: Vec3, moveA: boolean, moveB: boolean, hits: readonly Capsule[],
-  obstacles: readonly Capsule[], exempt: readonly Vec3[], delta: number,
+  obstacles: readonly Capsule[], lic: License, delta: number,
 ): [Vec3, Vec3] {
   let worst = hits[0]!
   let worstD = segSegDist(a, b, worst.a, worst.b)
@@ -206,9 +256,9 @@ function resolveEdge(
     if (d < worstD) { worstD = d; worst = c }
   }
   const endsOk = (na: Vec3, nb: Vec3): boolean =>
-    (!moveA || pointOk(na, obstacles, exempt, delta)) && (!moveB || pointOk(nb, obstacles, exempt, delta))
+    (!moveA || pointOk(na, obstacles, lic, delta)) && (!moveB || pointOk(nb, obstacles, lic, delta))
   const fullyClear = (na: Vec3, nb: Vec3): boolean =>
-    edgeHits(na, nb, obstacles, exempt, delta).length === 0 && endsOk(na, nb)
+    edgeHits(na, nb, obstacles, lic, delta).length === 0 && endsOk(na, nb)
 
   if (!straddles(a, b, worst)) {
     const scaled = tryScaleEdgeAcross(a, b, moveA, moveB, worst, delta)
@@ -230,13 +280,19 @@ function resolveEdge(
     const clear = marchEdge(a, b, moveA, moveB, dir, delta, fullyClear)
     if (clear !== null) return clear
   }
-  const target = worst.r + delta * (1 + 1e-3)
+  // The fallback accepts at EXACTLY the scan's violation threshold — an
+  // inflated target creates a dead band: an obstacle can legally rest just
+  // past the violation threshold from a FIXED endpoint (measured: 0.30004
+  // vs a 0.3003 target), making any edge from that endpoint permanently
+  // unable to reach the inflated target even though the scan would already
+  // call it clear.
+  const target = worst.r + delta * (1 - 1e-9)
   for (const dir of dirs) {
     const progress = marchEdge(a, b, moveA, moveB, dir, delta, (na, nb) =>
       segSegDist(na, nb, worst.a, worst.b) >= target && endsOk(na, nb))
     if (progress !== null) return progress
   }
-  throw new Error('route3: no transverse escape cleared the edge')
+  throw new Error(`route3: no transverse escape cleared the edge a=${JSON.stringify(a)} b=${JSON.stringify(b)} moveA=${moveA} moveB=${moveB} worst=${JSON.stringify(worst)} dWorst=${worstD.toFixed(4)} distA=${segPointDist(a, worst.a, worst.b).toFixed(4)} distB=${segPointDist(b, worst.a, worst.b).toFixed(4)} hits=${hits.length}`)
 }
 
 function hermiteSeed(e: EdgeIn, delta: number): Vec3[] {
@@ -261,7 +317,7 @@ function hermiteSeed(e: EdgeIn, delta: number): Vec3[] {
   return pts
 }
 
-function repair(seed: Vec3[], obstacles: readonly Capsule[], exempt: readonly Vec3[], delta: number, label: string): Vec3[] {
+function repair(seed: Vec3[], obstacles: readonly Capsule[], lic: License, delta: number, label: string): Vec3[] {
   const pts = seed.map((p) => v3(p.x, p.y, p.z))
   for (let round = 0; round < MAX_ROUNDS; round++) {
     let dirty = false
@@ -276,7 +332,7 @@ function repair(seed: Vec3[], obstacles: readonly Capsule[], exempt: readonly Ve
     const updates = new Map<number, Vec3>()
     for (let i = 0; i < snapshot.length - 1; i++) {
       const a = snapshot[i]!, b = snapshot[i + 1]!
-      const hits = edgeHits(a, b, obstacles, exempt, delta)
+      const hits = edgeHits(a, b, obstacles, lic, delta)
       if (hits.length === 0) continue
       dirty = true
       // Only the true terminals (index 0 / n) are pinned — exemption
@@ -294,11 +350,11 @@ function repair(seed: Vec3[], obstacles: readonly Capsule[], exempt: readonly Ve
       if (updates.has(i) && !permFixedA) continue
       if (updates.has(i + 1) && !permFixedB) continue
       const moveA = !permFixedA, moveB = !permFixedB
-      const [na, nb] = resolveEdge(a, b, moveA, moveB, hits, obstacles, exempt, delta)
+      const [na, nb] = resolveEdge(a, b, moveA, moveB, hits, obstacles, lic, delta)
       if (moveA) updates.set(i, na)
       if (moveB) updates.set(i + 1, nb)
     }
-    if (!dirty) return pts // the scan above just verified every edge clear
+    if (!dirty) return beautify(pts, obstacles, lic, delta) // the scan above just verified every edge clear
     for (const [idx, np] of updates) pts[idx] = np
     for (let i = 2; i < pts.length - 2; i++) {
       const mid = scale3(add3(pts[i - 1]!, pts[i + 1]!), 0.5)
@@ -310,25 +366,104 @@ function repair(seed: Vec3[], obstacles: readonly Capsule[], exempt: readonly Ve
       // a 0.01-per-round limit cycle at the target boundary). Accept the
       // smoothed position only if both edges it participates in stay clear
       // of every capsule outside the exemption balls.
-      if (edgeHits(pts[i - 1]!, cand, obstacles, exempt, delta).length === 0
-        && edgeHits(cand, pts[i + 1]!, obstacles, exempt, delta).length === 0) pts[i] = cand
+      if (edgeHits(pts[i - 1]!, cand, obstacles, lic, delta).length === 0
+        && edgeHits(cand, pts[i + 1]!, obstacles, lic, delta).length === 0) pts[i] = cand
     }
   }
   throw new Error(`route3: clearance not achieved for ${label} after ${MAX_ROUNDS} rounds`)
 }
 
-const chainOf = (pts: Vec3[]): Capsule[] => pts.slice(1).map((b, i) => ({ a: pts[i]!, b, r: 0 }))
+/** Repair output is CLEAR but carries its history — every push, march, and
+    scale survives as spikes, zigzags, and obstacle-hugging wander. The
+    drawn curve should instead read as the design's "distortion applied to
+    a straight line": beautify pulls the path TAUT (replace subpaths with
+    verified-clear chords), re-densifies, then ROUNDS corners with
+    clearance-verified smoothing to a fixpoint. Every accepted move is
+    verified against the same edge invariant the repair scan enforces, so
+    beautification can never spend the clearance the repair earned. The
+    first and last samples' segments are left untouched to preserve the
+    anchors' departure tangents. */
+function beautify(pts: Vec3[], obstacles: readonly Capsule[], lic: License, delta: number): Vec3[] {
+  if (pts.length < 4) return pts
+  // 1) Taut: from each kept vertex, probe the farthest reachable sample by
+  //    halving (log probes; a missed longer shortcut is cosmetic, never a
+  //    correctness issue) and jump to it when the chord is verified clear.
+  const last = pts.length - 1
+  const taut: Vec3[] = [pts[0]!, pts[1]!]
+  let i = 1
+  while (i < last - 1) {
+    let j = last - 1
+    while (j > i + 1 && edgeHits(pts[i]!, pts[j]!, obstacles, lic, delta).length !== 0) {
+      j = i + Math.floor((j - i) / 2)
+    }
+    taut.push(pts[j]!)
+    i = j
+  }
+  taut.push(pts[last]!)
+  // 2) Densify: subdivide each chord to ~delta/2 spacing (points on a clear
+  //    chord stay clear), giving the rounding pass room to bend.
+  const dense: Vec3[] = [taut[0]!]
+  for (let k = 1; k < taut.length; k++) {
+    const a = taut[k - 1]!, b = taut[k]!
+    const pieces = Math.max(1, Math.ceil(dist3(a, b) / (delta / 2)))
+    for (let s = 1; s <= pieces; s++) dense.push(lerpPt(a, b, s / pieces))
+  }
+  // 3) Round: guarded smoothing to a movement fixpoint. Purely cosmetic —
+  //    each accepted move is edge-verified, so stopping at the round cap
+  //    leaves a fully valid (just less smooth) curve; no throw needed.
+  for (let round = 0; round < 200; round++) {
+    let moved = 0
+    for (let k = 2; k < dense.length - 2; k++) {
+      const mid = scale3(add3(dense[k - 1]!, dense[k + 1]!), 0.5)
+      const cand = add3(dense[k]!, scale3(sub3(mid, dense[k]!), SMOOTH))
+      if (edgeHits(dense[k - 1]!, cand, obstacles, lic, delta).length === 0
+        && edgeHits(cand, dense[k + 1]!, obstacles, lic, delta).length === 0) {
+        moved = Math.max(moved, dist3(cand, dense[k]!))
+        dense[k] = cand
+      }
+    }
+    if (moved < 1e-3 * delta) break
+  }
+  return dense
+}
+
+const lerpPt = (a: Vec3, b: Vec3, t: number): Vec3 =>
+  v3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t)
+
+const chainOf = (pts: Vec3[], g: string): Capsule[] => pts.slice(1).map((b, i) => ({ a: pts[i]!, b, r: 0, g }))
 
 export function routeAll(nets: NetIn[], tree: Capsule[], delta: number): Map<WireId, Vec3[][]> {
   const obstacles: Capsule[] = [...tree]
+  // Every wire's anchors are obstacles from the START: without this, an
+  // early wire may legally park within δ of a LATER wire's anchor, making
+  // that wire's first edge permanently unresolvable (its fixed endpoint
+  // alone sits sub-δ from the stranger). Each anchor capsule carries its
+  // owner's group, so the owner itself keeps free access.
+  for (const net of nets) for (const a of net.anchors) obstacles.push({ a, b: a, r: 0, g: `w:${net.id}` })
   const out = new Map<WireId, Vec3[][]>()
   for (const net of nets) {
+    // Junctions clear against the LIVE obstacle set — the tree plus every
+    // wire routed so far — licensed only near this net's own anchors, so a
+    // junction's meeting zone ends ≥ δ from all foreign geometry and group
+    // licensing cleanly separates "meets here" from "merely nearby".
+    const own = `w:${net.id}`
+    const junctions = net.junctions.map((j) => clearPoint(j, obstacles, net.anchors, delta))
+    const ballPts = [...net.anchors, ...junctions]
+    const lic: License = {
+      own,
+      balls: ballPts.map((e) => ({ e, groups: groupsNear(e, obstacles, delta) })),
+    }
+    const posOf = (v: number): Vec3 =>
+      v < net.anchors.length ? net.anchors[v]! : junctions[v - net.anchors.length]!
+    const tanOf = (v: number): Vec3 | null =>
+      v < net.anchors.length ? net.tangents[v]! : null
     const curves: Vec3[][] = []
     const ownCaps: Capsule[] = []
-    net.edges.forEach((edge, i) => {
-      const pts = repair(hermiteSeed(edge, delta), [...obstacles, ...ownCaps], net.exempt, delta, `${net.id}[${i}]`)
+    net.edges.forEach(([u, w], i) => {
+      const edge: EdgeIn = { p: posOf(u), q: posOf(w), tp: tanOf(u), tq: tanOf(w) }
+      const pts = repair(hermiteSeed(edge, delta), [...obstacles, ...ownCaps], lic, delta, `${net.id}[${i}]`)
       curves.push(pts)
-      ownCaps.push(...chainOf(pts))
+      ownCaps.push(...chainOf(pts, own))
     })
     out.set(net.id, curves)
     obstacles.push(...ownCaps)

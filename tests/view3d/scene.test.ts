@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 import { scene3, type Entity } from '../../src/view3d/scene'
-import { CLEARANCE } from '../../src/view3d/layout'
-import { dist3, segPointDist, type Vec3 } from '../../src/view3d/vec3'
+import { CLEARANCE, layoutTree } from '../../src/view3d/layout'
+import { diagramSpec } from '../../src/view3d/spec'
+import { add3, dist3, dot3, scale3, segPointDist, sub3, type Vec3 } from '../../src/view3d/vec3'
 
 function fixture() {
   const b = new DiagramBuilder()
@@ -97,6 +98,58 @@ describe('scene3', () => {
   it('is deterministic', () => {
     const { d } = fixture()
     expect(scene3(d)).toEqual(scene3(d))
+  })
+  it('every terminal anchor is a LEAF: exactly one strand end touches it', () => {
+    // USER law 2026-08-15: a wire connects at the END of a branch. When the
+    // minimal network degenerates to a path through a terminal, a standoff
+    // junction takes the pass-through and the terminal hangs off it — so no
+    // anchor ever has two strand ends (in-and-out, the "sharp pin").
+    const { d, x } = fixture()
+    const s = scene3(d)
+    const tl = layoutTree(diagramSpec(d))
+    const spec = diagramSpec(d)
+    const wire = spec.wires.find((w) => w.id === x)!
+    const strandEnds = s.entities
+      .filter((e): e is Extract<Entity, { kind: 'strand' }> => e.kind === 'strand' && e.wire === x)
+      .flatMap((e) => [e.pts[0]!, e.pts[e.pts.length - 1]!])
+    for (const t of wire.terminals) {
+      const anchor = tl.anchorOf(t)
+      const touching = strandEnds.filter((p) => dist3(p, anchor) < 1e-6).length
+      expect(touching).toBe(1)
+    }
+  })
+  it('no strand crosses a ring disc interior', () => {
+    // USER law 2026-08-15: wires connect to ring EXTERIORS only — the disc
+    // interior is solid. Check every strand edge against every ring plane:
+    // a sign change within the rim radius is a threading violation.
+    const { d } = fixture()
+    const s = scene3(d)
+    const tl = layoutTree(diagramSpec(d))
+    const strands = s.entities.filter((e): e is Extract<Entity, { kind: 'strand' }> => e.kind === 'strand')
+    for (const ring of tl.rings.values()) {
+      for (const st of strands) {
+        for (let i = 1; i < st.pts.length; i++) {
+          const da = dot3(sub3(st.pts[i - 1]!, ring.center), ring.axis)
+          const db = dot3(sub3(st.pts[i]!, ring.center), ring.axis)
+          if (da === 0 && db === 0) continue // in-plane approach along the rim, never a crossing
+          if ((da > 0 && db > 0) || (da < 0 && db < 0)) continue
+          const t = Math.abs(da) / (Math.abs(da) + Math.abs(db))
+          const hit = add3(st.pts[i - 1]!, scale3(sub3(st.pts[i]!, st.pts[i - 1]!), t))
+          expect(dist3(hit, ring.center)).toBeGreaterThanOrEqual(ring.radius * 0.999)
+        }
+      }
+    }
+  })
+  it('rings carry their head wire for order-hue stroking; refs carry null', () => {
+    const { d, P, R } = fixture()
+    const spec = diagramSpec(d)
+    const s = scene3(d)
+    const ringOf = (n: string) => s.entities.find(
+      (e): e is Extract<Entity, { kind: 'ring' }> => e.kind === 'ring' && e.node === n,
+    )!
+    const headWire = spec.wires.find((w) => w.terminals.some((t) => t.node === P && t.portKey === 'hd'))!
+    expect(ringOf(P).headWire).toBe(headWire.id)
+    expect(ringOf(R).headWire).toBeNull()
   })
   it('a 0-ary ref renders as a plain ring plus label, no anchors, no throw', () => {
     const b = new DiagramBuilder()
