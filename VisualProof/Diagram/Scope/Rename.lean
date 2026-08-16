@@ -236,6 +236,82 @@ private theorem ItemSeq.childrenCanonical_rename_embedding
       rw [headIH rename embedding, tailIH rename embedding])
     items rename embedding
 
+private theorem indexEmbedding_of_preservesIndex
+    (rename : WireRenaming source target)
+    (_length_eq : source.length = target.length)
+    (preserves : ∀ {signature} (wire : Var source signature),
+      (rename wire).index.val = wire.index.val) :
+    IndexEmbedding rename := by
+  intro signature selected
+  exact {
+    apply := by
+      intro otherSignature other
+      rw [preserves other, preserves selected]
+    sourceBound := selected.index.isLt
+    targetBound := (rename selected).index.isLt
+  }
+
+theorem ItemSeq.incidencePaths_renameWires_preservesIndex
+    (items : ItemSeq source) (rename : WireRenaming source target)
+    (length_eq : source.length = target.length)
+    (preserves : ∀ {signature} (wire : Var source signature),
+      (rename wire).index.val = wire.index.val)
+    (wire : Var source signature) (itemIndex : Nat) :
+    (items.renameWires rename).incidencePaths wire.index.val itemIndex =
+      items.incidencePaths wire.index.val itemIndex := by
+  apply ItemSeq.incidencePaths_rename_reflect
+  simpa [preserves wire] using
+    indexEmbedding_of_preservesIndex rename length_eq preserves wire
+
+theorem ItemSeq.ChildrenCanonical.renameWires_preservesIndex_iff
+    (items : ItemSeq source) (rename : WireRenaming source target)
+    (length_eq : source.length = target.length)
+    (preserves : ∀ {signature} (wire : Var source signature),
+      (rename wire).index.val = wire.index.val) :
+    (items.renameWires rename).ChildrenCanonical ↔ items.ChildrenCanonical :=
+  ItemSeq.childrenCanonical_rename_embedding items rename
+    (@indexEmbedding_of_preservesIndex source target rename length_eq preserves)
+
+theorem Region.Canonical.renameWires_preservesIndex_iff
+    (region : Region source) (rename : WireRenaming source target)
+    (length_eq : source.length = target.length)
+    (preserves : ∀ {signature} (wire : Var source signature),
+      (rename wire).index.val = wire.index.val) :
+    (region.renameWires rename).Canonical ↔ region.Canonical := by
+  cases region with
+  | mk locals items =>
+      simp only [Region.renameWires, Region.Canonical]
+      have embedding := @indexEmbedding_of_preservesIndex source target rename
+        length_eq preserves
+      have rootsIff : ∀ localIndex : Fin locals.length,
+          RegionPath.RootedTwo
+              ((items.renameWires (rename.appendRight locals)).incidencePaths
+                (target.length + localIndex.val) 0) ↔
+            RegionPath.RootedTwo
+              (items.incidencePaths (source.length + localIndex.val) 0) := by
+        intro localIndex
+        let wire := Var.appendRight source (Var.ofIndex localIndex)
+        have pathsEq := ItemSeq.incidencePaths_rename_reflect items
+          (rename.appendRight locals) wire.index.val
+          ((rename.appendRight locals) wire).index.val 0
+          (embedding.appendRight locals wire)
+        have sourceIndex : wire.index.val = source.length + localIndex.val := by
+          simp [wire]
+        have targetIndex :
+            ((rename.appendRight locals) wire).index.val =
+              target.length + localIndex.val := by
+          simp [wire, WireRenaming.appendRight]
+        rw [← targetIndex, pathsEq, sourceIndex]
+      constructor
+      · rintro ⟨roots, children⟩
+        exact ⟨fun localIndex => (rootsIff localIndex).mp (roots localIndex),
+          (ItemSeq.childrenCanonical_rename_embedding items
+            (rename.appendRight locals) (embedding.appendRight locals)).mp children⟩
+      · rintro ⟨roots, children⟩
+        exact ⟨fun localIndex => (rootsIff localIndex).mpr (roots localIndex),
+          (ItemSeq.childrenCanonical_rename_embedding items
+            (rename.appendRight locals) (embedding.appendRight locals)).mpr children⟩
+
 private theorem adjoinHost_index (wire : Var (outer ++ hostLocals) signature) :
     (Region.adjoinHostWire outer hostLocals addedLocals wire).index.val =
       wire.index.val := by

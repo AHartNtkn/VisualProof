@@ -2,9 +2,16 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** State the original whole-assembly vacuity relation declaratively and state its inclusion in the transitive closure of the full Lean rule system.
+**Goal:** Define the original whole-assembly vacuity relation declaratively and prove its inclusion in the transitive closure of the full Lean rule system.
 
 **Architecture:** A compact recursive `IdentityOnlyExtension` witness identifies exactly the retained syntax and added identity apparatus. Dependent projections from that single witness define added wires, added identities, incidences, existing contacts, connectedness, and the historical two-case absorption relation; no executable edit, computed endpoint, inverse, graph copy, or primitive-step witness enters the relation. The closure theorem lives in a separate module so the relation remains independent of `Step`.
+
+The proof reads the complete absorption run backwards. It does not materialize
+individual carrier states as diagrams: doing so would duplicate recursive syntax
+and validity. Reusable proof support is owned separately at its natural boundary:
+finite rule-chain transport, exact recursive item focus, finite folds over existing
+extension evidence, and realization of an equality visible at a descendant region.
+Only assembly-component normalization remains in the completeness module.
 
 **Tech Stack:** Lean 4.30, the existing recursive `Region`/`Item`/`ItemSeq` syntax, `Contextual`, and `Relation.TransGen`.
 
@@ -84,3 +91,55 @@ Expected: focused build succeeds; the scan finds exactly the owning completeness
 git add VisualProof/Rule/Vacuity/Assembly.lean VisualProof/Rule/Vacuity/AssemblyCompleteness.lean VisualProof.lean docs/superpowers/plans/2026-08-16-declarative-vacuous-assembly.md
 git commit -m "State declarative vacuous assembly completeness"
 ```
+
+---
+
+### Task 2: Prove completeness
+
+**Files:**
+- Create or modify narrow diagram/rule theorem-owner modules as required for
+  recursive identity focus, closure transport, and visible equality realization.
+- Modify: `VisualProof/Rule/Vacuity/AssemblyCompleteness.lean`
+
+- [ ] **Step 1: Add isomorphism-aware finite `Step` closure lemmas**
+
+Prove concatenation and endpoint-isomorphism transport for
+`Relation.TransGen Step`, derived only from `Step.iso`.
+
+- [ ] **Step 2: Add exact recursive identity focus**
+
+Turn an existing `Region.IdentityOccurrence` into its owning region context and
+local item split, with the isomorphisms required to present the selected identity
+to `Stub`, `Presentation`, and zero-fresh `Iteration`. Do not introduce item IDs,
+paths stored independently of syntax, or a second navigation representation.
+
+- [ ] **Step 3: Add finite folds over extension evidence**
+
+Derive complete finite enumerations of fresh wires, added identities, and actual
+fresh incidences from `IdentityOnlyExtension`. These lists enumerate existing
+dependent cursors and never become assembly data or executable search state.
+
+- [ ] **Step 4: Realize visible equality regionally**
+
+Prove once that an equality available at an ancestor can be exposed at a
+descendant by a finite `Step` chain using `Iteration` and `Presentation`, with a
+cleanup chain. Reuse exact focus and context transport.
+
+- [ ] **Step 5: Normalize one accepted component**
+
+Read the accepted absorption trace backwards. Construct bare roots with
+`Point`/`Stub`, contacted roots with `Stub`, reflexive incidences with `Pin`, and
+same-region physical configurations with `Presentation`; use the regional
+equality lemma for transferred descendant incidences.
+
+- [ ] **Step 6: Prove the local and contextual completeness theorems**
+
+Handle the zero-fresh base (including nullary nodes and retained-wire identity
+configurations), concatenate component chains, lift through the original
+`Occurrence`, and close the exact public theorem without changing its statement.
+
+- [ ] **Step 7: Validate and commit**
+
+Run strict checks for every touched owner, the focused completeness build,
+admission and authority scans, `git diff --check`, and the aggregate build. Commit
+the complete proof once all task-owned validation is green.
