@@ -36,12 +36,11 @@ describe('expandHover', () => {
     const all = scene.entities.filter((e) => e.kind === 'strand' && e.wire === wid).map((e) => e.key)
     expect([...got].sort()).toEqual(all.sort())
   })
-  it('a branch expands to its whole subtree of branches and beads', () => {
+  it('a branch expands to its whole subtree of branches', () => {
     const { spec, scene, c1, c2 } = fixture()
     const got = expandHover(`b:${c1}`, spec, scene.entities)
     expect(got.has(`b:${c1}`)).toBe(true)
     expect(got.has(`b:${c2}`)).toBe(true)
-    expect(got.has(`d:${c2}`)).toBe(true)
     expect(got.has('b:r0')).toBe(false)
   })
   it('a ring expands to ring + its label + incident wire anchors (spec: hovering a node highlights its ring plus incident wire anchors)', () => {

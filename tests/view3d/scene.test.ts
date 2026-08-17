@@ -21,12 +21,16 @@ function fixture() {
 }
 
 describe('scene3', () => {
-  it('emits one branch per region, a bead per cut, rings and a ref label', () => {
+  it('emits one polarity-colored branch per region, rings and a ref label', () => {
     const { d, c1, P, Q, R } = fixture()
     const s = scene3(d)
     const byKind = (k: Entity['kind']) => s.entities.filter((e) => e.kind === k)
     expect(byKind('branch').map((e) => e.key).sort()).toEqual(['b:r0', `b:${c1}`].sort())
-    expect(byKind('bead').map((e) => e.key)).toEqual([`d:${c1}`])
+    // Polarity replaces marker dots (USER ruling 2026-08-16): the sheet's
+    // line is even, the cut's line odd — the crossing is a color change.
+    const branchOf = (key: string) => byKind('branch').find((e) => e.key === key) as Extract<Entity, { kind: 'branch' }>
+    expect(branchOf('b:r0').polarity).toBe(0)
+    expect(branchOf(`b:${c1}`).polarity).toBe(1)
     expect(byKind('ring').map((e) => e.key).sort()).toEqual([`r:${P}`, `r:${Q}`, `r:${R}`].sort())
     const labels = byKind('label')
     expect(labels.length).toBe(1)

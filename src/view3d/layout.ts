@@ -38,7 +38,6 @@ export type PlacedRing = {
 }
 export type TreeLayout = {
   regions: Map<RegionId, PlacedRegion>
-  beads: { region: RegionId; pos: Vec3 }[]
   identityAnchor: Map<NodeId, Vec3>
   rings: Map<NodeId, PlacedRing>
   spheres: Map<RegionId, { center: Vec3; r: number }>
@@ -157,9 +156,8 @@ export function layoutTree(spec: DiagramSpec): TreeLayout {
 
     const children: ChildPlan[] = []
     if (branchItems.length === 1) {
-      // A single sub-cut continues the line collinearly; its bead alone
-      // marks the crossing (USER law: the bump distinguishes a branch from
-      // a continuation).
+      // A single sub-cut continues the line collinearly; the polarity color
+      // change alone marks the crossing (USER ruling 2026-08-16).
       children.push({ region: branchItems[0]!.region, t: segLen, tilt: 0, azimuth: 0, stem: 2 * DELTA })
     } else if (branchItems.length > 1) {
       // Minimal clearance stem per child at a given tilt, against the TRUE
@@ -274,17 +272,16 @@ export function layoutTree(spec: DiagramSpec): TreeLayout {
 
   // ---- top-down realization ----
   const regions = new Map<RegionId, PlacedRegion>()
-  const beads: { region: RegionId; pos: Vec3 }[] = []
   const identityAnchor = new Map<NodeId, Vec3>()
   const rings = new Map<NodeId, PlacedRing>()
   const spheres = new Map<RegionId, { center: Vec3; r: number }>()
   const nodePrimary = new Map<NodeId, Vec3>()
 
-  const realize = (rid: RegionId, bead: Vec3, dir: Vec3, ref: Vec3, stem: number): void => {
+  const realize = (rid: RegionId, base: Vec3, dir: Vec3, ref: Vec3, stem: number): void => {
     const s = summaries.get(rid)!
-    const start = add3(bead, scale3(dir, stem))
+    const start = add3(base, scale3(dir, stem))
     const tip = add3(start, scale3(dir, s.segLen))
-    regions.set(rid, { region: rid, base: bead, tip, dir, ref, contentStart: stem })
+    regions.set(rid, { region: rid, base, tip, dir, ref, contentStart: stem })
     spheres.set(rid, { center: add3(start, scale3(dir, s.c)), r: s.rho })
     const rs = spec.regions.get(rid)!
     for (const item of rs.items) {
@@ -297,16 +294,12 @@ export function layoutTree(spec: DiagramSpec): TreeLayout {
     }
     const n2 = norm3(cross3(dir, ref))
     for (const cp of s.children) {
-      const childBead = add3(start, scale3(dir, cp.t))
+      const childBase = add3(start, scale3(dir, cp.t))
       const w = add3(scale3(ref, Math.cos(cp.azimuth)), scale3(n2, Math.sin(cp.azimuth)))
       const childDir = cp.tilt === 0 ? dir : norm3(add3(scale3(dir, Math.cos(cp.tilt)), scale3(w, Math.sin(cp.tilt))))
-      // Siblings share the fan point, so each crossing's bead sits a bead's
-      // breadth along its OWN line — one bump per branch root, never a
-      // stack of coincident beads at the tip.
-      beads.push({ region: cp.region, pos: add3(childBead, scale3(childDir, DELTA)) })
       const parallel = sub3(dir, scale3(childDir, dot3(dir, childDir)))
       const childRef = len3(parallel) < 1e-9 ? ref : norm3(parallel)
-      realize(cp.region, childBead, childDir, childRef, cp.stem)
+      realize(cp.region, childBase, childDir, childRef, cp.stem)
     }
   }
   realize(spec.root, v3(0, 0, 0), v3(0, 1, 0), v3(1, 0, 0), 0)
@@ -357,5 +350,5 @@ export function layoutTree(spec: DiagramSpec): TreeLayout {
     if (a === undefined) throw new Error(`layout: node ${t.node} has no port ${t.portKey}`)
     return a
   }
-  return { regions, beads, identityAnchor, rings, spheres, anchorOf }
+  return { regions, identityAnchor, rings, spheres, anchorOf }
 }

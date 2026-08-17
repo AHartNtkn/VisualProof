@@ -8,8 +8,11 @@ import { add3, anyPerp, cross3, dist3, dot3, len3, norm3, scale3, sub3, v3, type
 export const RING_SEGMENTS = 32
 
 export type Entity =
-  | { kind: 'branch'; key: string; pts: Vec3[] }
-  | { kind: 'bead'; key: string; pos: Vec3 }
+  /** `polarity`: the region's cut-nesting parity (sheet = 0). Branches
+      stroke by polarity — even keeps the strong line color, odd goes gray
+      (USER ruling 2026-08-16) — so every cut boundary is visible as a color
+      change and needs no marker dot. */
+  | { kind: 'branch'; key: string; polarity: 0 | 1; pts: Vec3[] }
   /** An identity node's marker on its line (USER law 2026-08-15: identity
       nodes draw small pips over the branches). `ownerWire`: the first wire
       bound there — the 2D bodyStroke hue rule. */
@@ -146,8 +149,14 @@ export function scene3(d: Diagram): Scene3 {
   const routed = routeAll(nets, tree, CLEARANCE)
 
   const entities: Entity[] = []
-  for (const pr of tl.regions.values()) entities.push({ kind: 'branch', key: `b:${pr.region}`, pts: [pr.base, pr.tip] })
-  for (const bead of tl.beads) entities.push({ kind: 'bead', key: `d:${bead.region}`, pos: bead.pos })
+  const depthOf = (rid: string): number => {
+    let depth = 0
+    for (let cur = spec.regions.get(rid)!.parent; cur !== null; cur = spec.regions.get(cur)!.parent) depth++
+    return depth
+  }
+  for (const pr of tl.regions.values()) {
+    entities.push({ kind: 'branch', key: `b:${pr.region}`, polarity: (depthOf(pr.region) % 2) as 0 | 1, pts: [pr.base, pr.tip] })
+  }
   const ownerWireOf = new Map<NodeId, WireId>()
   for (const w of spec.wires) {
     for (const t of w.terminals) {

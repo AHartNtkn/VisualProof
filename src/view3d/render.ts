@@ -14,6 +14,10 @@ export type RenderTheme = {
   mode: 'light' | 'dark'
   background: string
   line: string
+  /** Odd-polarity branch color: cut-nesting parity strokes branches in
+      alternating line/lineAlt (USER ruling 2026-08-16), so every cut
+      boundary is a visible color change and needs no marker dot. */
+  lineAlt: string
   baseWire: string
   hover: string
   hues: Map<WireId, string>
@@ -31,7 +35,7 @@ export type Renderer3 = {
 }
 
 type LineKind = 'branch' | 'ring' | 'strand'
-type SpriteKind = 'bead' | 'label' | 'pip'
+type SpriteKind = 'label' | 'pip'
 
 type LineRec = {
   kind: LineKind
@@ -52,7 +56,6 @@ type SpriteRec = {
 
 const LINE_W: Record<LineKind, number> = { branch: 3.5, ring: 2.2, strand: 2.2 }
 const HOVER_EXTRA_W = 1.2
-const BEAD_SCALE = 0.18
 const PIP_SCALE = 0.14
 const BLOOM = { strength: 0.9, radius: 0.6, threshold: 0.15 }
 const PICK_THRESHOLD = 0.12
@@ -123,6 +126,7 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
     if (e.kind === 'strand') return th.hues.get(e.wire) ?? th.baseWire
     if (e.kind === 'ring' && e.headWire !== null) return th.hues.get(e.headWire) ?? th.baseWire
     if (e.kind === 'pip' && e.ownerWire !== null) return th.hues.get(e.ownerWire) ?? th.baseWire
+    if (e.kind === 'branch' && e.polarity === 1) return th.lineAlt
     return th.line
   }
 
@@ -175,17 +179,6 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
       group.add(obj)
       return { kind: 'pip', obj, baseTex, hoverTex }
     }
-    if (e.kind === 'bead') {
-      const baseTex = discTexture(baseColor)
-      const hoverTex = discTexture(th.hover)
-      const mat = new THREE.SpriteMaterial({ map: baseTex, transparent: true, opacity: e.alpha ?? 1 })
-      const obj = new THREE.Sprite(mat)
-      obj.position.set(e.pos.x, e.pos.y, e.pos.z)
-      obj.scale.set(BEAD_SCALE, BEAD_SCALE, 1)
-      obj.userData['key'] = e.key
-      group.add(obj)
-      return { kind: 'bead', obj, baseTex, hoverTex }
-    }
     const base = textTexture(e.text, baseColor)
     const hover = textTexture(e.text, th.hover)
     const mat = new THREE.SpriteMaterial({ map: base.tex, transparent: true, opacity: e.alpha ?? 1 })
@@ -219,7 +212,7 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
     lineRecs.clear()
     spriteRecs.clear()
     for (const e of list) {
-      if (e.kind === 'bead' || e.kind === 'label' || e.kind === 'pip') spriteRecs.set(e.key, makeSprite(e))
+      if (e.kind === 'label' || e.kind === 'pip') spriteRecs.set(e.key, makeSprite(e))
       else lineRecs.set(e.key, makeLine(e))
     }
     applyHover()

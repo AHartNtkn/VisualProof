@@ -52,7 +52,7 @@ function busyFixture() {
 }
 
 describe('layoutTree', () => {
-  it('lone-chain cuts continue collinearly with beads marking each crossing', () => {
+  it('lone-chain cuts continue collinearly', () => {
     const b = new DiagramBuilder()
     const c1 = b.cut(b.root)
     const c2 = b.cut(c1)
@@ -61,7 +61,6 @@ describe('layoutTree', () => {
     const r0 = tl.regions.get('r0')!, p1 = tl.regions.get(c1)!, p2 = tl.regions.get(c2)!
     expect(dot3(r0.dir, p1.dir)).toBeCloseTo(1, 9)
     expect(dot3(p1.dir, p2.dir)).toBeCloseTo(1, 9)
-    expect(tl.beads.map((x) => x.region).sort()).toEqual([c1, c2].sort())
   })
   it('sibling cuts leave at distinct azimuths and stay ≥ δ apart (sampled)', () => {
     const { d } = busyFixture()

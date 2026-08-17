@@ -18,6 +18,7 @@ const renderThemeOf = (theme: Theme, diagram: Diagram): RenderTheme => ({
   mode: theme.mode,
   background: theme.canvas,
   line: theme.mode === 'dark' ? '#f2f4f8' : theme.ink,
+  lineAlt: theme.frame,
   baseWire: theme.wire,
   hover: theme.interaction.hover,
   hues: relationWireHues(diagram, theme.relationHueLightness),
