@@ -1,6 +1,7 @@
 import type { RegionId } from '../kernel/diagram/diagram'
 import type { DiagramSpec } from './spec'
 import type { Entity } from './scene'
+import type { Vec3 } from './vec3'
 
 /** The full highlight group for a hit entity key: a strand lights its whole
     wire network; a branch lights its whole subtree's lines; a
@@ -41,4 +42,27 @@ export function expandHover(key: string, spec: DiagramSpec, entities: readonly E
     return out
   }
   return out
+}
+
+/** The orbit focus for a picked entity: pips and labels focus their point;
+    a strand focuses its whole WIRE (the hover group is the wire, so the
+    orbit target is too); everything else focuses its own bounding-box
+    center. Null for keys not present in the scene. */
+export function focusPoint(key: string, entities: readonly Entity[]): Vec3 | null {
+  const hit = entities.find((e) => e.key === key)
+  if (hit === undefined) return null
+  if ('pos' in hit) return hit.pos
+  const pts: Vec3[] = []
+  if (hit.kind === 'strand') {
+    for (const e of entities) if (e.kind === 'strand' && e.wire === hit.wire) pts.push(...e.pts)
+  } else {
+    pts.push(...hit.pts)
+  }
+  let lo = { x: Infinity, y: Infinity, z: Infinity }
+  let hi = { x: -Infinity, y: -Infinity, z: -Infinity }
+  for (const p of pts) {
+    lo = { x: Math.min(lo.x, p.x), y: Math.min(lo.y, p.y), z: Math.min(lo.z, p.z) }
+    hi = { x: Math.max(hi.x, p.x), y: Math.max(hi.y, p.y), z: Math.max(hi.z, p.z) }
+  }
+  return { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2, z: (lo.z + hi.z) / 2 }
 }

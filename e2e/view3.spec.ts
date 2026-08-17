@@ -36,12 +36,21 @@ test('3D view mounts, renders the trunk, reports hover, and unmounts', async ({ 
   const box = (await canvas3.boundingBox())!
   const wrap = page.locator('div[data-view3-hover]')
   let hover = ''
+  let lastHoverX = 0
+  let lastHoverY = 0
   for (let f = 0.25; f <= 0.75 && hover === ''; f += 0.05) {
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height * f)
+    lastHoverX = box.x + box.width / 2
+    lastHoverY = box.y + box.height * f
+    await page.mouse.move(lastHoverX, lastHoverY)
     await page.waitForTimeout(50)
     hover = (await wrap.getAttribute('data-view3-hover')) ?? ''
   }
   expect(hover).toMatch(/^b:/)
+
+  // Click-to-focus: clicking the hovered branch sets the orbit focus to it.
+  await page.mouse.click(lastHoverX, lastHoverY)
+  await page.waitForTimeout(100)
+  expect((await wrap.getAttribute('data-view3-focus')) ?? '').toMatch(/^b:/)
 
   // Toggle back.
   await page.getByRole('button', { name: '2D view' }).click()

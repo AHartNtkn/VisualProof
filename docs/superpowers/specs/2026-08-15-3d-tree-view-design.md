@@ -67,7 +67,7 @@ The full render inventory: polylines, point sprites, one bloom pass, one text bi
 - Beads are point/disc sprites.
 - Bloom (`UnrealBloomPass`) runs in dark mode only; it operates on the rendered image, so the line-based geometry needs nothing special.
 - Hover: raycast with a distance threshold. A wire hit highlights that wire's whole network; a branch hit highlights its whole subtree line; a node hit highlights its ring plus incident wire anchors. Highlight tint is the theme's existing `interaction.hover` color.
-- Camera: perspective, orbiting the bounding-sphere center; wheel zoom; right-drag pan; initial framing fits the bounding sphere.
+- Camera: perspective, orbiting a focus point; wheel zoom; right-drag pan; initial framing fits the bounding sphere. A click (button 0, <5px travel) refocuses the orbit target on the clicked component — a node's center, a whole wire's extent, a branch's midpoint — gliding there over a short eased tween; a click on empty space refocuses the scene center. Orbit/zoom/pan mechanics are unchanged by focusing.
 
 ## Animation and transitions
 

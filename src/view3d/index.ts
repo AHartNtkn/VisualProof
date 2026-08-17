@@ -5,14 +5,16 @@ import { diagramSpec, type DiagramSpec } from './spec'
 import { scene3, type Scene3 } from './scene'
 import { planTransition, sceneAt, type TweenPlan } from './transition'
 import { escapesFraming, fitPose, orbited, panned, zoomed, type CamPose } from './camera'
-import { lerp3 } from './vec3'
-import { expandHover } from './pick'
+import { lerp3, type Vec3 } from './vec3'
+import { expandHover, focusPoint } from './pick'
 import { mountRender, type RenderTheme } from './render'
 
 export type View3State = { diagram: Diagram; theme: Theme }
 export type View3 = { update(s: View3State): void; dispose(): void }
 
 export const TWEEN_MS = 350
+/** Glide time for click-to-focus retargeting. */
+export const FOCUS_MS = 250
 
 const renderThemeOf = (theme: Theme, diagram: Diagram): RenderTheme => ({
   mode: theme.mode,
@@ -33,7 +35,12 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
   let pose: CamPose = fitPose(scene.center, scene.radius, aspectOf())
   let tween: { plan: TweenPlan; poseFrom: CamPose; poseTo: CamPose; start: number } | null = null
   let hoverKey: string | null = null
+  /** Click-to-focus: the orbit target glides to the clicked component
+      (USER request 2026-08-16); orbit/zoom mechanics are unchanged. A
+      click on empty space refocuses the whole scene. */
+  let glide: { from: Vec3; to: Vec3; start: number } | null = null
   container.dataset['view3Hover'] = ''
+  container.dataset['view3Focus'] = ''
 
   const renderer = mountRender(container, renderThemeOf(theme, diagram))
   renderer.setEntities(scene.entities)
@@ -52,6 +59,13 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
   })
   const frame = (now: number): void => {
     pending = false
+    if (glide !== null) {
+      const t = Math.min(1, (now - glide.start) / FOCUS_MS)
+      const e = t * t * (3 - 2 * t)
+      pose = { ...pose, target: lerp3(glide.from, glide.to, e) }
+      if (t >= 1) glide = null
+      else schedule()
+    }
     if (tween !== null) {
       const t = Math.min(1, (now - tween.start) / TWEEN_MS)
       const e = t * t * (3 - 2 * t)
@@ -81,16 +95,35 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
   }
 
   let drag: { button: number; x: number; y: number } | null = null
+  let press: { button: number; x: number; y: number } | null = null
   listen('pointerdown', (ev) => {
     drag = { button: ev.button, x: ev.clientX, y: ev.clientY }
+    press = { button: ev.button, x: ev.clientX, y: ev.clientY }
     container.setPointerCapture(ev.pointerId)
   })
-  listen('pointerup', () => { drag = null })
+  listen('pointerup', (ev) => {
+    drag = null
+    const wasPress = press
+    press = null
+    if (wasPress === null || wasPress.button !== 0) return
+    if (Math.hypot(ev.clientX - wasPress.x, ev.clientY - wasPress.y) >= 5) return
+    const rect = container.getBoundingClientRect()
+    const ndcX = ((ev.clientX - rect.left) / rect.width) * 2 - 1
+    const ndcY = -(((ev.clientY - rect.top) / rect.height) * 2 - 1)
+    const key = renderer.pickAt(ndcX, ndcY)
+    const to = key === null ? scene.center : focusPoint(key, scene.entities)
+    if (to === null) return
+    glide = { from: pose.target, to, start: performance.now() }
+    container.dataset['view3Focus'] = key ?? ''
+    schedule()
+  })
   listen('contextmenu', (ev) => ev.preventDefault())
   listen('pointermove', (ev) => {
     if (drag !== null) {
       const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y
       drag = { ...drag, x: ev.clientX, y: ev.clientY }
+      // A pan takes ownership of the target; let the glide yield to it.
+      if (drag.button === 2) glide = null
       pose = drag.button === 2 ? panned(pose, dx, dy, container.clientHeight) : orbited(pose, dx, dy)
       schedule()
       return
@@ -139,6 +172,8 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
           ? scene
           : sceneAt(tween.plan, Math.min(1, (performance.now() - tween.start) / TWEEN_MS))
         tween = { plan: planTransition(fromScene, nextScene), poseFrom: pose, poseTo, start: performance.now() }
+        glide = null // the transition's pose tween owns the camera now
+        container.dataset['view3Focus'] = ''
         spec = nextSpec
         scene = nextScene
         hoverKey = null
