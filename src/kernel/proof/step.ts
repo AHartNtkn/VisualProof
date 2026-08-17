@@ -187,7 +187,7 @@ function applyStepRaw(
     case 'wireJoin':
       return applyWireJoin(diagram, step.input, orientation)
     case 'erasure':
-      return applyErasure(diagram, step.sel, orientation)
+      return applyErasure(diagram, step.sel, orientation, reservation)
     case 'wireSever':
       return applyWireSever(
         diagram,
@@ -208,6 +208,7 @@ function applyStepRaw(
         step.sel,
         step.justifier,
         step.certificate,
+        reservation,
       )
     case 'doubleCutIntro':
       return applyDoubleCutIntro(diagram, step.sel, reservation)

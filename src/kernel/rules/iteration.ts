@@ -1,16 +1,17 @@
 import type { Diagram, RegionId } from '../diagram/diagram'
-import { isAncestorOrEqual } from '../diagram/regions'
+import { mkDiagram } from '../diagram/diagram'
+import { derivedScope, isAncestorOrEqual } from '../diagram/regions'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
 import { diagramIso } from '../diagram/canonical/iso'
 import { extractSubgraph } from '../diagram/subgraph/extract'
-import { removeSubgraph, spliceSubgraphMapped } from '../diagram/subgraph/splice'
+import { removeSubgraphParts, spliceSubgraphMapped } from '../diagram/subgraph/splice'
 import type { IdReservation } from '../diagram/subgraph/freshId'
 import { findOccurrences, type Occurrence } from '../diagram/subgraph/match'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import { checkOccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import { occurrenceToSelection } from '../diagram/subgraph/occurrence'
-import { requireRemovalScopePreserved } from './wire-ends'
+import { completeWireEnds } from './wire-ends'
 import { RuleError } from './error'
 
 /**
@@ -264,19 +265,26 @@ export function findDeiterationEvidence(
 
 /**
  * Replay exact deiteration evidence and remove the selected inner copy.
+ * Every surviving wire the copy touched is CAPPED: completion pins at its
+ * pre-removal derived scope replace whatever quantifier support the copy's
+ * mentions gave it (the Lean twin: Iteration.uncopyResidue).
  */
 export function applyDeiteration(
   diagram: Diagram,
   selection: SubgraphSelection,
   justifier: SubgraphSelection,
   certificate: OccurrenceCertificate,
+  reservation?: IdReservation,
 ): Diagram {
   const { contents } = evidenceGate(diagram, selection, justifier, certificate)
-  requireRemovalScopePreserved(
-    diagram,
-    contents.allNodes,
-    new Set(contents.internalWires),
-    'deiteration',
-  )
-  return removeSubgraph(diagram, selection)
+  const parts = removeSubgraphParts(diagram, selection)
+  const internal = new Set(contents.internalWires)
+  for (const [wireId, wire] of Object.entries(diagram.wires)) {
+    if (internal.has(wireId)) continue
+    if (!wire.endpoints.some((ep) => contents.allNodes.has(ep.node))) continue
+    completeWireEnds(
+      parts, wireId, derivedScope(diagram, wireId), 'deiteration', reservation?.nodes,
+    )
+  }
+  return mkDiagram({ root: diagram.root, ...parts })
 }

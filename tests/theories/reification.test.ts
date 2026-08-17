@@ -914,11 +914,10 @@ describe('logical dependency prefix', () => {
     const exists = theoremByName(theory.theorems, 'existsProp')
     expect(exists.lhs.boundary).toEqual([])
     expect(exists.rhs.boundary).toEqual([])
-    // The vacuity insert pins the surviving wire before the erasure, which
-    // now refuses to move a quantifier.
+    // Erasure caps the surviving wire itself (a completion pin minted
+    // inside the step), so no separate vacuity step precedes it.
     expect(flattenedRules(exists)).toEqual([
       'theorem',
-      'vacuity',
       'erasure',
       'doubleCutElim',
     ])

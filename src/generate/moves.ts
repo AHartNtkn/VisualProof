@@ -6,7 +6,6 @@ import { applyStep, EMPTY_PROOF_CONTEXT } from '../kernel/proof'
 import type { SubgraphSelection } from '../kernel/diagram'
 import { RuleError } from '../kernel/rules'
 import { bareWireDeletionSteps, bareWireInsertSteps } from '../kernel/proof/bare-wire'
-import { ScopePreservationError } from '../kernel/rules/wire-ends'
 import { deiterationStep, erasureStep } from '../app/interact/moves'
 import { bareWires, childCuts, nodesIn, propWires } from './diagram-scan'
 
@@ -59,22 +58,11 @@ export function enumerateMoves(
         // erasureStep's rider computation (src/app/interact/moves.ts) only
         // orphans wires all of whose endpoints sit on the selection's
         // *direct* nodes (`orphanedWires(diagram, new Set(selection.nodes))`);
-        // it does not walk the interior of a selected cut subtree. A
-        // cut-selection (this branch: `sel.regions = [cut]`, `sel.nodes = []`)
-        // can therefore hide a half-orphaned rider: a wire with one endpoint
-        // deep inside the selected subtree and another endpoint outside it
-        // (e.g. at the selection's own region, the wire's derived scope) is
-        // invisible to that direct-nodes check, so it is never added to the
-        // erasure's `wires` and never pinned. Erasing then leaves it with a
-        // single end, and applyErasure correctly refuses with
-        // ScopePreservationError — but that is exactly the case the auto-pin
-        // bundle exists to rescue (spec, search section): consumers pin the
-        // stranded wire and retry (the search's `applyCandidateWithPins`,
-        // the walk's `PrimitiveStepRecorder`), so this candidate is still
-        // legitimate and is emitted rather than dropped. Any other
-        // RuleError here is a real gate-mirroring bug for this branch and is
-        // probed and dropped; anything that isn't a RuleError at all is
-        // rethrown.
+        // it does not walk the interior of a selected cut subtree, so a
+        // cut-selection candidate is verified by probing the real rule.
+        // Erasure caps stranded wires itself (completion pins at their old
+        // derived scopes), so the probe either succeeds or refuses for a
+        // genuine gate reason; a non-RuleError is a real bug and rethrows.
         //
         // Atom-node selections (`sel.nodes = [nodeId]`, the `else` branch)
         // are exactly what `orphanedWires` handles correctly — a node's own
@@ -86,10 +74,6 @@ export function enumerateMoves(
           applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
           out.push({ moveClass: 'erasure', steps: [step] })
         } catch (error) {
-          if (error instanceof ScopePreservationError) {
-            out.push({ moveClass: 'erasure', steps: [step] })
-            continue
-          }
           if (error instanceof RuleError) continue
           throw error
         }

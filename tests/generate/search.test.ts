@@ -20,27 +20,24 @@ describe('minimalProofSearch', () => {
   it('solves ∀P:o. ¬(P∧¬P) deletion-only in exactly 5 moves, requiring the iteration class', () => {
     // Hand-computed minimal backward proof (team-lead ruling, discrepancy
     // protocol — see task-8-report.md): doubleCutElim(body pair) → deiterate
-    // inner P (justified by the relocated outer P) → erase outer P with an
-    // auto-pin bundle (the wire's only remaining natural pin is the ∀
-    // declaration's own; erasing the last atom strands it below the
-    // two-end floor, so the search bundles a pin step with the erasure,
-    // exactly as the app's real erase gesture does) → vacuity-delete the
-    // now-bare wire → doubleCutElim the shell. All five are deletion moves
-    // (auto-pin is bundled into its erasure, not a separate move), so
-    // phase 1 solves it; the inner (positive) cut can only be emptied by
-    // deiteration, so the iteration class is required; insertion is proven
-    // unnecessary.
+    // inner P (justified by the relocated outer P) → erase outer P (erasing
+    // the last atom would strand its wire below the two-end floor, so the
+    // rule itself caps the wire with a completion pin at its old scope) →
+    // vacuity-delete the now-bare wire → doubleCutElim the shell. All five
+    // are deletion moves, so phase 1 solves it; the inner (positive) cut
+    // can only be emptied by deiteration, so the iteration class is
+    // required; insertion is proven unnecessary.
     const outcome = minimalProofSearch(formulaToDiagram('∀P:o. ¬(P ∧ ¬P)'), DEFAULT_SEARCH_FUEL)
     if (outcome.status !== 'solved') throw new Error(`expected a solve, got ${JSON.stringify(outcome)}`)
     expect(outcome.mode).toBe('deletion-only')
     expect(outcome.length).toBe(5)
-    // steps.length may exceed length: the erasure that bundles an auto-pin
-    // contributes two ProofSteps (pin, then delete) to that one move.
+    // steps.length may exceed length: a bare-wire vacuity move contributes
+    // its whole primitive sequence to one move.
     expect(outcome.steps.length).toBeGreaterThanOrEqual(5)
     expect(outcome.requires).toContain('iteration')
     expect(outcome.requires).not.toContain('spawn')
   })
-  it('solves Peirce\'s law deletion-only, via the rescued pin-bundle candidate class', () => {
+  it('solves Peirce\'s law deletion-only, via the self-capping erasure candidate class', () => {
     // ((P→Q)→P)→P in ¬/∧ form — folklore's classic insertion-requiring
     // theorem, but that folklore is a claim about FORWARD derivations. Read
     // forward, the backward deletion alphabet {erasure(negative),
@@ -55,9 +52,10 @@ describe('minimalProofSearch', () => {
     //
     // This is also the regression pin for the alphabet-hole fix itself:
     // step 1 of the found proof is `erasure` of a cut-selection that
-    // strands a wire below the two-end floor — exactly the
-    // ScopePreservationError-raising candidate class the enumerator used to
-    // drop and now emits, rescued here by the search's auto-pin bundle.
+    // strands a wire below the two-end floor — the candidate class the
+    // enumerator used to drop; the rule now caps the stranded wire itself
+    // (a completion pin at its old derived scope), so the candidate
+    // applies directly.
     const peirce = formulaToDiagram('∀P Q:o. ¬(¬(¬(P ∧ ¬Q) ∧ ¬P) ∧ ¬P)')
     const outcome = minimalProofSearch(peirce, DEFAULT_SEARCH_FUEL)
     if (outcome.status !== 'solved') throw new Error(`expected a solve, got ${JSON.stringify(outcome)}`)
@@ -85,8 +83,8 @@ describe('minimalProofSearch', () => {
     const shrinkOutcome = minimalProofSearch(shrink.diagram, DEFAULT_SEARCH_FUEL)
     expect(shrinkOutcome.status).toBe('solved')
     // Walk moves and search moves are different units (kernel forward walk
-    // actions vs. backward search moves, one of which bundles pins) — no
-    // theorem relates their counts, so only the solved status is asserted.
+    // actions vs. backward search moves) — no theorem relates their
+    // counts, so only the solved status is asserted.
     const walk = propWalkFamily.generate({ atoms: 1, length: 4, attempts: 500 }, seededRng(6))
     const walkOutcome = minimalProofSearch(walk.diagram, DEFAULT_SEARCH_FUEL)
     expect(walkOutcome.status).toBe('solved')

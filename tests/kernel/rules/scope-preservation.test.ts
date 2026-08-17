@@ -5,6 +5,7 @@ import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../../../src/kernel/rules/doublecut'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
+import { applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 import { applyVacuityInsert } from '../../../src/kernel/rules/identity-rules'
 import { applyEndsDelete } from '../../../src/kernel/rules/wire-content'
 import { applyWireSever } from '../../../src/kernel/rules/wire-quantifier'
@@ -48,20 +49,32 @@ function sheetAndCutFixture(): Diagram {
   })
 }
 
-describe('erasure scope precondition', () => {
-  it('refuses to erase the incidence holding a quantifier out of a cut', () => {
+describe('erasure caps touched wires', () => {
+  it('caps the wire whose quantifier the erased incidence held', () => {
     const d = sheetAndCutFixture()
-    // Erasing A(x) would drop x's remaining incidence into the cut:
-    // ∃x ¬P(x) would silently become ¬∃x P(x).
-    expect(() => applyErasure(d, {
+    // Erasing A(x) would drop x's remaining incidence into the cut —
+    // ∃x ¬P(x) silently becoming ¬∃x P(x). The rule caps instead of
+    // refusing: a completion pin at x's pre-removal derived scope keeps
+    // the quantifier where it was (Lean: Erasure.residue).
+    const erased = applyErasure(d, {
       region: 'r0',
       regions: [],
       nodes: ['a', 'ah'],
       wires: ['ahead'],
-    })).toThrow(/pin it .*first|move the quantifier/)
+    })
+    expect(erased.nodes.a).toBeUndefined()
+    expect(erased.wires.ahead).toBeUndefined()
+    expect(derivedScope(erased, 'x')).toBe('r0')
+    const x = erased.wires.x!
+    expect(x.endpoints.length).toBeGreaterThanOrEqual(2)
+    const cap = x.endpoints.find((ep) => {
+      const node = erased.nodes[ep.node]!
+      return node.kind === 'identity' && node.arity === 1 && node.region === 'r0'
+    })
+    expect(cap, 'a fresh pin at the old scope holds the quantifier').toBeDefined()
   })
 
-  it('erases the same content once the wire is pinned first', () => {
+  it('mints nothing when the wire is already held', () => {
     const d = sheetAndCutFixture()
     const pinned = applyVacuityInsert(d, {
       kind: 'pin', wire: 'x', node: 'hold', region: 'r0',
@@ -74,6 +87,72 @@ describe('erasure scope precondition', () => {
     })
     expect(erased.nodes.a).toBeUndefined()
     expect(derivedScope(erased, 'x')).toBe('r0')
+    // hold and p are x's two ends; the cap was a no-op.
+    expect(erased.wires.x!.endpoints.map((ep) => ep.node).sort()).toEqual(['hold', 'p'])
+  })
+})
+
+describe('deiteration caps touched wires', () => {
+  /** ¬[P(x)] twice — a justifier cut at the sheet and an iso copy inside
+      another cut — where x's only mentions are one in each copy. */
+  function twoCopiesFixture(): Diagram {
+    return mkDiagram({
+      root: 'r0',
+      regions: {
+        r0: { kind: 'sheet' },
+        cutJ: { kind: 'cut', parent: 'r0' },
+        cutOuter: { kind: 'cut', parent: 'r0' },
+        cutC: { kind: 'cut', parent: 'cutOuter' },
+      },
+      nodes: {
+        pJ: { kind: 'atom', region: 'cutJ', sig: P },
+        hJ: { kind: 'identity', region: 'cutJ', sig: P, arity: 1 },
+        pC: { kind: 'atom', region: 'cutC', sig: P },
+        hC: { kind: 'identity', region: 'cutC', sig: P, arity: 1 },
+      },
+      wires: {
+        x: {
+          sig: IOTA,
+          endpoints: [
+            { node: 'pJ', port: { kind: 'arg', index: 0 } },
+            { node: 'pC', port: { kind: 'arg', index: 0 } },
+          ],
+        },
+        hJw: {
+          sig: P,
+          endpoints: [
+            { node: 'pJ', port: { kind: 'head' } },
+            { node: 'hJ', port: { kind: 'identity', index: 0 } },
+          ],
+        },
+        hCw: {
+          sig: P,
+          endpoints: [
+            { node: 'pC', port: { kind: 'head' } },
+            { node: 'hC', port: { kind: 'identity', index: 0 } },
+          ],
+        },
+      },
+    })
+  }
+
+  it('removing the copy caps the shared wire at its old scope', () => {
+    const d = twoCopiesFixture()
+    // x reads at the sheet only through BOTH copies together (DCA of the
+    // two cut mentions). Removing the inner copy bare would sink x's
+    // quantifier into the justifier cut — the cap keeps it at the sheet.
+    expect(derivedScope(d, 'x')).toBe('r0')
+    const selection = { region: 'cutOuter', regions: ['cutC'], nodes: [], wires: [] }
+    const evidence = findDeiterationEvidence(d, selection)
+    const removed = applyDeiteration(d, selection, evidence.justifier, evidence.certificate)
+    expect(removed.nodes.pC).toBeUndefined()
+    expect(removed.wires.hCw).toBeUndefined()
+    expect(derivedScope(removed, 'x')).toBe('r0')
+    const cap = removed.wires.x!.endpoints.find((ep) => {
+      const node = removed.nodes[ep.node]!
+      return node.kind === 'identity' && node.arity === 1 && node.region === 'r0'
+    })
+    expect(cap, 'a fresh pin at the old scope holds the quantifier').toBeDefined()
   })
 })
 

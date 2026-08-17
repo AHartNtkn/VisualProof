@@ -7528,22 +7528,6 @@
           "placements": []
         },
         {
-          "label": "pin w0",
-          "steps": [
-            {
-              "rule": "vacuity",
-              "direction": "insert",
-              "instance": {
-                "kind": "pin",
-                "wire": "w0",
-                "node": "hold_w0",
-                "region": "r0"
-              }
-            }
-          ],
-          "placements": []
-        },
-        {
           "label": "erase the vacuous P-to-True implication",
           "steps": [
             {
