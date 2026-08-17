@@ -358,4 +358,45 @@ theorem Region.Canonical.renameWires_adjoinHost_iff
   simpa only [wrapper, ItemSeq.renameWires, Item.renameWires,
     ItemSeq.ChildrenCanonical, Item.ChildrenCanonical, and_true] using wrapperIff
 
+private theorem adjoinMaterial_index
+    (wire : Var ((outer ++ hostLocals) ++ addedLocals) signature) :
+    (Region.adjoinMaterialWire outer hostLocals addedLocals wire).index.val =
+      wire.index.val := by
+  apply Var.appendCases (left := outer ++ hostLocals) (right := addedLocals)
+    (motive := fun wire =>
+      (Region.adjoinMaterialWire outer hostLocals addedLocals wire).index.val =
+        wire.index.val)
+  · intro signature contextWire
+    refine Var.appendCases (left := outer) (right := hostLocals)
+      (motive := fun contextWire =>
+        (Region.adjoinMaterialWire outer hostLocals addedLocals
+            ((contextWire).appendLeft addedLocals)).index.val =
+          ((contextWire).appendLeft addedLocals).index.val)
+      ?_ ?_ contextWire
+    · intro signature outerWire
+      simp [Region.adjoinMaterialWire]
+    · intro signature localWire
+      simp [Region.adjoinMaterialWire]
+  · intro signature materialWire
+    simp [Region.adjoinMaterialWire, List.length_append, Nat.add_assoc]
+
+private theorem adjoinMaterial_embedding
+    (outer hostLocals addedLocals : List Sig) :
+    IndexEmbedding (Region.adjoinMaterialWire outer hostLocals addedLocals) :=
+  indexEmbedding_of_preservesIndex _
+    (by simp [List.length_append])
+    (fun wire => adjoinMaterial_index wire)
+
+theorem ItemSeq.incidencePaths_renameWires_adjoinMaterial
+    (items : ItemSeq ((outer ++ hostLocals) ++ addedLocals))
+    (wire : Var ((outer ++ hostLocals) ++ addedLocals) signature)
+    (itemIndex : Nat) :
+    (items.renameWires
+      (Region.adjoinMaterialWire outer hostLocals addedLocals)).incidencePaths
+        wire.index.val itemIndex =
+      items.incidencePaths wire.index.val itemIndex := by
+  apply ItemSeq.incidencePaths_rename_reflect
+  simpa only [adjoinMaterial_index] using
+    adjoinMaterial_embedding outer hostLocals addedLocals wire
+
 end VisualProof.Diagram
