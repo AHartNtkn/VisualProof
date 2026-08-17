@@ -86,8 +86,8 @@ describe('propWalkFamily', () => {
       // Deliberately NOT testing a flag-on success: findDeiterationRedex's
       // ancestor-justified normalization has the same nearly-unsamplable
       // fixed-point property as family A's (measured directly on this
-      // family too — the default-knob seed batch that used to succeed
-      // within 49 attempts exhausted 1000 with the flag on). Hunting for a
+      // family too — the seed batch that succeeds within 49 attempts at
+      // default knobs exhausts 1000 with the flag on). Hunting for a
       // lucky seed would misrepresent that reality; this documents it
       // truthfully instead.
       expect(() => propWalkFamily.generate(

@@ -50,12 +50,11 @@ describe('minimalProofSearch', () => {
     // hand-replaying the returned steps via literal applyStep calls down to
     // the blank sheet.
     //
-    // This is also the regression pin for the alphabet-hole fix itself:
-    // step 1 of the found proof is `erasure` of a cut-selection that
-    // strands a wire below the two-end floor — the candidate class the
-    // enumerator used to drop; the rule now caps the stranded wire itself
-    // (a completion pin at its old derived scope), so the candidate
-    // applies directly.
+    // This is also the regression pin for the enumerator's cut-selection
+    // candidate class: step 1 of the found proof is `erasure` of a
+    // cut-selection that strands a wire below the two-end floor — the rule
+    // caps the stranded wire itself, so the candidate must be emitted and
+    // must apply directly.
     const peirce = formulaToDiagram('∀P Q:o. ¬(¬(¬(P ∧ ¬Q) ∧ ¬P) ∧ ¬P)')
     const outcome = minimalProofSearch(peirce, DEFAULT_SEARCH_FUEL)
     if (outcome.status !== 'solved') throw new Error(`expected a solve, got ${JSON.stringify(outcome)}`)

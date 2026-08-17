@@ -244,7 +244,7 @@ export function completeWireEnds(
 
 /**
  * The removal residue shared by erasure and deiteration (Lean:
- * Erasure.residue / Iteration.uncopyPins, uniform rule 2026-08-17): after
+ * Erasure.residue / Iteration.uncopyPins): after
  * removing `removedNodes` content from `selRegion`, cap every surviving
  * touched wire —
  *
