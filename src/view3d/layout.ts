@@ -133,7 +133,11 @@ export function layoutTree(spec: DiagramSpec): TreeLayout {
       acc += s
     }
     const branchItems = rs.items.filter((i): i is Extract<SceneItem, { kind: 'branch' }> => i.kind === 'branch')
-    const segLen = acc + (branchItems.length > 0 ? 0 : TIP_PAD)
+    // A parented line ends at its fan point, but a region IS its line: a
+    // childed region with no nodes still shows at least a TIP_PAD of
+    // segment, or the sheet (which has no lead-in stem) collapses to a
+    // point and vanishes from every non-empty diagram.
+    const segLen = branchItems.length > 0 ? Math.max(acc, TIP_PAD) : acc + TIP_PAD
     let maxRingR = 0
     for (const item of rs.items) {
       if (item.kind === 'node' && spec.nodes.get(item.id)!.kind !== 'identity') {

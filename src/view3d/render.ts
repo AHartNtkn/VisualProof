@@ -14,10 +14,11 @@ export type RenderTheme = {
   mode: 'light' | 'dark'
   background: string
   line: string
-  /** Even-polarity (sheet-parity) branch color: cut-nesting parity strokes
-      branches in alternating lineAlt/line — the sheet's lines gray, odd
-      (cut) lines strong (USER ruling 2026-08-16) — so every cut boundary is
-      a visible color change and needs no marker dot. */
+  /** Odd-polarity (cut) branch color: cut-nesting parity strokes branches
+      in alternating line/lineAlt — sheet-parity lines strong, cut-parity
+      lines gray (USER ruling 2026-08-16, confirmed after fixing the
+      vanishing sheet line) — so every cut boundary is a visible color
+      change and needs no marker dot. */
   lineAlt: string
   baseWire: string
   hover: string
@@ -127,7 +128,7 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
     if (e.kind === 'strand') return th.hues.get(e.wire) ?? th.baseWire
     if (e.kind === 'ring' && e.headWire !== null) return th.hues.get(e.headWire) ?? th.baseWire
     if (e.kind === 'pip' && e.ownerWire !== null) return th.hues.get(e.ownerWire) ?? th.baseWire
-    if (e.kind === 'branch' && e.polarity === 0) return th.lineAlt
+    if (e.kind === 'branch' && e.polarity === 1) return th.lineAlt
     return th.line
   }
 

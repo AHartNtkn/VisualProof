@@ -62,6 +62,20 @@ describe('layoutTree', () => {
     expect(dot3(r0.dir, p1.dir)).toBeCloseTo(1, 9)
     expect(dot3(p1.dir, p2.dir)).toBeCloseTo(1, 9)
   })
+  it('a region holding only cuts still shows a visible line (the sheet must never vanish)', () => {
+    // A childed region's length comes from its nodes; with zero nodes the
+    // sheet's line collapsed to a point — every non-empty diagram lost its
+    // sheet branch (USER report 2026-08-16), which made the polarity
+    // colors read as inverted.
+    const b = new DiagramBuilder()
+    const c1 = b.cut(b.root)
+    const c2 = b.cut(c1)
+    b.point(c2)
+    const tl = layoutOf(b.build())
+    for (const pr of tl.regions.values()) {
+      expect(dist3(pr.base, pr.tip)).toBeGreaterThanOrEqual(0.45)
+    }
+  })
   it('sibling cuts leave at distinct azimuths and stay ≥ δ apart (sampled)', () => {
     const { d } = busyFixture()
     const spec = diagramSpec(d)
