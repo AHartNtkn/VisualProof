@@ -1,6 +1,6 @@
 import type { Diagram, RegionId } from '../diagram/diagram'
 import { mkDiagram } from '../diagram/diagram'
-import { derivedScope, isAncestorOrEqual } from '../diagram/regions'
+import { isAncestorOrEqual } from '../diagram/regions'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
 import { diagramIso } from '../diagram/canonical/iso'
@@ -11,7 +11,7 @@ import { findOccurrences, type Occurrence } from '../diagram/subgraph/match'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import { checkOccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import { occurrenceToSelection } from '../diagram/subgraph/occurrence'
-import { completeWireEnds } from './wire-ends'
+import { capRemovedSupport } from './wire-ends'
 import { RuleError } from './error'
 
 /**
@@ -265,9 +265,8 @@ export function findDeiterationEvidence(
 
 /**
  * Replay exact deiteration evidence and remove the selected inner copy.
- * Every surviving wire the copy touched is CAPPED: completion pins at its
- * pre-removal derived scope replace whatever quantifier support the copy's
- * mentions gave it (the Lean twin: Iteration.uncopyResidue).
+ * Every surviving wire the copy touched is CAPPED by the shared removal
+ * residue (capRemovedSupport; Lean twin Iteration.uncopyResidue).
  */
 export function applyDeiteration(
   diagram: Diagram,
@@ -278,13 +277,9 @@ export function applyDeiteration(
 ): Diagram {
   const { contents } = evidenceGate(diagram, selection, justifier, certificate)
   const parts = removeSubgraphParts(diagram, selection)
-  const internal = new Set(contents.internalWires)
-  for (const [wireId, wire] of Object.entries(diagram.wires)) {
-    if (internal.has(wireId)) continue
-    if (!wire.endpoints.some((ep) => contents.allNodes.has(ep.node))) continue
-    completeWireEnds(
-      parts, wireId, derivedScope(diagram, wireId), 'deiteration', reservation?.nodes,
-    )
-  }
+  capRemovedSupport(
+    diagram, selection.region, contents.allNodes,
+    new Set(contents.internalWires), parts, 'deiteration', reservation?.nodes,
+  )
   return mkDiagram({ root: diagram.root, ...parts })
 }

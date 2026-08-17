@@ -9093,6 +9093,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r7_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose specialized plusBase result",
           "steps": [
             {
@@ -9364,6 +9380,38 @@
                   "w8",
                   "w9"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r11_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w8",
+                "node": "pin_0",
+                "region": "r11_0"
               }
             }
           ],
@@ -10316,6 +10364,22 @@
                   "w0",
                   "w2"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r7_0"
               }
             }
           ],
@@ -11460,6 +11524,38 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "claimVariable",
+                "node": "pin_0",
+                "region": "r11_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "successor",
+                "node": "pin",
+                "region": "r11_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose copied successor-property result",
           "steps": [
             {
@@ -11491,6 +11587,22 @@
                   "n5"
                 ],
                 "wires": []
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "claimVariable",
+                "node": "pin",
+                "region": "r4"
               }
             }
           ],
@@ -12903,6 +13015,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r7_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose Nat base consequence",
           "steps": [
             {
@@ -13106,6 +13234,38 @@
                   "w2",
                   "w4_0"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r11_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin_0",
+                "region": "r11_0"
               }
             }
           ],
@@ -15904,6 +16064,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r7_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose carrier-base local identity",
           "steps": [
             {
@@ -16048,6 +16224,22 @@
                   "w0",
                   "w12"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r11_0"
               }
             }
           ],
@@ -16200,6 +16392,22 @@
                   "w12",
                   "w2"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r24"
               }
             }
           ],
@@ -16390,6 +16598,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r7_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose carrier-base restored identity",
           "steps": [
             {
@@ -16421,6 +16645,22 @@
                   "n10"
                 ],
                 "wires": []
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r23"
               }
             }
           ],
@@ -16608,6 +16848,22 @@
                   "w0",
                   "w17"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r31_0"
               }
             }
           ],
@@ -16974,6 +17230,38 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r15_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w14",
+                "node": "pin_0",
+                "region": "r15_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose carrier-support successor Plus",
           "steps": [
             {
@@ -17047,6 +17335,54 @@
                   "w17",
                   "w2"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w15",
+                "node": "pin_0",
+                "region": "r36"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w17",
+                "node": "pin_1",
+                "region": "r36"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r36"
               }
             }
           ],
@@ -19548,6 +19884,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r3_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose inherited direct carrier",
           "steps": [
             {
@@ -19645,6 +19997,22 @@
                   "w0",
                   "w16"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "cw_10"
               }
             }
           ],
@@ -19922,6 +20290,38 @@
                   "w17",
                   "w2"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w16",
+                "node": "pin_0",
+                "region": "r19_1"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r19_1"
               }
             }
           ],
@@ -22219,6 +22619,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r7_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose copied addition-base result",
           "steps": [
             {
@@ -22481,6 +22897,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r7_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose inline-base right result",
           "steps": [
             {
@@ -22625,6 +23057,22 @@
                   "w0",
                   "w8"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r7_0"
               }
             }
           ],
@@ -22902,6 +23350,38 @@
                   "w11",
                   "w8"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r11_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w8",
+                "node": "pin_0",
+                "region": "r11_0"
               }
             }
           ],
@@ -23271,6 +23751,38 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r11_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w8",
+                "node": "pin_0",
+                "region": "r11_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose inline-base output identity",
           "steps": [
             {
@@ -23355,6 +23867,38 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w12",
+                "node": "pin",
+                "region": "r22"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w13",
+                "node": "pin_0",
+                "region": "r22"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge inline-base outer goal",
           "steps": [
             {
@@ -23408,6 +23952,54 @@
                   "w14",
                   "w8"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r22"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w14",
+                "node": "pin_1",
+                "region": "r22"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w8",
+                "node": "pin_0",
+                "region": "r22"
               }
             }
           ],
@@ -28304,6 +28896,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w13",
+                "node": "pin",
+                "region": "r9_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge successor-totality addition-step premise",
           "steps": [
             {
@@ -28357,6 +28965,38 @@
                   "w16_0",
                   "w3_0"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r9_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w16_0",
+                "node": "pin_0",
+                "region": "r9_0"
               }
             }
           ],
@@ -28441,6 +29081,70 @@
                   "w22",
                   "w3_0"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r26"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w14",
+                "node": "pin_0",
+                "region": "r26"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w22",
+                "node": "pin_1",
+                "region": "r26"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w3_0",
+                "node": "pin_2",
+                "region": "r26"
               }
             }
           ],
@@ -28879,6 +29583,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w13",
+                "node": "pin",
+                "region": "r9_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge transport first addition step premise",
           "steps": [
             {
@@ -28932,6 +29652,38 @@
                   "w16_1",
                   "w3_1"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r9_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w16_1",
+                "node": "pin_0",
+                "region": "r9_0"
               }
             }
           ],
@@ -29214,6 +29966,54 @@
                   "w24",
                   "w26"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r13_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w14",
+                "node": "pin_0",
+                "region": "r13_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w24",
+                "node": "pin_1",
+                "region": "r13_0"
               }
             }
           ],
@@ -29529,6 +30329,22 @@
                   "w25",
                   "w27"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w24",
+                "node": "pin",
+                "region": "r23_0"
               }
             }
           ],
@@ -29927,6 +30743,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w16_1",
+                "node": "pin",
+                "region": "r9_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge transport first-result addition step premise",
           "steps": [
             {
@@ -29980,6 +30812,38 @@
                   "w21_0",
                   "w3_1"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r9_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w21_0",
+                "node": "pin_0",
+                "region": "r9_0"
               }
             }
           ],
@@ -30292,6 +31156,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w13",
+                "node": "pin",
+                "region": "r9_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge transport outer-result addition step premise",
           "steps": [
             {
@@ -30345,6 +31225,38 @@
                   "w21_0",
                   "w3_1"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r9_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w21_0",
+                "node": "pin_0",
+                "region": "r9_0"
               }
             }
           ],
@@ -30453,6 +31365,38 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w25",
+                "node": "pin",
+                "region": "r30"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w26",
+                "node": "pin_0",
+                "region": "r30"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge successor outer transport goal",
           "steps": [
             {
@@ -30511,6 +31455,70 @@
                   "w27",
                   "w3_1"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r30"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w14",
+                "node": "pin_0",
+                "region": "r30"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w27",
+                "node": "pin_1",
+                "region": "r30"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w3_1",
+                "node": "pin_2",
+                "region": "r30"
               }
             }
           ],
@@ -35064,6 +36072,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r3_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge Nat(a) closure",
           "steps": [
             {
@@ -35336,6 +36360,22 @@
                   "w1",
                   "w2"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r3_0"
               }
             }
           ],
@@ -35838,6 +36878,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r3_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge Nat(b) closure",
           "steps": [
             {
@@ -36110,6 +37166,22 @@
                   "w1",
                   "w2"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r3_0"
               }
             }
           ],
@@ -36435,6 +37507,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w17",
+                "node": "pin",
+                "region": "cw_10"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose A(a) transport results",
           "steps": [
             {
@@ -36711,6 +37799,54 @@
                   "w2",
                   "w3_0_split_0_wrap_shift_shift_shift_shift_wrap_wrap_split_0_split_0_wrap_local_2"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w18",
+                "node": "pin_0",
+                "region": "r17_2"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w19",
+                "node": "pin_1",
+                "region": "r17_2"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r17_2"
               }
             }
           ],
@@ -38724,6 +39860,54 @@
                 ],
                 "nodes": [],
                 "wires": []
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r4"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin_0",
+                "region": "r4"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin_1",
+                "region": "r4"
               }
             }
           ],
@@ -42409,6 +43593,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r13_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose base-totality addition-base result",
           "steps": [
             {
@@ -42511,6 +43711,54 @@
                   "w2",
                   "w20"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w19",
+                "node": "pin_0",
+                "region": "r28"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r28"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w20",
+                "node": "pin_1",
+                "region": "r28"
               }
             }
           ],
@@ -42641,6 +43889,22 @@
                   "w0",
                   "w19"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r13_0"
               }
             }
           ],
@@ -42918,6 +44182,38 @@
                   "w2",
                   "w22"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w19",
+                "node": "pin_0",
+                "region": "r21_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r21_0"
               }
             }
           ],
@@ -43287,6 +44583,38 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w19",
+                "node": "pin_0",
+                "region": "r21_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r21_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose base-transport output identity",
           "steps": [
             {
@@ -43530,6 +44858,38 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r9_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w24",
+                "node": "pin_0",
+                "region": "r9_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose base-transport successor identity",
           "steps": [
             {
@@ -43674,6 +45034,22 @@
                   "w0",
                   "w19"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r13_0"
               }
             }
           ],
@@ -43852,6 +45228,70 @@
                   "w23",
                   "w25"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w19",
+                "node": "pin_0",
+                "region": "r32"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r32"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w23",
+                "node": "pin_1",
+                "region": "r32"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w25",
+                "node": "pin_2",
+                "region": "r32"
               }
             }
           ],
@@ -44075,6 +45515,38 @@
                   "w23",
                   "w24"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r9_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w24",
+                "node": "pin_0",
+                "region": "r9_0"
               }
             }
           ],
@@ -44549,6 +46021,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w26",
+                "node": "pin",
+                "region": "r17_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge closure-totality step premise",
           "steps": [
             {
@@ -44602,6 +46090,38 @@
                   "w29_0",
                   "w4_0"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r17_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w29_0",
+                "node": "pin_0",
+                "region": "r17_0"
               }
             }
           ],
@@ -44715,6 +46235,70 @@
                   "w34",
                   "w4_0"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r44"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w27",
+                "node": "pin_0",
+                "region": "r44"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w34",
+                "node": "pin_1",
+                "region": "r44"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w4_0",
+                "node": "pin_2",
+                "region": "r44"
               }
             }
           ],
@@ -45153,6 +46737,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w26",
+                "node": "pin",
+                "region": "r17_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge successor-transport canonical addition premise",
           "steps": [
             {
@@ -45206,6 +46806,38 @@
                   "w29_1",
                   "w4_1"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r17_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w29_1",
+                "node": "pin_0",
+                "region": "r17_0"
               }
             }
           ],
@@ -45488,6 +47120,54 @@
                   "w36",
                   "w4_1"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r21_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w27",
+                "node": "pin_0",
+                "region": "r21_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w36",
+                "node": "pin_1",
+                "region": "r21_0"
               }
             }
           ],
@@ -45822,6 +47502,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w36",
+                "node": "pin",
+                "region": "r41_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge inherited shift premise",
           "steps": [
             {
@@ -45875,6 +47571,38 @@
                   "w29_1",
                   "w38"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r41_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w29_1",
+                "node": "pin_0",
+                "region": "r41_0"
               }
             }
           ],
@@ -46187,6 +47915,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w26",
+                "node": "pin",
+                "region": "r17_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge successor-transport final shift premise",
           "steps": [
             {
@@ -46240,6 +47984,38 @@
                   "w38",
                   "w39"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r17_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w38",
+                "node": "pin_0",
+                "region": "r17_0"
               }
             }
           ],
@@ -46324,6 +48100,70 @@
                   "w37",
                   "w39"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r48"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w27",
+                "node": "pin_0",
+                "region": "r48"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w37",
+                "node": "pin_1",
+                "region": "r48"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w39",
+                "node": "pin_2",
+                "region": "r48"
               }
             }
           ],
@@ -49449,6 +51289,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r3_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge Nat carrier closure from support",
           "steps": [
             {
@@ -50106,6 +51962,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w20",
+                "node": "pin",
+                "region": "cw_10"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge inherited transport premise",
           "steps": [
             {
@@ -50159,6 +52031,38 @@
                   "w3_0_split_wrap_shift_wrap_local_2",
                   "w4_0"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "cw_10"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w3_0_split_wrap_shift_wrap_local_2",
+                "node": "pin_0",
+                "region": "cw_10"
               }
             }
           ],
@@ -50447,6 +52351,54 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w19",
+                "node": "pin_0",
+                "region": "r21_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r21_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w21",
+                "node": "pin_1",
+                "region": "r21_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose output identity",
           "steps": [
             {
@@ -50577,6 +52529,54 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w19",
+                "node": "pin_0",
+                "region": "r26"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r26"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w20",
+                "node": "pin_1",
+                "region": "r26"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge claim predecessor successor",
           "steps": [
             {
@@ -50630,6 +52630,54 @@
                   "w22",
                   "w3_0_split_wrap_shift_wrap_local_2"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r26"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w22",
+                "node": "pin_0",
+                "region": "r26"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w3_0_split_wrap_shift_wrap_local_2",
+                "node": "pin_1",
+                "region": "r26"
               }
             }
           ],
@@ -59469,6 +61517,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r3_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge support Nat closure",
           "steps": [
             {
@@ -60127,6 +62191,22 @@
                   "w1",
                   "w2"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r3_0"
               }
             }
           ],
@@ -61903,6 +63983,38 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r7_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w22",
+                "node": "pin_0",
+                "region": "r7_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose commutativity-base zero identity",
           "steps": [
             {
@@ -62069,6 +64181,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r17_1"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "expose copied commutativity addition-base result",
           "steps": [
             {
@@ -62171,6 +64299,54 @@
                   "w22",
                   "w23"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r36"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w22",
+                "node": "pin_0",
+                "region": "r36"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w23",
+                "node": "pin_1",
+                "region": "r36"
               }
             }
           ],
@@ -62354,6 +64530,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r15_0_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge commutativity-base left-unit Plus premise",
           "steps": [
             {
@@ -62412,6 +64604,38 @@
                   "w22",
                   "w25"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r15_0_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w22",
+                "node": "pin_0",
+                "region": "r15_0_0"
               }
             }
           ],
@@ -62486,6 +64710,22 @@
                   "w0",
                   "w22"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r39"
               }
             }
           ],
@@ -62788,6 +65028,38 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r23_2_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w22",
+                "node": "pin_0",
+                "region": "r23_2_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge commutativity-base right-unit premise",
           "steps": [
             {
@@ -62841,6 +65113,38 @@
                   "w1",
                   "w21"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r23_2_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin_0",
+                "region": "r23_2_0"
               }
             }
           ],
@@ -62995,6 +65299,22 @@
                   "w0",
                   "w22"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "cw_13_0"
               }
             }
           ],
@@ -63191,6 +65511,70 @@
                   "w22",
                   "w25"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r40"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w21",
+                "node": "pin_0",
+                "region": "r40"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w22",
+                "node": "pin_1",
+                "region": "r40"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w25",
+                "node": "pin_4",
+                "region": "r40"
               }
             }
           ],
@@ -63448,6 +65832,38 @@
                   "w21",
                   "w22"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r25_3"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w22",
+                "node": "pin_0",
+                "region": "r25_3"
               }
             }
           ],
@@ -63922,6 +66338,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w26",
+                "node": "pin",
+                "region": "r21_2"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge closure step premise",
           "steps": [
             {
@@ -63975,6 +66407,38 @@
                   "w29_1",
                   "w6_0"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r21_2"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w29_1",
+                "node": "pin_0",
+                "region": "r21_2"
               }
             }
           ],
@@ -64088,6 +66552,70 @@
                   "w31",
                   "w6_0"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r52"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w27",
+                "node": "pin_0",
+                "region": "r52"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w31",
+                "node": "pin_1",
+                "region": "r52"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w6_0",
+                "node": "pin_4",
+                "region": "r52"
               }
             }
           ],
@@ -64526,6 +67054,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w26",
+                "node": "pin",
+                "region": "r21_2"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge crossed addition-step premise",
           "steps": [
             {
@@ -64579,6 +67123,38 @@
                   "w29_2",
                   "w6_1"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r21_2"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w29_2",
+                "node": "pin_0",
+                "region": "r21_2"
               }
             }
           ],
@@ -64993,6 +67569,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w29_2",
+                "node": "pin",
+                "region": "cw_10_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge fixed-right transport premise",
           "steps": [
             {
@@ -65046,6 +67638,38 @@
                   "w26",
                   "w27"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "cw_10_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w26",
+                "node": "pin_0",
+                "region": "cw_10_0"
               }
             }
           ],
@@ -65328,6 +67952,54 @@
                   "w27",
                   "w6_1"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r25_3"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w21",
+                "node": "pin_0",
+                "region": "r25_3"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w27",
+                "node": "pin_1",
+                "region": "r25_3"
               }
             }
           ],
@@ -65644,6 +68316,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w27",
+                "node": "pin",
+                "region": "r25_2_0"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge cited successor-shift premise",
           "steps": [
             {
@@ -65697,6 +68385,22 @@
                   "w1",
                   "w21"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r25_2_0"
               }
             }
           ],
@@ -65781,6 +68485,70 @@
                   "w27",
                   "w33"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w2",
+                "node": "pin",
+                "region": "r56"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w21",
+                "node": "pin_0",
+                "region": "r56"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w27",
+                "node": "pin_1",
+                "region": "r56"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w33",
+                "node": "pin_4",
+                "region": "r56"
               }
             }
           ],
@@ -66155,6 +68923,22 @@
                   "w1",
                   "w2"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r3_0"
               }
             }
           ],
@@ -69408,6 +72192,22 @@
           "placements": []
         },
         {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w0",
+                "node": "pin",
+                "region": "r3_1"
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
           "label": "discharge Nat(a) closure",
           "steps": [
             {
@@ -69613,6 +72413,22 @@
                   "w2",
                   "w22"
                 ]
+              }
+            }
+          ],
+          "placements": []
+        },
+        {
+          "label": "tidy",
+          "steps": [
+            {
+              "rule": "vacuity",
+              "direction": "delete",
+              "instance": {
+                "kind": "pin",
+                "wire": "w1",
+                "node": "pin",
+                "region": "r3_1"
               }
             }
           ],

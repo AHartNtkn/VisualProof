@@ -11,7 +11,7 @@ import type {
 import { DiagramError, portKey } from '../diagram/diagram'
 import type { RelSig } from '../diagram/sig'
 import { sigKey } from '../diagram/sig'
-import { deepestCommonAncestor, derivedScope } from '../diagram/regions'
+import { deepestCommonAncestor, derivedScope, isAncestorOrEqual } from '../diagram/regions'
 import { freshId, type IdNamespaceReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 
@@ -239,6 +239,61 @@ export function completeWireEnds(
   parts.wires[wireId] = {
     sig: wire.sig,
     endpoints: [...wire.endpoints, ...added],
+  }
+}
+
+/**
+ * The removal residue shared by erasure and deiteration (Lean:
+ * Erasure.residue / Iteration.uncopyPins, uniform rule 2026-08-17): after
+ * removing `removedNodes` content from `selRegion`, cap every surviving
+ * touched wire —
+ *
+ *   (a) a wire quantified ABOVE the removal region that keeps no incidence
+ *       at-or-under it gets ONE pin at the removal region. The pin's region
+ *       path is a prefix of every removed mention's path, so the derived
+ *       scope cannot move; the cap is added even when the wire is amply
+ *       supported elsewhere, so the rule's output is a function of the
+ *       removal site alone (matching the local Lean rule exactly);
+ *   (b) a wire quantified AT the removal region is completed there —
+ *       pins until its DCA is restored and it has two ends.
+ *
+ * Touched surviving wires are always quantified at-or-above the removal
+ * region (removed endpoints sit at it or inside selected child subtrees;
+ * retained endpoints never do — they diverge at-or-above it), so the two
+ * clauses cover every case.
+ */
+export function capRemovedSupport(
+  d: Diagram,
+  selRegion: RegionId,
+  removedNodes: ReadonlySet<NodeId>,
+  dyingWires: ReadonlySet<WireId>,
+  parts: PartsInProgress,
+  operation: string,
+  reservation?: IdNamespaceReservation,
+): void {
+  for (const [wireId, wire] of Object.entries(d.wires)) {
+    if (dyingWires.has(wireId)) continue
+    if (!wire.endpoints.some((ep) => removedNodes.has(ep.node))) continue
+    const oldScope = derivedScope(d, wireId)
+    if (oldScope === selRegion) {
+      completeWireEnds(parts, wireId, oldScope, operation, reservation)
+      continue
+    }
+    const survivor = parts.wires[wireId]!
+    const locallySupported = survivor.endpoints.some((ep) =>
+      isAncestorOrEqual(d, selRegion, d.nodes[ep.node]!.region))
+    if (locallySupported) continue
+    const node = freshId(new Set(Object.keys(parts.nodes)), 'pin', reservation)
+    parts.nodes[node] = {
+      kind: 'identity',
+      region: selRegion,
+      sig: survivor.sig,
+      arity: 1,
+    }
+    parts.wires[wireId] = {
+      sig: survivor.sig,
+      endpoints: [...survivor.endpoints, { node, port: { kind: 'identity', index: 0 } }],
+    }
   }
 }
 

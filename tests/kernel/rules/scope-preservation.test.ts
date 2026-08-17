@@ -90,6 +90,80 @@ describe('erasure caps touched wires', () => {
     // hold and p are x's two ends; the cap was a no-op.
     expect(erased.wires.x!.endpoints.map((ep) => ep.node).sort()).toEqual(['hold', 'p'])
   })
+
+  it('pins a wire that loses every local incidence, even when supported elsewhere', () => {
+    // y reaches B and C at the sheet and one atom two cuts deep. Erasing
+    // that atom leaves y's scope and floor globally intact — but the
+    // residue rule still caps it at the removal region (Lean clause (a)):
+    // the rule's output is a function of the removal site alone, and the
+    // pin's region path is a prefix of the removed mention's, so the
+    // derived scope cannot move.
+    const d = mkDiagram({
+      root: 'r0',
+      regions: {
+        r0: { kind: 'sheet' },
+        cut1: { kind: 'cut', parent: 'r0' },
+        cut2: { kind: 'cut', parent: 'cut1' },
+      },
+      nodes: {
+        b: { kind: 'atom', region: 'r0', sig: P },
+        c: { kind: 'atom', region: 'r0', sig: P },
+        q: { kind: 'atom', region: 'cut2', sig: P },
+        bh: { kind: 'identity', region: 'r0', sig: P, arity: 1 },
+        ch: { kind: 'identity', region: 'r0', sig: P, arity: 1 },
+        qh: { kind: 'identity', region: 'cut2', sig: P, arity: 1 },
+      },
+      wires: {
+        y: {
+          sig: IOTA,
+          endpoints: [
+            { node: 'b', port: { kind: 'arg', index: 0 } },
+            { node: 'c', port: { kind: 'arg', index: 0 } },
+            { node: 'q', port: { kind: 'arg', index: 0 } },
+          ],
+        },
+        bhead: {
+          sig: P,
+          endpoints: [
+            { node: 'b', port: { kind: 'head' } },
+            { node: 'bh', port: { kind: 'identity', index: 0 } },
+          ],
+        },
+        chead: {
+          sig: P,
+          endpoints: [
+            { node: 'c', port: { kind: 'head' } },
+            { node: 'ch', port: { kind: 'identity', index: 0 } },
+          ],
+        },
+        qhead: {
+          sig: P,
+          endpoints: [
+            { node: 'q', port: { kind: 'head' } },
+            { node: 'qh', port: { kind: 'identity', index: 0 } },
+          ],
+        },
+      },
+    })
+    const erased = applyErasure(d, {
+      region: 'cut2',
+      regions: [],
+      nodes: ['q', 'qh'],
+      wires: ['qhead'],
+    })
+    expect(erased.nodes.q).toBeUndefined()
+    expect(derivedScope(erased, 'y')).toBe('r0')
+    const yEnds = erased.wires.y!.endpoints.map((ep) => ep.node).sort()
+    expect(yEnds).toHaveLength(3)
+    expect(yEnds).toContain('b')
+    expect(yEnds).toContain('c')
+    const capNode = yEnds.find((node) => node !== 'b' && node !== 'c')!
+    expect(erased.nodes[capNode]).toMatchObject({
+      kind: 'identity',
+      region: 'cut2',
+      arity: 1,
+    })
+  })
 })
 
 describe('deiteration caps touched wires', () => {
@@ -148,11 +222,14 @@ describe('deiteration caps touched wires', () => {
     expect(removed.nodes.pC).toBeUndefined()
     expect(removed.wires.hCw).toBeUndefined()
     expect(derivedScope(removed, 'x')).toBe('r0')
+    // The cap lands AT THE REMOVAL REGION (the copy's home, cutOuter) —
+    // its path is a prefix of the removed mention's path, so the derived
+    // scope is unchanged: DCA(cutJ, cutOuter) = r0.
     const cap = removed.wires.x!.endpoints.find((ep) => {
       const node = removed.nodes[ep.node]!
-      return node.kind === 'identity' && node.arity === 1 && node.region === 'r0'
+      return node.kind === 'identity' && node.arity === 1 && node.region === 'cutOuter'
     })
-    expect(cap, 'a fresh pin at the old scope holds the quantifier').toBeDefined()
+    expect(cap, 'a fresh pin at the removal region stands in for the copy').toBeDefined()
   })
 })
 

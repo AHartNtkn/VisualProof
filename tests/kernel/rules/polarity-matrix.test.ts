@@ -20,7 +20,7 @@ import {
   compileRelationJoin,
   compileRelationSever,
 } from '../../../src/kernel/proof/compile-content'
-import { bareWire } from '../../fixtures/pins'
+import { bareWire, detachCaps } from '../../fixtures/pins'
 import { EMPTY_PROOF_CONTEXT } from '../../../src/kernel/proof/context'
 
 function nested(depth: number) {
@@ -235,13 +235,14 @@ describe('structural round trips', () => {
     })
     const evidence = findDeiterationEvidence(iterated, copySelection)
 
+    // Removal residue: sweep the ⊤-idle caps to recover the original.
     expect(sameDiagram(
-      applyDeiteration(
+      detachCaps(iterated, applyDeiteration(
         iterated,
         copySelection,
         evidence.justifier,
         evidence.certificate,
-      ),
+      )),
       diagram,
     )).toBe(true)
   })

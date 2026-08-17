@@ -10,6 +10,7 @@ import {
 import { readPropTheorem } from '../../src/generate/prop/read'
 import { isMinimalTautology } from '../../src/generate/prop/shrink'
 import { containsDoubleNegation, containsDuplicateConjunct, usedAtoms } from '../../src/generate/prop/formula'
+import { sweepRemovablePins } from '../fixtures/pins'
 import { formulaToDiagram } from '../../src/formula'
 import { deiterationStep } from '../../src/app/interact/moves'
 import { applyStep, EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof'
@@ -263,7 +264,13 @@ describe('findDeiterationRedex', () => {
         target = findDeiterationRedex(diagram, body)
       }
       expect(steps).toBe(1)
-      expect(sameDiagram(diagram, formulaToDiagram('∀P Q:o. ¬(P ∧ ¬Q)'))).toBe(true)
+      // The deiteration leaves its removal residue (a cap on P's wire at
+      // the removal region); the recorder's tidy pass sweeps such ⊤-idle
+      // pins after every action, so sweep here the same way.
+      expect(sameDiagram(
+        sweepRemovablePins(diagram),
+        formulaToDiagram('∀P Q:o. ¬(P ∧ ¬Q)'),
+      )).toBe(true)
     },
   )
   it('finds no redex in a theorem with no structural repeat (broken-finder check)', () => {

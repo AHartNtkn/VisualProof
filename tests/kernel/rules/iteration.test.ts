@@ -9,7 +9,7 @@ import {
   applyIteration,
   findDeiterationEvidence,
 } from '../../../src/kernel/rules/iteration'
-import { contentEndpoints } from '../../fixtures/pins'
+import { contentEndpoints, detachCaps } from '../../fixtures/pins'
 
 function host() {
   const builder = new DiagramBuilder()
@@ -174,7 +174,12 @@ describe('exact applyDeiteration evidence', () => {
       wires: [],
     })
 
-    expect(sameDiagram(deiterate(iterated, copySelection), diagram)).toBe(true)
+    // Deiteration leaves its removal residue: a cap where the copy's mention
+    // was the wire's only incidence at-or-under the copy region. Sweeping
+    // the ⊤-idle caps recovers the original exactly.
+    const removed = deiterate(iterated, copySelection)
+    expect(sameDiagram(removed, diagram)).toBe(false)
+    expect(sameDiagram(detachCaps(iterated, removed), diagram)).toBe(true)
   })
 
   it('rejects removal with no disjoint exact justifier', () => {

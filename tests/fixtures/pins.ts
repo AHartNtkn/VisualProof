@@ -11,6 +11,8 @@ import type {
 import type { Sig } from '../../src/kernel/diagram/sig'
 import { IOTA } from '../../src/kernel/diagram/sig'
 import { isPinEndpoint } from '../../src/kernel/rules/wire-ends'
+import { applyVacuityDelete } from '../../src/kernel/rules/identity-rules'
+import { nextRemovablePinStep } from '../../src/kernel/proof/pin-sweep'
 
 /**
  * A wire with no content whose quantifier sits at `region`: the two pins are
@@ -60,5 +62,43 @@ export function bareWireParts(
         endpoints: ends.map((id) => ({ node: id, port: { kind: 'identity', index: 0 } })),
       },
     },
+  }
+}
+
+/**
+ * Detach exactly the caps a removal minted: every arity-1 identity present
+ * in `after` but not in `before`, removed by vacuity pin deletion. The
+ * exact inverse of the removal residue — deiterate-then-detachCaps is the
+ * old round-trip.
+ */
+export function detachCaps(before: Diagram, after: Diagram): Diagram {
+  let current = after
+  for (const [id, node] of Object.entries(after.nodes)) {
+    if (before.nodes[id] !== undefined) continue
+    if (node.kind !== 'identity' || node.arity !== 1) continue
+    const wireEntry = Object.entries(current.wires)
+      .find(([, wire]) => wire.endpoints.some((endpoint) => endpoint.node === id))
+    if (wireEntry === undefined) throw new Error(`cap '${id}' holds no wire`)
+    current = applyVacuityDelete(current, {
+      kind: 'pin', wire: wireEntry[0], node: id, region: node.region,
+    })
+  }
+  return current
+}
+
+/**
+ * Sweep every ⊤-idle pin, exactly as the recorder's tidy pass does after
+ * each action (proof/pin-sweep.ts): tests that apply raw steps use this to
+ * reach the same pin-minimal shape recorded derivations settle into.
+ */
+export function sweepRemovablePins(diagram: Diagram): Diagram {
+  let current = diagram
+  for (;;) {
+    const step = nextRemovablePinStep(current)
+    if (step === null) return current
+    if (step.rule !== 'vacuity' || step.direction !== 'delete') {
+      throw new Error('pin sweep produced a non-vacuity step')
+    }
+    current = applyVacuityDelete(current, step.instance)
   }
 }

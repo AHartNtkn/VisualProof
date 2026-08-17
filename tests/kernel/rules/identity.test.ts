@@ -24,7 +24,7 @@ import {
   applyIteration,
   findDeiterationEvidence,
 } from '../../../src/kernel/rules/iteration'
-import { bareWire, contentEndpoints } from '../../fixtures/pins'
+import { bareWire, contentEndpoints, detachCaps } from '../../fixtures/pins'
 
 type IdentityNode = Extract<Diagram['nodes'][NodeId], { kind: 'identity' }>
 
@@ -373,7 +373,8 @@ describe('Rule 5: explicit endpoint-level equals-for-equals evidence', () => {
 
     const ordinary = roundTrip(false)
     const permuted = roundTrip(true)
-    expect(sameDiagram(ordinary.restored, ordinary.source)).toBe(true)
+    // Removal residue: sweep the ⊤-idle caps to recover the original.
+    expect(sameDiagram(detachCaps(ordinary.iterated, ordinary.restored), ordinary.source)).toBe(true)
     expect(sameDiagram(permuted.source, ordinary.source)).toBe(true)
     expect(sameDiagram(permuted.iterated, ordinary.iterated)).toBe(true)
     expect(sameDiagram(

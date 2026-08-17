@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
+import { detachCaps } from '../../fixtures/pins'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import {
@@ -49,7 +50,8 @@ describe('open relational iteration and deiteration', () => {
 
     expect(iterated.wires[argument]!.endpoints.some((endpoint) => endpoint.node === copy))
       .toBe(true)
-    expect(sameDiagram(restored, diagram)).toBe(true)
+    // Removal residue: sweep the ⊤-idle caps to recover the original.
+    expect(sameDiagram(detachCaps(iterated, restored), diagram)).toBe(true)
   })
 
   it('rejects iteration to a region outside the source', () => {
