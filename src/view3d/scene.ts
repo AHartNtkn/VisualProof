@@ -9,9 +9,9 @@ export const RING_SEGMENTS = 32
 
 export type Entity =
   /** `polarity`: the region's cut-nesting parity (sheet = 0). Branches
-      stroke by polarity — even keeps the strong line color, odd goes gray
-      (USER ruling 2026-08-16) — so every cut boundary is visible as a color
-      change and needs no marker dot. */
+      stroke by polarity — sheet-parity lines go gray, odd (cut) lines keep
+      the strong color (USER ruling 2026-08-16) — so every cut boundary is
+      visible as a color change and needs no marker dot. */
   | { kind: 'branch'; key: string; polarity: 0 | 1; pts: Vec3[] }
   /** An identity node's marker on its line (USER law 2026-08-15: identity
       nodes draw small pips over the branches). `ownerWire`: the first wire
