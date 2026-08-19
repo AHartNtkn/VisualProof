@@ -22,6 +22,7 @@ import { buildSelection, type Hit } from '../hittest'
 import { ConnectionDragController } from './connection'
 import { CopyDragController } from './copy'
 import { copyDestinationPreview, copySelectionPreview } from './copy-view'
+import { applyIdentitySteps, IdentityOpsController } from './identity-ops'
 import { SlashController } from './slash'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 import type { CopyDestination, CopyPlan } from '../copy-planner'
@@ -66,6 +67,7 @@ function regionAt(engine: Engine, diagram: Diagram, point: Vec2): RegionId {
 
 export class ConstructController {
   readonly #options: ConstructOptions
+  readonly #identity: IdentityOpsController
   readonly #connection: ConnectionDragController
   readonly #copy: CopyDragController | null
   readonly #slash: SlashController
@@ -74,6 +76,18 @@ export class ConstructController {
 
   constructor(options: ConstructOptions) {
     this.#options = options
+    this.#identity = new IdentityOpsController({
+      active: options.active,
+      engine: options.engine,
+      diagram: options.diagram,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      claimEndDiscs: true,
+      commit: (label, steps) => this.#tryCommit(
+        () => applyIdentitySteps(this.#options.diagram(), steps), label,
+      ),
+      refuse: options.refuse,
+    })
     this.#slash = new SlashController({
       active: options.active,
       engine: options.engine,
@@ -134,6 +148,8 @@ export class ConstructController {
     if (sample.button === 2) return this.#slash.claim(sample)
     if (sample.button !== 0) return null
 
+    const identity = this.#identity.claim(sample)
+    if (identity !== null) return identity
     const connection = this.#connection.claim(sample)
     if (connection !== null) return connection
     const selected = this.#options.selection()
@@ -170,6 +186,7 @@ export class ConstructController {
       return true
     }
     if (sample.key === 'Escape') {
+      this.#identity.cancel()
       this.#copy?.cancel()
       if (this.#prompt !== null) {
         this.#closePrompt()
@@ -181,7 +198,12 @@ export class ConstructController {
   }
 
   overlay(): readonly Shape[] {
-    const connection = [...this.#connection.overlay(), ...(this.#copy?.overlay() ?? []), ...this.#slash.overlay()]
+    const connection = [
+      ...this.#identity.overlay(),
+      ...this.#connection.overlay(),
+      ...(this.#copy?.overlay() ?? []),
+      ...this.#slash.overlay(),
+    ]
     const preview = this.#preview
     if (preview === null) return connection
     const colors = this.#options.theme().interaction
@@ -195,6 +217,7 @@ export class ConstructController {
 
   dispose(): void {
     this.#closePrompt()
+    this.#identity.cancel()
     this.#connection.cancel()
     this.#copy?.dispose()
   }

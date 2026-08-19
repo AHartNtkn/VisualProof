@@ -20,6 +20,7 @@ import { absorbHits, orphanedWires } from '../edit'
 import { buildSelection, regionAt, type Hit } from '../hittest'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
 import { CopyDragController } from './copy'
+import { IdentityOpsController } from './identity-ops'
 import { SlashController } from './slash'
 import { WireOpsDragController } from './wire-ops'
 import { copyDestinationPreview, copySelectionPreview } from './copy-view'
@@ -118,6 +119,7 @@ function sameHit(left: Hit, right: Hit): boolean {
 export class ProofMoveController {
   readonly #options: ProofMoveControllerOptions
   readonly #document: Document
+  readonly #identity: IdentityOpsController
   readonly #wireOps: WireOpsDragController
   readonly #copy: CopyDragController
   readonly #slash: SlashController
@@ -131,6 +133,19 @@ export class ProofMoveController {
     assertProofContext(options.context())
     this.#options = options
     this.#document = options.host.ownerDocument
+    this.#identity = new IdentityOpsController({
+      active: options.active,
+      engine: options.engine,
+      diagram: options.diagram,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      claimEndDiscs: false,
+      commit: (label, steps, pointer) => {
+        this.#lastPointer = pointer
+        return this.#commitSteps(label, steps)
+      },
+      refuse: options.refuse,
+    })
     this.#wireOps = new WireOpsDragController({
       active: options.active,
       engine: options.engine,
@@ -217,7 +232,7 @@ export class ProofMoveController {
     if (this.#menu !== null) this.#closeMenu()
     if (sample.shiftKey || sample.ctrlKey) return null
     if (sample.button === 2) return this.#slash.claim(sample)
-    return this.#wireOps.claim(sample) ?? this.#copy.claim(sample)
+    return this.#identity.claim(sample) ?? this.#wireOps.claim(sample) ?? this.#copy.claim(sample)
   }
 
   contextMenu(sample: PointerSample): boolean {
@@ -399,6 +414,7 @@ export class ProofMoveController {
   overlay(): readonly Shape[] {
     this.#context()
     const result: Shape[] = [
+      ...this.#identity.overlay(),
       ...this.#wireOps.overlay(),
       ...this.#copy.overlay(),
       ...this.#slash.overlay(),
@@ -430,6 +446,7 @@ export class ProofMoveController {
     this.#closeMenu()
     this.#cycle = null
     this.#closePrompt()
+    this.#identity.cancel()
     this.#wireOps.cancel()
     this.#copy.cancel()
     this.#slash.cancel()
