@@ -1,5 +1,5 @@
-import type { Diagram, Endpoint, NodeId, RegionId } from '../../kernel/diagram/diagram'
-import { pkey, type Engine, type Leg } from '../../view/engine'
+import type { Diagram, NodeId, RegionId } from '../../kernel/diagram/diagram'
+import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import {
   beginBodyPlacement,
@@ -8,7 +8,6 @@ import {
   type BodyPlacement,
 } from '../../view/placement'
 import type { Vec2 } from '../../view/vec'
-import { computeLegs, type LegGeom } from '../../view/wires'
 import {
   absorbHits,
   addRelationWire,
@@ -23,14 +22,13 @@ import { buildSelection, type Hit } from '../hittest'
 import { ConnectionDragController } from './connection'
 import { CopyDragController } from './copy'
 import { copyDestinationPreview, copySelectionPreview } from './copy-view'
+import { SlashController } from './slash'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 import type { CopyDestination, CopyPlan } from '../copy-planner'
 
 type PlacementState = { readonly node: NodeId; readonly placement: BodyPlacement; at: Vec2 }
 
-type Preview =
-  | { readonly kind: 'slash'; readonly from: Vec2; at: Vec2 }
-  | { readonly kind: 'placement'; readonly state: PlacementState }
+type Preview = { readonly kind: 'placement'; readonly state: PlacementState }
 
 export type ConstructOptions = {
   readonly host: HTMLElement
@@ -66,47 +64,39 @@ function regionAt(engine: Engine, diagram: Diagram, point: Vec2): RegionId {
   return best?.id ?? diagram.root
 }
 
-function crosses(a: Vec2, b: Vec2, c: Vec2, d: Vec2): boolean {
-  const orient = (p: Vec2, q: Vec2, r: Vec2): number => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)
-  const abC = orient(a, b, c)
-  const abD = orient(a, b, d)
-  const cdA = orient(c, d, a)
-  const cdB = orient(c, d, b)
-  const overlaps = (a0: number, a1: number, b0: number, b1: number): boolean =>
-    Math.max(Math.min(a0, a1), Math.min(b0, b1)) <= Math.min(Math.max(a0, a1), Math.max(b0, b1))
-  return abC * abD <= 0 && cdA * cdB <= 0
-    && overlaps(a.x, b.x, c.x, d.x)
-    && overlaps(a.y, b.y, c.y, d.y)
-}
-
-function crossedLegs(engine: Engine, from: Vec2, to: Vec2): LegGeom[] {
-  return computeLegs(engine).filter((geometry) => {
-    for (let i = 1; i < geometry.pts.length; i++) {
-      if (crosses(from, to, geometry.pts[i - 1]!, geometry.pts[i]!)) return true
-    }
-    return false
-  })
-}
-
-function endpointAt(diagram: Diagram, leg: Leg): Endpoint | null {
-  for (const end of [leg.to, leg.from]) {
-    if (diagram.nodes[end.body] === undefined) continue
-    const endpoint = diagram.wires[leg.wid]?.endpoints.find((candidate) =>
-      candidate.node === end.body && pkey(candidate.port) === end.key)
-    if (endpoint !== undefined) return endpoint
-  }
-  return null
-}
-
 export class ConstructController {
   readonly #options: ConstructOptions
   readonly #connection: ConnectionDragController
   readonly #copy: CopyDragController | null
+  readonly #slash: SlashController
   #preview: Preview | null = null
   #prompt: HTMLDivElement | null = null
 
   constructor(options: ConstructOptions) {
     this.#options = options
+    this.#slash = new SlashController({
+      active: options.active,
+      engine: options.engine,
+      diagram: options.diagram,
+      theme: options.theme,
+      still: (sample) => {
+        this.#options.openSpawn(sample, regionAt(this.#options.engine(), this.#options.diagram(), sample.world))
+      },
+      commit: (crossings, sample) => {
+        let next = this.#options.diagram()
+        let severed = 0
+        for (const crossing of crossings) {
+          try {
+            next = severEndpoint(next, crossing.wire, crossing.endpoint)
+            severed++
+          } catch (error) {
+            this.#options.refuse(error instanceof Error ? error.message : String(error), sample.client)
+          }
+        }
+        if (severed > 0) this.#options.commit(next)
+      },
+      refuse: options.refuse,
+    })
     this.#connection = new ConnectionDragController({
       active: options.active,
       engine: options.engine,
@@ -141,7 +131,7 @@ export class ConstructController {
 
   claim(sample: PointerSample): PointerClaim | null {
     if (!this.#options.active()) return null
-    if (sample.button === 2) return this.#slashClaim(sample)
+    if (sample.button === 2) return this.#slash.claim(sample)
     if (sample.button !== 0) return null
 
     const connection = this.#connection.claim(sample)
@@ -191,13 +181,10 @@ export class ConstructController {
   }
 
   overlay(): readonly Shape[] {
-    const connection = [...this.#connection.overlay(), ...(this.#copy?.overlay() ?? [])]
+    const connection = [...this.#connection.overlay(), ...(this.#copy?.overlay() ?? []), ...this.#slash.overlay()]
     const preview = this.#preview
     if (preview === null) return connection
     const colors = this.#options.theme().interaction
-    if (preview.kind === 'slash') {
-      return [...connection, { kind: 'segment', from: preview.from, to: preview.at, stroke: colors.refusal, width: 2, glow: null }]
-    }
     const destination = regionAt(this.#options.engine(), this.#options.diagram(), preview.state.at)
     const home = this.#options.diagram().nodes[preview.state.node]?.region
     const geometry = this.#options.engine().regions.get(destination)
@@ -213,45 +200,6 @@ export class ConstructController {
   }
 
   modifiersChanged(ctrlHeld: boolean): void { this.#copy?.modifiersChanged(ctrlHeld) }
-
-  #slashClaim(start: PointerSample): PointerClaim {
-    const preview: Extract<Preview, { kind: 'slash' }> = { kind: 'slash', from: start.world, at: start.world }
-    this.#preview = preview
-    return {
-      still: 'claim',
-      blocksPassiveRelaxation: true,
-      move: (sample) => { preview.at = sample.world },
-      release: (sample, moved) => {
-        this.#preview = null
-        if (!moved) {
-          this.#options.openSpawn(start, regionAt(this.#options.engine(), this.#options.diagram(), start.world))
-          return
-        }
-        const crossings = crossedLegs(this.#options.engine(), preview.from, sample.world)
-        if (crossings.length === 0) {
-          this.#options.refuse('the slash crossed no strand', sample.client)
-          return
-        }
-        let next = this.#options.diagram()
-        let severed = 0
-        let junctionOnly = false
-        for (const crossing of crossings) {
-          const endpoint = endpointAt(next, crossing.leg)
-          if (endpoint === null) { junctionOnly = true; continue }
-          try {
-            next = severEndpoint(next, crossing.leg.wid, endpoint)
-            severed++
-          } catch (error) {
-            this.#options.refuse(error instanceof Error ? error.message : String(error), sample.client)
-          }
-        }
-        if (severed > 0) {
-          this.#options.commit(next)
-        } else if (junctionOnly) this.#options.refuse('that strand runs between junctions; sever nearer a port', sample.client)
-      },
-      cancel: () => { this.#preview = null },
-    }
-  }
 
   #placementClaim(node: NodeId): PointerClaim {
     const state: PlacementState = {
