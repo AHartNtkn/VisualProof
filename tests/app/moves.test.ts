@@ -10,11 +10,13 @@ import { bareWireDeletionSteps, bareWireInsertSteps } from '../../src/kernel/pro
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import type { ProofStep } from '../../src/kernel/proof/step'
 import { mkEngine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import { vec, type Vec2 } from '../../src/view/vec'
 import { UNARY } from '../fixtures/zero-signature'
 import { segment } from './helpers/build'
+import { place } from './helpers/gesture'
 
 function keySample(key: string, shiftKey = false) {
   return {
@@ -196,6 +198,28 @@ describe('proof move vocabulary', () => {
     expect(applied[0]!.steps).toEqual(
       [...bareWireInsertSteps(diagram, cut, relSig([]), 'w', ['pin0', 'pin1']).steps],
     )
+  })
+
+  it('a right-drag slash across a leg commits wireSever', () => {
+    const builder = new DiagramBuilder()
+    const seg = segment(builder, builder.root)
+    const diagram = builder.build()
+    const { moves, engine, applied } = harness(diagram)
+    place(engine, seg.ends[0], { x: 100, y: 300 })
+    place(engine, seg.ends[1], { x: 500, y: 300 })
+    const at = (p: Vec2) => ({ ...pointerSample(p), button: 2 })
+    const claim = moves.claim(at({ x: 150, y: 100 }))
+    expect(claim).not.toBeNull()
+    claim!.move(at({ x: 150, y: 500 }))
+    claim!.release(at({ x: 150, y: 500 }), true)
+    expect(applied).toHaveLength(1)
+    const steps = applied[0]!.steps
+    expect(steps.length).toBeGreaterThan(0)
+    expect(steps.every((step) => step.rule === 'wireSever')).toBe(true)
+    const input = (steps[0] as Extract<ProofStep, { rule: 'wireSever' }>).input
+    expect(input.wire).toBe(seg.wire)
+    expect(input.keep).toHaveLength(1)   // one end severed, one kept
+    expect(input.scope).toBeUndefined()  // derived-scope default
   })
 
   it('the i key is retired', () => {

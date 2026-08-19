@@ -1,4 +1,4 @@
-import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
+import type { Diagram, Endpoint, RegionId, WireId } from '../../kernel/diagram/diagram'
 import { derivedScope } from '../../kernel/diagram/regions'
 import { IOTA, relSig, type Sig } from '../../kernel/diagram/sig'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
@@ -8,7 +8,7 @@ import type { ProofContext } from '../../kernel/proof/context'
 import { assertProofContext } from '../../kernel/proof/context'
 import { bareWireDeletionSteps, bareWireInsertSteps } from '../../kernel/proof/bare-wire'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
-import type { Engine } from '../../view/engine'
+import { pkey, type Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
 import {
@@ -20,7 +20,7 @@ import { absorbHits, orphanedWires } from '../edit'
 import { buildSelection, regionAt, type Hit } from '../hittest'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
 import { CopyDragController } from './copy'
-import { DrawGestureController } from './draw'
+import { SlashController } from './slash'
 import { WireOpsDragController } from './wire-ops'
 import { copyDestinationPreview, copySelectionPreview } from './copy-view'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
@@ -120,7 +120,7 @@ export class ProofMoveController {
   readonly #document: Document
   readonly #wireOps: WireOpsDragController
   readonly #copy: CopyDragController
-  readonly #draw: DrawGestureController
+  readonly #slash: SlashController
   #prompt: HTMLDivElement | null = null
   #menu: HTMLDivElement | null = null
   #cycle: CitationCycle | null = null
@@ -146,20 +146,29 @@ export class ProofMoveController {
       promptSig: (client, apply) => { this.#promptSig(client, apply) },
       refuse: options.refuse,
     })
-    this.#draw = new DrawGestureController({
+    this.#slash = new SlashController({
       active: options.active,
       engine: options.engine,
       diagram: options.diagram,
-      viewScale: options.viewScale,
       theme: options.theme,
-      context: () => this.#context(),
-      orientation: options.orientation,
-      commit: (label, steps, pointer) => {
-        this.#lastPointer = pointer
-        return this.#commitSteps(label, steps)
+      commit: (crossings, sample) => {
+        const diagram = options.diagram()
+        const byWire = new Map<WireId, Endpoint[]>()
+        for (const crossing of crossings) {
+          const bucket = byWire.get(crossing.wire) ?? []
+          bucket.push(crossing.endpoint)
+          byWire.set(crossing.wire, bucket)
+        }
+        const steps: ProofStep[] = [...byWire.entries()].map(([wire, severed]) => {
+          const moved = new Set(severed.map((ep) => `${ep.node}:${pkey(ep.port)}`))
+          const keep = (diagram.wires[wire]?.endpoints ?? [])
+            .filter((ep) => !moved.has(`${ep.node}:${pkey(ep.port)}`))
+          return { rule: 'wireSever', input: { wire, keep } }
+        })
+        this.#lastPointer = sample.client
+        this.#commitSteps('wireSever', steps)
       },
-      openSpawn: options.openSpawn,
-      stillMenu: (sample) => { this.#openContextMenu(sample) },
+      still: (sample) => { this.#openContextMenu(sample) },
       refuse: options.refuse,
     })
     this.#copy = new CopyDragController({
@@ -207,7 +216,7 @@ export class ProofMoveController {
     ) return null
     if (this.#menu !== null) this.#closeMenu()
     if (sample.shiftKey || sample.ctrlKey) return null
-    if (sample.button === 2) return this.#draw.claim(sample)
+    if (sample.button === 2) return this.#slash.claim(sample)
     return this.#wireOps.claim(sample) ?? this.#copy.claim(sample)
   }
 
@@ -216,9 +225,10 @@ export class ProofMoveController {
     this.#lastPointer = sample.client
     if (!this.#options.active()) return false
     // Every claimed right press suppresses the browser's contextmenu event
-    // (it can fire at press time); a still release reopens through
-    // stillMenu, so the palette appears exactly once for a plain click.
-    if (this.#draw.consumeMenuSuppression()) return true
+    // (it can fire at press time); a still release reopens through the
+    // slash's still callback, so the palette appears exactly once for a
+    // plain click.
+    if (this.#slash.consumeMenuSuppression()) return true
     return this.#openContextMenu(sample)
   }
 
@@ -263,7 +273,6 @@ export class ProofMoveController {
       const active = this.#menu !== null
         || this.#cycle !== null
         || this.#prompt !== null
-        || this.#draw.hasPendingInteraction
       this.cancel()
       return active
     }
@@ -392,7 +401,7 @@ export class ProofMoveController {
     const result: Shape[] = [
       ...this.#wireOps.overlay(),
       ...this.#copy.overlay(),
-      ...this.#draw.overlay(),
+      ...this.#slash.overlay(),
     ]
     const cycle = this.#cycle
     if (cycle !== null && cycle.candidate.occurrences !== null) {
@@ -423,7 +432,7 @@ export class ProofMoveController {
     this.#closePrompt()
     this.#wireOps.cancel()
     this.#copy.cancel()
-    this.#draw.cancel()
+    this.#slash.cancel()
   }
 
   dispose(): void {
