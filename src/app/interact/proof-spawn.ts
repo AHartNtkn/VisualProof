@@ -17,7 +17,7 @@ import {
 } from './spawn'
 
 export type StructuralSpawnRequest = {
-  readonly node: DiagramNode
+  readonly node: Exclude<DiagramNode, { readonly kind: 'identity' }>
   readonly region: RegionId
   readonly wires: readonly WireId[]
 }
@@ -36,12 +36,6 @@ export function proofNodeSpawnStep(request: StructuralSpawnRequest): ProofStep {
         region: request.region,
         defId: request.node.defId,
         sig: request.node.sig,
-      }
-    case 'identity':
-      return {
-        rule: 'identityInsert',
-        region: request.region,
-        wires: request.wires,
       }
   }
 }

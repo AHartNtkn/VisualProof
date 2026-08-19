@@ -19,39 +19,24 @@ const kinds = (
 ).map((action) => action.kind)
 
 describe('applicableActions', () => {
-  it('mirrors the orientation-aware identity-insertion polarity matrix', () => {
+  it('never offers identityInsert — equating is compositional (join, pin, expose)', () => {
+    // Reuse the fixture that used to yield identityInsert for a selected
+    // pair of same-signature wires under negative polarity: the descriptor
+    // must never appear, in either orientation.
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const left = segment(builder, cut)
     const right = segment(builder, cut)
-    const relation = segment(builder, cut, relSig([]))
     const diagram = builder.build()
 
-    // A selected wire brings its pins: they are its drawn ends.
     const pair = mkSelection(diagram, {
       region: cut,
       regions: [],
       nodes: [...left.ends, ...right.ends],
       wires: [left.wire, right.wire],
     })
-    expect(kinds(diagram, pair)).toContain('identityInsert')
+    expect(kinds(diagram, pair)).not.toContain('identityInsert')
     expect(kinds(diagram, pair, true)).not.toContain('identityInsert')
-
-    const singleton = mkSelection(diagram, {
-      region: cut,
-      regions: [],
-      nodes: [...left.ends],
-      wires: [left.wire],
-    })
-    expect(kinds(diagram, singleton)).not.toContain('identityInsert')
-
-    const mixed = mkSelection(diagram, {
-      region: cut,
-      regions: [],
-      nodes: [...left.ends, ...relation.ends],
-      wires: [left.wire, relation.wire],
-    })
-    expect(kinds(diagram, mixed)).not.toContain('identityInsert')
 
     const positiveBuilder = new DiagramBuilder()
     const positiveLeft = segment(positiveBuilder, positiveBuilder.root)
@@ -64,7 +49,7 @@ describe('applicableActions', () => {
       wires: [positiveLeft.wire, positiveRight.wire],
     })
     expect(kinds(positive, positivePair)).not.toContain('identityInsert')
-    expect(kinds(positive, positivePair, true)).toContain('identityInsert')
+    expect(kinds(positive, positivePair, true)).not.toContain('identityInsert')
   })
 
   it('does not offer a specialized action for a cut-contained disequality', () => {

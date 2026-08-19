@@ -561,13 +561,6 @@ export class ProofMoveController {
           region: selection.regions[0]!,
         }))
         return
-      case 'identityInsert':
-        row(action.label, () => this.#commit({
-          rule: 'identityInsert',
-          region: selection.region,
-          wires: selection.wires,
-        }))
-        return
       case 'vacuityDelete':
         row(action.label, () => this.#commitSteps(
           'vacuity',

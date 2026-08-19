@@ -1,6 +1,5 @@
-import type { Diagram, WireId } from '../kernel/diagram/diagram'
-import { polarity, wireVisibleAt } from '../kernel/diagram/regions'
-import { sigEquals } from '../kernel/diagram/sig'
+import type { Diagram } from '../kernel/diagram/diagram'
+import { polarity } from '../kernel/diagram/regions'
 import { isPinEndpoint } from '../kernel/rules/wire-ends'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import type { ProofContext } from '../kernel/proof/context'
@@ -16,7 +15,6 @@ export type ActionDescriptor =
   | { readonly kind: 'erase'; readonly label: string }
   | { readonly kind: 'doubleCutWrap'; readonly label: string }
   | { readonly kind: 'doubleCutElim'; readonly label: string }
-  | { readonly kind: 'identityInsert'; readonly label: string }
   | { readonly kind: 'vacuityDelete'; readonly label: string }
   | { readonly kind: 'iterate'; readonly label: string; readonly needsTarget: true }
   | { readonly kind: 'deiterate'; readonly label: string }
@@ -26,8 +24,8 @@ export type ActionDescriptor =
 
 /**
  * `backward` is the same interface with polarity flipped: it changes citation
- * direction and flips the erasure and identity-insertion polarity gates.
- * Polarity-blind structural rules are unaffected.
+ * direction and flips the erasure polarity gate. Polarity-blind structural
+ * rules are unaffected.
  */
 export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: ProofContext, backward = false): ActionDescriptor[] {
   assertProofContext(ctx)
@@ -43,10 +41,6 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
   if (hasContent) {
     out.push({ kind: 'iterate', label: 'Iterate into…', needsTarget: true })
     out.push({ kind: 'deiterate', label: 'Deiterate (needs a justifying copy)' })
-  }
-
-  if (identityInsertionWires(d, sel, backward) !== null) {
-    out.push({ kind: 'identityInsert', label: 'Insert identity' })
   }
 
   // A single reference node unfolds when its relation is in scope. Unfold is a
@@ -100,34 +94,4 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
     out.push({ kind: 'citeTheorem', label: `Cite ${name} (${direction})`, name, direction })
   }
   return out
-}
-
-function identityInsertionWires(
-  diagram: Diagram,
-  selection: SubgraphSelection,
-  backward: boolean,
-): readonly WireId[] | null {
-  const need = backward ? 'positive' : 'negative'
-  // The selected wires' own pins ride along with them; anything else in the
-  // selection means the gesture is not "identify these lines".
-  const ownPin = (node: string): boolean => selection.wires.some((wireId) =>
-    diagram.wires[wireId]?.endpoints.some((endpoint) => endpoint.node === node) === true)
-  if (
-    polarity(diagram, selection.region) !== need
-    || !selection.nodes.every(ownPin)
-    || selection.regions.length !== 0
-    || selection.wires.length < 2
-    || new Set(selection.wires).size !== selection.wires.length
-  ) return null
-  const first = diagram.wires[selection.wires[0]!]
-  if (first === undefined) return null
-  for (const wireId of selection.wires) {
-    const wire = diagram.wires[wireId]
-    if (
-      wire === undefined
-      || !sigEquals(first.sig, wire.sig)
-      || !wireVisibleAt(diagram, wireId, selection.region)
-    ) return null
-  }
-  return selection.wires
 }
