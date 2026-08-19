@@ -1,5 +1,10 @@
-import { expect } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { test } from './zero-signature-fixture'
+import { DARK, LIGHT } from '../src/view/paint'
+import { formulaToDiagram } from '../src/formula'
+import { scene3 } from '../src/view3d/scene'
+import { FOV_DEG, eyeOf, fitPose } from '../src/view3d/camera'
+import { cross3, dot3, norm3, sub3 } from '../src/view3d/vec3'
 
 test('3D view mounts, renders the trunk, reports hover, and unmounts', async ({ page }) => {
   await page.goto('/')
@@ -56,4 +61,121 @@ test('3D view mounts, renders the trunk, reports hover, and unmounts', async ({ 
   await page.getByRole('button', { name: '2D view' }).click()
   await expect(page.locator('canvas[data-view3]')).toHaveCount(0)
   await expect(page.locator('#c')).toBeVisible()
+})
+
+test.describe('pip color fidelity', () => {
+  // A pip disc is only ~5 CSS px across at the fitted camera; doubling the
+  // device pixel ratio doubles its device-pixel size so the disc has a flat
+  // interior whose exact center pixel is pure disc color, measurable without
+  // rim or halo contamination.
+  test.use({ deviceScaleFactor: 2, viewport: { width: 1280, height: 720 } })
+
+  // A diagram whose identity nodes sit on relation wires (the ∀-bound P Q R
+  // loose ends) and on the ι-order x wire — every pip color class.
+  const FORMULA = '∀ P Q R : i → o. ∀ x. P(x) ∧ Q(x) ∧ R(x)'
+
+  /** Opens FORMULA in the 3D view (optionally after switching to the dark
+      theme) and asserts every identity pip's disc-core pixel matches one of
+      the scene's two legitimate pip colors. */
+  const assertPipCores = async (page: Page, theme: 'light' | 'dark'): Promise<void> => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /Mode: Edit/ }).click()
+    await page.getByRole('button', { name: 'Formula…', exact: true }).click()
+    const form = page.getByRole('dialog')
+    await form.getByLabel('Formula to diagram').fill(FORMULA)
+    await form.getByRole('button', { name: 'Create diagram', exact: true }).click()
+    await expect(form).toBeHidden()
+
+    await page.getByRole('button', { name: 'Utilities' }).click()
+    if (theme === 'dark') {
+      await page.getByRole('button', { name: /^Theme: / }).click()
+      await expect(page.getByRole('button', { name: `Theme: ${DARK.name}`, exact: true })).toBeVisible()
+    }
+    await page.getByRole('button', { name: '3D view' }).click()
+    const canvas3 = page.locator('canvas[data-view3]')
+    await expect(canvas3).toBeVisible()
+    await page.waitForTimeout(900) // camera fit + first frames
+
+    // Locate the identity pips deterministically: the shell replaces the
+    // diagram with formulaToDiagram(FORMULA) verbatim and mountView3 frames
+    // it with fitPose, so rebuilding the scene here and projecting through
+    // the same camera math yields the exact on-screen pip centers.
+    const box = (await canvas3.boundingBox())!
+    const scene = scene3(formulaToDiagram(FORMULA))
+    const aspect = box.width / box.height
+    const pose = fitPose(scene.center, scene.radius, aspect)
+    const eye = eyeOf(pose)
+    const fwd = norm3(sub3(pose.target, eye))
+    const right = norm3(cross3(fwd, { x: 0, y: 1, z: 0 }))
+    const up = cross3(right, fwd)
+    const tanHalf = Math.tan((FOV_DEG * Math.PI) / 360)
+    const pips = scene.entities.flatMap((e) => (e.kind === 'pip' ? [e] : []))
+    expect(pips.length, 'scene has no identity pips — the fixture formula must produce identity nodes').toBeGreaterThan(0)
+    const centers = pips.map((p) => {
+      const d = sub3(p.pos, eye)
+      const z = dot3(d, fwd)
+      return {
+        key: p.key,
+        x: Math.round(((dot3(d, right) / z / (tanHalf * aspect)) + 1) / 2 * box.width),
+        y: Math.round((1 - dot3(d, up) / z / tanHalf) / 2 * box.height),
+      }
+    })
+    // The legitimate pip colors in this scene: the relation-order hue ladder
+    // rung shared by P/Q/R and the theme's base wire color (the ι wire).
+    // Both rasterized by the same canvas-2d path discTexture uses, so the
+    // readback must match them exactly up to driver rounding.
+    const th = theme === 'dark' ? DARK : LIGHT
+    const cssColors = [`hsl(268, 48%, ${th.relationHueLightness}%)`, th.wire]
+    const measured = await canvas3.evaluate((c, args) => {
+      const el = c as HTMLCanvasElement
+      const off = document.createElement('canvas')
+      off.width = el.width
+      off.height = el.height
+      const ctx = off.getContext('2d')
+      if (ctx === null) throw new Error('no 2d context for readback')
+      ctx.drawImage(el, 0, 0)
+      const img = ctx.getImageData(0, 0, off.width, off.height).data
+      const sx = el.width / el.clientWidth
+      const sy = el.height / el.clientHeight
+      const cssToRgb = (color: string): [number, number, number] => {
+        const cc = document.createElement('canvas')
+        cc.width = cc.height = 1
+        const cctx = cc.getContext('2d')!
+        cctx.fillStyle = color
+        cctx.fillRect(0, 0, 1, 1)
+        const d = cctx.getImageData(0, 0, 1, 1).data
+        return [d[0]!, d[1]!, d[2]!]
+      }
+      const pixel = (px: number, py: number): [number, number, number] => {
+        const i = (py * off.width + px) * 4
+        return [img[i]!, img[i + 1]!, img[i + 2]!]
+      }
+      return {
+        cores: args.centers.map((p) => pixel(Math.round(p.x * sx), Math.round(p.y * sy))),
+        legit: args.cssColors.map(cssToRgb),
+      }
+    }, { centers, cssColors })
+
+    for (const [i, core] of measured.cores.entries()) {
+      const dist = measured.legit.map((col) => Math.max(
+        Math.abs(core[0]! - col[0]!), Math.abs(core[1]! - col[1]!), Math.abs(core[2]! - col[2]!),
+      ))
+      expect(
+        Math.min(...dist),
+        `${theme} pip ${centers[i]!.key} at (${centers[i]!.x},${centers[i]!.y}) core rgb(${core.join(',')}) ` +
+        `matches neither the relation hue rgb(${measured.legit[0]!.join(',')}) nor the base wire ` +
+        `rgb(${measured.legit[1]!.join(',')}) — rendering must not shift the disc color`,
+      ).toBeLessThanOrEqual(16)
+    }
+  }
+
+  test('dark-mode identity pips keep their wire color at the disc core', async ({ page }) => {
+    test.setTimeout(90_000)
+    await assertPipCores(page, 'dark')
+  })
+
+  test('light-mode identity pips keep their wire color at the disc core', async ({ page }) => {
+    test.setTimeout(90_000)
+    await assertPipCores(page, 'light')
+  })
 })

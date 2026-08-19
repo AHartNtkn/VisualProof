@@ -57,6 +57,13 @@ type SpriteRec = {
 }
 
 const LINE_W: Record<LineKind, number> = { branch: 3.5, ring: 2.2, strand: 2.2 }
+/** Pips live on this extra layer so render() can draw them a second time
+    above the bloom composite: the bloom pass is additive, and a filled disc
+    receives the blurred copy of its own full-intensity interior — clipping
+    the core toward white while only the halo keeps the wire hue. Thin lines
+    are unaffected (their blurred energy at their own center is far lower),
+    so pips are the one entity that needs the authored color restored. */
+const PIP_LAYER = 1
 const HOVER_EXTRA_W = 1.2
 const PIP_SCALE = 0.14
 const BLOOM = { strength: 0.9, radius: 0.6, threshold: 0.15 }
@@ -70,7 +77,11 @@ function discTexture(color: string): THREE.CanvasTexture {
   ctx.beginPath()
   ctx.arc(32, 32, 28, 0, 2 * Math.PI)
   ctx.fill()
-  return new THREE.CanvasTexture(c)
+  const tex = new THREE.CanvasTexture(c)
+  // Canvas 2D rasterizes in sRGB; the texture must say so or the renderer
+  // treats the bytes as linear and the output encode lightens the color.
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
 }
 
 function textTexture(text: string, color: string): { tex: THREE.CanvasTexture; w: number; h: number } {
@@ -84,7 +95,9 @@ function textTexture(text: string, color: string): { tex: THREE.CanvasTexture; w
   ctx2.fillStyle = color
   ctx2.textBaseline = 'middle'
   ctx2.fillText(text, 4, 32)
-  return { tex: new THREE.CanvasTexture(c), w: c.width, h: c.height }
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace // canvas 2D rasterizes in sRGB
+  return { tex, w: c.width, h: c.height }
 }
 
 const isLineEntity = (e: FadedEntity): e is FadedEntity & { kind: LineKind; pts: import('./vec3').Vec3[] } =>
@@ -175,6 +188,7 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
       const mat = new THREE.SpriteMaterial({ map: baseTex, transparent: true, opacity: e.alpha ?? 1, depthTest: false })
       const obj = new THREE.Sprite(mat)
       obj.renderOrder = 10
+      obj.layers.enable(PIP_LAYER) // also stays on layer 0 so the bloom halo survives
       obj.position.set(e.pos.x, e.pos.y, e.pos.z)
       obj.scale.set(PIP_SCALE, PIP_SCALE, 1)
       obj.userData['key'] = e.key
@@ -277,7 +291,23 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
       const key = hits[0]?.object.userData['key']
       return typeof key === 'string' ? key : null
     },
-    render() { composer.render() },
+    render() {
+      composer.render()
+      // With the bloom pass in the chain, redraw the pips over the composite:
+      // the composite's disc cores are clipped toward white (see PIP_LAYER),
+      // and this pass restores the authored color there while the bloom halo
+      // around each disc remains from the composite underneath.
+      if (composer.passes.includes(bloom)) {
+        const bg = scene.background
+        scene.background = null // a background draw ignores layers and would wipe the composite
+        renderer.autoClear = false
+        camera.layers.set(PIP_LAYER)
+        renderer.render(scene, camera)
+        camera.layers.set(0)
+        renderer.autoClear = true
+        scene.background = bg
+      }
+    },
     resize(w, h) {
       size = { w, h }
       renderer.setPixelRatio(window.devicePixelRatio)
