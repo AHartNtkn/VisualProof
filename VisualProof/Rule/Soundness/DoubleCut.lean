@@ -69,7 +69,9 @@ theorem Local.sound_iff
     (model : Model) (env : Values model wires) :
     denoteRegion model env before ↔ denoteRegion model env after := by
   cases step with
-  | introduce hostLocals hostItems selected =>
+  | introduce description =>
+      rcases description with ⟨hostLocals, hostItems, selected⟩
+      simp only [Description.source, Description.target]
       rw [introducedAt, Region.denote_adjoinAt,
         Region.denote_adjoinAt]
       constructor

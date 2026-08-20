@@ -45,14 +45,22 @@ def introducedAt (hostLocals : List Sig)
   Region.adjoinAt hostLocals hostItems
     (wrappedMaterial hostLocals hostItems selected)
 
+structure Description (outer : List Sig) where
+  hostLocals : List Sig
+  hostItems : ItemSeq (outer ++ hostLocals)
+  selected : Region (outer ++ hostLocals)
+
+def Description.source (description : Description outer) : Region outer :=
+  Region.adjoinAt description.hostLocals description.hostItems
+    description.selected
+
+def Description.target (description : Description outer) : Region outer :=
+  introducedAt description.hostLocals description.hostItems
+    description.selected
+
 inductive Local : LocalRule
-  | introduce
-      (hostLocals : List Sig)
-      (hostItems : ItemSeq (outer ++ hostLocals))
-      (selected : Region (outer ++ hostLocals)) :
-      Local
-        (Region.adjoinAt hostLocals hostItems selected)
-        (introducedAt hostLocals hostItems selected)
+  | introduce (description : Description outer) :
+      Local description.source description.target
 
 end DoubleCut
 

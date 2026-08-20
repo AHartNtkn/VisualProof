@@ -387,6 +387,7 @@ theorem Local.sound_iff
     (model : Model) (env : Values model wires) :
     denoteRegion model env before ↔ denoteRegion model env after := by
   cases step with
+  | mk description => cases description with
   | point locals items signature =>
       exact (Point.denote_present_iff locals items signature model env).symm
   | stub hostLocals before after signature arity ports position far =>

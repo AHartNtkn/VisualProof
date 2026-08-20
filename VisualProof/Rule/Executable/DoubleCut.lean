@@ -1,121 +1,67 @@
 import VisualProof.Rule.DoubleCut
+import VisualProof.Rule.Executable.WirePrimitive.Uniform
 
 namespace VisualProof.Rule.DoubleCut
 
 open Theory
 open Diagram
 
-inductive ForwardIndex {boundary : List Sig}
-    (source : OpenDiagram boundary) : Type
-  | introduce
-      (hostLocals : List Sig)
-      (hostItems : ItemSeq (wires ++ hostLocals))
-      (selected : Region (wires ++ hostLocals))
-      (occurrence : Occurrence
-        (Region.adjoinAt hostLocals hostItems selected) source)
-      (targetCanonical : (occurrence.context.fill
-        (introducedAt hostLocals hostItems selected)).Canonical)
-      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-        occurrence.interface.boundaryWire (occurrence.context.fill
-          (introducedAt hostLocals hostItems selected))) :
-      ForwardIndex source
-  | eliminate
-      (hostLocals : List Sig)
-      (hostItems : ItemSeq (wires ++ hostLocals))
-      (selected : Region (wires ++ hostLocals))
-      (occurrence : Occurrence
-        (introducedAt hostLocals hostItems selected) source)
-      (targetCanonical : (occurrence.context.fill
-        (Region.adjoinAt hostLocals hostItems selected)).Canonical)
-      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-        occurrence.interface.boundaryWire (occurrence.context.fill
-          (Region.adjoinAt hostLocals hostItems selected))) :
-      ForwardIndex source
+private def family : WirePrimitive.Executable.Family where
+  Description := Description
+  source := Description.source
+  target := Description.target
 
-def BackwardIndex {boundary : List Sig}
-    (source : OpenDiagram boundary) := ForwardIndex source
+private theorem build {wires : List Sig} (description : Description wires) :
+    Local description.source description.target :=
+  .introduce description
+
+private theorem view {wires : List Sig} {before after : Region wires}
+    (step : Local before after) :
+    ∃ description : Description wires,
+      before = description.source ∧ after = description.target := by
+  cases step with
+  | introduce description => exact ⟨description, rfl, rfl⟩
+
+abbrev ForwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
+  WirePrimitive.Executable.ComputedSymmetric.Index family source
+
+abbrev BackwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
+  ForwardIndex source
+
+def introduce (description : Description wires)
+    (occurrence : Occurrence description.source source) :
+    ForwardIndex source :=
+  .direct description occurrence
+
+def eliminate (description : Description wires)
+    (occurrence : Occurrence description.target source) :
+    ForwardIndex source :=
+  .reverse description occurrence
 
 def runForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary
-  | .introduce hostLocals hostItems selected occurrence targetCanonical
-      targetExternalTwoEnded =>
-      occurrence.interface.withBody
-        (occurrence.context.fill
-          (introducedAt hostLocals hostItems selected))
-        targetCanonical targetExternalTwoEnded
-  | .eliminate hostLocals hostItems selected occurrence targetCanonical
-      targetExternalTwoEnded =>
-      occurrence.interface.withBody
-        (occurrence.context.fill
-          (Region.adjoinAt hostLocals hostItems selected))
-        targetCanonical targetExternalTwoEnded
+    ForwardIndex source → Option (OpenDiagram boundary) :=
+  WirePrimitive.Executable.ComputedSymmetric.run source
 
 def runBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary :=
+    BackwardIndex source → Option (OpenDiagram boundary) :=
   runForward source
 
 theorem forward_exact (source target : OpenDiagram boundary) :
-    (∃ index : ForwardIndex source,
-      OpenDiagram.Isomorphic (runForward source index) target) ↔
+    (∃ (index : ForwardIndex source) (output : OpenDiagram boundary),
+      runForward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.DoubleCut source target := by
-  constructor
-  · rintro ⟨index, isomorphic⟩
-    apply Rule.DoubleCut.respectsTargetIso (target' := target) ?_ isomorphic
-    cases index with
-    | introduce hostLocals hostItems selected occurrence targetCanonical
-        targetExternalTwoEnded =>
-        refine ⟨_, _, _, occurrence, targetCanonical,
-          targetExternalTwoEnded, OpenDiagramIso.refl _, ?_⟩
-        exact atPolarity_symmetric_of occurrence.context.polarity
-          (Local.introduce hostLocals hostItems selected)
-    | eliminate hostLocals hostItems selected occurrence targetCanonical
-        targetExternalTwoEnded =>
-        refine ⟨_, _, _, occurrence, targetCanonical,
-          targetExternalTwoEnded, OpenDiagramIso.refl _, ?_⟩
-        cases occurrence.context.polarity <;>
-          simp only [atPolarity, symmetric, converse]
-        · exact Or.inr (Local.introduce hostLocals hostItems selected)
-        · exact Or.inl (Local.introduce hostLocals hostItems selected)
-  · rintro ⟨wires, before, after, occurrence, targetCanonical,
-      targetExternalTwoEnded, targetIso, localEvidence⟩
-    cases polarity : occurrence.context.polarity with
-    | positive =>
-        simp only [polarity, atPolarity, symmetric] at localEvidence
-        rcases localEvidence with direct | reverse
-        · cases direct with
-          | introduce hostLocals hostItems selected =>
-              exact ⟨.introduce hostLocals hostItems selected occurrence
-                targetCanonical targetExternalTwoEnded, ⟨targetIso.symm⟩⟩
-        · cases reverse with
-          | introduce hostLocals hostItems selected =>
-              exact ⟨.eliminate hostLocals hostItems selected occurrence
-                targetCanonical targetExternalTwoEnded, ⟨targetIso.symm⟩⟩
-    | negative =>
-        simp only [polarity, atPolarity, symmetric, converse] at localEvidence
-        rcases localEvidence with reverse | direct
-        · cases reverse with
-          | introduce hostLocals hostItems selected =>
-              exact ⟨.eliminate hostLocals hostItems selected occurrence
-                targetCanonical targetExternalTwoEnded, ⟨targetIso.symm⟩⟩
-        · cases direct with
-          | introduce hostLocals hostItems selected =>
-              exact ⟨.introduce hostLocals hostItems selected occurrence
-                targetCanonical targetExternalTwoEnded, ⟨targetIso.symm⟩⟩
+  simpa only [Rule.DoubleCut] using
+    (WirePrimitive.Executable.ComputedSymmetric.forward_exact family Local
+      build view source target)
 
 theorem backward_exact (source target : OpenDiagram boundary) :
-    (∃ index : BackwardIndex source,
-      OpenDiagram.Isomorphic (runBackward source index) target) ↔
+    (∃ (index : BackwardIndex source) (output : OpenDiagram boundary),
+      runBackward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.DoubleCut target source := by
-  constructor
-  · intro witness
-    have forwardWitness : ∃ index : ForwardIndex source,
-        OpenDiagram.Isomorphic (runForward source index) target := by
-      simpa only [BackwardIndex, runBackward] using witness
-    exact Rule.DoubleCut.symm
-      ((forward_exact source target).mp forwardWitness)
-  · intro step
-    have forwardWitness :=
-      (forward_exact source target).mpr (Rule.DoubleCut.symm step)
-    simpa only [BackwardIndex, runBackward] using forwardWitness
+  simpa only [Rule.DoubleCut] using
+    (WirePrimitive.Executable.ComputedSymmetric.backward_exact family Local
+      build view source target)
 
 end VisualProof.Rule.DoubleCut

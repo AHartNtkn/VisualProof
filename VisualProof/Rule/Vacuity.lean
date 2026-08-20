@@ -1313,25 +1313,36 @@ private theorem Stub.Far.ownerPathFrom_embedInternal_zero
         ownerPathFrom_mapExactFrameInternal before after
           (descendant.mapInternalWire holeMap)
           (fun nested => descendantOwner nested) internal 0
-inductive Local : LocalRule
+inductive Description (outer : List Sig) : Type
   | point (locals : List Sig)
-      (items : ItemSeq (outer ++ locals)) (signature : Sig) :
-      Local (Point.plain locals items)
-        (Point.present locals items signature)
+      (items : ItemSeq (outer ++ locals)) (signature : Sig)
   | stub (hostLocals : List Sig)
       (before after : ItemSeq (outer ++ hostLocals))
       (signature : Sig) (arity : Nat)
       (ports : Fin arity → Var (outer ++ hostLocals) signature)
       (position : Fin (arity + 1))
       (far : Stub.Far (Stub.freshWire outer hostLocals signature)
-        (Stub.extendedItems hostLocals before after signature arity ports position)) :
-      Local (Stub.plain hostLocals before after signature arity ports)
-        (Stub.present hostLocals before after signature arity ports position far)
+        (Stub.extendedItems hostLocals before after signature arity ports position))
   | pin (locals : List Sig)
       (items : ItemSeq (outer ++ locals))
-      (signature : Sig) (wire : Var (outer ++ locals) signature) :
-      Local (Pin.plain locals items)
-        (Pin.present locals items signature wire)
+      (signature : Sig) (wire : Var (outer ++ locals) signature)
+
+def Description.source : Description outer → Region outer
+  | .point locals items _ => Point.plain locals items
+  | .stub hostLocals before after signature arity ports _ _ =>
+      Stub.plain hostLocals before after signature arity ports
+  | .pin locals items _ _ => Pin.plain locals items
+
+def Description.target : (description : Description outer) → Region outer
+  | .point locals items signature => Point.present locals items signature
+  | .stub hostLocals before after signature arity ports position far =>
+      Stub.present hostLocals before after signature arity ports position far
+  | .pin locals items signature wire =>
+      Pin.present locals items signature wire
+
+inductive Local : LocalRule
+  | mk (description : Description outer) :
+      Local description.source description.target
 
 private theorem Local.internalEmbedding
     {before after : Region outer} (step : Local before after) :
@@ -1340,6 +1351,7 @@ private theorem Local.internalEmbedding
       ∀ {signature} (wire : Region.InternalWire before signature),
         (map wire).ownerPath = wire.ownerPath := by
   cases step with
+  | mk description => cases description with
   | point locals items signature =>
       let suffix : ItemSeq (outer ++ locals) :=
         .cons (.identity signature 0 Fin.elim0) .nil
