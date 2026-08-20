@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import type { Diagram, IdentityDiagramNode, NodeId, WireId } from '../../src/kernel/diagram/diagram'
+import type { Diagram, IdentityDiagramNode, NodeId } from '../../src/kernel/diagram/diagram'
 import { sameDiagram } from '../../src/kernel/diagram/canonical/iso'
 import { diagramFromJson, diagramToJson } from '../../src/kernel/diagram/json'
-import { IOTA } from '../../src/kernel/diagram/sig'
+import { IOTA, relSig } from '../../src/kernel/diagram/sig'
 import { derivedScope } from '../../src/kernel/diagram/regions'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import {
@@ -22,15 +22,14 @@ import {
   severEndpoint,
 } from '../../src/app/edit'
 import { ConstructController } from '../../src/app/interact/construct'
+import type { Hit } from '../../src/app/hittest'
 import type { PointerSample } from '../../src/app/interact/viewport'
 import { mkEngine, type Engine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
-import { computeLegs } from '../../src/view/wires'
-import { length, sub } from '../../src/view/vec'
 import type { Vec2 } from '../../src/view/vec'
 import { UNARY } from '../fixtures/zero-signature'
 import { bareWire, segment, spread } from './helpers/build'
-import { place } from './helpers/gesture'
+import { endpointPoint, farStrandPoint, place } from './helpers/gesture'
 
 function keySample(key: string, shiftKey = false) {
   return {
@@ -58,7 +57,11 @@ function pointerSample(point: Vec2): PointerSample {
   }
 }
 
-function constructHarness(diagram: Diagram, engine: Engine = mkEngine(diagram, [])) {
+function constructHarness(
+  diagram: Diagram,
+  engine: Engine = mkEngine(diagram, []),
+  selection: () => readonly Hit[] = () => [],
+) {
   const committed: Diagram[] = []
   const refusals: string[] = []
   const construct = new ConstructController({
@@ -67,7 +70,7 @@ function constructHarness(diagram: Diagram, engine: Engine = mkEngine(diagram, [
     engine: () => engine,
     viewScale: () => 1,
     diagram: () => diagram,
-    selection: () => [],
+    selection,
     setSelection: () => undefined,
     commit: (next) => { committed.push(next) },
     refuse: (text) => { refusals.push(text) },
@@ -86,26 +89,6 @@ function drag(construct: ConstructController, from: Vec2, to: Vec2): void {
   expect(claim).not.toBeNull()
   claim!.move(pointerSample(to))
   claim!.release(pointerSample(to), true)
-}
-
-/** A point on `wire`'s own routed stroke that clears every identity dot's
-    disc and halo — found by walking the actual computed geometry, never a
-    guessed coordinate (see wire-ops.test.ts's `farStrandPoint`). */
-function farStrandPoint(engine: Engine, wire: WireId): Vec2 {
-  const clear = (p: Vec2): boolean => {
-    for (const body of engine.bodies.values()) {
-      if (body.kind !== 'identity') continue
-      if (length(sub(p, body.pos)) <= body.discR * engine.scale + 6) return false
-    }
-    return true
-  }
-  for (const geometry of computeLegs(engine)) {
-    if (geometry.leg.wid !== wire) continue
-    for (const p of geometry.pts) {
-      if (clear(p)) return p
-    }
-  }
-  throw new Error(`no strand point on '${wire}' clears every identity dot`)
 }
 
 function identityNodesOfArity(diagram: Diagram, arity: number): Array<[NodeId, IdentityDiagramNode]> {
@@ -518,4 +501,94 @@ describe('fission and duplicate (construction mode, strand-onto-strand/dot drags
     expect(committed).toEqual([])
     expect(refusals).toEqual(['this line is not attached to that dot'])
   })
+})
+
+const BINARY = relSig([IOTA, IOTA])
+
+/** A BINARY atom with a second pin ("dot") on its head wire and a second
+    pin ("dot") on its first argument wire — mirrors wire-ops.test.ts's
+    `plumingWithDots()`, for the connection-drag expose/duplicate parity
+    tests below. */
+function plumingWithDots() {
+  const builder = new DiagramBuilder()
+  const atom = builder.atom(builder.root, BINARY)
+  const wire = builder.wire([{ node: atom, port: { kind: 'head' } }], BINARY)
+  const wirePin = builder.pin(wire, builder.root)
+  const headDot = builder.pin(wire, builder.root)
+  const first = builder.wire([{ node: atom, port: { kind: 'arg', index: 0 } }])
+  const firstPin = builder.pin(first, builder.root)
+  const argDot = builder.pin(first, builder.root)
+  const second = builder.wire([{ node: atom, port: { kind: 'arg', index: 1 } }])
+  const secondPin = builder.pin(second, builder.root)
+  const diagram = builder.build()
+  const engine = mkEngine(diagram, [])
+  engine.scale = 12
+  place(engine, atom, { x: 300, y: 300 })
+  place(engine, wirePin, { x: 300, y: 80 })
+  place(engine, headDot, { x: 700, y: 80 })
+  place(engine, firstPin, { x: 100, y: 500 })
+  place(engine, argDot, { x: 100, y: 750 })
+  place(engine, secondPin, { x: 500, y: 500 })
+  return { diagram, engine, atom, wire, first, second, headDot, argDot }
+}
+
+/** Every wire attached to `node`. */
+function wiresOn(diagram: Diagram, node: NodeId): string[] {
+  return Object.entries(diagram.wires)
+    .filter(([, w]) => w.endpoints.some((ep) => ep.node === node))
+    .map(([id]) => id)
+}
+
+describe('connection-drag expose/duplicate parity with proof mode (construction mode)', () => {
+  it('an arg endpoint dragged (via connection, atom selected) onto a dot on its own arg wire commits expose, not duplicate', () => {
+    const { diagram, engine, atom, first, argDot } = plumingWithDots()
+    const from = endpointPoint(engine, first, { node: atom, port: { kind: 'arg', index: 0 } })
+    const to = engine.bodies.get(argDot)!.pos
+    // IdentityOpsController declines a press on a selected body (finding
+    // 7), so this press reaches ConnectionDragController instead, whose
+    // source then carries the concrete arg endpoint.
+    const { construct, committed, refusals } = constructHarness(
+      diagram, engine, () => [{ kind: 'node', id: atom }],
+    )
+
+    drag(construct, from, to)
+
+    expect(refusals).toEqual([])
+    expect(committed).toHaveLength(1)
+    const next = committed[0]!
+    expect(next.nodes[argDot]).toMatchObject({ kind: 'identity', arity: 2 })
+    expect(wiresOn(next, argDot)).toHaveLength(2)
+    // The arg endpoint moved off `first` onto a fresh wire — `first` no
+    // longer holds it, and some other wire now does.
+    expect(next.wires[first]?.endpoints.some((ep) => ep.node === atom)).toBe(false)
+    const freshWire = Object.keys(next.wires).find((id) => id !== first
+      && next.wires[id]!.endpoints.some((ep) => ep.node === atom && ep.port.kind === 'arg' && ep.port.index === 0))
+    expect(freshWire).toBeDefined()
+  })
+
+  it('a head endpoint dragged (via connection, atom selected) onto a dot on its own head wire commits expose, not duplicate', () => {
+    const { diagram, engine, atom, wire, headDot } = plumingWithDots()
+    const from = endpointPoint(engine, wire, { node: atom, port: { kind: 'head' } })
+    const to = engine.bodies.get(headDot)!.pos
+    const { construct, committed, refusals } = constructHarness(
+      diagram, engine, () => [{ kind: 'node', id: atom }],
+    )
+
+    drag(construct, from, to)
+
+    expect(refusals).toEqual([])
+    expect(committed).toHaveLength(1)
+    const next = committed[0]!
+    expect(next.nodes[headDot]).toMatchObject({ kind: 'identity', arity: 2 })
+    expect(wiresOn(next, headDot)).toHaveLength(2)
+    expect(next.wires[wire]?.endpoints.some((ep) => ep.node === atom)).toBe(false)
+    const freshWire = Object.keys(next.wires).find((id) => id !== wire
+      && next.wires[id]!.endpoints.some((ep) => ep.node === atom && ep.port.kind === 'head'))
+    expect(freshWire).toBeDefined()
+  })
+
+  // The strand→dot duplicate case (source.endpoint === null) is already
+  // covered as a regression by "a strand dragged onto its own single-wire
+  // dot centre duplicates the wire..." above, in the fission/duplicate
+  // describe block — that test exercises this exact commit path.
 })

@@ -140,6 +140,7 @@ export class ProofMoveController {
       viewScale: options.viewScale,
       theme: options.theme,
       claimEndDiscs: false,
+      selected: (node) => options.selection().some((hit) => hit.kind === 'node' && hit.id === node),
       commit: (label, steps, pointer) => {
         this.#lastPointer = pointer
         return this.#commitSteps(label, steps)

@@ -33,6 +33,10 @@ export type IdentityOpsOptions = {
   /** Edit mode claims atom/ref end discs for the expose drag; proof mode
       leaves them to WireOpsDragController, which owns richer end drops. */
   readonly claimEndDiscs: boolean
+  /** A press on a body already in the current selection is declined here,
+      in both modes, so a drag-selected body keeps meaning place/copy —
+      the identity-rule gestures only ever claim unselected bodies. */
+  readonly selected: (node: NodeId) => boolean
   readonly commit: (label: string, steps: readonly ProofStep[], pointer: Vec2) => boolean
   readonly refuse: (text: string, pointer: Vec2) => void
 }
@@ -257,6 +261,7 @@ export class IdentityOpsController {
     const halo = this.#radius()
     for (const body of engine.bodies.values()) {
       if (body.kind !== 'identity') continue
+      if (this.#options.selected(body.id)) continue
       const r = body.discR * engine.scale
       const distance = length(sub(point, body.pos))
       if (Math.abs(distance - r) <= halo) return { kind: 'dotRim', node: body.id }
@@ -264,7 +269,9 @@ export class IdentityOpsController {
     }
     if (this.#options.claimEndDiscs) {
       const endDisc = this.#endDiscAt(point)
-      if (endDisc !== null) return { kind: 'endDisc', node: endDisc.node, wire: endDisc.wire }
+      if (endDisc !== null && !this.#options.selected(endDisc.node)) {
+        return { kind: 'endDisc', node: endDisc.node, wire: endDisc.wire }
+      }
     }
     return null
   }
@@ -348,7 +355,7 @@ export class IdentityOpsController {
     const engine = this.#options.engine()
     if (wireManipulationHitTest(engine, point, viewport) !== null) return false
     if (identityDiscAt(engine, point) !== null) return false
-    if (this.#options.claimEndDiscs && this.#endDiscAt(point) !== null) return false
+    if (this.#endDiscAt(point) !== null) return false
     return true
   }
 

@@ -140,7 +140,12 @@ function dotInCut() {
 
 type Committed = { readonly label: string; readonly steps: readonly ProofStep[] }
 
-function harness(diagram: Diagram, engine: Engine, claimEndDiscs = false) {
+function harness(
+  diagram: Diagram,
+  engine: Engine,
+  claimEndDiscs = false,
+  selected: (node: string) => boolean = () => false,
+) {
   const committed: Committed[] = []
   const refusals: string[] = []
   let current = diagram
@@ -151,6 +156,7 @@ function harness(diagram: Diagram, engine: Engine, claimEndDiscs = false) {
     viewScale: () => 1,
     theme: () => LIGHT,
     claimEndDiscs,
+    selected,
     commit: (label, steps) => {
       try {
         current = applyAction(current, { label, steps, placements: [] }, EMPTY_PROOF_CONTEXT, 'forward')
@@ -186,6 +192,73 @@ describe('collapse: dot dragged into open space', () => {
     expect(Object.keys(after.wires)).toHaveLength(1)
     const node = after.nodes[dot]
     expect(node).toMatchObject({ kind: 'identity', arity: 1 })
+  })
+
+  it('refuses collapsing onto an atom disc in proof mode too — disc classification must not vary by mode', () => {
+    const builder = new DiagramBuilder()
+    const dot = builder.identity(builder.root, IOTA, 2)
+    const a = builder.wire([{ node: dot, port: { kind: 'identity', index: 0 } }])
+    builder.pin(a, builder.root)
+    const b = builder.wire([{ node: dot, port: { kind: 'identity', index: 1 } }])
+    builder.pin(b, builder.root)
+    const atom = builder.atom(builder.root, relSig([]))
+    builder.wire([{ node: atom, port: { kind: 'head' } }], relSig([]))
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    engine.scale = 12
+    place(engine, dot, { x: 300, y: 300 })
+    place(engine, atom, { x: 900, y: 300 })
+    // Proof mode: `harness`'s default `claimEndDiscs` is false. The atom's
+    // own disc must still count as not-open-space here, exactly as it
+    // does in edit mode — dropping the dot inside it must never read as
+    // "open space" just because this controller instance isn't claiming
+    // end discs for its own gestures.
+    const h = harness(diagram, engine)
+
+    drag(h.controller, { x: 300, y: 300 }, { x: 900, y: 300 })
+
+    expect(h.committed).toEqual([])
+    expect(h.refusals).toEqual(['release in open space to collapse, or on another dot to fuse'])
+  })
+})
+
+describe('selection arbitration: identity gestures decline selected bodies', () => {
+  it('an unselected dot still collapses (regression)', () => {
+    const { diagram, engine, dot } = dotJoined()
+    const h = harness(diagram, engine, false, () => false)
+
+    drag(h.controller, { x: 300, y: 300 }, farBlank())
+
+    expect(h.refusals).toEqual([])
+    expect(h.committed).toHaveLength(1)
+    expect(h.diagram().nodes[dot]).toMatchObject({ kind: 'identity', arity: 1 })
+  })
+
+  it('a selected dot is never claimed by the identity controller', () => {
+    const { diagram, engine, dot } = dotJoined()
+    const h = harness(diagram, engine, false, (node) => node === dot)
+
+    const claim = h.controller.claim(pointerSample({ x: 300, y: 300 }))
+
+    expect(claim).toBeNull()
+  })
+
+  it('a selected atom disc is never claimed by the identity controller in edit mode either', () => {
+    const { diagram, engine, atom } = exposeFixture()
+    const h = harness(diagram, engine, true, (node) => node === atom)
+
+    const claim = h.controller.claim(pointerSample({ x: 300, y: 300 }))
+
+    expect(claim).toBeNull()
+  })
+
+  it('an unselected atom disc is still claimed by the identity controller in edit mode (regression)', () => {
+    const { diagram, engine } = exposeFixture()
+    const h = harness(diagram, engine, true, () => false)
+
+    const claim = h.controller.claim(pointerSample({ x: 300, y: 300 }))
+
+    expect(claim).not.toBeNull()
   })
 })
 

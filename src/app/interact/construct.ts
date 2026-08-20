@@ -25,6 +25,7 @@ import { copyDestinationPreview, copySelectionPreview } from './copy-view'
 import {
   applyIdentitySteps,
   duplicateStep,
+  exposeStep,
   fissionStep,
   identityDiscAt,
   IdentityOpsController,
@@ -91,6 +92,7 @@ export class ConstructController {
       viewScale: options.viewScale,
       theme: options.theme,
       claimEndDiscs: true,
+      selected: (node) => options.selection().some((hit) => hit.kind === 'node' && hit.id === node),
       commit: (label, steps) => this.#tryCommit(
         () => applyIdentitySteps(this.#options.diagram(), steps), label,
       ),
@@ -132,6 +134,13 @@ export class ConstructController {
           if (!diagram.wires[source.wire]!.endpoints.some((ep) => ep.node === target.identity)) {
             this.#options.refuse('this line is not attached to that dot', pointer)
             return false
+          }
+          if (source.endpoint !== null) {
+            const endpoint = source.endpoint
+            return this.#tryCommit(
+              () => applyIdentitySteps(diagram, [exposeStep(diagram, target.identity, source.wire, endpoint)]),
+              'endpoint exposed onto the dot',
+            )
           }
           return this.#tryCommit(
             () => applyIdentitySteps(diagram, [duplicateStep(diagram, target.identity, source.wire)]),
