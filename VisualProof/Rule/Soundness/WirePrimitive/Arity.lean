@@ -46,12 +46,12 @@ def operationSound (arguments : List Sig) (added : Sig) :
       evidence model sourceEnv targetEnv agree realizes
     subst target
     simp only [denoteRegion_mk, denoteItemSeq_cons, denoteItem_atom,
-      denoteItemSeq_nil]
+      denoteItem_identity, denoteItemSeq_nil]
     have argumentEq := Transform.evaluate_retained_eq ports agree
     constructor
     · intro sourceHolds
       obtain ⟨addedValue, targetHolds⟩ := (realizes _).mp sourceHolds
-      refine ⟨(addedValue, PUnit.unit), ?_, trivial⟩
+      refine ⟨(addedValue, PUnit.unit), ?_, ?_, trivial⟩
       let addedEnv : Values model [added] := (addedValue, PUnit.unit)
       rw [evaluateVars_append]
       have retainedEq :
@@ -95,7 +95,11 @@ def operationSound (arguments : List Sig) (added : Sig) :
       exact (congrFun (Values.lookup_append_left targetEnv
         addedEnv targetHead) _).mpr
           targetHolds
-    · rintro ⟨⟨addedValue, addedUnit⟩, targetHolds, _⟩
+      · intro left right
+        have positionsEqual : left = right := Subsingleton.elim _ _
+        subst right
+        trivial
+    · rintro ⟨⟨addedValue, addedUnit⟩, targetHolds, _, _⟩
       cases addedUnit
       apply (realizes _).mpr
       refine ⟨addedValue, ?_⟩

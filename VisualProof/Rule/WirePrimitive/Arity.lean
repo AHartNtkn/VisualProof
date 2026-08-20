@@ -36,7 +36,10 @@ def operation (arguments : List Sig) (added : Sig) :
         (Vars.append
           ((ports.map fun wire => frame.targetKeep wire).map
             fun wire => wire.appendLeft [added])
-          (.cons (Var.appendRight _ .here) .nil))) .nil)
+          (.cons (Var.appendRight _ .here) .nil)))
+      (.cons
+        (.identity added 1 (fun _ => Var.appendRight _ .here))
+        .nil))
 
 def rootFrame (outer before after arguments : List Sig) (added : Sig) :=
   Transform.Frame.replace outer before after
