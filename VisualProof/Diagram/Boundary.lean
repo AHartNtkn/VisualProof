@@ -80,6 +80,39 @@ def Candidate.validate (candidate : Candidate boundary) :
     Option (OpenDiagram boundary) :=
   if valid : candidate.Valid then some (candidate.toOpen valid) else none
 
+def Candidate.validateWhen (candidate : Candidate boundary)
+    (condition : Prop) [Decidable condition] : Option (OpenDiagram boundary) :=
+  if condition then candidate.validate else none
+
+@[simp] theorem Candidate.validateWhen_of_valid
+    (candidate : Candidate boundary) (condition : Prop) [Decidable condition]
+    (conditionEvidence : condition) (valid : candidate.Valid) :
+    candidate.validateWhen condition = some (candidate.toOpen valid) := by
+  simp [Candidate.validateWhen, conditionEvidence,
+    Candidate.validate, valid]
+
+theorem Candidate.validateWhen_eq_some_iff
+    (candidate : Candidate boundary) (condition : Prop)
+    [Decidable condition] (output : OpenDiagram boundary) :
+    candidate.validateWhen condition = some output ↔
+      ∃ (conditionEvidence : condition) (valid : candidate.Valid),
+        output = candidate.toOpen valid := by
+  constructor
+  · intro computed
+    simp only [Candidate.validateWhen] at computed
+    split at computed
+    next conditionEvidence =>
+      simp only [Candidate.validate] at computed
+      split at computed
+      next valid =>
+        simp only [Option.some.injEq] at computed
+        exact ⟨conditionEvidence, valid, computed.symm⟩
+      next => simp at computed
+    next => simp at computed
+  · rintro ⟨conditionEvidence, valid, rfl⟩
+    exact Candidate.validateWhen_of_valid candidate condition
+      conditionEvidence valid
+
 @[simp] theorem Candidate.validate_of_valid
     (candidate : Candidate boundary) (valid : candidate.Valid) :
     candidate.validate = some (candidate.toOpen valid) := by

@@ -21,6 +21,47 @@ def validateBody (interface : OpenDiagram boundary)
       some (interface.withBody body canonical twoEnded) := by
   simp [validateBody, canonical, twoEnded]
 
+def validateBodyWhen (condition : Prop) [Decidable condition]
+    (interface : OpenDiagram boundary) (body : Region interface.external) :
+    Option (OpenDiagram boundary) :=
+  if condition then validateBody interface body else none
+
+@[simp] theorem validateBodyWhen_of_valid
+    (condition : Prop) [Decidable condition] (evidence : condition)
+    (interface : OpenDiagram boundary) (body : Region interface.external)
+    (canonical : body.Canonical)
+    (twoEnded : OpenDiagram.ExternalTwoEnded interface.boundaryWire body) :
+    validateBodyWhen condition interface body =
+      some (interface.withBody body canonical twoEnded) := by
+  simp [validateBodyWhen, evidence, canonical, twoEnded, validateBody]
+
+theorem validateBodyWhen_eq_some_iff
+    (condition : Prop) [Decidable condition]
+    (interface : OpenDiagram boundary) (body : Region interface.external)
+    (output : OpenDiagram boundary) :
+    validateBodyWhen condition interface body = some output ↔
+      ∃ (evidence : condition) (canonical : body.Canonical)
+        (twoEnded : OpenDiagram.ExternalTwoEnded interface.boundaryWire body),
+        output = interface.withBody body canonical twoEnded := by
+  constructor
+  · intro computed
+    simp only [validateBodyWhen] at computed
+    split at computed
+    next evidence =>
+      simp only [validateBody] at computed
+      split at computed
+      next canonical =>
+        split at computed
+        next twoEnded =>
+          simp only [Option.some.injEq] at computed
+          exact ⟨evidence, canonical, twoEnded, computed.symm⟩
+        next => simp at computed
+      next => simp at computed
+    next => simp at computed
+  · rintro ⟨evidence, canonical, twoEnded, rfl⟩
+    exact validateBodyWhen_of_valid condition evidence interface body
+      canonical twoEnded
+
 structure Family.{u} where
   Description : List Sig → Type u
   source : {wires : List Sig} → Description wires → Region wires

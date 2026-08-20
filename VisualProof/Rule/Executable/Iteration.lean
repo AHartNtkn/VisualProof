@@ -1,4 +1,5 @@
 import VisualProof.Rule.Iteration
+import VisualProof.Rule.Executable.WirePrimitive.Uniform
 
 namespace VisualProof.Rule.Iteration
 
@@ -16,14 +17,7 @@ inductive ForwardIndex {boundary : List Sig}
       (freshening : WireFreshening
         (occurrence.ancestorWires ++ occurrence.anchorLocals)
         occurrence.descendantWires freshWires
-        occurrence.descendant.outerWire)
-      (targetCanonical :
-        (occurrence.targetBody
-          (copied occurrence.selected occurrence.before freshening)).Canonical)
-      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-        occurrence.interface.boundaryWire
-          (occurrence.targetBody
-            (copied occurrence.selected occurrence.before freshening))) :
+        occurrence.descendant.outerWire) :
       ForwardIndex source
   | remove
       (occurrence : NestedOccurrence source)
@@ -34,14 +28,7 @@ inductive ForwardIndex {boundary : List Sig}
         occurrence.descendantWires freshWires
         occurrence.descendant.outerWire)
       (current_eq : occurrence.before =
-        copied occurrence.selected remainder freshening)
-      (targetCanonical :
-        (occurrence.targetBody
-          (uncopyResidue occurrence.selected remainder freshening)).Canonical)
-      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-        occurrence.interface.boundaryWire
-          (occurrence.targetBody
-            (uncopyResidue occurrence.selected remainder freshening))) :
+        copied occurrence.selected remainder freshening) :
       ForwardIndex source
   | undo
       (occurrence : NestedOccurrence source)
@@ -52,10 +39,7 @@ inductive ForwardIndex {boundary : List Sig}
         occurrence.descendantWires freshWires
         occurrence.descendant.outerWire)
       (current_eq : occurrence.before =
-        copied occurrence.selected remainder freshening)
-      (targetCanonical : (occurrence.targetBody remainder).Canonical)
-      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-        occurrence.interface.boundaryWire (occurrence.targetBody remainder)) :
+        copied occurrence.selected remainder freshening) :
       ForwardIndex source
   | restore
       (occurrence : NestedOccurrence source)
@@ -66,14 +50,7 @@ inductive ForwardIndex {boundary : List Sig}
         occurrence.descendantWires freshWires
         occurrence.descendant.outerWire)
       (current_eq : occurrence.before =
-        uncopyResidue occurrence.selected remainder freshening)
-      (targetCanonical :
-        (occurrence.targetBody
-          (copied occurrence.selected remainder freshening)).Canonical)
-      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-        occurrence.interface.boundaryWire
-          (occurrence.targetBody
-            (copied occurrence.selected remainder freshening))) :
+        uncopyResidue occurrence.selected remainder freshening) :
       ForwardIndex source
 
 /-- The rule is symmetric, so its backward computational choices are exactly
@@ -82,27 +59,25 @@ def BackwardIndex {boundary : List Sig}
     (source : OpenDiagram boundary) := ForwardIndex source
 
 def runForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary
-  | .copy occurrence _ freshening targetCanonical targetExternalTwoEnded =>
-      occurrence.replace
-        (copied occurrence.selected occurrence.before freshening)
-        targetCanonical targetExternalTwoEnded
-  | .remove occurrence remainder _ freshening _ targetCanonical
-      targetExternalTwoEnded =>
-      occurrence.replace
-        (uncopyResidue occurrence.selected remainder freshening)
-        targetCanonical targetExternalTwoEnded
-  | .undo occurrence remainder _ _ _ targetCanonical
-      targetExternalTwoEnded =>
-      occurrence.replace remainder targetCanonical targetExternalTwoEnded
-  | .restore occurrence remainder _ freshening _ targetCanonical
-      targetExternalTwoEnded =>
-      occurrence.replace
-        (copied occurrence.selected remainder freshening)
-        targetCanonical targetExternalTwoEnded
+    ForwardIndex source → Option (OpenDiagram boundary)
+  | .copy occurrence _ freshening =>
+      WirePrimitive.Executable.validateBody occurrence.interface
+        (occurrence.targetBody
+          (copied occurrence.selected occurrence.before freshening))
+  | .remove occurrence remainder _ freshening _ =>
+      WirePrimitive.Executable.validateBody occurrence.interface
+        (occurrence.targetBody
+          (uncopyResidue occurrence.selected remainder freshening))
+  | .undo occurrence remainder _ _ _ =>
+      WirePrimitive.Executable.validateBody occurrence.interface
+        (occurrence.targetBody remainder)
+  | .restore occurrence remainder _ freshening _ =>
+      WirePrimitive.Executable.validateBody occurrence.interface
+        (occurrence.targetBody
+          (copied occurrence.selected remainder freshening))
 
 def runBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary :=
+    BackwardIndex source → Option (OpenDiagram boundary) :=
   runForward source
 
 private theorem Local.view
@@ -126,91 +101,138 @@ private theorem Local.view
   | remove remainder freshWires freshening =>
       exact Or.inr ⟨remainder, freshWires, freshening, rfl, rfl⟩
 
+
+private theorem validateTarget_exact
+    {boundary : List Sig} {source : OpenDiagram boundary}
+    (occurrence : NestedOccurrence source)
+    (after : Region occurrence.descendantWires)
+    (target : OpenDiagram boundary) :
+    (∃ output : OpenDiagram boundary,
+      WirePrimitive.Executable.validateBody occurrence.interface
+          (occurrence.targetBody after) = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
+      ∃ (canonical : (occurrence.targetBody after).Canonical)
+        (twoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire (occurrence.targetBody after)),
+        OpenDiagram.Isomorphic
+          (occurrence.replace after canonical twoEnded) target := by
+  constructor
+  · rintro ⟨output, computed, isomorphic⟩
+    simp only [WirePrimitive.Executable.validateBody] at computed
+    split at computed
+    next canonical =>
+      split at computed
+      next twoEnded =>
+        simp only [Option.some.injEq] at computed
+        subst output
+        exact ⟨canonical, twoEnded, isomorphic⟩
+      next => simp at computed
+    next => simp at computed
+  · rintro ⟨canonical, twoEnded, isomorphic⟩
+    exact ⟨occurrence.replace after canonical twoEnded,
+      WirePrimitive.Executable.validateBody_of_valid _ _ canonical twoEnded,
+      isomorphic⟩
+
 theorem forward_exact (source target : OpenDiagram boundary) :
-    (∃ index : ForwardIndex source,
-      OpenDiagram.Isomorphic (runForward source index) target) ↔
+    (∃ (index : ForwardIndex source) (output : OpenDiagram boundary),
+      runForward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.Iteration source target := by
   constructor
-  · rintro ⟨index, isomorphic⟩
-    apply Rule.Iteration.respectsTargetIso (target' := target) ?_ isomorphic
+  · rintro ⟨index, output, computed, isomorphic⟩
     cases index with
-    | copy occurrence freshWires freshening targetCanonical
-        targetExternalTwoEnded =>
+    | copy occurrence freshWires freshening =>
+        obtain ⟨canonical, twoEnded, ⟨targetIso⟩⟩ :=
+          (validateTarget_exact occurrence
+            (copied occurrence.selected occurrence.before freshening)
+            target).mp ⟨output, computed, isomorphic⟩
         exact ⟨occurrence,
           copied occurrence.selected occurrence.before freshening,
-          targetCanonical, targetExternalTwoEnded, OpenDiagramIso.refl _,
+          canonical, twoEnded, targetIso.symm,
           Or.inl (.copy occurrence.before freshWires freshening)⟩
-    | remove occurrence remainder freshWires freshening current_eq
-        targetCanonical targetExternalTwoEnded =>
+    | remove occurrence remainder freshWires freshening currentEq =>
+        obtain ⟨canonical, twoEnded, ⟨targetIso⟩⟩ :=
+          (validateTarget_exact occurrence
+            (uncopyResidue occurrence.selected remainder freshening)
+            target).mp ⟨output, computed, isomorphic⟩
         have localEvidence : Local occurrence.descendant occurrence.selected
             occurrence.before
             (uncopyResidue occurrence.selected remainder freshening) := by
-          rw [current_eq]
+          rw [currentEq]
           exact .remove remainder freshWires freshening
         exact ⟨occurrence,
           uncopyResidue occurrence.selected remainder freshening,
-          targetCanonical, targetExternalTwoEnded, OpenDiagramIso.refl _,
-          Or.inl localEvidence⟩
-    | undo occurrence remainder freshWires freshening current_eq
-        targetCanonical targetExternalTwoEnded =>
+          canonical, twoEnded, targetIso.symm, Or.inl localEvidence⟩
+    | undo occurrence remainder freshWires freshening currentEq =>
+        obtain ⟨canonical, twoEnded, ⟨targetIso⟩⟩ :=
+          (validateTarget_exact occurrence remainder target).mp
+            ⟨output, computed, isomorphic⟩
         have localEvidence : Local occurrence.descendant occurrence.selected
             remainder occurrence.before := by
-          rw [current_eq]
+          rw [currentEq]
           exact .copy remainder freshWires freshening
-        exact ⟨occurrence, remainder, targetCanonical,
-          targetExternalTwoEnded,
-          OpenDiagramIso.refl _, Or.inr localEvidence⟩
-    | restore occurrence remainder freshWires freshening current_eq
-        targetCanonical targetExternalTwoEnded =>
+        exact ⟨occurrence, remainder, canonical, twoEnded, targetIso.symm,
+          Or.inr localEvidence⟩
+    | restore occurrence remainder freshWires freshening currentEq =>
+        obtain ⟨canonical, twoEnded, ⟨targetIso⟩⟩ :=
+          (validateTarget_exact occurrence
+            (copied occurrence.selected remainder freshening) target).mp
+              ⟨output, computed, isomorphic⟩
         have localEvidence : Local occurrence.descendant occurrence.selected
             (copied occurrence.selected remainder freshening)
             occurrence.before := by
-          rw [current_eq]
+          rw [currentEq]
           exact .remove remainder freshWires freshening
         exact ⟨occurrence,
           copied occurrence.selected remainder freshening,
-          targetCanonical, targetExternalTwoEnded, OpenDiagramIso.refl _,
-          Or.inr localEvidence⟩
-  · rintro ⟨occurrence, after, targetCanonical,
-      targetExternalTwoEnded, targetIso, localEvidence⟩
+          canonical, twoEnded, targetIso.symm, Or.inr localEvidence⟩
+  · rintro ⟨occurrence, after, canonical, twoEnded, targetIso,
+      localEvidence⟩
     rcases localEvidence with forward | backward
     · rcases Local.view forward with
-        ⟨remainder, freshWires, freshening, before_eq, after_eq⟩ |
-        ⟨remainder, freshWires, freshening, before_eq, after_eq⟩
+        ⟨remainder, freshWires, freshening, beforeEq, afterEq⟩ |
+        ⟨remainder, freshWires, freshening, beforeEq, afterEq⟩
       · subst remainder
         subst after
-        exact ⟨.copy occurrence freshWires freshening targetCanonical
-          targetExternalTwoEnded,
-          ⟨targetIso.symm⟩⟩
+        refine ⟨.copy occurrence freshWires freshening,
+          occurrence.replace
+            (copied occurrence.selected occurrence.before freshening)
+            canonical twoEnded, ?_, ⟨targetIso.symm⟩⟩
+        exact WirePrimitive.Executable.validateBody_of_valid _ _ canonical
+          twoEnded
       · subst after
-        exact ⟨.remove occurrence remainder freshWires freshening
-          before_eq targetCanonical targetExternalTwoEnded,
-          ⟨targetIso.symm⟩⟩
+        refine ⟨.remove occurrence remainder freshWires freshening beforeEq,
+          occurrence.replace
+            (uncopyResidue occurrence.selected remainder freshening)
+            canonical twoEnded, ?_, ⟨targetIso.symm⟩⟩
+        exact WirePrimitive.Executable.validateBody_of_valid _ _ canonical
+          twoEnded
     · rcases Local.view backward with
-        ⟨remainder, freshWires, freshening, after_eq, before_eq⟩ |
-        ⟨remainder, freshWires, freshening, after_eq, before_eq⟩
+        ⟨remainder, freshWires, freshening, afterEq, beforeEq⟩ |
+        ⟨remainder, freshWires, freshening, afterEq, beforeEq⟩
       · subst after
-        exact ⟨.undo occurrence remainder freshWires freshening before_eq
-          targetCanonical targetExternalTwoEnded, ⟨targetIso.symm⟩⟩
+        refine ⟨.undo occurrence remainder freshWires freshening beforeEq,
+          occurrence.replace remainder canonical twoEnded,
+          ?_, ⟨targetIso.symm⟩⟩
+        exact WirePrimitive.Executable.validateBody_of_valid _ _ canonical
+          twoEnded
       · subst after
-        exact ⟨.restore occurrence remainder freshWires freshening
-          before_eq targetCanonical targetExternalTwoEnded,
-          ⟨targetIso.symm⟩⟩
+        refine ⟨.restore occurrence remainder freshWires freshening beforeEq,
+          occurrence.replace
+            (copied occurrence.selected remainder freshening)
+            canonical twoEnded, ?_, ⟨targetIso.symm⟩⟩
+        exact WirePrimitive.Executable.validateBody_of_valid _ _ canonical
+          twoEnded
 
 theorem backward_exact (source target : OpenDiagram boundary) :
-    (∃ index : BackwardIndex source,
-      OpenDiagram.Isomorphic (runBackward source index) target) ↔
+    (∃ (index : BackwardIndex source) (output : OpenDiagram boundary),
+      runBackward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.Iteration target source := by
   constructor
   · intro witness
-    have forwardWitness : ∃ index : ForwardIndex source,
-        OpenDiagram.Isomorphic (runForward source index) target := by
-      simpa only [BackwardIndex, runBackward] using witness
-    exact Rule.Iteration.symm
-      ((forward_exact source target).mp forwardWitness)
+    exact Rule.Iteration.symm ((forward_exact source target).mp witness)
   · intro step
-    have forwardWitness :=
-      (forward_exact source target).mpr (Rule.Iteration.symm step)
-    simpa only [BackwardIndex, runBackward] using forwardWitness
+    exact (forward_exact source target).mpr (Rule.Iteration.symm step)
 
 end VisualProof.Rule.Iteration
