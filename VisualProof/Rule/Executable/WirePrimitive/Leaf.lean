@@ -8,77 +8,81 @@ open Diagram
 
 namespace FormalApplication
 
+private def family : Executable.Family where
+  Description := Leaf.Formal.Applies.Description
+  source := Leaf.Formal.Applies.Description.target
+  target := Leaf.Formal.Applies.Description.source
+
+private theorem build {wires : List Sig}
+    (description : Leaf.Formal.Applies.Description wires) :
+    Leaf.Formal.Local description.target description.source :=
+  .abstractFormal (.mk description)
+
+private theorem view {wires : List Sig} {before after : Region wires}
+    (step : Leaf.Formal.Local before after) :
+    ∃ description : Leaf.Formal.Applies.Description wires,
+      before = description.target ∧ after = description.source := by
+  cases step with
+  | abstractFormal step =>
+      cases step with
+      | mk description => exact ⟨description, rfl, rfl⟩
+
 abbrev ForwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
-  Executable.Directed.ForwardIndex Leaf.Formal.Local source
+  Executable.ComputedDirected.Index family source
 
 abbrev BackwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
-  Executable.Directed.BackwardIndex Leaf.Formal.Local source
+  Executable.ComputedDirected.Index family source
 
-def abstractFormal (step : Leaf.Formal.Applies after before)
-    (occurrence : Occurrence before source)
-    (polarity : occurrence.context.polarity = .positive)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def abstractFormal (description : Leaf.Formal.Applies.Description wires)
+    (occurrence : Occurrence description.target source) :
     ForwardIndex source :=
-  .positive (.abstractFormal step) occurrence polarity targetCanonical
-    targetExternalTwoEnded
+  .direct description occurrence
 
-def applyFormal (step : Leaf.Formal.Applies before after)
-    (occurrence : Occurrence before source)
-    (polarity : occurrence.context.polarity = .negative)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def applyFormal (description : Leaf.Formal.Applies.Description wires)
+    (occurrence : Occurrence description.source source) :
     ForwardIndex source :=
-  .negative (.abstractFormal step) occurrence polarity targetCanonical
-    targetExternalTwoEnded
+  .reverse description occurrence
 
-def backwardApplyFormal (step : Leaf.Formal.Applies before after)
-    (occurrence : Occurrence before source)
-    (polarity : occurrence.context.polarity = .positive)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def backwardApplyFormal (description : Leaf.Formal.Applies.Description wires)
+    (occurrence : Occurrence description.source source) :
     BackwardIndex source :=
-  .positive (.abstractFormal step) occurrence polarity targetCanonical
-    targetExternalTwoEnded
+  .reverse description occurrence
 
-def backwardAbstractFormal (step : Leaf.Formal.Applies after before)
-    (occurrence : Occurrence before source)
-    (polarity : occurrence.context.polarity = .negative)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def backwardAbstractFormal
+    (description : Leaf.Formal.Applies.Description wires)
+    (occurrence : Occurrence description.target source) :
     BackwardIndex source :=
-  .negative (.abstractFormal step) occurrence polarity targetCanonical
-    targetExternalTwoEnded
+  .direct description occurrence
 
 def runForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary :=
-  Executable.Directed.runForward source
+    ForwardIndex source → Option (OpenDiagram boundary) :=
+  Executable.ComputedDirected.runForward source
 
 def runBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary :=
-  Executable.Directed.runBackward source
+    BackwardIndex source → Option (OpenDiagram boundary) :=
+  Executable.ComputedDirected.runBackward source
 
 def compileForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary := runForward source
+    ForwardIndex source → Option (OpenDiagram boundary) := runForward source
 
 def compileBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary := runBackward source
+    BackwardIndex source → Option (OpenDiagram boundary) := runBackward source
 
 theorem forward_exact (source target : OpenDiagram boundary) :
-    (∃ index : ForwardIndex source,
-      OpenDiagram.Isomorphic (runForward source index) target) ↔
+    (∃ (index : ForwardIndex source) (output : OpenDiagram boundary),
+      runForward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.WirePrimitive.FormalApplication source target := by
-  exact Executable.Directed.forward_exact Leaf.Formal.Local source target
+  exact Executable.ComputedDirected.forward_exact family Leaf.Formal.Local
+    build view source target
 
 theorem backward_exact (source target : OpenDiagram boundary) :
-    (∃ index : BackwardIndex source,
-      OpenDiagram.Isomorphic (runBackward source index) target) ↔
+    (∃ (index : BackwardIndex source) (output : OpenDiagram boundary),
+      runBackward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.WirePrimitive.FormalApplication target source := by
-  exact Executable.Directed.backward_exact Leaf.Formal.Local source target
+  exact Executable.ComputedDirected.backward_exact family Leaf.Formal.Local
+    build view source target
 
 theorem respectsTargetIso
     (step : Rule.WirePrimitive.FormalApplication source target)
@@ -100,77 +104,81 @@ end FormalApplication
 
 namespace IdentityLeaf
 
+private def family : Executable.Family where
+  Description := Leaf.Identity.Leaves.Description
+  source := Leaf.Identity.Leaves.Description.target
+  target := Leaf.Identity.Leaves.Description.source
+
+private theorem build {wires : List Sig}
+    (description : Leaf.Identity.Leaves.Description wires) :
+    Leaf.Identity.Local description.target description.source :=
+  .abstractIdentity (.mk description)
+
+private theorem view {wires : List Sig} {before after : Region wires}
+    (step : Leaf.Identity.Local before after) :
+    ∃ description : Leaf.Identity.Leaves.Description wires,
+      before = description.target ∧ after = description.source := by
+  cases step with
+  | abstractIdentity step =>
+      cases step with
+      | mk description => exact ⟨description, rfl, rfl⟩
+
 abbrev ForwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
-  Executable.Directed.ForwardIndex Leaf.Identity.Local source
+  Executable.ComputedDirected.Index family source
 
 abbrev BackwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
-  Executable.Directed.BackwardIndex Leaf.Identity.Local source
+  Executable.ComputedDirected.Index family source
 
-def identityAbstract (step : Leaf.Identity.Leaves after before)
-    (occurrence : Occurrence before source)
-    (polarity : occurrence.context.polarity = .positive)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def identityAbstract (description : Leaf.Identity.Leaves.Description wires)
+    (occurrence : Occurrence description.target source) :
     ForwardIndex source :=
-  .positive (.abstractIdentity step) occurrence polarity targetCanonical
-    targetExternalTwoEnded
+  .direct description occurrence
 
-def identityLeaf (step : Leaf.Identity.Leaves before after)
-    (occurrence : Occurrence before source)
-    (polarity : occurrence.context.polarity = .negative)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def identityLeaf (description : Leaf.Identity.Leaves.Description wires)
+    (occurrence : Occurrence description.source source) :
     ForwardIndex source :=
-  .negative (.abstractIdentity step) occurrence polarity targetCanonical
-    targetExternalTwoEnded
+  .reverse description occurrence
 
-def backwardIdentityLeaf (step : Leaf.Identity.Leaves before after)
-    (occurrence : Occurrence before source)
-    (polarity : occurrence.context.polarity = .positive)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def backwardIdentityLeaf (description : Leaf.Identity.Leaves.Description wires)
+    (occurrence : Occurrence description.source source) :
     BackwardIndex source :=
-  .positive (.abstractIdentity step) occurrence polarity targetCanonical
-    targetExternalTwoEnded
+  .reverse description occurrence
 
-def backwardIdentityAbstract (step : Leaf.Identity.Leaves after before)
-    (occurrence : Occurrence before source)
-    (polarity : occurrence.context.polarity = .negative)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def backwardIdentityAbstract
+    (description : Leaf.Identity.Leaves.Description wires)
+    (occurrence : Occurrence description.target source) :
     BackwardIndex source :=
-  .negative (.abstractIdentity step) occurrence polarity targetCanonical
-    targetExternalTwoEnded
+  .direct description occurrence
 
 def runForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary :=
-  Executable.Directed.runForward source
+    ForwardIndex source → Option (OpenDiagram boundary) :=
+  Executable.ComputedDirected.runForward source
 
 def runBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary :=
-  Executable.Directed.runBackward source
+    BackwardIndex source → Option (OpenDiagram boundary) :=
+  Executable.ComputedDirected.runBackward source
 
 def compileForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary := runForward source
+    ForwardIndex source → Option (OpenDiagram boundary) := runForward source
 
 def compileBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary := runBackward source
+    BackwardIndex source → Option (OpenDiagram boundary) := runBackward source
 
 theorem forward_exact (source target : OpenDiagram boundary) :
-    (∃ index : ForwardIndex source,
-      OpenDiagram.Isomorphic (runForward source index) target) ↔
+    (∃ (index : ForwardIndex source) (output : OpenDiagram boundary),
+      runForward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.WirePrimitive.IdentityLeaf source target := by
-  exact Executable.Directed.forward_exact Leaf.Identity.Local source target
+  exact Executable.ComputedDirected.forward_exact family Leaf.Identity.Local
+    build view source target
 
 theorem backward_exact (source target : OpenDiagram boundary) :
-    (∃ index : BackwardIndex source,
-      OpenDiagram.Isomorphic (runBackward source index) target) ↔
+    (∃ (index : BackwardIndex source) (output : OpenDiagram boundary),
+      runBackward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.WirePrimitive.IdentityLeaf target source := by
-  exact Executable.Directed.backward_exact Leaf.Identity.Local source target
+  exact Executable.ComputedDirected.backward_exact family Leaf.Identity.Local
+    build view source target
 
 theorem respectsTargetIso
     (step : Rule.WirePrimitive.IdentityLeaf source target)

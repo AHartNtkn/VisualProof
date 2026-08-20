@@ -6,49 +6,69 @@ namespace VisualProof.Rule.WirePrimitive.ArgumentPermutation
 open Theory
 open Diagram
 
+private def family : Executable.Family where
+  Description := Permutes.Description
+  source := Permutes.Description.source
+  target := Permutes.Description.target
+
+private theorem build {wires : List Sig}
+    (description : Permutes.Description wires) :
+    Local description.source description.target :=
+  .permute (.mk description)
+
+private theorem view {wires : List Sig} {before after : Region wires}
+    (step : Local before after) :
+    ∃ description : Permutes.Description wires,
+      before = description.source ∧ after = description.target := by
+  cases step with
+  | permute step =>
+      cases step with
+      | mk description => exact ⟨description, rfl, rfl⟩
+
 abbrev ForwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
-  Executable.Symmetric.ForwardIndex Local source
+  Executable.ComputedSymmetric.Index family source
 
 abbrev BackwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
-  Executable.Symmetric.BackwardIndex Local source
+  Executable.ComputedSymmetric.Index family source
 
 /-- The sole parametric permutation executor. Applying it with the inverse
 permutation supplies the inverse semantic operation. -/
-def argumentPermute (step : Permutes before after)
-    (occurrence : Occurrence before source)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def argumentPermute (description : Permutes.Description wires)
+    (occurrence : Occurrence description.source source) :
     ForwardIndex source :=
-  .direct (.permute step) occurrence targetCanonical targetExternalTwoEnded
+  .direct description occurrence
 
 def runForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary :=
-  Executable.Symmetric.runForward source
+    ForwardIndex source → Option (OpenDiagram boundary) :=
+  Executable.ComputedSymmetric.run source
 
 def runBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary :=
-  Executable.Symmetric.runBackward source
+    BackwardIndex source → Option (OpenDiagram boundary) :=
+  Executable.ComputedSymmetric.run source
 
 def compileForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary := runForward source
+    ForwardIndex source → Option (OpenDiagram boundary) := runForward source
 
 def compileBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary := runBackward source
+    BackwardIndex source → Option (OpenDiagram boundary) := runBackward source
 
 theorem forward_exact (source target : OpenDiagram boundary) :
-    (∃ index : ForwardIndex source,
-      OpenDiagram.Isomorphic (runForward source index) target) ↔
+    (∃ (index : ForwardIndex source) (output : OpenDiagram boundary),
+      runForward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.WirePrimitive.ArgumentPermutation source target := by
   simpa only [Rule.WirePrimitive.ArgumentPermutation] using
-    (Executable.Symmetric.forward_exact Local source target)
+    (Executable.ComputedSymmetric.forward_exact family Local build view
+      source target)
 
 theorem backward_exact (source target : OpenDiagram boundary) :
-    (∃ index : BackwardIndex source,
-      OpenDiagram.Isomorphic (runBackward source index) target) ↔
+    (∃ (index : BackwardIndex source) (output : OpenDiagram boundary),
+      runBackward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.WirePrimitive.ArgumentPermutation target source := by
   simpa only [Rule.WirePrimitive.ArgumentPermutation] using
-    (Executable.Symmetric.backward_exact Local source target)
+    (Executable.ComputedSymmetric.backward_exact family Local build view
+      source target)
 
 theorem respectsTargetIso
     (step : Rule.WirePrimitive.ArgumentPermutation source target)

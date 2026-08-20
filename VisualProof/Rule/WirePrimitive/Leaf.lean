@@ -28,18 +28,31 @@ def rootFrame (outer localBefore localAfter before after : List Sig) :=
   Transform.Frame.replace outer localBefore localAfter []
     (before ++ .rel (before ++ after) :: after)
 
+structure Applies.Description (outer : List Sig) where
+  before : List Sig
+  after : List Sig
+  localBefore : List Sig
+  localAfter : List Sig
+  items : ItemSeq (outer ++ (localBefore ++
+    .rel (before ++ .rel (before ++ after) :: after) :: localAfter))
+  itemsEdit : Transform.ItemsEdit (operation before after)
+    (rootFrame outer localBefore localAfter before after) PUnit.unit items
+
+def Applies.Description.source (description : Applies.Description outer) :
+    Region outer :=
+  .mk (description.localBefore ++
+    .rel (description.before ++
+      .rel (description.before ++ description.after) :: description.after) ::
+      description.localAfter) description.items
+
+def Applies.Description.target (description : Applies.Description outer) :
+    Region outer :=
+  Region.adjoinAt (description.localBefore ++ description.localAfter) .nil
+    description.itemsEdit.run
+
 inductive Applies : Region outer → Region outer → Prop
-  | mk
-      (before after localBefore localAfter : List Sig)
-      {items : ItemSeq (outer ++ (localBefore ++
-        .rel (before ++ .rel (before ++ after) :: after) :: localAfter))}
-      (itemsEdit : Transform.ItemsEdit (operation before after)
-        (rootFrame outer localBefore localAfter before after) PUnit.unit
-        items) :
-      Applies
-        (.mk (localBefore ++
-          .rel (before ++ .rel (before ++ after) :: after) :: localAfter) items)
-        (Region.adjoinAt (localBefore ++ localAfter) .nil itemsEdit.run)
+  | mk (description : Applies.Description outer) :
+      Applies description.source description.target
 
 inductive Local : LocalRule
   | abstractFormal (step : Applies applied formal) : Local formal applied
@@ -101,19 +114,30 @@ def rootFrame (outer localBefore localAfter : List Sig)
   Transform.Frame.replace outer localBefore localAfter []
     (List.replicate arity signature)
 
+structure Leaves.Description (outer : List Sig) where
+  signature : Sig
+  arity : Nat
+  localBefore : List Sig
+  localAfter : List Sig
+  items : ItemSeq (outer ++ (localBefore ++
+    .rel (List.replicate arity signature) :: localAfter))
+  itemsEdit : Transform.ItemsEdit (operation signature arity)
+    (rootFrame outer localBefore localAfter signature arity) PUnit.unit items
+
+def Leaves.Description.source (description : Leaves.Description outer) :
+    Region outer :=
+  .mk (description.localBefore ++
+    .rel (List.replicate description.arity description.signature) ::
+      description.localAfter) description.items
+
+def Leaves.Description.target (description : Leaves.Description outer) :
+    Region outer :=
+  Region.adjoinAt (description.localBefore ++ description.localAfter) .nil
+    description.itemsEdit.run
+
 inductive Leaves : Region outer → Region outer → Prop
-  | mk
-      (signature : Sig) (arity : Nat)
-      (localBefore localAfter : List Sig)
-      {items : ItemSeq (outer ++ (localBefore ++
-        .rel (List.replicate arity signature) :: localAfter))}
-      (itemsEdit : Transform.ItemsEdit (operation signature arity)
-        (rootFrame outer localBefore localAfter signature arity) PUnit.unit
-        items) :
-      Leaves
-        (.mk (localBefore ++
-          .rel (List.replicate arity signature) :: localAfter) items)
-        (Region.adjoinAt (localBefore ++ localAfter) .nil itemsEdit.run)
+  | mk (description : Leaves.Description outer) :
+      Leaves description.source description.target
 
 inductive Local : LocalRule
   | abstractIdentity (step : Leaves applied identity) : Local identity applied

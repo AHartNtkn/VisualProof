@@ -40,9 +40,12 @@ theorem Permutes.sound_iff {outer : List Sig}
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env source ↔ denoteRegion model env target := by
   cases step with
-  | @mk sourceArguments targetArguments before after permutation items
-      itemsResult =>
+  | mk description =>
+    rcases description with
+      ⟨sourceArguments, targetArguments, before, after, permutation, items,
+        itemsResult⟩
     intro model env
+    simp only [Permutes.Description.source, Permutes.Description.target]
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]
     constructor

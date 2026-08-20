@@ -63,8 +63,11 @@ theorem Applies.sound {outer : List Sig} {applied formal : Region outer}
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env formal → denoteRegion model env applied := by
   cases step with
-  | @mk before after localBefore localAfter items itemsResult =>
+  | mk description =>
+    rcases description with
+      ⟨before, after, localBefore, localAfter, items, itemsResult⟩
     intro model env
+    simp only [Applies.Description.source, Applies.Description.target]
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]
     rintro ⟨targetLocal, _, targetDenotes⟩
@@ -167,8 +170,11 @@ theorem Leaves.sound {outer : List Sig} {applied identity : Region outer}
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env identity → denoteRegion model env applied := by
   cases step with
-  | @mk signature arity localBefore localAfter items itemsResult =>
+  | mk description =>
+    rcases description with
+      ⟨signature, arity, localBefore, localAfter, items, itemsResult⟩
     intro model env
+    simp only [Leaves.Description.source, Leaves.Description.target]
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]
     rintro ⟨targetLocal, _, targetDenotes⟩

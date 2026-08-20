@@ -40,8 +40,11 @@ theorem Duplicates.sound_iff {outer : List Sig}
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env source ↔ denoteRegion model env target := by
   cases step with
-  | @mk before after localBefore localAfter signature items itemsResult =>
+  | mk description =>
+    rcases description with
+      ⟨before, after, localBefore, localAfter, signature, items, itemsResult⟩
     intro model env
+    simp only [Duplicates.Description.source, Duplicates.Description.target]
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]
     constructor
@@ -254,8 +257,11 @@ theorem Drops.sound {outer : List Sig} {applied dropped : Region outer}
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env dropped → denoteRegion model env applied := by
   cases step with
-  | @mk before after localBefore localAfter signature items itemsResult =>
+  | mk description =>
+    rcases description with
+      ⟨before, after, localBefore, localAfter, signature, items, itemsResult⟩
     intro model env
+    simp only [Drops.Description.source, Drops.Description.target]
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]
     rintro ⟨targetLocal, _, targetDenotes⟩
@@ -314,9 +320,13 @@ theorem UniformDrops.sound_iff {outer : List Sig}
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env applied ↔ denoteRegion model env dropped := by
   cases step with
-  | @mk before after localBefore localAfter signature attachment items
-      itemsResult =>
+  | mk description =>
+    rcases description with
+      ⟨before, after, localBefore, localAfter, signature, attachment, items,
+        itemsResult⟩
     intro model env
+    simp only [UniformDrops.Description.source,
+      UniformDrops.Description.target]
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]
     constructor
@@ -464,13 +474,15 @@ theorem Local.sound {wires : List Sig}
     ∀ (model : Model) (env : Values model wires),
       denoteRegion model env before → denoteRegion model env after := by
   cases step with
-  | extend step => exact step.sound
-  | uniformDrop step =>
-      intro model env
-      exact (step.sound_iff model env).mp
-  | uniformExtend step =>
-      intro model env
-      exact (step.sound_iff model env).mpr
+  | mk description =>
+      cases description with
+      | extend description => exact (Drops.mk description).sound
+      | uniformDrop description =>
+          intro model env
+          exact ((UniformDrops.mk description).sound_iff model env).mp
+      | uniformExtend description =>
+          intro model env
+          exact ((UniformDrops.mk description).sound_iff model env).mpr
 
 end Argument.Projection
 

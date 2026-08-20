@@ -6,55 +6,74 @@ namespace VisualProof.Rule.WirePrimitive.ArgumentDuplicate
 open Theory
 open Diagram
 
+private def family : Executable.Family where
+  Description := Argument.Duplicate.Duplicates.Description
+  source := Argument.Duplicate.Duplicates.Description.source
+  target := Argument.Duplicate.Duplicates.Description.target
+
+private theorem build {wires : List Sig}
+    (description : Argument.Duplicate.Duplicates.Description wires) :
+    Argument.Duplicate.Local description.source description.target :=
+  .duplicate (.mk description)
+
+private theorem view {wires : List Sig} {before after : Region wires}
+    (step : Argument.Duplicate.Local before after) :
+    ∃ description : Argument.Duplicate.Duplicates.Description wires,
+      before = description.source ∧ after = description.target := by
+  cases step with
+  | duplicate step =>
+      cases step with
+      | mk description => exact ⟨description, rfl, rfl⟩
+
 abbrev ForwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
-  Executable.Symmetric.ForwardIndex Argument.Duplicate.Local source
+  Executable.ComputedSymmetric.Index family source
 
 abbrev BackwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
-  Executable.Symmetric.BackwardIndex Argument.Duplicate.Local source
+  Executable.ComputedSymmetric.Index family source
 
-def argumentDuplicate (step : Argument.Duplicate.Duplicates before after)
-    (occurrence : Occurrence before source)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def argumentDuplicate
+    (description : Argument.Duplicate.Duplicates.Description wires)
+    (occurrence : Occurrence description.source source) :
     ForwardIndex source :=
-  .direct (.duplicate step) occurrence targetCanonical targetExternalTwoEnded
+  .direct description occurrence
 
-def argumentContract (step : Argument.Duplicate.Duplicates after before)
-    (occurrence : Occurrence before source)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def argumentContract
+    (description : Argument.Duplicate.Duplicates.Description wires)
+    (occurrence : Occurrence description.target source) :
     ForwardIndex source :=
-  .reverse (.duplicate step) occurrence targetCanonical targetExternalTwoEnded
+  .reverse description occurrence
 
 def runForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary :=
-  Executable.Symmetric.runForward source
+    ForwardIndex source → Option (OpenDiagram boundary) :=
+  Executable.ComputedSymmetric.run source
 
 def runBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary :=
-  Executable.Symmetric.runBackward source
+    BackwardIndex source → Option (OpenDiagram boundary) :=
+  Executable.ComputedSymmetric.run source
 
 def compileForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary := runForward source
+    ForwardIndex source → Option (OpenDiagram boundary) := runForward source
 
 def compileBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary := runBackward source
+    BackwardIndex source → Option (OpenDiagram boundary) := runBackward source
 
 theorem forward_exact (source target : OpenDiagram boundary) :
-    (∃ index : ForwardIndex source,
-      OpenDiagram.Isomorphic (runForward source index) target) ↔
+    (∃ (index : ForwardIndex source) (output : OpenDiagram boundary),
+      runForward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.WirePrimitive.ArgumentDuplicate source target := by
   simpa only [Rule.WirePrimitive.ArgumentDuplicate] using
-    (Executable.Symmetric.forward_exact Argument.Duplicate.Local source target)
+    (Executable.ComputedSymmetric.forward_exact family
+      Argument.Duplicate.Local build view source target)
 
 theorem backward_exact (source target : OpenDiagram boundary) :
-    (∃ index : BackwardIndex source,
-      OpenDiagram.Isomorphic (runBackward source index) target) ↔
+    (∃ (index : BackwardIndex source) (output : OpenDiagram boundary),
+      runBackward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.WirePrimitive.ArgumentDuplicate target source := by
   simpa only [Rule.WirePrimitive.ArgumentDuplicate] using
-    (Executable.Symmetric.backward_exact Argument.Duplicate.Local source target)
+    (Executable.ComputedSymmetric.backward_exact family
+      Argument.Duplicate.Local build view source target)
 
 theorem respectsTargetIso
     (step : Rule.WirePrimitive.ArgumentDuplicate source target)
@@ -79,107 +98,102 @@ namespace VisualProof.Rule.WirePrimitive.ArgumentProjection
 open Theory
 open Diagram
 
+private def family : Executable.Family where
+  Description := Argument.Projection.Local.Description
+  source := Argument.Projection.Local.Description.source
+  target := Argument.Projection.Local.Description.target
+
+private theorem build {wires : List Sig}
+    (description : Argument.Projection.Local.Description wires) :
+    Argument.Projection.Local description.source description.target :=
+  .mk description
+
+private theorem view {wires : List Sig} {before after : Region wires}
+    (step : Argument.Projection.Local before after) :
+    ∃ description : Argument.Projection.Local.Description wires,
+      before = description.source ∧ after = description.target := by
+  cases step with
+  | mk description => exact ⟨description, rfl, rfl⟩
+
 abbrev ForwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
-  Executable.Directed.ForwardIndex Argument.Projection.Local source
+  Executable.ComputedDirected.Index family source
 
 abbrev BackwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
-  Executable.Directed.BackwardIndex Argument.Projection.Local source
+  Executable.ComputedDirected.Index family source
 
-def argumentExtend (step : Argument.Projection.Drops after before)
-    (occurrence : Occurrence before source)
-    (polarity : occurrence.context.polarity = .positive)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def argumentExtend
+    (description : Argument.Projection.Drops.Description wires)
+    (occurrence : Occurrence description.target source) :
     ForwardIndex source :=
-  .positive (.extend step) occurrence polarity targetCanonical
-    targetExternalTwoEnded
+  .direct (.extend description) occurrence
 
-def argumentDrop (step : Argument.Projection.Drops before after)
-    (occurrence : Occurrence before source)
-    (polarity : occurrence.context.polarity = .negative)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def argumentDrop
+    (description : Argument.Projection.Drops.Description wires)
+    (occurrence : Occurrence description.source source) :
     ForwardIndex source :=
-  .negative (.extend step) occurrence polarity targetCanonical
-    targetExternalTwoEnded
+  .reverse (.extend description) occurrence
 
 def uniformArgumentDrop
-    (step : Argument.Projection.UniformDrops before after)
-    (occurrence : Occurrence before source)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+    (description : Argument.Projection.UniformDrops.Description wires)
+    (occurrence : Occurrence description.source source) :
     ForwardIndex source := by
-  cases polarity : occurrence.context.polarity with
+  cases occurrence.context.polarity with
   | positive =>
-      exact .positive (.uniformDrop step) occurrence polarity targetCanonical
-        targetExternalTwoEnded
+      exact .direct (.uniformDrop description) occurrence
   | negative =>
-      exact .negative (.uniformExtend step) occurrence polarity targetCanonical
-        targetExternalTwoEnded
+      exact .reverse (.uniformExtend description) occurrence
 
 def uniformArgumentExtend
-    (step : Argument.Projection.UniformDrops after before)
-    (occurrence : Occurrence before source)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+    (description : Argument.Projection.UniformDrops.Description wires)
+    (occurrence : Occurrence description.target source) :
     ForwardIndex source := by
-  cases polarity : occurrence.context.polarity with
+  cases occurrence.context.polarity with
   | positive =>
-      exact .positive (.uniformExtend step) occurrence polarity targetCanonical
-        targetExternalTwoEnded
+      exact .direct (.uniformExtend description) occurrence
   | negative =>
-      exact .negative (.uniformDrop step) occurrence polarity targetCanonical
-        targetExternalTwoEnded
+      exact .reverse (.uniformDrop description) occurrence
 
-def backwardArgumentDrop (step : Argument.Projection.Drops before after)
-    (occurrence : Occurrence before source)
-    (polarity : occurrence.context.polarity = .positive)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def backwardArgumentDrop
+    (description : Argument.Projection.Drops.Description wires)
+    (occurrence : Occurrence description.source source) :
     BackwardIndex source :=
-  .positive (.extend step) occurrence polarity targetCanonical
-    targetExternalTwoEnded
+  .reverse (.extend description) occurrence
 
-def backwardArgumentExtend (step : Argument.Projection.Drops after before)
-    (occurrence : Occurrence before source)
-    (polarity : occurrence.context.polarity = .negative)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def backwardArgumentExtend
+    (description : Argument.Projection.Drops.Description wires)
+    (occurrence : Occurrence description.target source) :
     BackwardIndex source :=
-  .negative (.extend step) occurrence polarity targetCanonical
-    targetExternalTwoEnded
+  .direct (.extend description) occurrence
 
 def runForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary :=
-  Executable.Directed.runForward source
+    ForwardIndex source → Option (OpenDiagram boundary) :=
+  Executable.ComputedDirected.runForward source
 
 def runBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary :=
-  Executable.Directed.runBackward source
+    BackwardIndex source → Option (OpenDiagram boundary) :=
+  Executable.ComputedDirected.runBackward source
 
 def compileForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary := runForward source
+    ForwardIndex source → Option (OpenDiagram boundary) := runForward source
 
 def compileBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary := runBackward source
+    BackwardIndex source → Option (OpenDiagram boundary) := runBackward source
 
 theorem forward_exact (source target : OpenDiagram boundary) :
-    (∃ index : ForwardIndex source,
-      OpenDiagram.Isomorphic (runForward source index) target) ↔
+    (∃ (index : ForwardIndex source) (output : OpenDiagram boundary),
+      runForward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.WirePrimitive.ArgumentProjection source target := by
-  exact Executable.Directed.forward_exact Argument.Projection.Local source target
+  exact Executable.ComputedDirected.forward_exact family
+    Argument.Projection.Local build view source target
 
 theorem backward_exact (source target : OpenDiagram boundary) :
-    (∃ index : BackwardIndex source,
-      OpenDiagram.Isomorphic (runBackward source index) target) ↔
+    (∃ (index : BackwardIndex source) (output : OpenDiagram boundary),
+      runBackward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.WirePrimitive.ArgumentProjection target source := by
-  exact Executable.Directed.backward_exact Argument.Projection.Local source target
+  exact Executable.ComputedDirected.backward_exact family
+    Argument.Projection.Local build view source target
 
 theorem respectsTargetIso
     (step : Rule.WirePrimitive.ArgumentProjection source target)

@@ -53,18 +53,32 @@ def targetHead (outer before after arguments : List Sig) (added : Sig) :
   Transform.Frame.insertedHead outer before after
     (.rel (arguments ++ [added]))
 
+structure Shift.Description (outer : List Sig) where
+  arguments : List Sig
+  before : List Sig
+  after : List Sig
+  added : Sig
+  items : ItemSeq (outer ++ (before ++ .rel arguments :: after))
+  itemsEdit : Transform.ItemsEdit (operation arguments added)
+    (rootFrame outer before after arguments added)
+    (targetHead outer before after arguments added) items
+
+def Shift.Description.source (description : Shift.Description outer) :
+    Region outer :=
+  .mk (description.before ++ .rel description.arguments :: description.after)
+    description.items
+
+def Shift.Description.target (description : Shift.Description outer) :
+    Region outer :=
+  Region.adjoinAt
+    (description.before ++
+      .rel (description.arguments ++ [description.added]) :: description.after)
+    .nil description.itemsEdit.run
+
 /-- Exact structural arity shift with one fresh site-local argument wire. -/
 inductive Shift : Region outer → Region outer → Prop
-  | mk
-      (arguments before after : List Sig) (added : Sig)
-      {items : ItemSeq (outer ++ (before ++ .rel arguments :: after))}
-      (itemsEdit : Transform.ItemsEdit (operation arguments added)
-        (rootFrame outer before after arguments added)
-        (targetHead outer before after arguments added) items) :
-      Shift (.mk (before ++ .rel arguments :: after) items)
-        (Region.adjoinAt
-          (before ++ .rel (arguments ++ [added]) :: after) .nil
-          itemsEdit.run)
+  | mk (description : Shift.Description outer) :
+      Shift description.source description.target
 
 inductive Local : LocalRule
   | shift (step : Shift before after) : Local before after

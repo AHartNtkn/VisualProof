@@ -6,55 +6,72 @@ namespace VisualProof.Rule.WirePrimitive.Arity
 open Theory
 open Diagram
 
+private def family : Executable.Family where
+  Description := Shift.Description
+  source := Shift.Description.source
+  target := Shift.Description.target
+
+private theorem build {wires : List Sig}
+    (description : Shift.Description wires) :
+    Local description.source description.target :=
+  .shift (.mk description)
+
+private theorem view {wires : List Sig} {before after : Region wires}
+    (step : Local before after) :
+    ∃ description : Shift.Description wires,
+      before = description.source ∧ after = description.target := by
+  cases step with
+  | shift step =>
+      cases step with
+      | mk description => exact ⟨description, rfl, rfl⟩
+
 abbrev ForwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
-  Executable.Symmetric.ForwardIndex Local source
+  Executable.ComputedSymmetric.Index family source
 
 abbrev BackwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
-  Executable.Symmetric.BackwardIndex Local source
+  Executable.ComputedSymmetric.Index family source
 
-def arityShift (step : Shift before after)
-    (occurrence : Occurrence before source)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def arityShift (description : Shift.Description wires)
+    (occurrence : Occurrence description.source source) :
     ForwardIndex source :=
-  .direct (.shift step) occurrence targetCanonical targetExternalTwoEnded
+  .direct description occurrence
 
-def arityUnshift (step : Shift after before)
-    (occurrence : Occurrence before source)
-    (targetCanonical : (occurrence.context.fill after).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire (occurrence.context.fill after)) :
+def arityUnshift (description : Shift.Description wires)
+    (occurrence : Occurrence description.target source) :
     ForwardIndex source :=
-  .reverse (.shift step) occurrence targetCanonical targetExternalTwoEnded
+  .reverse description occurrence
 
 def runForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary :=
-  Executable.Symmetric.runForward source
+    ForwardIndex source → Option (OpenDiagram boundary) :=
+  Executable.ComputedSymmetric.run source
 
 def runBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary :=
-  Executable.Symmetric.runBackward source
+    BackwardIndex source → Option (OpenDiagram boundary) :=
+  Executable.ComputedSymmetric.run source
 
 def compileForward (source : OpenDiagram boundary) :
-    ForwardIndex source → OpenDiagram boundary := runForward source
+    ForwardIndex source → Option (OpenDiagram boundary) := runForward source
 
 def compileBackward (source : OpenDiagram boundary) :
-    BackwardIndex source → OpenDiagram boundary := runBackward source
+    BackwardIndex source → Option (OpenDiagram boundary) := runBackward source
 
 theorem forward_exact (source target : OpenDiagram boundary) :
-    (∃ index : ForwardIndex source,
-      OpenDiagram.Isomorphic (runForward source index) target) ↔
+    (∃ (index : ForwardIndex source) (output : OpenDiagram boundary),
+      runForward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.WirePrimitive.Arity source target := by
   simpa only [Rule.WirePrimitive.Arity] using
-    (Executable.Symmetric.forward_exact Local source target)
+    (Executable.ComputedSymmetric.forward_exact family Local build view
+      source target)
 
 theorem backward_exact (source target : OpenDiagram boundary) :
-    (∃ index : BackwardIndex source,
-      OpenDiagram.Isomorphic (runBackward source index) target) ↔
+    (∃ (index : BackwardIndex source) (output : OpenDiagram boundary),
+      runBackward source index = some output ∧
+        OpenDiagram.Isomorphic output target) ↔
       Rule.WirePrimitive.Arity target source := by
   simpa only [Rule.WirePrimitive.Arity] using
-    (Executable.Symmetric.backward_exact Local source target)
+    (Executable.ComputedSymmetric.backward_exact family Local build view
+      source target)
 
 theorem respectsTargetIso
     (step : Rule.WirePrimitive.Arity source target)

@@ -27,17 +27,31 @@ def targetHead (outer before after arguments : List Sig) :
     Var (outer ++ (before ++ .rel arguments :: after)) (.rel arguments) :=
   Transform.Frame.insertedHead outer before after (.rel arguments)
 
+/-- Complete source-side description of one cut-wrap edit. -/
+structure Wrap.Description (outer : List Sig) where
+  arguments : List Sig
+  before : List Sig
+  after : List Sig
+  items : ItemSeq (outer ++ (before ++ .rel arguments :: after))
+  itemsEdit : Transform.ItemsEdit (operation arguments)
+    (rootFrame outer before after arguments)
+    (targetHead outer before after arguments) items
+
+def Wrap.Description.source (description : Wrap.Description outer) :
+    Region outer :=
+  .mk (description.before ++ .rel description.arguments :: description.after)
+    description.items
+
+def Wrap.Description.target (description : Wrap.Description outer) :
+    Region outer :=
+  Region.adjoinAt
+    (description.before ++ .rel description.arguments :: description.after)
+    .nil description.itemsEdit.run
+
 /-- Exact structural cut-wrapping of every application of one local wire. -/
 inductive Wrap : Region outer → Region outer → Prop
-  | mk
-      (arguments before after : List Sig)
-      {items : ItemSeq (outer ++ (before ++ .rel arguments :: after))}
-      (itemsEdit : Transform.ItemsEdit (operation arguments)
-        (rootFrame outer before after arguments)
-        (targetHead outer before after arguments) items) :
-      Wrap (.mk (before ++ .rel arguments :: after) items)
-        (Region.adjoinAt (before ++ .rel arguments :: after) .nil
-          itemsEdit.run)
+  | mk (description : Wrap.Description outer) :
+      Wrap description.source description.target
 
 inductive Local : LocalRule
   | wrap (step : Wrap before after) : Local before after
@@ -77,20 +91,33 @@ def secondHead (outer before after arguments : List Sig) :
       (.rel arguments) :=
   Var.appendRight outer (Var.appendRight before (.there .here))
 
+structure Split.Description (outer : List Sig) where
+  arguments : List Sig
+  before : List Sig
+  after : List Sig
+  items : ItemSeq (outer ++ (before ++ .rel arguments :: after))
+  itemsEdit : Transform.ItemsEdit (operation arguments)
+    (rootFrame outer before after arguments)
+    (firstHead outer before after arguments,
+      secondHead outer before after arguments) items
+
+def Split.Description.source (description : Split.Description outer) :
+    Region outer :=
+  .mk (description.before ++ .rel description.arguments :: description.after)
+    description.items
+
+def Split.Description.target (description : Split.Description outer) :
+    Region outer :=
+  Region.adjoinAt
+    (description.before ++ .rel description.arguments ::
+      .rel description.arguments :: description.after)
+    .nil description.itemsEdit.run
+
 /-- Exact structural parallel splitting of every application of one local
 wire into two co-located applications. -/
 inductive Split : Region outer → Region outer → Prop
-  | mk
-      (arguments before after : List Sig)
-      {items : ItemSeq (outer ++ (before ++ .rel arguments :: after))}
-      (itemsEdit : Transform.ItemsEdit (operation arguments)
-        (rootFrame outer before after arguments)
-        (firstHead outer before after arguments,
-          secondHead outer before after arguments) items) :
-      Split (.mk (before ++ .rel arguments :: after) items)
-        (Region.adjoinAt
-          (before ++ .rel arguments :: .rel arguments :: after) .nil
-          itemsEdit.run)
+  | mk (description : Split.Description outer) :
+      Split description.source description.target
 
 inductive Local : LocalRule
   | split (step : Split before after) : Local before after
@@ -109,17 +136,30 @@ def operation (arguments : List Sig) : Transform.Operation arguments where
 def rootFrame (outer before after arguments : List Sig) :=
   Transform.Frame.replace outer before after [] arguments
 
+structure Delete.Description (outer : List Sig) where
+  arguments : List Sig
+  before : List Sig
+  after : List Sig
+  items : ItemSeq (outer ++ (before ++ .rel arguments :: after))
+  itemsEdit : Transform.ItemsEdit (operation arguments)
+    (rootFrame outer before after arguments) PUnit.unit items
+
+def Delete.Description.source (description : Delete.Description outer) :
+    Region outer :=
+  .mk (description.before ++ .rel description.arguments :: description.after)
+    description.items
+
+def Delete.Description.target (description : Delete.Description outer) :
+    Region outer :=
+  Region.adjoinAt (description.before ++ description.after) .nil
+    description.itemsEdit.run
+
 /-- Exact structural deletion of every application of one local wire. The
 local rule is oriented in the sound spawn direction; contextual polarity
 supplies deletion in negative position. -/
 inductive Delete : Region outer → Region outer → Prop
-  | mk
-      (arguments before after : List Sig)
-      {items : ItemSeq (outer ++ (before ++ .rel arguments :: after))}
-      (itemsEdit : Transform.ItemsEdit (operation arguments)
-        (rootFrame outer before after arguments) PUnit.unit items) :
-      Delete (.mk (before ++ .rel arguments :: after) items)
-        (Region.adjoinAt (before ++ after) .nil itemsEdit.run)
+  | mk (description : Delete.Description outer) :
+      Delete description.source description.target
 
 inductive Local : LocalRule
   | spawn (step : Delete applied empty) : Local empty applied

@@ -67,19 +67,32 @@ def targetHead (outer before after targetArguments : List Sig) :
       (.rel targetArguments) :=
   Transform.Frame.insertedHead outer before after (.rel targetArguments)
 
+structure Permutes.Description (outer : List Sig) where
+  sourceArguments : List Sig
+  targetArguments : List Sig
+  before : List Sig
+  after : List Sig
+  permutation : Permutation sourceArguments targetArguments
+  items : ItemSeq (outer ++ (before ++ .rel sourceArguments :: after))
+  itemsEdit : Transform.ItemsEdit
+    (operation sourceArguments targetArguments permutation)
+    (rootFrame outer before after sourceArguments targetArguments)
+    (targetHead outer before after targetArguments) items
+
+def Permutes.Description.source (description : Permutes.Description outer) :
+    Region outer :=
+  .mk (description.before ++
+    .rel description.sourceArguments :: description.after) description.items
+
+def Permutes.Description.target (description : Permutes.Description outer) :
+    Region outer :=
+  Region.adjoinAt
+    (description.before ++ .rel description.targetArguments :: description.after)
+    .nil description.itemsEdit.run
+
 inductive Permutes : Region outer → Region outer → Prop
-  | mk
-      (sourceArguments targetArguments before after : List Sig)
-      (permutation : Permutation sourceArguments targetArguments)
-      {items : ItemSeq
-        (outer ++ (before ++ .rel sourceArguments :: after))}
-      (itemsEdit : Transform.ItemsEdit
-        (operation sourceArguments targetArguments permutation)
-        (rootFrame outer before after sourceArguments targetArguments)
-        (targetHead outer before after targetArguments) items) :
-      Permutes (.mk (before ++ .rel sourceArguments :: after) items)
-        (Region.adjoinAt (before ++ .rel targetArguments :: after) .nil
-          itemsEdit.run)
+  | mk (description : Permutes.Description outer) :
+      Permutes description.source description.target
 
 inductive Local : LocalRule
   | permute (step : Permutes before after) : Local before after

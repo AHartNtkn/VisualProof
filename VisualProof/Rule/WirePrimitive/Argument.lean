@@ -84,22 +84,34 @@ def targetHead (outer localBefore localAfter before after : List Sig)
       (.rel (before ++ signature :: signature :: after)) :=
   Transform.Frame.insertedHead outer localBefore localAfter _
 
+structure Duplicates.Description (outer : List Sig) where
+  before : List Sig
+  after : List Sig
+  localBefore : List Sig
+  localAfter : List Sig
+  signature : Sig
+  items : ItemSeq (outer ++ (localBefore ++
+    .rel (before ++ signature :: after) :: localAfter))
+  itemsEdit : Transform.ItemsEdit (operation before after signature)
+    (rootFrame outer localBefore localAfter before after signature)
+    (targetHead outer localBefore localAfter before after signature) items
+
+def Duplicates.Description.source
+    (description : Duplicates.Description outer) : Region outer :=
+  .mk (description.localBefore ++
+    .rel (description.before ++ description.signature :: description.after) ::
+      description.localAfter) description.items
+
+def Duplicates.Description.target
+    (description : Duplicates.Description outer) : Region outer :=
+  Region.adjoinAt (description.localBefore ++
+    .rel (description.before ++ description.signature ::
+      description.signature :: description.after) :: description.localAfter)
+    .nil description.itemsEdit.run
+
 inductive Duplicates : Region outer → Region outer → Prop
-  | mk
-      (before after localBefore localAfter : List Sig) (signature : Sig)
-      {items : ItemSeq (outer ++ (localBefore ++
-        .rel (before ++ signature :: after) :: localAfter))}
-      (itemsEdit : Transform.ItemsEdit
-        (operation before after signature)
-        (rootFrame outer localBefore localAfter before after signature)
-        (targetHead outer localBefore localAfter before after signature)
-        items) :
-      Duplicates
-        (.mk (localBefore ++ .rel (before ++ signature :: after) :: localAfter)
-          items)
-        (Region.adjoinAt (localBefore ++
-          .rel (before ++ signature :: signature :: after) :: localAfter)
-          .nil itemsEdit.run)
+  | mk (description : Duplicates.Description outer) :
+      Duplicates description.source description.target
 
 inductive Local : LocalRule
   | duplicate (step : Duplicates before after) : Local before after
@@ -232,43 +244,82 @@ def targetHead (outer localBefore localAfter before after : List Sig) :
       (.rel (before ++ after)) :=
   Transform.Frame.insertedHead outer localBefore localAfter _
 
+structure Drops.Description (outer : List Sig) where
+  before : List Sig
+  after : List Sig
+  localBefore : List Sig
+  localAfter : List Sig
+  signature : Sig
+  items : ItemSeq (outer ++ (localBefore ++
+    .rel (before ++ signature :: after) :: localAfter))
+  itemsEdit : Transform.ItemsEdit (operation before after signature)
+    (rootFrame outer localBefore localAfter before after signature)
+    (targetHead outer localBefore localAfter before after) items
+
+def Drops.Description.source (description : Drops.Description outer) :
+    Region outer :=
+  .mk (description.localBefore ++
+    .rel (description.before ++ description.signature :: description.after) ::
+      description.localAfter) description.items
+
+def Drops.Description.target (description : Drops.Description outer) :
+    Region outer :=
+  Region.adjoinAt (description.localBefore ++
+    .rel (description.before ++ description.after) :: description.localAfter)
+    .nil description.itemsEdit.run
+
 inductive Drops : Region outer → Region outer → Prop
-  | mk
-      (before after localBefore localAfter : List Sig) (signature : Sig)
-      {items : ItemSeq (outer ++ (localBefore ++
-        .rel (before ++ signature :: after) :: localAfter))}
-      (itemsEdit : Transform.ItemsEdit
-        (operation before after signature)
-        (rootFrame outer localBefore localAfter before after signature)
-        (targetHead outer localBefore localAfter before after) items) :
-      Drops
-        (.mk (localBefore ++ .rel (before ++ signature :: after) :: localAfter)
-          items)
-        (Region.adjoinAt (localBefore ++ .rel (before ++ after) :: localAfter)
-          .nil itemsEdit.run)
+  | mk (description : Drops.Description outer) :
+      Drops description.source description.target
+
+structure UniformDrops.Description (outer : List Sig) where
+  before : List Sig
+  after : List Sig
+  localBefore : List Sig
+  localAfter : List Sig
+  signature : Sig
+  attachment : Option
+    (Var (outer ++ (localBefore ++ localAfter)) signature)
+  items : ItemSeq (outer ++ (localBefore ++
+    .rel (before ++ signature :: after) :: localAfter))
+  itemsEdit : Transform.ItemsEdit (uniformOperation before after signature)
+    (rootFrame outer localBefore localAfter before after signature)
+    (targetHead outer localBefore localAfter before after, attachment) items
+
+def UniformDrops.Description.source
+    (description : UniformDrops.Description outer) : Region outer :=
+  .mk (description.localBefore ++
+    .rel (description.before ++ description.signature :: description.after) ::
+      description.localAfter) description.items
+
+def UniformDrops.Description.target
+    (description : UniformDrops.Description outer) : Region outer :=
+  Region.adjoinAt (description.localBefore ++
+    .rel (description.before ++ description.after) :: description.localAfter)
+    .nil description.itemsEdit.run
 
 inductive UniformDrops : Region outer → Region outer → Prop
-  | mk
-      (before after localBefore localAfter : List Sig) (signature : Sig)
-      (attachment : Option
-        (Var (outer ++ (localBefore ++ localAfter)) signature))
-      {items : ItemSeq (outer ++ (localBefore ++
-        .rel (before ++ signature :: after) :: localAfter))}
-      (itemsEdit : Transform.ItemsEdit
-        (uniformOperation before after signature)
-        (rootFrame outer localBefore localAfter before after signature)
-        (targetHead outer localBefore localAfter before after, attachment)
-        items) :
-      UniformDrops
-        (.mk (localBefore ++ .rel (before ++ signature :: after) :: localAfter)
-          items)
-        (Region.adjoinAt (localBefore ++ .rel (before ++ after) :: localAfter)
-          .nil itemsEdit.run)
+  | mk (description : UniformDrops.Description outer) :
+      UniformDrops description.source description.target
+
+inductive Local.Description (outer : List Sig) : Type
+  | extend (description : Drops.Description outer)
+  | uniformDrop (description : UniformDrops.Description outer)
+  | uniformExtend (description : UniformDrops.Description outer)
+
+def Local.Description.source : Local.Description outer → Region outer
+  | .extend description => description.target
+  | .uniformDrop description => description.source
+  | .uniformExtend description => description.target
+
+def Local.Description.target : Local.Description outer → Region outer
+  | .extend description => description.source
+  | .uniformDrop description => description.target
+  | .uniformExtend description => description.source
 
 inductive Local : LocalRule
-  | extend (step : Drops applied dropped) : Local dropped applied
-  | uniformDrop (step : UniformDrops applied dropped) : Local applied dropped
-  | uniformExtend (step : UniformDrops applied dropped) : Local dropped applied
+  | mk (description : Local.Description outer) :
+      Local description.source description.target
 
 end Projection
 

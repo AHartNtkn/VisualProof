@@ -158,8 +158,11 @@ theorem Shift.sound_iff {outer : List Sig} {source target : Region outer}
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env source ↔ denoteRegion model env target := by
   cases step with
-  | @mk arguments before after added items itemsResult =>
+  | mk description =>
+    rcases description with
+      ⟨arguments, before, after, added, items, itemsResult⟩
     intro model env
+    simp only [Shift.Description.source, Shift.Description.target]
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]
     constructor
