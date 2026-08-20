@@ -197,27 +197,38 @@ def operationSound (before after : List Sig) (signature : Sig) :
 def uniformOperationSound (before after : List Sig) (signature : Sig) :
     (uniformOperation before after signature).Sound where
   Realizes := fun frame data _ sourceEnv targetEnv =>
-    ∀ values,
-      sourceEnv.lookup frame.selected
-          (Values.insertAt before
-            (sourceEnv.lookup (frame.sourceKeep data.2)) values) ↔
-        targetEnv.lookup data.1 values
+    match data.2 with
+    | none => True
+    | some attachment => ∀ values,
+        sourceEnv.lookup frame.selected
+            (Values.insertAt before
+              (sourceEnv.lookup (frame.sourceKeep attachment)) values) ↔
+          targetEnv.lookup data.1 values
   realizes_append := by
     intro common sourceWires targetWires frame data model sourceEnv targetEnv
-      realizes locals localEnv values
-    simpa [uniformOperation, Transform.Frame.append,
-      WireRenaming.appendRight] using realizes values
+      realizes locals localEnv
+    rcases data with ⟨targetHead, attachment⟩
+    cases attachment with
+    | none => trivial
+    | some attachment =>
+        intro values
+        simpa [uniformOperation, Transform.Frame.append,
+          WireRenaming.appendRight] using realizes values
   site_sound := by
     intro common sourceWires targetWires frame data ports target evidence model
       sourceEnv targetEnv agree realizes
-    rcases evidence with ⟨retained, rfl, rfl⟩
-    rw [Transform.denote_singleton_iff]
-    simp only [denoteItem_atom]
-    rw [Vars.insertAt_map]
-    rw [evaluate_insert]
-    have retainedEq := Transform.evaluate_retained_eq retained agree
-    rw [← retainedEq]
-    exact realizes _
+    rcases data with ⟨targetHead, attachment⟩
+    cases attachment with
+    | none => simp [uniformOperation] at evidence
+    | some attachment =>
+        rcases evidence with ⟨retained, rfl, rfl⟩
+        rw [Transform.denote_singleton_iff]
+        simp only [denoteItem_atom]
+        rw [Vars.insertAt_map]
+        rw [evaluate_insert]
+        have retainedEq := Transform.evaluate_retained_eq retained agree
+        rw [← retainedEq]
+        exact realizes _
 
 theorem Drops.sound {outer : List Sig} {applied dropped : Region outer}
     (step : Drops applied dropped) :
@@ -309,12 +320,14 @@ theorem UniformDrops.sound_iff {outer : List Sig}
       let sourceBound := Values.append env (Transform.Values.insertSegment
         (additions := [.rel sourceArguments]) localBefore
         (sourceRelation, PUnit.unit) commonLocal)
-      let attachmentValue := sourceBound.lookup
-        ((rootFrame outer localBefore localAfter before after signature).sourceKeep
-          attachment)
       let targetRelation : denoteSig model (.rel targetArguments) :=
-        fun values => sourceRelation
-          (Values.insertAt before attachmentValue values)
+        match attachment with
+        | none => fun _ => False
+        | some attachment => fun values => sourceRelation
+            (Values.insertAt before
+              (sourceBound.lookup
+                ((rootFrame outer localBefore localAfter before after
+                  signature).sourceKeep attachment)) values)
       let targetLocal := Transform.Values.insertSegment
         (additions := [.rel targetArguments]) localBefore
         (targetRelation, PUnit.unit) commonLocal
@@ -323,23 +336,28 @@ theorem UniformDrops.sound_iff {outer : List Sig}
           (rootFrame outer localBefore localAfter before after signature)
           (targetHead outer localBefore localAfter before after, attachment)
           model sourceBound (Values.append env targetLocal) := by
-        intro values
-        simp only [sourceBound, attachmentValue, targetRelation, rootFrame,
-          targetHead, targetLocal, sourceArguments, targetArguments]
-        have sourceLookup := congrFun (Transform.lookup_replace_selected
-          (additions := [.rel (before ++ after)]) env commonLocal
-            sourceRelation)
-          (Values.insertAt before
-            ((Values.append env (Transform.Values.insertSegment
-              (additions := [.rel (before ++ signature :: after)])
-              localBefore (sourceRelation, PUnit.unit) commonLocal)).lookup
-                ((Transform.Frame.replace outer localBefore localAfter
-                  [.rel (before ++ after)]
-                  (before ++ signature :: after)).sourceKeep attachment))
-            values)
-        have targetLookup := congrFun (Transform.lookup_replace_targetHead
-          (additions := []) env commonLocal targetRelation PUnit.unit) values
-        exact (Iff.of_eq sourceLookup).trans (Iff.of_eq targetLookup).symm
+        cases attachment with
+        | none => trivial
+        | some attachment =>
+            intro values
+            simp only [sourceBound, targetRelation, rootFrame,
+              targetHead, targetLocal, sourceArguments, targetArguments]
+            have sourceLookup := congrFun (Transform.lookup_replace_selected
+              (additions := [.rel (before ++ after)]) env commonLocal
+                sourceRelation)
+              (Values.insertAt before
+                ((Values.append env (Transform.Values.insertSegment
+                  (additions := [.rel (before ++ signature :: after)])
+                  localBefore (sourceRelation, PUnit.unit) commonLocal)).lookup
+                    ((Transform.Frame.replace outer localBefore localAfter
+                      [.rel (before ++ after)]
+                      (before ++ signature :: after)).sourceKeep attachment))
+                values)
+            have targetLookup := congrFun
+              (Transform.lookup_replace_targetHead (additions := []) env
+                commonLocal targetRelation PUnit.unit) values
+            exact (Iff.of_eq sourceLookup).trans
+              (Iff.of_eq targetLookup).symm
       have equivalence := itemsResult.sound_iff
         (uniformOperationSound before after signature) model sourceBound
         (Values.append env targetLocal)
@@ -377,34 +395,39 @@ theorem UniformDrops.sound_iff {outer : List Sig}
           (Values.append env (Transform.Values.insertSegment
             (additions := [.rel targetArguments]) localBefore
             (targetRelation, PUnit.unit) commonLocal)) := by
-        intro values
-        simp only [rootFrame, targetHead, sourceLocal, sourceArguments,
-          targetArguments]
-        have sourceLookup := congrFun (Transform.lookup_replace_selected
-          (additions := [.rel (before ++ after)]) env commonLocal
-            sourceRelation)
-          (Values.insertAt before
-            ((Values.append env (Transform.Values.insertSegment
-              (additions := [.rel (before ++ signature :: after)])
-              localBefore (sourceRelation, PUnit.unit) commonLocal)).lookup
-                ((Transform.Frame.replace outer localBefore localAfter
-                  [.rel (before ++ after)]
-                  (before ++ signature :: after)).sourceKeep attachment))
-            values)
-        have targetLookup := congrFun (Transform.lookup_replace_targetHead
-          (additions := []) env commonLocal targetRelation PUnit.unit) values
-        exact (Iff.of_eq sourceLookup).trans
-          ((show targetRelation
-              (Values.dropAt before (Values.insertAt before
+        cases attachment with
+        | none => trivial
+        | some attachment =>
+            intro values
+            simp only [rootFrame, targetHead, sourceLocal, sourceArguments,
+              targetArguments]
+            have sourceLookup := congrFun (Transform.lookup_replace_selected
+              (additions := [.rel (before ++ after)]) env commonLocal
+                sourceRelation)
+              (Values.insertAt before
                 ((Values.append env (Transform.Values.insertSegment
                   (additions := [.rel (before ++ signature :: after)])
                   localBefore (sourceRelation, PUnit.unit) commonLocal)).lookup
                     ((Transform.Frame.replace outer localBefore localAfter
                       [.rel (before ++ after)]
                       (before ++ signature :: after)).sourceKeep attachment))
-                values)) ↔ targetRelation values by
-              rw [Values.drop_insert]).trans
-            (Iff.of_eq targetLookup).symm)
+                values)
+            have targetLookup := congrFun
+              (Transform.lookup_replace_targetHead (additions := []) env
+                commonLocal targetRelation PUnit.unit) values
+            exact (Iff.of_eq sourceLookup).trans
+              ((show targetRelation
+                  (Values.dropAt before (Values.insertAt before
+                    ((Values.append env (Transform.Values.insertSegment
+                      (additions := [.rel (before ++ signature :: after)])
+                      localBefore
+                      (sourceRelation, PUnit.unit) commonLocal)).lookup
+                        ((Transform.Frame.replace outer localBefore localAfter
+                          [.rel (before ++ after)]
+                          (before ++ signature :: after)).sourceKeep attachment))
+                    values)) ↔ targetRelation values by
+                  rw [Values.drop_insert]).trans
+                (Iff.of_eq targetLookup).symm)
       have equivalence := itemsResult.sound_iff
         (uniformOperationSound before after signature) model
         (Values.append env sourceLocal)

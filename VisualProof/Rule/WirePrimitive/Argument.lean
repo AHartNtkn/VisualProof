@@ -207,14 +207,17 @@ def operation (before after : List Sig) (signature : Sig) :
 def uniformOperation (before after : List Sig) (signature : Sig) :
     Transform.Operation (before ++ signature :: after) where
   Data := fun {common _ targetWires} _ =>
-    Var targetWires (.rel (before ++ after)) × Var common signature
+    Var targetWires (.rel (before ++ after)) × Option (Var common signature)
   appendData := fun _ data locals =>
-    (data.1.appendLeft locals, data.2.appendLeft locals)
+    (data.1.appendLeft locals, data.2.map fun wire => wire.appendLeft locals)
   site := fun frame data ports target =>
-    ∃ retained : Vars _ (before ++ after),
-      ports = Vars.insertAt before data.2 retained ∧
-      target = Region.singleton (.atom data.1
-        (retained.map fun wire => frame.targetKeep wire))
+    match data.2 with
+    | none => False
+    | some attachment =>
+        ∃ retained : Vars _ (before ++ after),
+          ports = Vars.insertAt before attachment retained ∧
+          target = Region.singleton (.atom data.1
+            (retained.map fun wire => frame.targetKeep wire))
 
 def rootFrame (outer localBefore localAfter before after : List Sig)
     (signature : Sig) :=
@@ -246,7 +249,8 @@ inductive Drops : Region outer → Region outer → Prop
 inductive UniformDrops : Region outer → Region outer → Prop
   | mk
       (before after localBefore localAfter : List Sig) (signature : Sig)
-      (attachment : Var (outer ++ (localBefore ++ localAfter)) signature)
+      (attachment : Option
+        (Var (outer ++ (localBefore ++ localAfter)) signature))
       {items : ItemSeq (outer ++ (localBefore ++
         .rel (before ++ signature :: after) :: localAfter))}
       {result : Region (outer ++ (localBefore ++
