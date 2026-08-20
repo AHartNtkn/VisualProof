@@ -329,14 +329,14 @@ export class WireOpsDragController {
           this.#commit('parallelFuse', { rule: 'parallelFuse', a, b }, sample)
           return
         }
-        if (disc === null && manipulation === null) {
+        const dot = identityDiscAt(engine, point)
+        if (disc === null && manipulation === null && dot === null) {
           this.#commit('parallelSplit', {
             rule: 'parallelSplit',
             wire: grab.wire,
           }, sample)
           return
         }
-        const dot = identityDiscAt(engine, point)
         if (dot !== null && diagram.wires[grab.wire]!.endpoints.some((ep) => ep.node === dot)) {
           this.#commit(
             'identification',
@@ -353,7 +353,11 @@ export class WireOpsDragController {
       }
       case 'rim': {
         const manipulation = wireManipulationHitTest(engine, point, viewport)
-        if (manipulation !== null || this.#discAt(point) !== null) {
+        if (
+          manipulation !== null
+          || this.#discAt(point) !== null
+          || identityDiscAt(engine, point) !== null
+        ) {
           this.#options.refuse(
             'pull the new argument stub into open space',
             sample.client,

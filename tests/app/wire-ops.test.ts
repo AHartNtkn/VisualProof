@@ -2,19 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { WireOpsDragController } from '../../src/app/interact/wire-ops'
 import { duplicateStep, fissionStep } from '../../src/app/interact/identity-ops'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
+import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { IOTA, relSig, type Sig } from '../../src/kernel/diagram/sig'
 import { applyAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import type { ProofStep } from '../../src/kernel/proof/step'
 import { mkEngine, type Engine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
-import { computeLegs } from '../../src/view/wires'
-import { length, sub } from '../../src/view/vec'
 import type { Vec2 } from '../../src/view/vec'
 import {
   endpointPoint,
   farBlank,
+  farStrandPoint,
   place,
   placeRegion,
   pointerSample,
@@ -71,27 +70,6 @@ function onlyStep(committed: readonly Committed[]): ProofStep {
   expect(committed).toHaveLength(1)
   expect(committed[0]!.steps).toHaveLength(1)
   return committed[0]!.steps[0]!
-}
-
-/** A point on `wire`'s own routed stroke that clears every identity dot's
-    disc and halo — a strand grab/drop point distinguishable from any dot
-    on the diagram, found by walking the actual computed geometry rather
-    than guessing coordinates. */
-function farStrandPoint(engine: Engine, wire: WireId): Vec2 {
-  const clear = (p: Vec2): boolean => {
-    for (const body of engine.bodies.values()) {
-      if (body.kind !== 'identity') continue
-      if (length(sub(p, body.pos)) <= body.discR * engine.scale + 6) return false
-    }
-    return true
-  }
-  for (const geometry of computeLegs(engine)) {
-    if (geometry.leg.wid !== wire) continue
-    for (const p of geometry.pts) {
-      if (clear(p)) return p
-    }
-  }
-  throw new Error(`no strand point on '${wire}' clears every identity dot`)
 }
 
 /**
@@ -198,6 +176,25 @@ describe('expose: an atom/ref end or argument port dragged onto an identity dot 
     const h = harness(diagram, engine)
 
     drag(h.controller, { x: 300, y: 300 }, { x: 700, y: 80 })
+
+    expect(h.refusals).toEqual([])
+    const step = onlyStep(h.committed)
+    expect(step).toMatchObject({
+      rule: 'identification',
+      input: { kind: 'expose', transfer: [{ node: atom, port: { kind: 'head' } }] },
+    })
+  })
+
+  it('an end dropped off-centre inside the dot\'s disc (clear of the strand halo) still commits expose, never parallelSplit', () => {
+    const { engine, diagram, atom, headDot } = plumingWithDots()
+    const h = harness(diagram, engine)
+    const dotPos = engine.bodies.get(headDot)!.pos
+    // 16 world units off the dot's own centre: inside its 54-unit disc,
+    // well outside the 6-unit strand/endpoint hit halo, so no wire hit
+    // exists at this exact point the way it does at the dot's own centre.
+    const to = { x: dotPos.x, y: dotPos.y + 16 }
+
+    drag(h.controller, { x: 300, y: 300 }, to)
 
     expect(h.refusals).toEqual([])
     const step = onlyStep(h.committed)
@@ -425,6 +422,31 @@ describe('object-typed drag dispatch', () => {
       wire,
       newArgSig: IOTA,
     })
+  })
+
+  it('refuses pulling the rim onto an identity dot\'s disc instead of committing the stub there', () => {
+    const builder = new DiagramBuilder()
+    const atom = builder.atom(builder.root, UNARY)
+    const wire = builder.wire([{ node: atom, port: { kind: 'head' } }], UNARY)
+    builder.pin(wire, builder.root)
+    builder.wire([{ node: atom, port: { kind: 'arg', index: 0 } }])
+    const dot = builder.identity(builder.root, IOTA, 1)
+    const dotWire = builder.wire([{ node: dot, port: { kind: 'identity', index: 0 } }])
+    builder.pin(dotWire, builder.root)
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    engine.scale = 12
+    place(engine, atom, { x: 300, y: 300 })
+    place(engine, dot, { x: 300, y: 700 })
+    const from = endpointPoint(engine, wire, { node: atom, port: { kind: 'head' } })
+    const h = harness(diagram, engine)
+    const dotPos = engine.bodies.get(dot)!.pos
+    const to = { x: dotPos.x, y: dotPos.y + 16 }
+
+    drag(h.controller, from, to)
+
+    expect(h.committed).toEqual([])
+    expect(h.refusals).toEqual(['pull the new argument stub into open space'])
   })
 
   it('a port dragged off the node unshifts when its wire is a private stub', () => {
