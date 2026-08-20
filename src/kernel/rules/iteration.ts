@@ -146,22 +146,17 @@ function subtreeEvidence(
   }
   const contents = selectionContents(diagram, selection)
   const { pattern, attachments } = extractSubgraph(diagram, selection)
-  for (const [rid, region] of Object.entries(diagram.regions).sort()) {
+  for (const [rid, region] of Object.entries(diagram.regions).sort(([left], [right]) => left.localeCompare(right))) {
     if (region.kind !== 'cut') continue
     if (rid === selection.regions[0]) continue
     if (!isAncestorOrEqual(diagram, region.parent, selection.region)) continue
     if (contents.allRegions.has(rid)) continue
-    let probe
-    try {
-      probe = extractSubgraph(diagram, {
-        region: region.parent,
-        regions: [rid],
-        nodes: [],
-        wires: [],
-      })
-    } catch {
-      continue
-    }
+    const probe = extractSubgraph(diagram, {
+      region: region.parent,
+      regions: [rid],
+      nodes: [],
+      wires: [],
+    })
     if (probe.attachments.length !== attachments.length) continue
     if (probe.attachments.some((wire, index) => wire !== attachments[index])) continue
     const iso = diagramIso(
