@@ -1,4 +1,3 @@
-import VisualProof.Rule.Erasure
 import VisualProof.Rule.WireSever
 import VisualProof.Rule.Iteration
 import VisualProof.Rule.DoubleCut
@@ -15,7 +14,6 @@ open Theory
 
 inductive Step {boundary : List Sig} :
     OpenDiagram boundary → OpenDiagram boundary → Prop
-  | erasure : Erasure source target → Step source target
   | wireSever : WireSever source target → Step source target
   | iteration : Iteration source target → Step source target
   | doubleCut : DoubleCut source target → Step source target
@@ -47,8 +45,6 @@ theorem Step.iso
     (targetIso : OpenDiagramIso target target') :
     Step source' target' := by
   cases step with
-  | erasure step =>
-      exact .erasure (Erasure.iso sourceIso step targetIso)
   | wireSever step =>
       exact .wireSever (WireSever.iso sourceIso step targetIso)
   | iteration step =>

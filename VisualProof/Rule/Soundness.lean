@@ -21,8 +21,6 @@ theorem Step.sound
     ∀ (model : Model) (args : Values model boundary),
       denoteOpen model source args → denoteOpen model target args := by
   cases step with
-  | erasure step =>
-      exact Erasure.sound step
   | wireSever step =>
       exact WireSever.sound step
   | iteration step =>
