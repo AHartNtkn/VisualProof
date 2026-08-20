@@ -429,7 +429,7 @@ describe('fission and duplicate (construction mode, strand-onto-strand/dot drags
     expect(refusals).toEqual(['these lines meet at several dots'])
   })
 
-  it('a strand dragged onto its own dot duplicates the wire onto it', () => {
+  it('a strand dragged onto its own single-wire dot centre duplicates the wire, never the same-wire join refusal', () => {
     const builder = new DiagramBuilder()
     const dot = builder.identity(builder.root, IOTA, 1)
     const a = builder.wire([{ node: dot, port: { kind: 'identity', index: 0 } }])
@@ -441,11 +441,11 @@ describe('fission and duplicate (construction mode, strand-onto-strand/dot drags
     place(engine, aPin, { x: 100, y: 300 })
     const { construct, committed, refusals } = constructHarness(diagram, engine)
     const from = farStrandPoint(engine, a)
-    // Off the dot's centre (which coincides with wire `a`'s own terminal —
-    // the connection drag resolves a wire hit before falling back to the
-    // dot), but still inside its disc.
-    const dotPos = engine.bodies.get(dot)!.pos
-    const to = { x: dotPos.x, y: dotPos.y - 30 }
+    // The dot's exact centre — which is ALSO wire `a`'s own terminal there
+    // (identity ports anchor at body centre). The identity target must
+    // resolve before the wire hit-test, or this reads as a same-wire drop
+    // and wrongly refuses 'release on another line to join'.
+    const to = engine.bodies.get(dot)!.pos
 
     drag(construct, from, to)
 
@@ -455,6 +455,42 @@ describe('fission and duplicate (construction mode, strand-onto-strand/dot drags
     expect(next.nodes[dot]).toMatchObject({ kind: 'identity', arity: 2 })
     const onDot = next.wires[a]!.endpoints.filter((ep) => ep.node === dot)
     expect(onDot).toHaveLength(2)
+  })
+
+  it('a strand dragged onto a multi-wire dot\'s exact centre duplicates that strand\'s wire, never fission', () => {
+    // A second wire `b` also attached to `dot` means the dot's centre is
+    // ALSO `b`'s own terminal there. If the connection drag resolved the
+    // wire hit-test before the identity target, a distance-0 tie between
+    // `a`'s and `b`'s terminals at that exact point could resolve to `b`
+    // and silently commit FISSION (since `a` and `b` share exactly one
+    // dot) instead of the intended duplicate of `a`.
+    const builder = new DiagramBuilder()
+    const dot = builder.identity(builder.root, IOTA, 2)
+    const a = builder.wire([{ node: dot, port: { kind: 'identity', index: 0 } }])
+    const aPin = builder.pin(a, builder.root)
+    const b = builder.wire([{ node: dot, port: { kind: 'identity', index: 1 } }])
+    const bPin = builder.pin(b, builder.root)
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    engine.scale = 12
+    place(engine, dot, { x: 300, y: 300 })
+    place(engine, aPin, { x: 100, y: 300 })
+    place(engine, bPin, { x: 500, y: 300 })
+    const { construct, committed, refusals } = constructHarness(diagram, engine)
+    const from = farStrandPoint(engine, a)
+    const to = engine.bodies.get(dot)!.pos
+
+    drag(construct, from, to)
+
+    expect(refusals).toEqual([])
+    expect(committed).toHaveLength(1)
+    const next = committed[0]!
+    expect(Object.keys(next.wires).sort()).toEqual([a, b].sort())
+    expect(next.nodes[dot]).toMatchObject({ kind: 'identity', arity: 3 })
+    const onDotA = next.wires[a]!.endpoints.filter((ep) => ep.node === dot)
+    expect(onDotA).toHaveLength(2)
+    const onDotB = next.wires[b]!.endpoints.filter((ep) => ep.node === dot)
+    expect(onDotB).toHaveLength(1)
   })
 
   it('refuses duplicating onto a dot the strand is not attached to', () => {

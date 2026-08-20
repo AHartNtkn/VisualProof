@@ -170,18 +170,25 @@ export class ConnectionDragController {
     this.#preview = null
   }
 
-  /** A wire hit (endpoint or strand) resolves before falling back to the
-      identity dot under the point — a dot only ever completes a gesture
-      that no wire itself would claim. */
+  /** The identity dot under the point resolves before the wire hit-test —
+      the same discs-outrank-terminals precedent wire-ops.ts and
+      identity-ops.ts's own dot-drop dispatch already follow. Identity
+      ports anchor at their dot's exact centre (the rendering law: "the
+      point IS the drawing"), so every wire attached to a dot has its own
+      terminal sitting there too; checking the wire hit first would let a
+      drop anywhere in a multi-wire dot's disc resolve to whichever
+      attached wire's terminal happens to win a distance-0 tie, silently
+      committing fission (or a misleading same-wire refusal) instead of
+      the intended duplicate. */
   #targetAt(point: Vec2): ConnectionTarget | null {
+    const dot = this.#options.identityTarget?.(point) ?? null
+    if (dot !== null) return { identity: dot }
     const hit = wireManipulationHitTest(
       this.#options.engine(),
       point,
       { scale: this.#options.viewScale() },
     )
-    if (hit !== null) return wireEnd(hit)
-    const dot = this.#options.identityTarget?.(point) ?? null
-    return dot === null ? null : { identity: dot }
+    return hit === null ? null : wireEnd(hit)
   }
 
   #issueClaim(claim: PointerClaim): PointerClaim {
