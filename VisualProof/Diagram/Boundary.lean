@@ -126,6 +126,21 @@ theorem Candidate.valid_of_validate_eq_some
   · assumption
   · simp at computed
 
+theorem Candidate.validate_eq_some_iff
+    (candidate : Candidate boundary) (output : OpenDiagram boundary) :
+    candidate.validate = some output ↔
+      ∃ valid : candidate.Valid, output = candidate.toOpen valid := by
+  constructor
+  · intro computed
+    simp only [Candidate.validate] at computed
+    split at computed
+    next valid =>
+      simp only [Option.some.injEq] at computed
+      exact ⟨valid, computed.symm⟩
+    next => simp at computed
+  · rintro ⟨valid, rfl⟩
+    exact Candidate.validate_of_valid candidate valid
+
 /-- Replace the body while preserving the typed interface. The replacement
 must independently establish canonical DCA placement. -/
 def withBody (diagram : OpenDiagram boundary)
