@@ -25,6 +25,7 @@ import {
   relSigOf,
   replacePins,
   requireRemovalScopePreserved,
+  ScopePreservationError,
   wireAt,
   withoutEndpointsOf,
   type AppliedEnd,
@@ -360,8 +361,12 @@ export function applyArgDrop(
   }
 
   // Dropped-position wires lose one endpoint per end: class-(b) — their
-  // quantifiers and floors must survive (wires still serving another
-  // position keep replacement endpoints and are exempt).
+  // quantifiers and floors must survive. Wires serving no other position
+  // are checked up front with the erasure precondition (actionable
+  // "pin first" error); every dropped-position wire is then checked
+  // exactly on the rebuilt result, because keeping a wire at another
+  // position keeps the wire but not necessarily its incidence regions.
+  const dropped = ends.map((end) => end.args[position]!)
   const keptElsewhere = new Set(
     ends.flatMap((end) => end.args.filter((_, index) => index !== position)),
   )
@@ -370,11 +375,9 @@ export function applyArgDrop(
     new Set(ends.map((end) => end.node)),
     new Set([wireId]),
     'dropping an argument',
-    new Set(
-      ends.map((end) => end.args[position]!).filter((w) => !keptElsewhere.has(w)),
-    ),
+    new Set(dropped.filter((w) => !keptElsewhere.has(w))),
   )
-  return replaceEnds(
+  const result = replaceEnds(
     diagram,
     wireId,
     ends,
@@ -383,6 +386,20 @@ export function applyArgDrop(
     'drop',
     reservation,
   )
+  for (const attachment of new Set(dropped)) {
+    if (result.wires[attachment] === undefined) continue
+    const before = derivedScope(diagram, attachment)
+    const after = derivedScope(result, attachment)
+    if (after !== before) {
+      throw new ScopePreservationError(
+        `dropping an argument would move the quantifier of wire '${attachment}' `
+        + `from '${before}' to '${after}'; pin it at '${before}' first`,
+        attachment,
+        before,
+      )
+    }
+  }
+  return result
 }
 
 /**

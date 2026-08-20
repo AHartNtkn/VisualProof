@@ -4,6 +4,7 @@ import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { contentEndpoints } from '../../fixtures/pins'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { applyVacuityInsert } from '../../../src/kernel/rules/identity-rules'
 import {
   applyAbstractFormal,
   applyApplyFormal,
@@ -19,6 +20,7 @@ import {
   applyRefAbstract,
   applyRefLeaf,
 } from '../../../src/kernel/rules/wire-args'
+import { ScopePreservationError } from '../../../src/kernel/rules/wire-ends'
 
 const UNARY = relSig([IOTA])
 const BINARY = relSig([IOTA, IOTA])
@@ -249,6 +251,44 @@ describe('argument drop / extend', () => {
       new Map(),
       'backward',
     )).toThrowError(/covering every end/)
+  })
+})
+
+describe('argument drop keeps the dropped attachment quantifier in place', () => {
+  /** R(p,q) on the sheet, ¬(R(p,p) ∧ pin p): p reads at the sheet only through the first end. */
+  function dropFixture() {
+    const BINARY = relSig([IOTA, IOTA])
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const a = b.atom(b.root, BINARY)
+    const c = b.atom(cut, BINARY)
+    const R = b.wire([{ node: a, port: { kind: 'head' } }, { node: c, port: { kind: 'head' } }], BINARY)
+    const p = b.wire([
+      { node: a, port: { kind: 'arg', index: 0 } },
+      { node: c, port: { kind: 'arg', index: 0 } },
+      { node: c, port: { kind: 'arg', index: 1 } },
+    ])
+    b.pin(p, cut)
+    const q = b.wire([{ node: a, port: { kind: 'arg', index: 1 } }])
+    b.pin(q, b.root)
+    return { d: b.build(), R, p, cut }
+  }
+
+  it('refuses the ungated uniform drop that would sink the attachment under a cut', () => {
+    const { d, R, p } = dropFixture()
+    expect(derivedScope(d, p)).toBe(d.root)
+    // BUG: p is "kept elsewhere" (position 1 of the cut end) and was exempt
+    // from the scope check, so the drop went through and ∃p moved into the cut.
+    expect(() => applyArgDrop(d, R, 0)).toThrow(ScopePreservationError)
+  })
+
+  it('accepts the drop once the attachment is pinned at its scope', () => {
+    const { d, R, p } = dropFixture()
+    const held = applyVacuityInsert(d, {
+      kind: 'pin', wire: p, node: 'hold_p', region: d.root,
+    })
+    const out = applyArgDrop(held, R, 0)
+    expect(derivedScope(out, p)).toBe(d.root)
   })
 })
 
