@@ -1,4 +1,4 @@
-import type { Endpoint, WireId } from '../../kernel/diagram/diagram'
+import type { Endpoint, NodeId, WireId } from '../../kernel/diagram/diagram'
 import { pkey, type Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import { wireOverlayShapes } from '../../view/paint'
@@ -14,10 +14,15 @@ export type ConnectionEnd = {
   readonly endpoint: Endpoint | null
 }
 
-/** The wire-to-wire connection: the merge gesture. */
+/** A connection's drop target: a wire (its own end or strand) or, when the
+    host supplies `identityTarget`, an identity dot — ports are not things
+    a gesture can name, so a dot target names the node, never a leg. */
+export type ConnectionTarget = ConnectionEnd | { readonly identity: NodeId }
+
+/** The wire-to-wire (or wire-to-dot) connection: the merge gesture. */
 export type ConnectionGesture = {
   readonly source: ConnectionEnd
-  readonly target: ConnectionEnd
+  readonly target: ConnectionTarget
 }
 
 export type ConnectionDragOptions = {
@@ -27,13 +32,16 @@ export type ConnectionDragOptions = {
   readonly theme: () => Theme
   readonly commit: (gesture: ConnectionGesture, pointer: Vec2) => boolean
   readonly refuse: (text: string, pointer: Vec2) => void
+  /** Identity dot under a point, when the host wants dot drops recognized
+      (construction mode; proving mode passes nothing and sees no change). */
+  readonly identityTarget?: (point: Vec2) => NodeId | null
 }
 
 type WirePreview = {
   readonly source: ConnectionEnd
   readonly from: Vec2
   at: Vec2
-  target: ConnectionEnd | null
+  target: ConnectionTarget | null
 }
 
 function wireEnd(hit: WireManipulationHit): ConnectionEnd {
@@ -97,21 +105,12 @@ export class ConnectionDragController {
       blocksPassiveRelaxation: true,
       move: (next) => {
         preview.at = next.world
-        const target = wireManipulationHitTest(
-          this.#options.engine(),
-          next.world,
-          { scale: this.#options.viewScale() },
-        )
-        preview.target = target === null ? null : wireEnd(target)
+        preview.target = this.#targetAt(next.world)
       },
       release: (next, moved) => {
         this.#preview = null
         if (!moved) return
-        const target = wireManipulationHitTest(
-          this.#options.engine(),
-          next.world,
-          { scale: this.#options.viewScale() },
-        )
+        const target = this.#targetAt(next.world)
         if (target === null) {
           this.#options.refuse(
             'release on a line endpoint or another line',
@@ -121,7 +120,7 @@ export class ConnectionDragController {
         }
         this.#options.commit({
           source: preview.source,
-          target: wireEnd(target),
+          target,
         }, next.client)
       },
       cancel: () => {
@@ -145,7 +144,23 @@ export class ConnectionDragController {
       glow: null,
     })
     if (preview.target !== null) {
-      out.push(...wireTargetShapes(engine, preview.target, color, 3.2))
+      if ('identity' in preview.target) {
+        const body = engine.bodies.get(preview.target.identity)
+        if (body !== undefined) {
+          out.push({
+            kind: 'circle',
+            center: body.pos,
+            r: body.discR * engine.scale + 1.5,
+            fill: null,
+            stroke: color,
+            width: 2,
+            insetColor: null,
+            glow: null,
+          })
+        }
+      } else {
+        out.push(...wireTargetShapes(engine, preview.target, color, 3.2))
+      }
     }
     return out
   }
@@ -153,6 +168,20 @@ export class ConnectionDragController {
   cancel(): void {
     this.#claimEpoch++
     this.#preview = null
+  }
+
+  /** A wire hit (endpoint or strand) resolves before falling back to the
+      identity dot under the point — a dot only ever completes a gesture
+      that no wire itself would claim. */
+  #targetAt(point: Vec2): ConnectionTarget | null {
+    const hit = wireManipulationHitTest(
+      this.#options.engine(),
+      point,
+      { scale: this.#options.viewScale() },
+    )
+    if (hit !== null) return wireEnd(hit)
+    const dot = this.#options.identityTarget?.(point) ?? null
+    return dot === null ? null : { identity: dot }
   }
 
   #issueClaim(claim: PointerClaim): PointerClaim {

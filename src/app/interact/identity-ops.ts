@@ -16,11 +16,12 @@ import { regionAt, wireManipulationHitTest } from '../hittest'
 import { headWireOf } from './wire-ops'
 import type { PointerClaim, PointerSample } from './viewport'
 
-/** What a press grabbed, in identity-rule vocabulary. */
+/** What a press grabbed, in identity-rule vocabulary. Every designation is a
+    wire or a node — never a port or an indexed leg (USER RULING
+    2026-08-20): ports are not things a gesture can name. */
 export type IdentityGrab =
   | { readonly kind: 'dot'; readonly node: NodeId }
   | { readonly kind: 'dotRim'; readonly node: NodeId }
-  | { readonly kind: 'leg'; readonly node: NodeId; readonly wire: WireId; readonly index: number }
   | { readonly kind: 'endDisc'; readonly node: NodeId; readonly wire: WireId }
 
 export type IdentityOpsOptions = {
@@ -132,13 +133,64 @@ export function fuseStep(d: Diagram, a: NodeId, b: NodeId): ProofStep {
   }
 }
 
+/** Fission `node` into two dots: `dragged` peels off onto a fresh dot
+    alongside `bridge` (the wire the gesture landed on), which stays a port
+    on the survivor too — `bridge` threads through both as the fission's
+    drawn bridge. */
+export function fissionStep(d: Diagram, node: NodeId, dragged: WireId, bridge: WireId): ProofStep {
+  const region = (d.nodes[node] as IdentityDiagramNode).region
+  const ports = portWires(d, node)
+  return {
+    rule: 'presentation',
+    input: {
+      region,
+      removeNodes: [node],
+      addNodes: {
+        [`${node}_a`]: [dragged, bridge],
+        [`${node}_b`]: ports.filter((w) => w !== dragged),
+      },
+    },
+  }
+}
+
+/** Duplicate `wire` onto `node`: the dot gains a second port on the same
+    wire. */
+export function duplicateStep(d: Diagram, node: NodeId, wire: WireId): ProofStep {
+  const region = (d.nodes[node] as IdentityDiagramNode).region
+  return {
+    rule: 'presentation',
+    input: { region, removeNodes: [node], addNodes: { [node]: [...portWires(d, node), wire] } },
+  }
+}
+
+/** Contract one of `wire`'s two ports on `node` back down to one. */
+export function contractStep(d: Diagram, node: NodeId, wire: WireId): ProofStep {
+  const region = (d.nodes[node] as IdentityDiagramNode).region
+  const ports = portWires(d, node)
+  const drop = ports.indexOf(wire)
+  return {
+    rule: 'presentation',
+    input: { region, removeNodes: [node], addNodes: { [node]: ports.filter((_, i) => i !== drop) } },
+  }
+}
+
+/** Identity nodes with a port on both `a` and `b` — the dots two wires'
+    strands cross at, dragged-strand-onto-strand fission's gate. */
+export function sharedDots(d: Diagram, a: WireId, b: WireId): readonly NodeId[] {
+  const nodesOn = (wire: WireId): Set<NodeId> => new Set(
+    (d.wires[wire]?.endpoints ?? [])
+      .filter((ep) => ep.port.kind === 'identity')
+      .map((ep) => ep.node),
+  )
+  const onA = nodesOn(a)
+  return [...nodesOn(b)].filter((node) => onA.has(node))
+}
+
 /**
  * The shared identity-rule gesture surface: grabs on an identity dot, its
- * rim, an attached leg, or (edit mode) an atom/ref end disc, dispatched by
- * object kind exactly as WireOpsDragController dispatches wire grabs. This
- * task implements the dot-into-open-space collapse row and the
- * dot-onto-dot fuse row; the remaining rows refuse with placeholder-free
- * messages naming their gesture until later tasks land them.
+ * rim, or (edit mode) an atom/ref end disc, dispatched by object kind
+ * exactly as WireOpsDragController dispatches wire grabs. Every gesture
+ * names a wire or a node — never a port or an indexed leg.
  */
 export class IdentityOpsController {
   readonly #options: IdentityOpsOptions
@@ -210,16 +262,6 @@ export class IdentityOpsController {
       if (Math.abs(distance - r) <= halo) return { kind: 'dotRim', node: body.id }
       if (distance < r - halo) return { kind: 'dot', node: body.id }
     }
-    const viewport = { scale: this.#options.viewScale() }
-    const manipulation = wireManipulationHitTest(engine, point, viewport)
-    if (manipulation !== null && manipulation.kind === 'endpoint' && manipulation.endpoint.port.kind === 'identity') {
-      return {
-        kind: 'leg',
-        node: manipulation.endpoint.node,
-        wire: manipulation.wire,
-        index: manipulation.endpoint.port.index,
-      }
-    }
     if (this.#options.claimEndDiscs) {
       const endDisc = this.#endDiscAt(point)
       if (endDisc !== null) return { kind: 'endDisc', node: endDisc.node, wire: endDisc.wire }
@@ -238,6 +280,19 @@ export class IdentityOpsController {
         if (target !== null && target !== grab.node) {
           this.#options.commit('presentation', [fuseStep(diagram, grab.node, target)], sample.client)
           return
+        }
+        const manipulation = wireManipulationHitTest(engine, point, viewport)
+        if (manipulation !== null) {
+          const ports = portWires(diagram, grab.node)
+          const count = ports.filter((w) => w === manipulation.wire).length
+          if (count >= 2) {
+            this.#options.commit('presentation', [contractStep(diagram, grab.node, manipulation.wire)], sample.client)
+            return
+          }
+          if (count === 1) {
+            this.#options.refuse('only a doubled leg contracts', sample.client)
+            return
+          }
         }
         if (!this.#isOpenSpace(point, viewport) || target !== null) {
           this.#options.refuse(
@@ -269,10 +324,6 @@ export class IdentityOpsController {
           instance: { kind: 'stub', base: grab.node, wire: 'w', end: 'w_end', region: dropRegion },
         }
         this.#options.commit('vacuity', [step], sample.client)
-        return
-      }
-      case 'leg': {
-        this.#options.refuse('release on the dot or one of its legs', sample.client)
         return
       }
       case 'endDisc': {

@@ -13,7 +13,7 @@ import { computeLegs } from '../../view/wires'
 import { length, sub } from '../../view/vec'
 import type { Vec2 } from '../../view/vec'
 import { wireManipulationHitTest } from '../hittest'
-import { exposeStep, identityDiscAt } from './identity-ops'
+import { duplicateStep, exposeStep, fissionStep, identityDiscAt, sharedDots } from './identity-ops'
 import type { PointerClaim, PointerSample } from './viewport'
 
 /** What a press grabbed, in the object vocabulary of the drag table. */
@@ -240,6 +240,15 @@ export class WireOpsDragController {
     const point = sample.world
     switch (grab.kind) {
       case 'strand': {
+        const dot = identityDiscAt(engine, point)
+        if (dot !== null) {
+          if (diagram.wires[grab.wire]!.endpoints.some((ep) => ep.node === dot)) {
+            this.#commit('presentation', duplicateStep(diagram, dot, grab.wire), sample)
+            return
+          }
+          this.#options.refuse('this line is not attached to that dot', sample.client)
+          return
+        }
         const disc = this.#discAt(point)
         if (disc !== null) {
           if (disc.wire === grab.wire) {
@@ -277,6 +286,15 @@ export class WireOpsDragController {
             `line '${manipulation.wire}' is already one identity`,
             sample.client,
           )
+          return
+        }
+        const shared = sharedDots(diagram, grab.wire, manipulation.wire)
+        if (shared.length > 1) {
+          this.#options.refuse('these lines meet at several dots', sample.client)
+          return
+        }
+        if (shared.length === 1) {
+          this.#commit('presentation', fissionStep(diagram, shared[0]!, grab.wire, manipulation.wire), sample)
           return
         }
         this.#commit('wireJoin', {

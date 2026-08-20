@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { WireOpsDragController } from '../../src/app/interact/wire-ops'
+import { duplicateStep, fissionStep } from '../../src/app/interact/identity-ops'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import type { Diagram } from '../../src/kernel/diagram/diagram'
+import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
 import { IOTA, relSig, type Sig } from '../../src/kernel/diagram/sig'
 import { applyAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import type { ProofStep } from '../../src/kernel/proof/step'
 import { mkEngine, type Engine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
+import { computeLegs } from '../../src/view/wires'
+import { length, sub } from '../../src/view/vec'
 import type { Vec2 } from '../../src/view/vec'
 import {
   endpointPoint,
@@ -68,6 +71,27 @@ function onlyStep(committed: readonly Committed[]): ProofStep {
   expect(committed).toHaveLength(1)
   expect(committed[0]!.steps).toHaveLength(1)
   return committed[0]!.steps[0]!
+}
+
+/** A point on `wire`'s own routed stroke that clears every identity dot's
+    disc and halo — a strand grab/drop point distinguishable from any dot
+    on the diagram, found by walking the actual computed geometry rather
+    than guessing coordinates. */
+function farStrandPoint(engine: Engine, wire: WireId): Vec2 {
+  const clear = (p: Vec2): boolean => {
+    for (const body of engine.bodies.values()) {
+      if (body.kind !== 'identity') continue
+      if (length(sub(p, body.pos)) <= body.discR * engine.scale + 6) return false
+    }
+    return true
+  }
+  for (const geometry of computeLegs(engine)) {
+    if (geometry.leg.wid !== wire) continue
+    for (const p of geometry.pts) {
+      if (clear(p)) return p
+    }
+  }
+  throw new Error(`no strand point on '${wire}' clears every identity dot`)
 }
 
 /**
@@ -607,5 +631,177 @@ describe('object-typed drag dispatch', () => {
     expect(h.committed).toEqual([])
     expect(h.refusals).toHaveLength(1)
     expect(h.diagram()).toBe(diagram)
+  })
+})
+
+/** Three wires meeting at an arity-3 dot at the root, each held by a pin. */
+function dotJoined3() {
+  const builder = new DiagramBuilder()
+  const dot = builder.identity(builder.root, IOTA, 3)
+  const a = builder.wire([{ node: dot, port: { kind: 'identity', index: 0 } }])
+  const aPin = builder.pin(a, builder.root)
+  const b = builder.wire([{ node: dot, port: { kind: 'identity', index: 1 } }])
+  const bPin = builder.pin(b, builder.root)
+  const c = builder.wire([{ node: dot, port: { kind: 'identity', index: 2 } }])
+  const cPin = builder.pin(c, builder.root)
+  const diagram = builder.build()
+  const engine = mkEngine(diagram, [])
+  engine.scale = 12
+  place(engine, dot, { x: 300, y: 300 })
+  place(engine, aPin, { x: 100, y: 300 })
+  place(engine, bPin, { x: 500, y: 300 })
+  place(engine, cPin, { x: 300, y: 540 })
+  return { diagram, engine, dot, a, b, c }
+}
+
+/** Two wires `a` and `c` each threading through both `dot1` and `dot2` —
+    their strands share two identity dots, not one. */
+function ladderedDots() {
+  const builder = new DiagramBuilder()
+  const dot1 = builder.identity(builder.root, IOTA, 2)
+  const dot2 = builder.identity(builder.root, IOTA, 2)
+  const a = builder.wire([
+    { node: dot1, port: { kind: 'identity', index: 0 } },
+    { node: dot2, port: { kind: 'identity', index: 0 } },
+  ])
+  const aPin = builder.pin(a, builder.root)
+  const c = builder.wire([
+    { node: dot1, port: { kind: 'identity', index: 1 } },
+    { node: dot2, port: { kind: 'identity', index: 1 } },
+  ])
+  const cPin = builder.pin(c, builder.root)
+  const diagram = builder.build()
+  const engine = mkEngine(diagram, [])
+  engine.scale = 12
+  place(engine, dot1, { x: 300, y: 300 })
+  place(engine, dot2, { x: 300, y: 600 })
+  place(engine, aPin, { x: 100, y: 450 })
+  place(engine, cPin, { x: 500, y: 450 })
+  return { diagram, engine, dot1, dot2, a, c }
+}
+
+/** A single-port dot on wire `a`. */
+function singleDot() {
+  const builder = new DiagramBuilder()
+  const dot = builder.identity(builder.root, IOTA, 1)
+  const a = builder.wire([{ node: dot, port: { kind: 'identity', index: 0 } }])
+  const aPin = builder.pin(a, builder.root)
+  const diagram = builder.build()
+  const engine = mkEngine(diagram, [])
+  engine.scale = 12
+  place(engine, dot, { x: 300, y: 300 })
+  place(engine, aPin, { x: 100, y: 300 })
+  return { diagram, engine, dot, a }
+}
+
+describe('fission: strand dragged onto another strand sharing a dot', () => {
+  it('exactly one shared dot fissions it into two dots, the target wire becoming the bridge', () => {
+    const { diagram, engine, dot, a, b, c } = dotJoined3()
+    const from = farStrandPoint(engine, a)
+    const to = farStrandPoint(engine, c)
+    const h = harness(diagram, engine)
+
+    drag(h.controller, from, to)
+
+    expect(h.refusals).toEqual([])
+    expect(h.committed).toHaveLength(1)
+    expect(h.committed[0]!.steps).toEqual([fissionStep(diagram, dot, a, c)])
+    const after = h.diagram()
+    expect(Object.keys(after.wires).sort()).toEqual([a, b, c].sort())
+    const identities = Object.entries(after.nodes).filter(([, n]) => n.kind === 'identity' && n.arity >= 2)
+    expect(identities).toHaveLength(2)
+    const portSets = identities.map(([id]) =>
+      Object.entries(after.wires)
+        .filter(([, w]) => w.endpoints.some((ep) => ep.node === id))
+        .map(([wid]) => wid)
+        .sort())
+    expect(portSets.sort()).toEqual([[a, c].sort(), [b, c].sort()].sort())
+  })
+
+  it('refuses when the strands share several dots', () => {
+    const { diagram, engine, a, c } = ladderedDots()
+    const from = farStrandPoint(engine, a)
+    const to = farStrandPoint(engine, c)
+    const h = harness(diagram, engine)
+
+    drag(h.controller, from, to)
+
+    expect(h.committed).toEqual([])
+    expect(h.refusals).toEqual(['these lines meet at several dots'])
+  })
+
+  it('strands sharing no dot still commit wireJoin, unregressed', () => {
+    // A cut, matching every other wireJoin test in this file: joining is
+    // gated off at the root in the forward orientation (inner scope must
+    // be negative).
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const dotA = builder.identity(cut, IOTA, 1)
+    const left = builder.wire([{ node: dotA, port: { kind: 'identity', index: 0 } }])
+    const leftPin = builder.pin(left, cut)
+    const dotC = builder.identity(cut, IOTA, 1)
+    const right = builder.wire([{ node: dotC, port: { kind: 'identity', index: 0 } }])
+    const rightPin = builder.pin(right, cut)
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    engine.scale = 12
+    place(engine, dotA, { x: 100, y: 100 })
+    place(engine, leftPin, { x: 100, y: 400 })
+    place(engine, dotC, { x: 500, y: 100 })
+    place(engine, rightPin, { x: 500, y: 400 })
+    const from = farStrandPoint(engine, left)
+    const to = farStrandPoint(engine, right)
+    const h = harness(diagram, engine)
+
+    drag(h.controller, from, to)
+
+    expect(h.refusals).toEqual([])
+    expect(onlyStep(h.committed)).toEqual({
+      rule: 'wireJoin',
+      input: { a: left, b: right },
+    })
+  })
+})
+
+describe('duplicate: strand dragged onto an identity dot it is attached to', () => {
+  it('duplicates the wire onto the dot', () => {
+    const { diagram, engine, dot, a } = singleDot()
+    const from = farStrandPoint(engine, a)
+    const to = engine.bodies.get(dot)!.pos
+    const h = harness(diagram, engine)
+
+    drag(h.controller, from, to)
+
+    expect(h.refusals).toEqual([])
+    expect(h.committed[0]!.steps).toEqual([duplicateStep(diagram, dot, a)])
+    const after = h.diagram()
+    expect(after.nodes[dot]).toMatchObject({ kind: 'identity', arity: 2 })
+    const onDot = after.wires[a]!.endpoints.filter((ep) => ep.node === dot)
+    expect(onDot).toHaveLength(2)
+  })
+
+  it('refuses dropping on a dot the strand is not attached to', () => {
+    const builder = new DiagramBuilder()
+    const dot = builder.identity(builder.root, IOTA, 1)
+    const a = builder.wire([{ node: dot, port: { kind: 'identity', index: 0 } }])
+    const aPin = builder.pin(a, builder.root)
+    const other = builder.identity(builder.root, IOTA, 1)
+    const b = builder.wire([{ node: other, port: { kind: 'identity', index: 0 } }])
+    const bPin = builder.pin(b, builder.root)
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    engine.scale = 12
+    place(engine, dot, { x: 300, y: 300 })
+    place(engine, aPin, { x: 100, y: 300 })
+    place(engine, other, { x: 700, y: 300 })
+    place(engine, bPin, { x: 900, y: 300 })
+    const from = farStrandPoint(engine, a)
+    const to = engine.bodies.get(other)!.pos
+    const h = harness(diagram, engine)
+
+    drag(h.controller, from, to)
+
+    expect(h.committed).toEqual([])
+    expect(h.refusals).toEqual(['this line is not attached to that dot'])
   })
 })

@@ -22,7 +22,14 @@ import { buildSelection, wireManipulationHitTest, type Hit } from '../hittest'
 import { ConnectionDragController } from './connection'
 import { CopyDragController } from './copy'
 import { copyDestinationPreview, copySelectionPreview } from './copy-view'
-import { applyIdentitySteps, IdentityOpsController } from './identity-ops'
+import {
+  applyIdentitySteps,
+  duplicateStep,
+  fissionStep,
+  identityDiscAt,
+  IdentityOpsController,
+  sharedDots,
+} from './identity-ops'
 import { SlashController } from './slash'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 import type { CopyDestination, CopyPlan } from '../copy-planner'
@@ -117,11 +124,35 @@ export class ConstructController {
       engine: options.engine,
       viewScale: options.viewScale,
       theme: options.theme,
+      identityTarget: (point) => identityDiscAt(options.engine(), point),
       commit: (gesture, pointer) => {
         const { source, target } = gesture
+        if ('identity' in target) {
+          const diagram = this.#options.diagram()
+          if (!diagram.wires[source.wire]!.endpoints.some((ep) => ep.node === target.identity)) {
+            this.#options.refuse('this line is not attached to that dot', pointer)
+            return false
+          }
+          return this.#tryCommit(
+            () => applyIdentitySteps(diagram, [duplicateStep(diagram, target.identity, source.wire)]),
+            'line duplicated onto the dot',
+          )
+        }
         if (source.wire === target.wire) {
           this.#options.refuse('release on another line to join', pointer)
           return false
+        }
+        const diagram = this.#options.diagram()
+        const shared = sharedDots(diagram, source.wire, target.wire)
+        if (shared.length > 1) {
+          this.#options.refuse('these lines meet at several dots', pointer)
+          return false
+        }
+        if (shared.length === 1) {
+          return this.#tryCommit(
+            () => applyIdentitySteps(diagram, [fissionStep(diagram, shared[0]!, source.wire, target.wire)]),
+            'line fissioned off the shared dot',
+          )
         }
         return this.#tryCommit(() => joinWires(this.#options.diagram(), [source.wire, target.wire]), 'lines joined — one individual now')
       },

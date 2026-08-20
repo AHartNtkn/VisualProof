@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { IdentityOpsController, applyIdentitySteps, collapseStep, exposeStep, fuseStep } from '../../src/app/interact/identity-ops'
+import {
+  IdentityOpsController,
+  applyIdentitySteps,
+  collapseStep,
+  contractStep,
+  exposeStep,
+  fuseStep,
+} from '../../src/app/interact/identity-ops'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { IOTA, relSig } from '../../src/kernel/diagram/sig'
@@ -11,6 +18,7 @@ import { LIGHT } from '../../src/view/paint'
 import type { Vec2 } from '../../src/view/vec'
 import { farBlank, place, placeRegion, pointerSample } from './helpers/gesture'
 import { segment } from './helpers/build'
+import { wireManipulationHitTest } from '../../src/app/hittest'
 
 const BINARY = relSig([IOTA, IOTA])
 
@@ -29,6 +37,38 @@ function dotJoined() {
   place(engine, aPin, { x: 100, y: 300 })
   place(engine, bPin, { x: 500, y: 300 })
   return { diagram, engine, dot, a, b, aPin, bPin }
+}
+
+/** An arity-2 dot with one wire `a` doubled onto both its ports, plus a pin
+    so `a` has a strand away from the dot to drop onto. The junction is
+    pinned explicitly (mkEngine seeds it from the pre-`place()` spiral
+    layout, which `place()` never revisits) so the strand runs the straight
+    line from the dot toward the pin. */
+function doubledLegDot() {
+  const builder = new DiagramBuilder()
+  const dot = builder.identity(builder.root, IOTA, 2)
+  const a = builder.wire([
+    { node: dot, port: { kind: 'identity', index: 0 } },
+    { node: dot, port: { kind: 'identity', index: 1 } },
+  ])
+  const aPin = builder.pin(a, builder.root)
+  const diagram = builder.build()
+  const engine = mkEngine(diagram, [])
+  engine.scale = 12
+  place(engine, dot, { x: 300, y: 300 })
+  place(engine, aPin, { x: 100, y: 300 })
+  engine.wires.get(a)!.net.junctions = [{ x: 200, y: 300 }]
+  return { diagram, engine, dot, a, aPin }
+}
+
+/** A strand point on `wire`, found by asking the same hit-test the drop
+    dispatch itself uses (never a hardcoded/guessed coordinate). */
+function strandPoint(engine: Engine, wire: string, near: Vec2): Vec2 {
+  const hit = wireManipulationHitTest(engine, near, { scale: 1 })
+  if (hit === null || hit.wire !== wire) {
+    throw new Error(`no strand hit for '${wire}' near (${near.x},${near.y})`)
+  }
+  return near
 }
 
 /** Two arity-2 dots bridged by a shared wire: `a—●1—c—●2—b`, each outer end
@@ -278,6 +318,55 @@ describe('expose: an atom/ref end dragged onto an identity dot on this wire (edi
     expect(h.committed).toHaveLength(1)
     const step = h.committed[0]!.steps[0]!
     expect(step.rule).toBe('presentation')
+  })
+})
+
+describe('contract: dot dragged onto the strand of one of its doubled wires', () => {
+  it('commits a presentation step that drops one of the doubled ports', () => {
+    const { diagram, engine, dot, a } = doubledLegDot()
+    const h = harness(diagram, engine)
+    const to = strandPoint(engine, a, { x: 230, y: 300 })
+    drag(h.controller, { x: 300, y: 300 }, to)
+    expect(h.refusals).toEqual([])
+    expect(h.committed).toHaveLength(1)
+    expect(h.committed[0]!.steps).toEqual([contractStep(diagram, dot, a)])
+    const after = h.diagram()
+    const node = after.nodes[dot]
+    expect(node).toMatchObject({ kind: 'identity', arity: 1 })
+    const onDot = after.wires[a]!.endpoints.filter((ep) => ep.node === dot)
+    expect(onDot).toHaveLength(1)
+  })
+
+  it('refuses dropping the dot on the strand of a single-leg attached wire', () => {
+    const { diagram, engine, a } = dotJoined()
+    const h = harness(diagram, engine)
+    const to = strandPoint(engine, a, { x: 200, y: 300 })
+    drag(h.controller, { x: 300, y: 300 }, to)
+    expect(h.committed).toEqual([])
+    expect(h.refusals).toEqual(['only a doubled leg contracts'])
+  })
+
+  it('refuses dropping the dot on the strand of a wire that is not attached to it', () => {
+    const builder = new DiagramBuilder()
+    const dot = builder.identity(builder.root, IOTA, 2)
+    const a = builder.wire([{ node: dot, port: { kind: 'identity', index: 0 } }])
+    const aPin = builder.pin(a, builder.root)
+    const b = builder.wire([{ node: dot, port: { kind: 'identity', index: 1 } }])
+    const bPin = builder.pin(b, builder.root)
+    const stray = segment(builder, builder.root)
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    engine.scale = 12
+    place(engine, dot, { x: 300, y: 300 })
+    place(engine, aPin, { x: 100, y: 300 })
+    place(engine, bPin, { x: 500, y: 300 })
+    place(engine, stray.ends[0], { x: 100, y: 700 })
+    place(engine, stray.ends[1], { x: 500, y: 700 })
+    const strand = strandPoint(engine, stray.wire, { x: 300, y: 700 })
+    const h = harness(diagram, engine)
+    drag(h.controller, { x: 300, y: 300 }, strand)
+    expect(h.committed).toEqual([])
+    expect(h.refusals).toEqual(['release in open space to collapse, or on another dot to fuse'])
   })
 })
 
