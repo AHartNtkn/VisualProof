@@ -14,5 +14,9 @@ run_meta Lean.compileDecls #[
   ``VisualProof.Rule.DoubleCut.runForward,
   ``VisualProof.Rule.DoubleCut.runBackward,
   ``VisualProof.Rule.Vacuity.runForward,
-  ``VisualProof.Rule.Vacuity.runBackward
+  ``VisualProof.Rule.Vacuity.runBackward,
+  ``VisualProof.Rule.Presentation.runForward,
+  ``VisualProof.Rule.Presentation.runBackward,
+  ``VisualProof.Rule.Identification.runForward,
+  ``VisualProof.Rule.Identification.runBackward
 ]

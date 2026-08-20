@@ -3,9 +3,11 @@
 ## Objective
 
 Use recursive `OpenDiagram` syntax as the only execution representation. For
-each of the five constructors of `Rule.Step`, define a computable forward
-runner and a computable backward runner whose source-indexed inputs identify
-one already-selected rule instance.
+each executable rule family—erasure, wire severance, iteration, double cut,
+vacuity, presentation, and identification—define a computable forward runner
+and a computable backward runner whose source-indexed inputs identify one
+already-selected rule instance. Comprehension remains a structurally recursive
+mathematical relation with semantic soundness and no runner.
 
 ## Required Theorems
 
@@ -42,6 +44,7 @@ isomorphic diagram.
 
 ## Completion Oracle
 
-The obsolete execution closure is absent; all ten runners compile; all ten
-exact iff theorems and ten endpoint-isomorphism closure theorems are
-kernel-checked; the strict module checks, source audits, and full build pass.
+All fourteen runners compile; all fourteen exact iff theorems and fourteen
+endpoint-isomorphism closure theorems are kernel-checked; all eight `Step`
+constructors dispatch through kernel-checked soundness; the strict module
+checks, source audits, and full build pass.

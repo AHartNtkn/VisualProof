@@ -68,7 +68,7 @@ audit_rules() {
 
 audit_roster() {
   local step="$repo_root/VisualProof/Rule/Step.lean"
-  local expected=$'erasure\nwireSever\niteration\ndoubleCut\nvacuity'
+  local expected=$'erasure\nwireSever\niteration\ndoubleCut\ncomprehension\nvacuity\npresentation\nidentification'
   local actual
   actual=$(awk '
     /^inductive Step / { inside = 1; next }
@@ -86,11 +86,7 @@ audit_roster() {
       "$expected" "$actual" >&2
     return 1
   fi
-  if rg -n '\|[[:space:]]*comprehension\b' "$step"; then
-    printf 'Comprehension must remain outside Rule.Step\n' >&2
-    return 1
-  fi
-  printf 'roster: exact five Rule.Step constructors; Comprehension remains separate\n'
+  printf 'roster: exact eight Rule.Step constructors\n'
 }
 
 audit_implementation() {
@@ -110,7 +106,7 @@ audit_implementation() {
     "$root" "$umbrella" || true)
 
   local rule file declaration
-  for rule in Erasure WireSever Iteration DoubleCut Vacuity; do
+  for rule in Erasure WireSever Iteration DoubleCut Vacuity Presentation Identification; do
     file="$root/$rule.lean"
     if [[ ! -f $file ]]; then
       printf 'missing executable rule module: %s\n' "$rule"

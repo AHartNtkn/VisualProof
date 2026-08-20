@@ -3,3 +3,5 @@ import VisualProof.Rule.Executable.WireSever
 import VisualProof.Rule.Executable.Iteration
 import VisualProof.Rule.Executable.DoubleCut
 import VisualProof.Rule.Executable.Vacuity
+import VisualProof.Rule.Executable.Presentation
+import VisualProof.Rule.Executable.Identification

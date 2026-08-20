@@ -4,11 +4,12 @@ import VisualProof
 Public trust audit for recursive diagram semantics and rule soundness.
 -/
 
-#print axioms VisualProof.Diagram.iso_denotation
+#print axioms VisualProof.Diagram.RegionIso.denotation
 #print axioms VisualProof.Diagram.Region.denote_spliceAt
 #print axioms VisualProof.Diagram.denoteItem_identity
 
 #print axioms VisualProof.Rule.Step.sound
+#print axioms VisualProof.Rule.Comprehension.sound
 
 #print axioms VisualProof.Rule.Erasure.forward_exact
 #print axioms VisualProof.Rule.Erasure.backward_exact
@@ -34,3 +35,13 @@ Public trust audit for recursive diagram semantics and rule soundness.
 #print axioms VisualProof.Rule.Vacuity.backward_exact
 #print axioms VisualProof.Rule.Vacuity.respectsTargetIso
 #print axioms VisualProof.Rule.Vacuity.backward_respectsTargetIso
+
+#print axioms VisualProof.Rule.Presentation.forward_exact
+#print axioms VisualProof.Rule.Presentation.backward_exact
+#print axioms VisualProof.Rule.Presentation.respectsTargetIso
+#print axioms VisualProof.Rule.Presentation.backward_respectsTargetIso
+
+#print axioms VisualProof.Rule.Identification.forward_exact
+#print axioms VisualProof.Rule.Identification.backward_exact
+#print axioms VisualProof.Rule.Identification.respectsTargetIso
+#print axioms VisualProof.Rule.Identification.backward_respectsTargetIso

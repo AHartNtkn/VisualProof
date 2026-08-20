@@ -118,7 +118,7 @@
   - `point`: insert/delete one arity-0 identity node of a declared signature at one selected region;
   - `stub`: extend one existing identity node by one port and a fresh typed wire ending at one fresh unary identity at-or-below the base node's region, or retract that exact shape;
   - `pin`: attach one fresh unary identity to one existing visible wire, or detach that exact identity only when the surviving incidences retain the wire's DCA and two-end floor.
-- The general vacuous-assembly result is a decomposition corollary over finite compositions of these primitives, identification exposure/collapse, and presentation invariance. It is not a primitive relation, runner index, or acceptance procedure.
+- The public vacuity closure consists of the three primitive families, identification exposure/collapse, and presentation invariance. No component graph or whole-assembly acceptance authority enters the calculus.
 - Presentation replaces one-region, one-signature identity configurations that generate the same finite equivalence relation on the same wires, preserving at least one regional port per member and two incidences per wire.
 - Identification collapses or exposes one or more wires at an equality node, retaining that node, with absorbed wire DCA exactly the node region and a nonempty set of non-identity incidences transferred for every absorbed wire. A wire whose only incidences are duplicate ports on that identity node belongs to vacuity instead; redundant same-wire ports whose removal leaves the wire valid belong to presentation invariance.
 
@@ -128,11 +128,10 @@
 - [ ] Implement two direct runner directions for each family and prove exact iff coverage plus both target-isomorphism closure laws.
 - [ ] Prove vacuity equivalence separately for point, stub, and pin: inhabitedness plus truth conjunction for point, one-point existential elimination for stub, and reflexivity for pin. Prove endpoint validity and surviving-wire scope preservation from each primitive's stated conditions.
 - [ ] Prove presentation equality-relation invariance and identification's one-point principle.
-- [ ] After all three primitive families are GREEN, state and prove the generic assembly decomposition as a finite-step corollary by reversing the accepting absorption sequence. The corollary may consume point/stub/pin, identification, and presentation steps; it must not add another executable rule.
 - [ ] Add distinct `Step.vacuity`, `Step.presentation`, and `Step.identification` constructors and update `Step.iso`.
 - [ ] Strict-check each family independently, scan for target/search/normalization/raised limits, and commit each independently.
 
-**Architecture gate:** vacuity execution is exactly one point, stub, or pin operation. If implementing it requires a component graph, absorption fixpoint, recursive assembly edit, target search, or overlap with wire join/sever, stop and correct the rule boundary. The assembly theorem belongs only to the later proof closure.
+**Architecture gate:** vacuity execution is exactly one point, stub, or pin operation. If implementing it requires a component graph, absorption fixpoint, recursive assembly edit, target search, or overlap with wire join/sever, stop and correct the rule boundary.
 
 ### Task 5: Replace comprehension with typed relation-wire instantiation
 

@@ -151,7 +151,7 @@ theorem Local.nested_denotes_iff
 
 /-- Higher-order iteration and deiteration preserve denotation in either
 direction. -/
-theorem Iteration.sound
+theorem sound
     {source target : OpenDiagram boundary}
     (step : Rule.Iteration source target) :
     ∀ (model : Model) (args : Values model boundary),

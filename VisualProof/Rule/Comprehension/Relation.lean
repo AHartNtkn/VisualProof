@@ -8,209 +8,144 @@ open Diagram
 
 namespace Comprehension
 
-inductive Image (targetRels : RelCtx) : Nat → Type
-  | variable
-      (relation : RelVar targetRels arity) :
-      Image targetRels arity
-  | diagram
-      (pattern : OpenDiagram arity) :
-      Image targetRels arity
+/-- Insert one relation wire between two local-context fragments. -/
+def localRetain (before after : List Sig) (arguments : List Sig) :
+    WireRenaming (before ++ after) (before ++ (.rel arguments :: after)) :=
+  ⟨Var.appendMap
+    (fun wire => wire.appendLeft (.rel arguments :: after))
+    (fun wire => Var.appendRight before (.there wire))⟩
 
-abbrev Mapping (sourceRels targetRels : RelCtx) :=
-  {arity : Nat} →
-    RelVar sourceRels arity →
-    Image targetRels arity
+/-- Embed the retained outer and local wires into the quantified context. -/
+def retain (outer before after : List Sig) (arguments : List Sig) :
+    WireRenaming (outer ++ (before ++ after))
+      (outer ++ (before ++ (.rel arguments :: after))) :=
+  ⟨Var.appendMap
+    (fun wire => wire.appendLeft (before ++ (.rel arguments :: after)))
+    (fun wire => Var.appendRight outer
+      (localRetain before after arguments wire))⟩
 
-def Image.weaken
-    (head : Nat)
-    {arity : Nat} :
-    Image targetRels arity →
-      Image (head :: targetRels) arity
-  | .variable relation =>
-      .variable
-        (RelationRenaming.weaken head relation)
-  | .diagram pattern =>
-      .diagram pattern
+/-- The exact locally bound relation wire discharged by comprehension. -/
+def selected (outer before after : List Sig) (arguments : List Sig) :
+    Var (outer ++ (before ++ (.rel arguments :: after))) (.rel arguments) :=
+  Var.appendRight outer (Var.appendRight before .here)
 
-def Mapping.lift
-    (mapping : Mapping sourceRels targetRels)
-    (head : Nat) :
-    Mapping (head :: sourceRels) (head :: targetRels) :=
-  fun {arity} relation =>
-    match relation with
-    | ⟨index, hasArity⟩ =>
-        Fin.cases
-          (motive := fun i =>
-            (head :: sourceRels).get i = arity →
-              Image (head :: targetRels) arity)
-          (fun equality =>
-            .variable ⟨0, equality⟩)
-          (fun tailIndex equality =>
-            Image.weaken head
-              (mapping
-                (⟨tailIndex, equality⟩ :
-                  RelVar sourceRels arity)))
-          index hasArity
-
-def Mapping.instantiateHead
-    (pattern : OpenDiagram relationArity) :
-    Mapping (relationArity :: rels) rels :=
-  fun {arity} relation =>
-    match relation with
-    | ⟨index, hasArity⟩ =>
-        Fin.cases
-          (motive := fun i =>
-            (relationArity :: rels).get i = arity →
-              Image rels arity)
-          (fun equality =>
-            .diagram (pattern.castArity equality))
-          (fun tailIndex equality =>
-            .variable
-              (⟨tailIndex, equality⟩ :
-                RelVar rels arity))
-          index hasArity
-
-def singleton
-    (item : Item wires rels) :
-    Region wires rels :=
-  .mk 0 (.cons item .nil)
+/-- A pattern-boundary attachment. Surjectivity of the pattern boundary makes
+this assignment determine every external pattern wire. -/
+structure BoundaryAssignment (pattern : OpenDiagram arguments)
+    (targetWires : List Sig) where
+  wire : WireRenaming pattern.external targetWires
 
 namespace Instantiation
 
 mutual
-  inductive RegionResult :
-      {sourceRels targetRels : RelCtx} →
-      Mapping sourceRels targetRels →
-      {wires : Nat} →
-      Region wires sourceRels →
-      Region wires targetRels →
-      Prop
+  /-- Recursive instantiation under cuts. The selected relation remains an
+  inherited wire; locally bound wires are retained exactly. -/
+  inductive RegionResult (pattern : OpenDiagram arguments) :
+      {sourceWires targetWires : List Sig} →
+      WireRenaming targetWires sourceWires →
+      Var sourceWires (.rel arguments) →
+      Region sourceWires → Region targetWires → Prop
     | mk
-        {mapping : Mapping sourceRels targetRels}
-        {localWires : Nat}
-        {items : ItemSeq (wires + localWires) sourceRels}
-        {result : Region (wires + localWires) targetRels}
-        (items_result :
-          ItemsResult mapping items result) :
-        RegionResult mapping
-          (.mk localWires items)
-          (Region.adjoinAt localWires .nil result)
+        {retain : WireRenaming targetWires sourceWires}
+        {selected : Var sourceWires (.rel arguments)}
+        {locals : List Sig}
+        {items : ItemSeq (sourceWires ++ locals)}
+        {result : Region (targetWires ++ locals)}
+        (itemsResult : ItemsResult pattern (retain.appendRight locals)
+          (selected.appendLeft locals) items result) :
+        RegionResult pattern retain selected (.mk locals items)
+          (Region.adjoinAt locals .nil result)
 
-  inductive ItemsResult :
-      {sourceRels targetRels : RelCtx} →
-      Mapping sourceRels targetRels →
-      {wires : Nat} →
-      ItemSeq wires sourceRels →
-      Region wires targetRels →
-      Prop
+  /-- An item sequence becomes a conjunction of its instantiated item
+  regions. This is structural proof evidence, not a second syntax. -/
+  inductive ItemsResult (pattern : OpenDiagram arguments) :
+      {sourceWires targetWires : List Sig} →
+      WireRenaming targetWires sourceWires →
+      Var sourceWires (.rel arguments) →
+      ItemSeq sourceWires → Region targetWires → Prop
     | nil
-        {mapping : Mapping sourceRels targetRels} :
-        ItemsResult mapping .nil Region.blank
+        {retain : WireRenaming targetWires sourceWires}
+        {selected : Var sourceWires (.rel arguments)} :
+        ItemsResult pattern retain selected .nil (Region.blank targetWires)
     | cons
-        {mapping : Mapping sourceRels targetRels}
-        {item : Item wires sourceRels}
-        {tail : ItemSeq wires sourceRels}
-        {itemResult tailResult : Region wires targetRels}
-        (item_result :
-          ItemResult mapping item itemResult)
-        (tail_result :
-          ItemsResult mapping tail tailResult) :
-        ItemsResult mapping
-          (.cons item tail)
+        {retain : WireRenaming targetWires sourceWires}
+        {selected : Var sourceWires (.rel arguments)}
+        {item : Item sourceWires} {tail : ItemSeq sourceWires}
+        {itemResult tailResult : Region targetWires}
+        (itemEvidence : ItemResult pattern retain selected item itemResult)
+        (tailEvidence : ItemsResult pattern retain selected tail tailResult) :
+        ItemsResult pattern retain selected (.cons item tail)
           (itemResult.conjoin tailResult)
 
-  inductive ItemResult :
-      {sourceRels targetRels : RelCtx} →
-      Mapping sourceRels targetRels →
-      {wires : Nat} →
-      Item wires sourceRels →
-      Region wires targetRels →
-      Prop
-    | atomVariable
-        {mapping : Mapping sourceRels targetRels}
-        {arity : Nat}
-        {relation : RelVar sourceRels arity}
-        {arguments : Fin arity → Fin wires}
-        (mapped : RelVar targetRels arity)
-        (image :
-          mapping relation = Image.variable mapped) :
-        ItemResult mapping
-          (.atom relation arguments)
-          (singleton (.atom mapped arguments))
-
-    | atomDiagram
-        {mapping : Mapping sourceRels targetRels}
-        {arity : Nat}
-        {relation : RelVar sourceRels arity}
-        {arguments : Fin arity → Fin wires}
-        (pattern : OpenDiagram arity)
-        (image :
-          mapping relation = Image.diagram pattern)
-        (assignment :
-          BoundaryAssignment pattern (Fin wires))
-        (arguments_eq :
-          assignment.args = arguments) :
-        ItemResult mapping
-          (.atom relation arguments)
-          ((pattern.substituteBoundary assignment).renameRelations
-            RelationRenaming.empty)
-
+  /-- One source item either uses only retained wires, expands an application
+  headed by the selected relation wire, or recursively instantiates a cut. -/
+  inductive ItemResult (pattern : OpenDiagram arguments) :
+      {sourceWires targetWires : List Sig} →
+      WireRenaming targetWires sourceWires →
+      Var sourceWires (.rel arguments) →
+      Item sourceWires → Region targetWires → Prop
+    | atom
+        {retain : WireRenaming targetWires sourceWires}
+        {selected : Var sourceWires (.rel arguments)}
+        (head : Var targetWires (.rel atomArguments))
+        (ports : Vars targetWires atomArguments) :
+        ItemResult pattern retain selected
+          (.atom (retain head) (ports.map (fun wire => retain wire)))
+          (Region.singleton (.atom head ports))
+    | selectedAtom
+        {retain : WireRenaming targetWires sourceWires}
+        {selected : Var sourceWires (.rel arguments)}
+        (assignment : BoundaryAssignment pattern targetWires) :
+        ItemResult pattern retain selected
+          (.atom selected
+            ((pattern.boundaryWire.map
+              (fun wire => assignment.wire wire)).map
+                (fun wire => retain wire)))
+          (pattern.body.renameWires assignment.wire)
     | identity
-        {mapping : Mapping sourceRels targetRels}
-        (arity : Nat)
-        (arguments : Fin arity → Fin wires) :
-        ItemResult mapping
-          (.identity arity arguments)
-          (singleton (.identity arity arguments))
-
+        {retain : WireRenaming targetWires sourceWires}
+        {selected : Var sourceWires (.rel arguments)}
+        (signature : Sig) (arity : Nat)
+        (ports : Fin arity → Var targetWires signature) :
+        ItemResult pattern retain selected
+          (.identity signature arity (fun index => retain (ports index)))
+          (Region.singleton (.identity signature arity ports))
     | cut
-        {mapping : Mapping sourceRels targetRels}
-        {body : Region wires sourceRels}
-        {result : Region wires targetRels}
-        (body_result :
-          RegionResult mapping body result) :
-        ItemResult mapping
-          (.cut body)
-          (singleton (.cut result))
-
-    | bubble
-        {mapping : Mapping sourceRels targetRels}
-        (arity : Nat)
-        {body : Region wires (arity :: sourceRels)}
-        {result : Region wires (arity :: targetRels)}
-        (body_result :
-          RegionResult (mapping.lift arity) body result) :
-        ItemResult mapping
-          (.bubble arity body)
-          (singleton (.bubble arity result))
+        {retain : WireRenaming targetWires sourceWires}
+        {selected : Var sourceWires (.rel arguments)}
+        {body : Region sourceWires} {result : Region targetWires}
+        (bodyEvidence : RegionResult pattern retain selected body result) :
+        ItemResult pattern retain selected (.cut body)
+          (Region.singleton (.cut result))
 end
 
 end Instantiation
 
-def Instantiates
-    (pattern : OpenDiagram relationArity)
-    (quantified : Region wires (relationArity :: rels))
-    (specialized : Region wires rels) :
-    Prop :=
-  Instantiation.RegionResult
-    (Mapping.instantiateHead pattern)
-    quantified specialized
+/-- Exact structural evidence that removes one locally bound relation wire and
+instantiates every application headed by it with the supplied open pattern. -/
+inductive Instantiates
+    (pattern : OpenDiagram arguments) (before after : List Sig) :
+    Region outer → Region outer → Prop
+  | mk
+      {items : ItemSeq
+        (outer ++ (before ++ (.rel arguments :: after)))}
+      {result : Region (outer ++ (before ++ after))}
+      (itemsResult : Instantiation.ItemsResult pattern
+        (retain outer before after arguments)
+        (selected outer before after arguments) items result) :
+      Instantiates pattern before after
+        (.mk (before ++ (.rel arguments :: after)) items)
+        (Region.adjoinAt (before ++ after) .nil result)
 
+/-- Positive comprehension generalizes a specialized region by one local
+relation wire. Context polarity supplies the contravariant direction. -/
 inductive Local : LocalRule
   | comprehend
-      (hostLocal : Nat)
-      (hostItems : ItemSeq (wires + hostLocal) rels)
-      (relationArity : Nat)
-      (pattern : OpenDiagram relationArity)
-      (body : Region materialWires (relationArity :: materialRels))
-      (specialized : Region materialWires materialRels)
-      (instantiates : Instantiates pattern body specialized)
-      (wireMap : Fin materialWires → Fin (wires + hostLocal))
-      (relationMap : RelationRenaming materialRels rels) :
-      Local
-        (Region.spliceAt hostLocal hostItems specialized wireMap relationMap)
-        (Region.spliceAt hostLocal hostItems
-          (singleton (.bubble relationArity body)) wireMap relationMap)
+      (arguments before after : List Sig)
+      (pattern : OpenDiagram arguments)
+      {quantified specialized : Region wires}
+      (instantiates : Instantiates pattern before after quantified specialized) :
+      Local specialized quantified
 
 end Comprehension
 
