@@ -2,6 +2,7 @@ import type { Endpoint, RegionId, WireId } from '../../../src/kernel/diagram/dia
 import type { PointerSample } from '../../../src/app/interact/viewport'
 import { pkey, type Engine } from '../../../src/view/engine'
 import { computeLegs } from '../../../src/view/wires'
+import { length, sub } from '../../../src/view/vec'
 import type { Vec2 } from '../../../src/view/vec'
 
 export function pointerSample(point: Vec2, button = 0): PointerSample {
@@ -61,4 +62,25 @@ export function endpointPoint(
 
 export function farBlank(): Vec2 {
   return { x: 4000, y: 4000 }
+}
+
+/** A point on `wire`'s own routed stroke that clears every identity dot's
+    disc and halo — a strand grab/drop point distinguishable from any dot
+    on the diagram, found by walking the actual computed geometry rather
+    than guessing coordinates. */
+export function farStrandPoint(engine: Engine, wire: WireId): Vec2 {
+  const clear = (p: Vec2): boolean => {
+    for (const body of engine.bodies.values()) {
+      if (body.kind !== 'identity') continue
+      if (length(sub(p, body.pos)) <= body.discR * engine.scale + 6) return false
+    }
+    return true
+  }
+  for (const geometry of computeLegs(engine)) {
+    if (geometry.leg.wid !== wire) continue
+    for (const p of geometry.pts) {
+      if (clear(p)) return p
+    }
+  }
+  throw new Error(`no strand point on '${wire}' clears every identity dot`)
 }
