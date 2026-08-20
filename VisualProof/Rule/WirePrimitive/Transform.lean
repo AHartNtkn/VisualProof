@@ -327,9 +327,14 @@ theorem lookup_replace_targetSecond
       cases outerEnv with
       | mk first rest => exact induction rest
 
+/-- The semantically trivial unary identity used when the selected relation
+wire is pinned at a transformation site. -/
+def unaryPin (wire : Var wires signature) : Region wires :=
+  Region.singleton (.identity signature 1 (fun _ => wire))
+
 /-- A uniform operation supplies its target-side distinguished wires, their
-lifting beneath local binders, the site syntax, and the one shared semantic
-witness invariant used at every site. -/
+lifting beneath local binders, source-side site choices, and the targets
+computed from those choices. -/
 structure Operation (arguments : List Sig) where
   Data : ∀ {common sourceWires targetWires},
     Frame arguments common sourceWires targetWires → Type
@@ -337,10 +342,19 @@ structure Operation (arguments : List Sig) where
     ∀ {common sourceWires targetWires}
       (frame : Frame arguments common sourceWires targetWires),
       Data frame → ∀ locals, Data (frame.append locals)
+  SiteData :
+    ∀ {common sourceWires targetWires}
+      (frame : Frame arguments common sourceWires targetWires),
+      Data frame → Vars common arguments → Type
   site :
     ∀ {common sourceWires targetWires}
       (frame : Frame arguments common sourceWires targetWires),
-      Data frame → Vars common arguments → Region targetWires → Prop
+      (data : Data frame) → (ports : Vars common arguments) →
+      SiteData frame data ports → Region targetWires
+  pin :
+    ∀ {common sourceWires targetWires}
+      (frame : Frame arguments common sourceWires targetWires),
+      Data frame → Region targetWires
 
 namespace Operation
 
@@ -368,102 +382,138 @@ structure Sound (operation : Operation arguments) where
     ∀ {common sourceWires targetWires}
       (frame : Frame arguments common sourceWires targetWires)
       (data : operation.Data frame) (ports : Vars common arguments)
-      (target : Region targetWires),
-      operation.site frame data ports target →
+      (siteData : operation.SiteData frame data ports),
       ∀ (model : Model) (sourceEnv : Values model sourceWires)
         (targetEnv : Values model targetWires),
         EnvironmentsAgree frame sourceEnv targetEnv →
         Realizes frame data model sourceEnv targetEnv →
-        (sourceEnv.lookup frame.selected
+          (sourceEnv.lookup frame.selected
             (evaluateVars
               (ports.map fun wire => frame.sourceKeep wire) sourceEnv) ↔
-          denoteRegion model targetEnv target)
+          denoteRegion model targetEnv
+            (operation.site frame data ports siteData))
+  pin_sound :
+    ∀ {common sourceWires targetWires}
+      (frame : Frame arguments common sourceWires targetWires)
+      (data : operation.Data frame) (model : Model)
+      (targetEnv : Values model targetWires),
+      denoteRegion model targetEnv (operation.pin frame data)
 
 end Operation
 
 mutual
-  /-- A recursive uniform transformation beneath locally bound wires. -/
-  inductive RegionResult (operation : Operation arguments) :
+  /-- Source-indexed recursive edit beneath locally bound wires. -/
+  inductive RegionEdit (operation : Operation arguments) :
       {common sourceWires targetWires : List Sig} →
       (frame : Frame arguments common sourceWires targetWires) →
       operation.Data frame →
-      Region sourceWires → Region targetWires → Prop
+      Region sourceWires → Type
     | mk
         {frame : Frame arguments common sourceWires targetWires}
         {data : operation.Data frame}
         {locals : List Sig}
         {items : ItemSeq (sourceWires ++ locals)}
-        {result : Region (targetWires ++ locals)}
-        (itemsResult : ItemsResult operation (frame.append locals)
-          (operation.appendData frame data locals) items result) :
-        RegionResult operation frame data (.mk locals items)
-          (Region.adjoinAt locals .nil result)
+        (itemsEdit : ItemsEdit operation (frame.append locals)
+          (operation.appendData frame data locals) items) :
+        RegionEdit operation frame data (.mk locals items)
 
-  /-- A source conjunction becomes the conjunction of its transformed item
-  regions. Site replacements may bind fresh wires locally. -/
-  inductive ItemsResult (operation : Operation arguments) :
+  /-- Source-indexed edits for a conjunction. -/
+  inductive ItemsEdit (operation : Operation arguments) :
       {common sourceWires targetWires : List Sig} →
       (frame : Frame arguments common sourceWires targetWires) →
       operation.Data frame →
-      ItemSeq sourceWires → Region targetWires → Prop
+      ItemSeq sourceWires → Type
     | nil
         {frame : Frame arguments common sourceWires targetWires}
         {data : operation.Data frame} :
-        ItemsResult operation frame data .nil (Region.blank targetWires)
+        ItemsEdit operation frame data .nil
     | cons
         {frame : Frame arguments common sourceWires targetWires}
         {data : operation.Data frame}
         {item : Item sourceWires} {tail : ItemSeq sourceWires}
-        {itemResult tailResult : Region targetWires}
-        (itemEvidence : ItemResult operation frame data item itemResult)
-        (tailEvidence : ItemsResult operation frame data tail tailResult) :
-        ItemsResult operation frame data (.cons item tail)
-          (itemResult.conjoin tailResult)
+        (itemEdit : ItemEdit operation frame data item)
+        (tailEdit : ItemsEdit operation frame data tail) :
+        ItemsEdit operation frame data (.cons item tail)
 
-  /-- Every non-selected item is reconstructed from retained wires. The
-  selected wire is accepted only as an atom head, which enforces that all of
-  its incidences are applications. -/
-  inductive ItemResult (operation : Operation arguments) :
+  /-- Source-indexed edit for one item. -/
+  inductive ItemEdit (operation : Operation arguments) :
       {common sourceWires targetWires : List Sig} →
       (frame : Frame arguments common sourceWires targetWires) →
       operation.Data frame →
-      Item sourceWires → Region targetWires → Prop
+      Item sourceWires → Type
     | atom
         {frame : Frame arguments common sourceWires targetWires}
         {data : operation.Data frame}
         (head : Var common (.rel atomArguments))
         (ports : Vars common atomArguments) :
-        ItemResult operation frame data
+        ItemEdit operation frame data
           (.atom (frame.sourceKeep head)
             (ports.map fun wire => frame.sourceKeep wire))
-          (Region.singleton (.atom (frame.targetKeep head)
-            (ports.map fun wire => frame.targetKeep wire)))
     | selectedAtom
         {frame : Frame arguments common sourceWires targetWires}
         {data : operation.Data frame}
         (ports : Vars common arguments)
-        {target : Region targetWires}
-        (evidence : operation.site frame data ports target) :
-        ItemResult operation frame data
+        (siteData : operation.SiteData frame data ports) :
+        ItemEdit operation frame data
           (.atom frame.selected
-            (ports.map fun wire => frame.sourceKeep wire)) target
+            (ports.map fun wire => frame.sourceKeep wire))
+    | selectedPin
+        {frame : Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        (ports : Fin 1 → Var sourceWires (.rel arguments))
+        (selected : ports 0 = frame.selected) :
+        ItemEdit operation frame data
+          (.identity (.rel arguments) 1 ports)
     | identity
         {frame : Frame arguments common sourceWires targetWires}
         {data : operation.Data frame}
         (signature : Sig) (arity : Nat)
         (ports : Fin arity → Var common signature) :
-        ItemResult operation frame data
+        ItemEdit operation frame data
           (.identity signature arity
             (fun index => frame.sourceKeep (ports index)))
-          (Region.singleton (.identity signature arity
-            (fun index => frame.targetKeep (ports index))))
     | cut
         {frame : Frame arguments common sourceWires targetWires}
         {data : operation.Data frame}
-        {body : Region sourceWires} {result : Region targetWires}
-        (bodyEvidence : RegionResult operation frame data body result) :
-        ItemResult operation frame data (.cut body)
-          (Region.singleton (.cut result))
+        {body : Region sourceWires}
+        (bodyEdit : RegionEdit operation frame data body) :
+        ItemEdit operation frame data (.cut body)
+end
+
+mutual
+  def RegionEdit.run
+      {operation : Operation arguments}
+      {frame : Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame} {source : Region sourceWires}
+      (edit : RegionEdit operation frame data source) : Region targetWires :=
+    match edit with
+    | .mk itemsEdit => Region.adjoinAt _ .nil itemsEdit.run
+
+  def ItemsEdit.run
+      {operation : Operation arguments}
+      {frame : Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame} {source : ItemSeq sourceWires}
+      (edit : ItemsEdit operation frame data source) : Region targetWires :=
+    match edit with
+    | .nil => Region.blank targetWires
+    | .cons itemEdit tailEdit => itemEdit.run.conjoin tailEdit.run
+
+  def ItemEdit.run
+      {operation : Operation arguments}
+      {frame : Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame} {source : Item sourceWires}
+      (edit : ItemEdit operation frame data source) : Region targetWires :=
+    match edit with
+    | .atom head ports =>
+        Region.singleton (.atom (frame.targetKeep head)
+          (ports.map fun wire => frame.targetKeep wire))
+    | .selectedAtom ports siteData =>
+        operation.site frame data ports siteData
+    | .selectedPin _ _ => operation.pin frame data
+    | .identity signature arity ports =>
+        Region.singleton (.identity signature arity
+          (fun index => frame.targetKeep (ports index)))
+    | .cut bodyEdit => Region.singleton (.cut bodyEdit.run)
 end
 
 private theorem EnvironmentsAgree.append
@@ -539,28 +589,29 @@ theorem denote_blank_iff (model : Model) (env : Values model wires) :
     exact ⟨PUnit.unit, trivial⟩
 
 mutual
-  theorem RegionResult.sound_iff
+  theorem RegionEdit.sound_iff
       {arguments common sourceWires targetWires : List Sig}
       {operation : Operation arguments}
       (operationSound : operation.Sound)
       {frame : Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
-      {source : Region sourceWires} {target : Region targetWires}
-      (step : RegionResult operation frame data source target)
+      {source : Region sourceWires}
+      (edit : RegionEdit operation frame data source)
       (model : Model) (sourceEnv : Values model sourceWires)
       (targetEnv : Values model targetWires)
       (agree : EnvironmentsAgree frame sourceEnv targetEnv)
       (realizes : operationSound.Realizes frame data model sourceEnv targetEnv) :
       denoteRegion model sourceEnv source ↔
-        denoteRegion model targetEnv target := by
-    cases step with
-    | @mk _ _ _ _ _ locals items result itemsResult =>
+        denoteRegion model targetEnv edit.run := by
+    cases edit with
+    | mk itemsEdit =>
+      simp only [RegionEdit.run]
       simp only [denoteRegion_mk]
       rw [Region.denote_adjoinAt]
       constructor
       · rintro ⟨localEnv, itemsDenote⟩
         exact ⟨localEnv, trivial,
-          (itemsResult.sound_iff operationSound model
+          (itemsEdit.sound_iff operationSound model
             (Values.append sourceEnv localEnv)
             (Values.append targetEnv localEnv)
             (agree.append localEnv)
@@ -568,66 +619,81 @@ mutual
               realizes localEnv)).mp itemsDenote⟩
       · rintro ⟨localEnv, _, resultDenotes⟩
         exact ⟨localEnv,
-          (itemsResult.sound_iff operationSound model
+          (itemsEdit.sound_iff operationSound model
             (Values.append sourceEnv localEnv)
             (Values.append targetEnv localEnv)
             (agree.append localEnv)
             (operationSound.realizes_append frame data model sourceEnv targetEnv
               realizes localEnv)).mpr resultDenotes⟩
 
-  theorem ItemsResult.sound_iff
+  theorem ItemsEdit.sound_iff
       {arguments common sourceWires targetWires : List Sig}
       {operation : Operation arguments}
       (operationSound : operation.Sound)
       {frame : Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
-      {items : ItemSeq sourceWires} {target : Region targetWires}
-      (step : ItemsResult operation frame data items target)
+      {items : ItemSeq sourceWires}
+      (edit : ItemsEdit operation frame data items)
       (model : Model) (sourceEnv : Values model sourceWires)
       (targetEnv : Values model targetWires)
       (agree : EnvironmentsAgree frame sourceEnv targetEnv)
       (realizes : operationSound.Realizes frame data model sourceEnv targetEnv) :
       denoteItemSeq model sourceEnv items ↔
-        denoteRegion model targetEnv target := by
-    cases step with
+        denoteRegion model targetEnv edit.run := by
+    cases edit with
     | nil =>
+      simp only [ItemsEdit.run]
       change True ↔ ∃ localEnv : Values model [], True
       constructor
       · intro
         exact ⟨PUnit.unit, trivial⟩
       · intro
         trivial
-    | cons itemEvidence tailEvidence =>
+    | cons itemEdit tailEdit =>
+      simp only [ItemsEdit.run]
       rw [denoteItemSeq_cons, Region.denote_conjoin]
       exact and_congr
-        (itemEvidence.sound_iff operationSound model sourceEnv targetEnv
+        (itemEdit.sound_iff operationSound model sourceEnv targetEnv
           agree realizes)
-        (tailEvidence.sound_iff operationSound model sourceEnv targetEnv
+        (tailEdit.sound_iff operationSound model sourceEnv targetEnv
           agree realizes)
 
-  theorem ItemResult.sound_iff
+  theorem ItemEdit.sound_iff
       {arguments common sourceWires targetWires : List Sig}
       {operation : Operation arguments}
       (operationSound : operation.Sound)
       {frame : Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
-      {item : Item sourceWires} {target : Region targetWires}
-      (step : ItemResult operation frame data item target)
+      {item : Item sourceWires}
+      (edit : ItemEdit operation frame data item)
       (model : Model) (sourceEnv : Values model sourceWires)
       (targetEnv : Values model targetWires)
       (agree : EnvironmentsAgree frame sourceEnv targetEnv)
       (realizes : operationSound.Realizes frame data model sourceEnv targetEnv) :
       denoteItem model sourceEnv item ↔
-        denoteRegion model targetEnv target := by
-    cases step with
+        denoteRegion model targetEnv edit.run := by
+    cases edit with
     | atom head ports =>
+      simp only [ItemEdit.run]
       rw [denote_singleton_iff]
       simp only [denoteItem_atom]
       rw [agree head, evaluate_retained_eq ports agree]
-    | selectedAtom ports evidence =>
-      exact operationSound.site_sound frame data ports _ evidence model sourceEnv
+    | selectedAtom ports siteData =>
+      simp only [ItemEdit.run]
+      exact operationSound.site_sound frame data ports siteData model sourceEnv
         targetEnv agree realizes
+    | selectedPin ports selected =>
+      simp only [ItemEdit.run]
+      simp only [denoteItem_identity]
+      constructor
+      · intro _
+        exact operationSound.pin_sound frame data model targetEnv
+      · intro _ left right
+        have positionsEqual : left = right := Subsingleton.elim _ _
+        subst right
+        rfl
     | identity signature arity ports =>
+      simp only [ItemEdit.run]
       rw [denote_singleton_iff]
       simp only [denoteItem_identity]
       constructor
@@ -637,11 +703,12 @@ mutual
       · intro targetDenotes left right
         rw [agree (ports left), agree (ports right)]
         exact targetDenotes left right
-    | cut bodyEvidence =>
+    | cut bodyEdit =>
+      simp only [ItemEdit.run]
       rw [denote_singleton_iff]
       simp only [denoteItem_cut]
       exact not_congr
-        (bodyEvidence.sound_iff operationSound model sourceEnv targetEnv agree
+        (bodyEdit.sound_iff operationSound model sourceEnv targetEnv agree
           realizes)
 end
 

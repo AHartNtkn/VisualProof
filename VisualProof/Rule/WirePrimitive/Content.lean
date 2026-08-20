@@ -13,10 +13,12 @@ namespace Cut
 def operation (arguments : List Sig) : Transform.Operation arguments where
   Data := fun {_ _ targetWires} _ => Var targetWires (.rel arguments)
   appendData := fun _ targetHead locals => targetHead.appendLeft locals
-  site := fun frame targetHead ports target =>
-    target = Region.singleton (.cut (Region.singleton
+  SiteData := fun _ _ _ => PUnit
+  site := fun frame targetHead ports _ =>
+    Region.singleton (.cut (Region.singleton
       (.atom targetHead
         (ports.map fun wire => frame.targetKeep wire))))
+  pin := fun _ targetHead => Transform.unaryPin targetHead
 
 def rootFrame (outer before after arguments : List Sig) :=
   Transform.Frame.replace outer before after [.rel arguments] arguments
@@ -30,12 +32,12 @@ inductive Wrap : Region outer → Region outer → Prop
   | mk
       (arguments before after : List Sig)
       {items : ItemSeq (outer ++ (before ++ .rel arguments :: after))}
-      {result : Region (outer ++ (before ++ .rel arguments :: after))}
-      (itemsResult : Transform.ItemsResult (operation arguments)
+      (itemsEdit : Transform.ItemsEdit (operation arguments)
         (rootFrame outer before after arguments)
-        (targetHead outer before after arguments) items result) :
+        (targetHead outer before after arguments) items) :
       Wrap (.mk (before ++ .rel arguments :: after) items)
-        (Region.adjoinAt (before ++ .rel arguments :: after) .nil result)
+        (Region.adjoinAt (before ++ .rel arguments :: after) .nil
+          itemsEdit.run)
 
 inductive Local : LocalRule
   | wrap (step : Wrap before after) : Local before after
@@ -51,12 +53,14 @@ def operation (arguments : List Sig) : Transform.Operation arguments where
   Data := fun {_ _ targetWires} _ => Heads targetWires arguments
   appendData := fun _ heads locals =>
     (heads.1.appendLeft locals, heads.2.appendLeft locals)
-  site := fun frame heads ports target =>
-    target =
-      (Region.singleton (.atom heads.1
+  SiteData := fun _ _ _ => PUnit
+  site := fun frame heads ports _ =>
+    (Region.singleton (.atom heads.1
         (ports.map fun wire => frame.targetKeep wire))).conjoin
       (Region.singleton (.atom heads.2
         (ports.map fun wire => frame.targetKeep wire)))
+  pin := fun _ heads =>
+    (Transform.unaryPin heads.1).conjoin (Transform.unaryPin heads.2)
 
 def rootFrame (outer before after arguments : List Sig) :=
   Transform.Frame.replace outer before after
@@ -79,15 +83,14 @@ inductive Split : Region outer → Region outer → Prop
   | mk
       (arguments before after : List Sig)
       {items : ItemSeq (outer ++ (before ++ .rel arguments :: after))}
-      {result : Region
-        (outer ++ (before ++ .rel arguments :: .rel arguments :: after))}
-      (itemsResult : Transform.ItemsResult (operation arguments)
+      (itemsEdit : Transform.ItemsEdit (operation arguments)
         (rootFrame outer before after arguments)
         (firstHead outer before after arguments,
-          secondHead outer before after arguments) items result) :
+          secondHead outer before after arguments) items) :
       Split (.mk (before ++ .rel arguments :: after) items)
         (Region.adjoinAt
-          (before ++ .rel arguments :: .rel arguments :: after) .nil result)
+          (before ++ .rel arguments :: .rel arguments :: after) .nil
+          itemsEdit.run)
 
 inductive Local : LocalRule
   | split (step : Split before after) : Local before after
@@ -99,7 +102,9 @@ namespace Ends
 def operation (arguments : List Sig) : Transform.Operation arguments where
   Data := fun _ => PUnit
   appendData := fun _ _ _ => PUnit.unit
-  site := fun _ _ _ target => target = Region.blank _
+  SiteData := fun _ _ _ => PUnit
+  site := fun _ _ _ _ => Region.blank _
+  pin := fun _ _ => Region.blank _
 
 def rootFrame (outer before after arguments : List Sig) :=
   Transform.Frame.replace outer before after [] arguments
@@ -111,11 +116,10 @@ inductive Delete : Region outer → Region outer → Prop
   | mk
       (arguments before after : List Sig)
       {items : ItemSeq (outer ++ (before ++ .rel arguments :: after))}
-      {result : Region (outer ++ (before ++ after))}
-      (itemsResult : Transform.ItemsResult (operation arguments)
-        (rootFrame outer before after arguments) PUnit.unit items result) :
+      (itemsEdit : Transform.ItemsEdit (operation arguments)
+        (rootFrame outer before after arguments) PUnit.unit items) :
       Delete (.mk (before ++ .rel arguments :: after) items)
-        (Region.adjoinAt (before ++ after) .nil result)
+        (Region.adjoinAt (before ++ after) .nil itemsEdit.run)
 
 inductive Local : LocalRule
   | spawn (step : Delete applied empty) : Local empty applied

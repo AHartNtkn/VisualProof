@@ -42,9 +42,9 @@ def operationSound (arguments : List Sig) (added : Sig) :
       targetEnv realizes locals localEnv values
     simpa [operation, Transform.Frame.append] using realizes values
   site_sound := by
-    intro common sourceWires targetWires frame targetHead ports target
-      evidence model sourceEnv targetEnv agree realizes
-    subst target
+    intro common sourceWires targetWires frame targetHead ports siteData
+      model sourceEnv targetEnv agree realizes
+    simp only [operation]
     simp only [denoteRegion_mk, denoteItemSeq_cons, denoteItem_atom,
       denoteItem_identity, denoteItemSeq_nil]
     have argumentEq := Transform.evaluate_retained_eq ports agree
@@ -146,13 +146,19 @@ def operationSound (arguments : List Sig) (added : Sig) :
       exact (congrFun (Values.lookup_append_left targetEnv
         addedEnv targetHead) _).mp
           targetHolds
+  pin_sound := by
+    intro common sourceWires targetWires frame targetHead model targetEnv
+    simp only [operation]
+    simp only [Transform.unaryPin]
+    rw [Transform.denote_singleton_iff]
+    simp [denoteItem_identity]
 
 theorem Shift.sound_iff {outer : List Sig} {source target : Region outer}
     (step : Shift source target) :
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env source ↔ denoteRegion model env target := by
   cases step with
-  | @mk arguments before after added items result itemsResult =>
+  | @mk arguments before after added items itemsResult =>
     intro model env
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]

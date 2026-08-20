@@ -30,8 +30,9 @@ def operation (arguments : List Sig) (added : Sig) :
   Data := fun {_ _ targetWires} _ =>
     Var targetWires (.rel (arguments ++ [added]))
   appendData := fun _ targetHead locals => targetHead.appendLeft locals
-  site := fun frame targetHead ports target =>
-    target = .mk [added] (.cons
+  SiteData := fun _ _ _ => PUnit
+  site := fun frame targetHead ports _ =>
+    .mk [added] (.cons
       (.atom (targetHead.appendLeft [added])
         (Vars.append
           ((ports.map fun wire => frame.targetKeep wire).map
@@ -40,6 +41,7 @@ def operation (arguments : List Sig) (added : Sig) :
       (.cons
         (.identity added 1 (fun _ => Var.appendRight _ .here))
         .nil))
+  pin := fun _ targetHead => Transform.unaryPin targetHead
 
 def rootFrame (outer before after arguments : List Sig) (added : Sig) :=
   Transform.Frame.replace outer before after
@@ -56,14 +58,13 @@ inductive Shift : Region outer → Region outer → Prop
   | mk
       (arguments before after : List Sig) (added : Sig)
       {items : ItemSeq (outer ++ (before ++ .rel arguments :: after))}
-      {result : Region
-        (outer ++ (before ++ .rel (arguments ++ [added]) :: after))}
-      (itemsResult : Transform.ItemsResult (operation arguments added)
+      (itemsEdit : Transform.ItemsEdit (operation arguments added)
         (rootFrame outer before after arguments added)
-        (targetHead outer before after arguments added) items result) :
+        (targetHead outer before after arguments added) items) :
       Shift (.mk (before ++ .rel arguments :: after) items)
         (Region.adjoinAt
-          (before ++ .rel (arguments ++ [added]) :: after) .nil result)
+          (before ++ .rel (arguments ++ [added]) :: after) .nil
+          itemsEdit.run)
 
 inductive Local : LocalRule
   | shift (step : Shift before after) : Local before after

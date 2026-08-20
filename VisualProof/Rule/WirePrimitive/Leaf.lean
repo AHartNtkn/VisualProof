@@ -14,13 +14,15 @@ def operation (before after : List Sig) :
     Transform.Operation (before ++ .rel (before ++ after) :: after) where
   Data := fun _ => PUnit
   appendData := fun _ _ _ => PUnit.unit
-  site := fun frame _ ports target =>
-    ∃ (formal : Var _ (.rel (before ++ after)))
-      (retained : Vars _ (before ++ after)),
-      ports = Argument.Projection.Vars.insertAt before formal retained ∧
-      target = Region.singleton
-        (.atom (frame.targetKeep formal)
-          (retained.map fun wire => frame.targetKeep wire))
+  SiteData := fun {common _sourceWires _targetWires} _frame _data ports =>
+    Σ formal : Var common (.rel (before ++ after)),
+      { retained : Vars common (before ++ after) //
+        ports = Argument.Projection.Vars.insertAt before formal retained }
+  site := fun frame _ _ siteData =>
+    Region.singleton
+      (.atom (frame.targetKeep siteData.1)
+        (siteData.2.val.map fun wire => frame.targetKeep wire))
+  pin := fun _ _ => Region.blank _
 
 def rootFrame (outer localBefore localAfter before after : List Sig) :=
   Transform.Frame.replace outer localBefore localAfter []
@@ -31,14 +33,13 @@ inductive Applies : Region outer → Region outer → Prop
       (before after localBefore localAfter : List Sig)
       {items : ItemSeq (outer ++ (localBefore ++
         .rel (before ++ .rel (before ++ after) :: after) :: localAfter))}
-      {result : Region (outer ++ (localBefore ++ localAfter))}
-      (itemsResult : Transform.ItemsResult (operation before after)
+      (itemsEdit : Transform.ItemsEdit (operation before after)
         (rootFrame outer localBefore localAfter before after) PUnit.unit
-        items result) :
+        items) :
       Applies
         (.mk (localBefore ++
           .rel (before ++ .rel (before ++ after) :: after) :: localAfter) items)
-        (Region.adjoinAt (localBefore ++ localAfter) .nil result)
+        (Region.adjoinAt (localBefore ++ localAfter) .nil itemsEdit.run)
 
 inductive Local : LocalRule
   | abstractFormal (step : Applies applied formal) : Local formal applied
@@ -87,11 +88,13 @@ def operation (signature : Sig) (arity : Nat) :
     Transform.Operation (List.replicate arity signature) where
   Data := fun _ => PUnit
   appendData := fun _ _ _ => PUnit.unit
-  site := fun frame _ ports target =>
-    ∃ identityPorts : Fin arity → Var _ signature,
-      ports = Vars.fromFn identityPorts ∧
-      target = Region.singleton (.identity signature arity
-        (fun position => frame.targetKeep (identityPorts position)))
+  SiteData := fun {common _sourceWires _targetWires} _frame _data ports =>
+    { identityPorts : Fin arity → Var common signature //
+      ports = Vars.fromFn identityPorts }
+  site := fun frame _ _ siteData =>
+    Region.singleton (.identity signature arity
+      (fun position => frame.targetKeep (siteData.val position)))
+  pin := fun _ _ => Region.blank _
 
 def rootFrame (outer localBefore localAfter : List Sig)
     (signature : Sig) (arity : Nat) :=
@@ -100,18 +103,17 @@ def rootFrame (outer localBefore localAfter : List Sig)
 
 inductive Leaves : Region outer → Region outer → Prop
   | mk
-      (signature : Sig) (arity : Nat) (arityAtLeastTwo : 2 ≤ arity)
+      (signature : Sig) (arity : Nat)
       (localBefore localAfter : List Sig)
       {items : ItemSeq (outer ++ (localBefore ++
         .rel (List.replicate arity signature) :: localAfter))}
-      {result : Region (outer ++ (localBefore ++ localAfter))}
-      (itemsResult : Transform.ItemsResult (operation signature arity)
+      (itemsEdit : Transform.ItemsEdit (operation signature arity)
         (rootFrame outer localBefore localAfter signature arity) PUnit.unit
-        items result) :
+        items) :
       Leaves
         (.mk (localBefore ++
           .rel (List.replicate arity signature) :: localAfter) items)
-        (Region.adjoinAt (localBefore ++ localAfter) .nil result)
+        (Region.adjoinAt (localBefore ++ localAfter) .nil itemsEdit.run)
 
 inductive Local : LocalRule
   | abstractIdentity (step : Leaves applied identity) : Local identity applied

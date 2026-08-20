@@ -51,10 +51,12 @@ def operation (sourceArguments targetArguments : List Sig)
   Data := fun {_ _ targetWires} _ =>
     Var targetWires (.rel targetArguments)
   appendData := fun _ targetHead locals => targetHead.appendLeft locals
-  site := fun frame targetHead ports target =>
-    target = Region.singleton (.atom targetHead
+  SiteData := fun _ _ _ => PUnit
+  site := fun frame targetHead ports _ =>
+    Region.singleton (.atom targetHead
       (permutation.mapVars
         (ports.map fun wire => frame.targetKeep wire)))
+  pin := fun _ targetHead => Transform.unaryPin targetHead
 
 def rootFrame (outer before after sourceArguments targetArguments : List Sig) :=
   Transform.Frame.replace outer before after [.rel targetArguments]
@@ -71,14 +73,13 @@ inductive Permutes : Region outer → Region outer → Prop
       (permutation : Permutation sourceArguments targetArguments)
       {items : ItemSeq
         (outer ++ (before ++ .rel sourceArguments :: after))}
-      {result : Region
-        (outer ++ (before ++ .rel targetArguments :: after))}
-      (itemsResult : Transform.ItemsResult
+      (itemsEdit : Transform.ItemsEdit
         (operation sourceArguments targetArguments permutation)
         (rootFrame outer before after sourceArguments targetArguments)
-        (targetHead outer before after targetArguments) items result) :
+        (targetHead outer before after targetArguments) items) :
       Permutes (.mk (before ++ .rel sourceArguments :: after) items)
-        (Region.adjoinAt (before ++ .rel targetArguments :: after) .nil result)
+        (Region.adjoinAt (before ++ .rel targetArguments :: after) .nil
+          itemsEdit.run)
 
 inductive Local : LocalRule
   | permute (step : Permutes before after) : Local before after

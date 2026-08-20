@@ -40,9 +40,11 @@ def operationSound (before after : List Sig) :
       realizes locals localEnv formal values
     simpa [operation, Transform.Frame.append] using realizes formal values
   site_sound := by
-    intro common sourceWires targetWires frame data ports target evidence model
+    intro common sourceWires targetWires frame data ports siteData model
       sourceEnv targetEnv agree realizes
-    rcases evidence with ⟨formal, retained, rfl, rfl⟩
+    rcases siteData with ⟨formal, retained, portsEq⟩
+    subst ports
+    simp only [operation]
     rw [Transform.denote_singleton_iff]
     simp only [denoteItem_atom]
     rw [Argument.Projection.Vars.insertAt_map,
@@ -50,13 +52,18 @@ def operationSound (before after : List Sig) :
     have retainedEq := Transform.evaluate_retained_eq retained agree
     rw [← retainedEq, ← agree formal]
     exact realizes (sourceEnv.lookup (frame.sourceKeep formal)) _
+  pin_sound := by
+    intro common sourceWires targetWires frame data model targetEnv
+    simp only [operation]
+    rw [Transform.denote_blank_iff]
+    trivial
 
 theorem Applies.sound {outer : List Sig} {applied formal : Region outer}
     (step : Applies applied formal) :
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env formal → denoteRegion model env applied := by
   cases step with
-  | @mk before after localBefore localAfter items result itemsResult =>
+  | @mk before after localBefore localAfter items itemsResult =>
     intro model env
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]
@@ -130,9 +137,11 @@ def operationSound (signature : Sig) (arity : Nat) :
       realizes locals localEnv values
     simpa [operation, Transform.Frame.append] using realizes values
   site_sound := by
-    intro common sourceWires targetWires frame data ports target evidence model
+    intro common sourceWires targetWires frame data ports siteData model
       sourceEnv targetEnv agree realizes
-    rcases evidence with ⟨identityPorts, rfl, rfl⟩
+    rcases siteData with ⟨identityPorts, portsEq⟩
+    subst ports
+    simp only [operation]
     rw [Transform.denote_singleton_iff]
     simp only [denoteItem_identity]
     rw [Vars.fromFn_map]
@@ -147,14 +156,18 @@ def operationSound (signature : Sig) (arity : Nat) :
       rw [Values.lookup_evaluate_fromFn, Values.lookup_evaluate_fromFn,
         agree (identityPorts left), agree (identityPorts right)]
       exact targetHolds left right
+  pin_sound := by
+    intro common sourceWires targetWires frame data model targetEnv
+    simp only [operation]
+    rw [Transform.denote_blank_iff]
+    trivial
 
 theorem Leaves.sound {outer : List Sig} {applied identity : Region outer}
     (step : Leaves applied identity) :
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env identity → denoteRegion model env applied := by
   cases step with
-  | @mk signature arity arityAtLeastTwo localBefore localAfter items result
-      itemsResult =>
+  | @mk signature arity localBefore localAfter items itemsResult =>
     intro model env
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]

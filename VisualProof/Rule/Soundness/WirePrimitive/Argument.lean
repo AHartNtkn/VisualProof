@@ -19,22 +19,28 @@ def operationSound (before after : List Sig) (signature : Sig) :
       targetEnv realizes locals localEnv values
     simpa [operation, Transform.Frame.append] using realizes values
   site_sound := by
-    intro common sourceWires targetWires frame targetHead ports target
-      evidence model sourceEnv targetEnv agree realizes
-    subst target
+    intro common sourceWires targetWires frame targetHead ports siteData
+      model sourceEnv targetEnv agree realizes
+    simp only [operation]
     rw [Transform.denote_singleton_iff]
     simp only [denoteItem_atom]
     rw [evaluate_duplicate]
     have argumentEq := Transform.evaluate_retained_eq ports agree
     rw [← congrArg (Values.duplicateAt before) argumentEq]
     exact realizes _
+  pin_sound := by
+    intro common sourceWires targetWires frame targetHead model targetEnv
+    simp only [operation]
+    simp only [Transform.unaryPin]
+    rw [Transform.denote_singleton_iff]
+    simp [denoteItem_identity]
 
 theorem Duplicates.sound_iff {outer : List Sig}
     {source target : Region outer} (step : Duplicates source target) :
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env source ↔ denoteRegion model env target := by
   cases step with
-  | @mk before after localBefore localAfter signature items result itemsResult =>
+  | @mk before after localBefore localAfter signature items itemsResult =>
     intro model env
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]
@@ -184,15 +190,21 @@ def operationSound (before after : List Sig) (signature : Sig) :
       targetEnv realizes locals localEnv values
     simpa [operation, Transform.Frame.append] using realizes values
   site_sound := by
-    intro common sourceWires targetWires frame targetHead ports target
-      evidence model sourceEnv targetEnv agree realizes
-    subst target
+    intro common sourceWires targetWires frame targetHead ports siteData
+      model sourceEnv targetEnv agree realizes
+    simp only [operation]
     rw [Transform.denote_singleton_iff]
     simp only [denoteItem_atom]
     rw [evaluate_drop]
     have argumentEq := Transform.evaluate_retained_eq ports agree
     rw [← congrArg (Values.dropAt before) argumentEq]
     exact realizes _
+  pin_sound := by
+    intro common sourceWires targetWires frame targetHead model targetEnv
+    simp only [operation]
+    simp only [Transform.unaryPin]
+    rw [Transform.denote_singleton_iff]
+    simp [denoteItem_identity]
 
 def uniformOperationSound (before after : List Sig) (signature : Sig) :
     (uniformOperation before after signature).Sound where
@@ -215,27 +227,34 @@ def uniformOperationSound (before after : List Sig) (signature : Sig) :
         simpa [uniformOperation, Transform.Frame.append,
           WireRenaming.appendRight] using realizes values
   site_sound := by
-    intro common sourceWires targetWires frame data ports target evidence model
+    intro common sourceWires targetWires frame data ports siteData model
       sourceEnv targetEnv agree realizes
-    rcases data with ⟨targetHead, attachment⟩
-    cases attachment with
-    | none => simp [uniformOperation] at evidence
-    | some attachment =>
-        rcases evidence with ⟨retained, rfl, rfl⟩
-        rw [Transform.denote_singleton_iff]
-        simp only [denoteItem_atom]
-        rw [Vars.insertAt_map]
-        rw [evaluate_insert]
-        have retainedEq := Transform.evaluate_retained_eq retained agree
-        rw [← retainedEq]
-        exact realizes _
+    rcases siteData with ⟨attachment, retained, attachmentEq, portsEq⟩
+    rcases data with ⟨targetHead, selectedAttachment⟩
+    simp only at attachmentEq
+    subst selectedAttachment
+    subst ports
+    simp only [uniformOperation]
+    rw [Transform.denote_singleton_iff]
+    simp only [denoteItem_atom]
+    rw [Vars.insertAt_map]
+    rw [evaluate_insert]
+    have retainedEq := Transform.evaluate_retained_eq retained agree
+    rw [← retainedEq]
+    exact realizes _
+  pin_sound := by
+    intro common sourceWires targetWires frame data model targetEnv
+    simp only [uniformOperation]
+    simp only [Transform.unaryPin]
+    rw [Transform.denote_singleton_iff]
+    simp [denoteItem_identity]
 
 theorem Drops.sound {outer : List Sig} {applied dropped : Region outer}
     (step : Drops applied dropped) :
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env dropped → denoteRegion model env applied := by
   cases step with
-  | @mk before after localBefore localAfter signature items result itemsResult =>
+  | @mk before after localBefore localAfter signature items itemsResult =>
     intro model env
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]
@@ -295,7 +314,7 @@ theorem UniformDrops.sound_iff {outer : List Sig}
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env applied ↔ denoteRegion model env dropped := by
   cases step with
-  | @mk before after localBefore localAfter signature attachment items result
+  | @mk before after localBefore localAfter signature attachment items
       itemsResult =>
     intro model env
     simp only [denoteRegion_mk]

@@ -20,22 +20,28 @@ def operationSound (arguments : List Sig) : (operation arguments).Sound where
       targetEnv realizes locals localEnv values
     simpa [operation, Transform.Frame.append] using realizes values
   site_sound := by
-    intro common sourceWires targetWires frame targetHead ports target
-      evidence model sourceEnv targetEnv agree realizes
-    subst target
+    intro common sourceWires targetWires frame targetHead ports siteData
+      model sourceEnv targetEnv agree realizes
+    simp only [operation]
     rw [Transform.denote_singleton_iff]
     simp only [denoteItem_cut]
     rw [Transform.denote_singleton_iff]
     simp only [denoteItem_atom]
     rw [← Transform.evaluate_retained_eq ports agree]
     exact realizes _
+  pin_sound := by
+    intro common sourceWires targetWires frame targetHead model targetEnv
+    simp only [operation]
+    simp only [Transform.unaryPin]
+    rw [Transform.denote_singleton_iff]
+    simp [denoteItem_identity]
 
 theorem Wrap.sound_iff {outer : List Sig} {source target : Region outer}
     (step : Wrap source target) :
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env source ↔ denoteRegion model env target := by
   cases step with
-  | @mk arguments before after items result itemsResult =>
+  | @mk arguments before after items itemsResult =>
     intro model env
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]
@@ -167,21 +173,28 @@ def operationSound (arguments : List Sig) : (operation arguments).Sound where
       targetEnv realizes locals localEnv values
     simpa [operation, Transform.Frame.append] using realizes values
   site_sound := by
-    intro common sourceWires targetWires frame heads ports target evidence
+    intro common sourceWires targetWires frame heads ports siteData
       model sourceEnv targetEnv agree realizes
-    subst target
+    simp only [operation]
     rw [Region.denote_conjoin, Transform.denote_singleton_iff,
       Transform.denote_singleton_iff]
     simp only [denoteItem_atom]
     rw [← Transform.evaluate_retained_eq ports agree]
     exact realizes _
+  pin_sound := by
+    intro common sourceWires targetWires frame heads model targetEnv
+    simp only [operation]
+    simp only [Transform.unaryPin]
+    rw [Region.denote_conjoin, Transform.denote_singleton_iff,
+      Transform.denote_singleton_iff]
+    constructor <;> simp [denoteItem_identity]
 
 theorem Split.sound_iff {outer : List Sig} {source target : Region outer}
     (step : Split source target) :
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env source ↔ denoteRegion model env target := by
   cases step with
-  | @mk arguments before after items result itemsResult =>
+  | @mk arguments before after items itemsResult =>
     intro model env
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]
@@ -319,18 +332,23 @@ def operationSound (arguments : List Sig) : (operation arguments).Sound where
       realizes locals localEnv values
     simpa [operation, Transform.Frame.append] using realizes values
   site_sound := by
-    intro common sourceWires targetWires frame data ports target evidence
+    intro common sourceWires targetWires frame data ports siteData
       model sourceEnv targetEnv agree realizes
-    subst target
+    simp only [operation]
     rw [Transform.denote_blank_iff]
     exact iff_true_intro (realizes _)
+  pin_sound := by
+    intro common sourceWires targetWires frame data model targetEnv
+    simp only [operation]
+    rw [Transform.denote_blank_iff]
+    trivial
 
 theorem Delete.sound {outer : List Sig} {applied empty : Region outer}
     (step : Delete applied empty) :
     ∀ (model : Model) (env : Values model outer),
       denoteRegion model env empty → denoteRegion model env applied := by
   cases step with
-  | @mk arguments before after items result itemsResult =>
+  | @mk arguments before after items itemsResult =>
     intro model env
     simp only [denoteRegion_mk]
     rw [Region.denote_adjoinAt]

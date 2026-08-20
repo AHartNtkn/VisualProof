@@ -64,10 +64,12 @@ def operation (before after : List Sig) (signature : Sig) :
   Data := fun {_ _ targetWires} _ =>
     Var targetWires (.rel (before ++ signature :: signature :: after))
   appendData := fun _ targetHead locals => targetHead.appendLeft locals
-  site := fun frame targetHead ports target =>
-    target = Region.singleton (.atom targetHead
+  SiteData := fun _ _ _ => PUnit
+  site := fun frame targetHead ports _ =>
+    Region.singleton (.atom targetHead
       (Vars.duplicateAt before
         (ports.map fun wire => frame.targetKeep wire)))
+  pin := fun _ targetHead => Transform.unaryPin targetHead
 
 def rootFrame (outer localBefore localAfter before after : List Sig)
     (signature : Sig) :=
@@ -87,19 +89,17 @@ inductive Duplicates : Region outer → Region outer → Prop
       (before after localBefore localAfter : List Sig) (signature : Sig)
       {items : ItemSeq (outer ++ (localBefore ++
         .rel (before ++ signature :: after) :: localAfter))}
-      {result : Region (outer ++ (localBefore ++
-        .rel (before ++ signature :: signature :: after) :: localAfter))}
-      (itemsResult : Transform.ItemsResult
+      (itemsEdit : Transform.ItemsEdit
         (operation before after signature)
         (rootFrame outer localBefore localAfter before after signature)
         (targetHead outer localBefore localAfter before after signature)
-        items result) :
+        items) :
       Duplicates
         (.mk (localBefore ++ .rel (before ++ signature :: after) :: localAfter)
           items)
         (Region.adjoinAt (localBefore ++
           .rel (before ++ signature :: signature :: after) :: localAfter)
-          .nil result)
+          .nil itemsEdit.run)
 
 inductive Local : LocalRule
   | duplicate (step : Duplicates before after) : Local before after
@@ -199,10 +199,12 @@ def operation (before after : List Sig) (signature : Sig) :
   Data := fun {_ _ targetWires} _ =>
     Var targetWires (.rel (before ++ after))
   appendData := fun _ targetHead locals => targetHead.appendLeft locals
-  site := fun frame targetHead ports target =>
-    target = Region.singleton (.atom targetHead
+  SiteData := fun _ _ _ => PUnit
+  site := fun frame targetHead ports _ =>
+    Region.singleton (.atom targetHead
       (Vars.dropAt before
         (ports.map fun wire => frame.targetKeep wire)))
+  pin := fun _ targetHead => Transform.unaryPin targetHead
 
 def uniformOperation (before after : List Sig) (signature : Sig) :
     Transform.Operation (before ++ signature :: after) where
@@ -210,14 +212,15 @@ def uniformOperation (before after : List Sig) (signature : Sig) :
     Var targetWires (.rel (before ++ after)) × Option (Var common signature)
   appendData := fun _ data locals =>
     (data.1.appendLeft locals, data.2.map fun wire => wire.appendLeft locals)
-  site := fun frame data ports target =>
-    match data.2 with
-    | none => False
-    | some attachment =>
-        ∃ retained : Vars _ (before ++ after),
-          ports = Vars.insertAt before attachment retained ∧
-          target = Region.singleton (.atom data.1
-            (retained.map fun wire => frame.targetKeep wire))
+  SiteData := fun {common _sourceWires _targetWires} _frame data ports =>
+    Σ attachment : Var common signature,
+      { retained : Vars common (before ++ after) //
+        data.2 = some attachment ∧
+          ports = Vars.insertAt before attachment retained }
+  site := fun frame data _ siteData =>
+    Region.singleton (.atom data.1
+      (siteData.2.val.map fun wire => frame.targetKeep wire))
+  pin := fun _ data => Transform.unaryPin data.1
 
 def rootFrame (outer localBefore localAfter before after : List Sig)
     (signature : Sig) :=
@@ -234,17 +237,15 @@ inductive Drops : Region outer → Region outer → Prop
       (before after localBefore localAfter : List Sig) (signature : Sig)
       {items : ItemSeq (outer ++ (localBefore ++
         .rel (before ++ signature :: after) :: localAfter))}
-      {result : Region (outer ++ (localBefore ++
-        .rel (before ++ after) :: localAfter))}
-      (itemsResult : Transform.ItemsResult
+      (itemsEdit : Transform.ItemsEdit
         (operation before after signature)
         (rootFrame outer localBefore localAfter before after signature)
-        (targetHead outer localBefore localAfter before after) items result) :
+        (targetHead outer localBefore localAfter before after) items) :
       Drops
         (.mk (localBefore ++ .rel (before ++ signature :: after) :: localAfter)
           items)
         (Region.adjoinAt (localBefore ++ .rel (before ++ after) :: localAfter)
-          .nil result)
+          .nil itemsEdit.run)
 
 inductive UniformDrops : Region outer → Region outer → Prop
   | mk
@@ -253,18 +254,16 @@ inductive UniformDrops : Region outer → Region outer → Prop
         (Var (outer ++ (localBefore ++ localAfter)) signature))
       {items : ItemSeq (outer ++ (localBefore ++
         .rel (before ++ signature :: after) :: localAfter))}
-      {result : Region (outer ++ (localBefore ++
-        .rel (before ++ after) :: localAfter))}
-      (itemsResult : Transform.ItemsResult
+      (itemsEdit : Transform.ItemsEdit
         (uniformOperation before after signature)
         (rootFrame outer localBefore localAfter before after signature)
         (targetHead outer localBefore localAfter before after, attachment)
-        items result) :
+        items) :
       UniformDrops
         (.mk (localBefore ++ .rel (before ++ signature :: after) :: localAfter)
           items)
         (Region.adjoinAt (localBefore ++ .rel (before ++ after) :: localAfter)
-          .nil result)
+          .nil itemsEdit.run)
 
 inductive Local : LocalRule
   | extend (step : Drops applied dropped) : Local dropped applied
