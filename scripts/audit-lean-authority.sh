@@ -68,7 +68,7 @@ audit_rules() {
 
 audit_roster() {
   local step="$repo_root/VisualProof/Rule/Step.lean"
-  local expected=$'erasure\nwireSever\niteration\ndoubleCut\ncomprehension\nvacuity\npresentation\nidentification'
+  local expected=$'wireSever\niteration\ndoubleCut\nvacuity\npresentation\nidentification\ncutShape\nparallelShape\nends\narity\nargumentPermutation\nargumentDuplicate\nargumentProjection\nformalApplication\nidentityLeaf'
   local actual
   actual=$(awk '
     /^inductive Step / { inside = 1; next }
@@ -86,7 +86,11 @@ audit_roster() {
       "$expected" "$actual" >&2
     return 1
   fi
-  printf 'roster: exact eight Rule.Step constructors\n'
+  if rg -n '^  \|[[:space:]]*(comprehension|erasure)\b' "$step"; then
+    printf 'Rule.Step contains forbidden constructor\n' >&2
+    return 1
+  fi
+  printf 'roster: exact fifteen Rule.Step constructors\n'
 }
 
 audit_implementation() {
