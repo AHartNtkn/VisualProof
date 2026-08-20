@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { Diagram } from '../../../src/kernel/diagram/diagram'
+import type { Diagram, WireId } from '../../../src/kernel/diagram/diagram'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
+import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../../../src/kernel/rules/doublecut'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 import { applyVacuityInsert } from '../../../src/kernel/rules/identity-rules'
-import { applyEndsDelete } from '../../../src/kernel/rules/wire-content'
+import { applyCutWrap, applyEndsDelete } from '../../../src/kernel/rules/wire-content'
 import { applyWireSever } from '../../../src/kernel/rules/wire-quantifier'
 
 const P = relSig([IOTA])
@@ -339,5 +340,55 @@ describe('remnant completion', () => {
       expect(node.kind).toBe('identity')
     }
     expect(derivedScope(deleted, 'h')).toBe('cut')
+  })
+})
+
+describe('cut wrap keeps argument quantifiers where they were', () => {
+  /** R(w,w) on the sheet and ¬R(u,u); w's only incidences are on the sheet atom. */
+  function wrapFixture(): { d: Diagram; R: WireId; w: WireId } {
+    const BINARY = relSig([IOTA, IOTA])
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const a = b.atom(b.root, BINARY)
+    const c = b.atom(cut, BINARY)
+    const R = b.wire([{ node: a, port: { kind: 'head' } }, { node: c, port: { kind: 'head' } }], BINARY)
+    const w = b.wire([
+      { node: a, port: { kind: 'arg', index: 0 } },
+      { node: a, port: { kind: 'arg', index: 1 } },
+    ])
+    const u = b.wire([
+      { node: c, port: { kind: 'arg', index: 0 } },
+      { node: c, port: { kind: 'arg', index: 1 } },
+    ])
+    b.pin(u, b.root)
+    return { d: b.build(), R, w }
+  }
+
+  it('pins an argument wire whose every incidence moves into a new cut', () => {
+    const { d, R, w } = wrapFixture()
+    const root = d.root
+    expect(derivedScope(d, w)).toBe(root)
+    const out = applyCutWrap(d, R)
+    // BUG: without the cap, w's incidences all sit inside the fresh cut and
+    // ∃w sinks under a negation — a satisfiable diagram becomes unsatisfiable.
+    expect(derivedScope(out, w)).toBe(root)
+    const pins = out.wires[w]!.endpoints.filter((ep) => {
+      const node = out.nodes[ep.node]!
+      return node.kind === 'identity' && node.arity === 1 && node.region === root
+    })
+    expect(pins).toHaveLength(1)
+  })
+
+  it('adds nothing for an argument wire that keeps an incidence outside the wrap', () => {
+    const { d, R, w } = wrapFixture()
+    const out = applyCutWrap(d, R)
+    // u is pinned on the sheet already: scope unchanged, no second pin.
+    const u = Object.keys(out.wires).find((id) => id !== w && out.wires[id]!.sig.kind === 'iota')!
+    expect(derivedScope(out, u)).toBe(d.root)
+    const pinCount = out.wires[u]!.endpoints.filter((ep) => {
+      const node = out.nodes[ep.node]!
+      return node.kind === 'identity' && node.arity === 1
+    }).length
+    expect(pinCount).toBe(1)
   })
 })

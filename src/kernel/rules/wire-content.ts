@@ -20,6 +20,7 @@ import {
   completeWireEnds,
   deletePins,
   pinEndpointsOf,
+  pinMovedQuantifiers,
   relSigOf,
   requireRemovalScopePreserved,
   transferPins,
@@ -96,6 +97,9 @@ export function applyCutWrap(
   const parts: PartsInProgress = { regions, nodes, wires }
   transferPins(parts, pins, fresh)
   completeWireEnds(parts, fresh, oldScope, 'cut wrap', reservation?.nodes)
+  // The wrapped atoms' argument wires moved one cut deeper with them; any
+  // whose quantifier that would drag along is held at its old scope.
+  pinMovedQuantifiers(diagram, parts, ends.flatMap((end) => end.args), reservation?.nodes)
   return mkDiagram({ root: diagram.root, ...parts })
 }
 

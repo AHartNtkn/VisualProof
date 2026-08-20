@@ -243,6 +243,33 @@ export function completeWireEnds(
 }
 
 /**
+ * Class-(c) scope transport (spec §5): any listed wire whose incidence DCA the
+ * rebuild moved receives one pin at its OLD derived scope, so the quantifier
+ * stays exactly where it was. Wires whose DCA did not move get nothing.
+ */
+export function pinMovedQuantifiers(
+  before: Diagram,
+  parts: PartsInProgress,
+  wireIds: Iterable<WireId>,
+  reservation?: IdNamespaceReservation,
+): void {
+  const taken = new Set(Object.keys(parts.nodes))
+  for (const wireId of new Set(wireIds)) {
+    const wire = parts.wires[wireId]
+    if (wire === undefined) continue
+    const oldScope = derivedScope(before, wireId)
+    if (endpointDca(parts, wire.endpoints) === oldScope) continue
+    const node = freshId(taken, 'pin', reservation)
+    taken.add(node)
+    parts.nodes[node] = { kind: 'identity', region: oldScope, sig: wire.sig, arity: 1 }
+    parts.wires[wireId] = {
+      sig: wire.sig,
+      endpoints: [...wire.endpoints, { node, port: { kind: 'identity', index: 0 } }],
+    }
+  }
+}
+
+/**
  * The removal residue shared by erasure and deiteration (Lean:
  * Erasure.residue / Iteration.uncopyPins): after
  * removing `removedNodes` content from `selRegion`, cap every surviving
