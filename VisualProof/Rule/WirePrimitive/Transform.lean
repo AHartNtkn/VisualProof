@@ -136,6 +136,20 @@ theorem append_splitAppend
         simp only [splitAppend, Values.append]
         rw [induction rest]
 
+theorem splitAppend_append
+    (leftValues : Values model left) (rightValues : Values model right) :
+    splitAppend left (Values.append leftValues rightValues) =
+      (leftValues, rightValues) := by
+  induction left with
+  | nil =>
+      cases leftValues
+      rfl
+  | cons head tail induction =>
+      cases leftValues with
+      | mk first rest =>
+        simp only [Values.append, splitAppend]
+        rw [induction rest]
+
 theorem insertSegment_splitSegment
     (before additions after : List Sig)
     (values : Values model (before ++ (additions ++ after))) :
