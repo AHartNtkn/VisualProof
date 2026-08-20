@@ -17,7 +17,7 @@ import {
 } from '../actions'
 import { inferFoldArgs } from '../define'
 import { absorbHits, orphanedWires } from '../edit'
-import { buildSelection, regionAt, type Hit } from '../hittest'
+import { buildSelection, regionAt, wireManipulationHitTest, type Hit } from '../hittest'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
 import { CopyDragController } from './copy'
 import { IdentityOpsController } from './identity-ops'
@@ -318,12 +318,32 @@ export class ProofMoveController {
         this.#options.refuse('point at a region first', this.#lastPointer)
         return true
       }
+      const world = this.#lastWorld
+      // Over a strand, Q pins the wire at the hovered region — shift is
+      // ignored there, since a pin's sig is the wire's own sig, not a choice
+      // the gesture makes.
+      const manipulation = wireManipulationHitTest(
+        this.#options.engine(), world, { scale: this.#options.viewScale() },
+      )
+      if (manipulation !== null) {
+        this.#commitSteps('vacuity', [{
+          rule: 'vacuity',
+          direction: 'insert',
+          instance: {
+            kind: 'pin',
+            wire: manipulation.wire,
+            node: 'pin',
+            region: regionAt(this.#options.engine(), this.#options.diagram(), world),
+          },
+        }])
+        return true
+      }
       this.#commitSteps('vacuity', bareWireInsertSteps(
         this.#options.diagram(),
         regionAt(
           this.#options.engine(),
           this.#options.diagram(),
-          this.#lastWorld,
+          world,
         ),
         sample.shiftKey ? relSig([]) : IOTA,
         'w',

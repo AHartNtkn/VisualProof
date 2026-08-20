@@ -10,6 +10,7 @@ import {
   absorbHits,
   addCut,
   addIdentity,
+  addRelationWire,
   deleteHits,
   deleteSelection,
   dissolveRegion,
@@ -20,8 +21,61 @@ import {
   reparentNode,
   severEndpoint,
 } from '../../src/app/edit'
+import { ConstructController } from '../../src/app/interact/construct'
+import type { PointerSample } from '../../src/app/interact/viewport'
+import { mkEngine } from '../../src/view/engine'
+import { LIGHT } from '../../src/view/paint'
+import type { Vec2 } from '../../src/view/vec'
 import { UNARY } from '../fixtures/zero-signature'
-import { bareWire } from './helpers/build'
+import { bareWire, segment, spread } from './helpers/build'
+
+function keySample(key: string, shiftKey = false) {
+  return {
+    key,
+    shiftKey,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+    repeat: false,
+  }
+}
+
+function pointerSample(point: Vec2): PointerSample {
+  return {
+    pointerId: 1,
+    button: 0,
+    client: point,
+    screen: point,
+    world: point,
+    hit: null,
+    shiftKey: false,
+    ctrlKey: false,
+    altKey: false,
+    metaKey: false,
+  }
+}
+
+function constructHarness(diagram: Diagram) {
+  const engine = mkEngine(diagram, [])
+  const committed: Diagram[] = []
+  const refusals: string[] = []
+  const construct = new ConstructController({
+    host: { ownerDocument: {} } as unknown as HTMLElement,
+    active: () => true,
+    engine: () => engine,
+    viewScale: () => 1,
+    diagram: () => diagram,
+    selection: () => [],
+    setSelection: () => undefined,
+    commit: (next) => { committed.push(next) },
+    refuse: (text) => { refusals.push(text) },
+    setProblem: () => undefined,
+    clearProblem: () => undefined,
+    openSpawn: () => undefined,
+    theme: () => LIGHT,
+  })
+  return { construct, engine, committed, refusals }
+}
 
 function identityNodesOfArity(diagram: Diagram, arity: number): Array<[NodeId, IdentityDiagramNode]> {
   return Object.entries(diagram.nodes)
@@ -198,6 +252,67 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     const joined = joinWires(builder.build(), [second, first])
     expect(Object.keys(joined.wires)).toEqual([first])
     expect(joined.wires[first]!.endpoints).toHaveLength(4)
+  })
+
+  it('addRelationWire spawns a bare wire at any signature, including an individual', () => {
+    const builder = new DiagramBuilder()
+    const diagram = builder.build()
+    const { diagram: next, wire } = addRelationWire(diagram, builder.root, IOTA)
+    const pins = Object.entries(next.nodes)
+      .filter((entry): entry is [NodeId, IdentityDiagramNode] => entry[1].kind === 'identity')
+    expect(pins).toHaveLength(2)
+    for (const [, node] of pins) {
+      expect(node).toMatchObject({ kind: 'identity', region: builder.root, sig: IOTA, arity: 1 })
+    }
+    expect(next.wires[wire]!.sig).toEqual(IOTA)
+    expect(next.wires[wire]!.endpoints).toHaveLength(2)
+  })
+
+  it('Q over a strand pins the wire in edit mode', () => {
+    const builder = new DiagramBuilder()
+    const seg = segment(builder, builder.root)
+    const diagram = builder.build()
+    const { construct, engine, committed } = constructHarness(diagram)
+    const mid = spread(engine, seg, { x: 300, y: 300 })
+
+    construct.passiveSample(pointerSample(mid))
+    expect(construct.keyDown(keySample('q'))).toBe(true)
+
+    expect(committed).toHaveLength(1)
+    const next = committed[0]!
+    const grown = identityNodesOfArity(next, 1)
+      .filter(([id]) => diagram.nodes[id] === undefined)
+    expect(grown).toHaveLength(1)
+    expect(next.wires[seg.wire]!.endpoints).toContainEqual({
+      node: grown[0]![0],
+      port: { kind: 'identity', index: 0 },
+    })
+  })
+
+  it('Q over blank space spawns a fresh two-pin segment in edit mode', () => {
+    const diagram = emptyDiagram()
+    const { construct, committed } = constructHarness(diagram)
+
+    construct.passiveSample(pointerSample({ x: 0, y: 0 }))
+    expect(construct.keyDown(keySample('q'))).toBe(true)
+
+    expect(committed).toHaveLength(1)
+    const next = committed[0]!
+    const grownWires = Object.keys(next.wires).filter((id) => diagram.wires[id] === undefined)
+    expect(grownWires).toHaveLength(1)
+    const wire = next.wires[grownWires[0]!]!
+    expect(wire.sig).toEqual(IOTA)
+    expect(wire.endpoints).toHaveLength(2)
+  })
+
+  it('Q with no pointer refuses', () => {
+    const diagram = emptyDiagram()
+    const { construct, committed, refusals } = constructHarness(diagram)
+
+    expect(construct.keyDown(keySample('q'))).toBe(true)
+
+    expect(committed).toHaveLength(0)
+    expect(refusals).toEqual(['point at a region first'])
   })
 
   it('rejects heterogeneous bare wires before mutation', () => {

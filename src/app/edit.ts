@@ -1,6 +1,6 @@
 import type { Diagram, DiagramNode, Endpoint, NodeId, Region, RegionId, Wire, WireId } from '../kernel/diagram/diagram'
 import { mkDiagram, portKey, requiredPorts } from '../kernel/diagram/diagram'
-import type { RelSig, Sig } from '../kernel/diagram/sig'
+import type { Sig } from '../kernel/diagram/sig'
 import { sigEquals, sigKey } from '../kernel/diagram/sig'
 import { derivedScope, isAncestorOrEqual, wireVisibleAt } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
@@ -71,13 +71,14 @@ export function addCut(d: Diagram, sel: SubgraphSelection): { diagram: Diagram; 
 }
 
 /**
- * Introduce a fresh relational wire of sort `sig` at `region`, drawn as the
- * bare two-pin segment that holds its quantifier there. A relational wire IS
+ * Introduce a fresh wire of sort `sig` at `region`, drawn as the bare
+ * two-pin segment that holds its quantifier there. At a relation sig this IS
  * the second-order existential variable (the old "bubble"), and atoms attach
- * their head to it. A bare segment is a vacuous existential, deletable by
- * vacuity — the construction-level counterpart of vacuity insertion.
+ * their head to it; at IOTA it is a bare individual wire. A bare segment is
+ * a vacuous existential, deletable by vacuity — the construction-level
+ * counterpart of vacuity insertion.
  */
-export function addRelationWire(d: Diagram, region: RegionId, sig: RelSig): { diagram: Diagram; wire: WireId } {
+export function addRelationWire(d: Diagram, region: RegionId, sig: Sig): { diagram: Diagram; wire: WireId } {
   if (d.regions[region] === undefined) throw new Error(`unknown region '${region}'`)
   const wire = freshId(new Set(Object.keys(d.wires)), 'w')
   const nodes: Record<NodeId, DiagramNode> = { ...d.nodes }

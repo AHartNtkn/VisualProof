@@ -18,7 +18,7 @@ import {
   severEndpoint,
 } from '../edit'
 import { relSig, IOTA } from '../../kernel/diagram/sig'
-import { buildSelection, type Hit } from '../hittest'
+import { buildSelection, wireManipulationHitTest, type Hit } from '../hittest'
 import { ConnectionDragController } from './connection'
 import { CopyDragController } from './copy'
 import { copyDestinationPreview, copySelectionPreview } from './copy-view'
@@ -73,6 +73,7 @@ export class ConstructController {
   readonly #slash: SlashController
   #preview: Preview | null = null
   #prompt: HTMLDivElement | null = null
+  #lastWorld: Vec2 | null = null
 
   constructor(options: ConstructOptions) {
     this.#options = options
@@ -143,6 +144,11 @@ export class ConstructController {
     })
   }
 
+  /** Track the hovered world point for pointer-located keyboard actions. */
+  passiveSample(sample: PointerSample | null): void {
+    this.#lastWorld = sample === null ? null : sample.world
+  }
+
   claim(sample: PointerSample): PointerClaim | null {
     if (!this.#options.active()) return null
     if (sample.button === 2) return this.#slash.claim(sample)
@@ -164,6 +170,35 @@ export class ConstructController {
 
   keyDown(sample: KeySample): boolean {
     if (!this.#options.active() || sample.repeat) return false
+    if (sample.key === 'q' || sample.key === 'Q') {
+      if (this.#lastWorld === null) {
+        this.#options.refuse('point at a region first')
+        return true
+      }
+      const world = this.#lastWorld
+      const manipulation = wireManipulationHitTest(
+        this.#options.engine(), world, { scale: this.#options.viewScale() },
+      )
+      if (manipulation !== null) {
+        this.#tryCommit(() => applyIdentitySteps(this.#options.diagram(), [{
+          rule: 'vacuity',
+          direction: 'insert',
+          instance: {
+            kind: 'pin',
+            wire: manipulation.wire,
+            node: 'pin',
+            region: regionAt(this.#options.engine(), this.#options.diagram(), world),
+          },
+        }]), 'pinned')
+        return true
+      }
+      this.#tryCommit(() => addRelationWire(
+        this.#options.diagram(),
+        regionAt(this.#options.engine(), this.#options.diagram(), world),
+        sample.shiftKey ? relSig([]) : IOTA,
+      ).diagram, 'bare line drawn')
+      return true
+    }
     if (sample.key === 'w' || sample.key === 'W') {
       const selected = absorbHits(this.#options.diagram(), this.#options.selection())
       if (selected.length === 0) {

@@ -15,7 +15,7 @@ import { mkEngine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import { vec, type Vec2 } from '../../src/view/vec'
 import { UNARY } from '../fixtures/zero-signature'
-import { segment } from './helpers/build'
+import { segment, spread } from './helpers/build'
 import { place } from './helpers/gesture'
 
 function keySample(key: string, shiftKey = false) {
@@ -156,6 +156,22 @@ describe('proof move vocabulary', () => {
     expect(bareCase.applied).toHaveLength(1)
     expect(bareCase.applied[0]!.steps)
       .toEqual(bareWireDeletionSteps(bareDiagram, bare.wire))
+  })
+
+  it('Q over a strand pins the wire at the hovered region', () => {
+    const builder = new DiagramBuilder()
+    const seg = segment(builder, builder.root)
+    const diagram = builder.build()
+    const { moves, engine, applied } = harness(diagram)
+    const mid = spread(engine, seg, { x: 300, y: 300 })
+    moves.passiveSample(pointerSample(mid))
+    expect(moves.keyDown(keySample('q'))).toBe(true)
+    expect(applied).toHaveLength(1)
+    expect(applied[0]!.steps[0]).toMatchObject({
+      rule: 'vacuity',
+      direction: 'insert',
+      instance: { kind: 'pin', wire: seg.wire, region: diagram.root },
+    })
   })
 
   it('Q spawns a bare quantifier wire at the hovered region', () => {
