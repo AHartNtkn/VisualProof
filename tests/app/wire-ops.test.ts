@@ -128,6 +128,90 @@ function pluming() {
   return { diagram, engine, atom, wire, first, second, port }
 }
 
+/**
+ * `pluming()`'s shape, plus a second pin on the head wire ("the dot" the
+ * atom's end is exposed onto) and a second pin on the first argument wire
+ * ("the dot" that argument's end is exposed onto).
+ */
+function plumingWithDots() {
+  const builder = new DiagramBuilder()
+  const atom = builder.atom(builder.root, BINARY)
+  const wire = builder.wire([
+    { node: atom, port: { kind: 'head' } },
+  ], BINARY)
+  const wirePin = builder.pin(wire, builder.root)
+  const headDot = builder.pin(wire, builder.root)
+  const first = builder.wire([
+    { node: atom, port: { kind: 'arg', index: 0 } },
+  ])
+  const firstPin = builder.pin(first, builder.root)
+  const argDot = builder.pin(first, builder.root)
+  const second = builder.wire([
+    { node: atom, port: { kind: 'arg', index: 1 } },
+  ])
+  const secondPin = builder.pin(second, builder.root)
+  const diagram = builder.build()
+  const engine = mkEngine(diagram, [])
+  engine.scale = 12
+  place(engine, atom, { x: 300, y: 300 })
+  place(engine, wirePin, { x: 300, y: 80 })
+  place(engine, headDot, { x: 700, y: 80 })
+  place(engine, firstPin, { x: 100, y: 500 })
+  place(engine, argDot, { x: 100, y: 750 })
+  place(engine, secondPin, { x: 500, y: 500 })
+  const port = (index: number): Vec2 =>
+    endpointPoint(
+      engine,
+      index === 0 ? first : second,
+      { node: atom, port: { kind: 'arg', index } },
+    )
+  return { diagram, engine, atom, wire, first, second, port, headDot, argDot, firstPin }
+}
+
+describe('expose: an atom/ref end or argument port dragged onto an identity dot on that wire', () => {
+  it('an end dragged onto a dot on its own head wire commits identification-expose', () => {
+    const { engine, diagram, atom } = plumingWithDots()
+    const h = harness(diagram, engine)
+
+    drag(h.controller, { x: 300, y: 300 }, { x: 700, y: 80 })
+
+    expect(h.refusals).toEqual([])
+    const step = onlyStep(h.committed)
+    expect(step).toMatchObject({
+      rule: 'identification',
+      input: { kind: 'expose', transfer: [{ node: atom, port: { kind: 'head' } }] },
+    })
+  })
+
+  it('an argument port dragged onto a dot on its own argument wire commits identification-expose', () => {
+    const { engine, diagram, atom, port } = plumingWithDots()
+    const h = harness(diagram, engine)
+
+    drag(h.controller, port(0), { x: 100, y: 750 })
+
+    expect(h.refusals).toEqual([])
+    const step = onlyStep(h.committed)
+    expect(step).toMatchObject({
+      rule: 'identification',
+      input: { kind: 'expose', transfer: [{ node: atom, port: { kind: 'arg', index: 0 } }] },
+    })
+  })
+
+  it('an end refuses on an identity dot that is not on this wire, with the reworded message', () => {
+    const { engine, diagram } = plumingWithDots()
+    const h = harness(diagram, engine)
+
+    // firstPin is an identity dot, but it sits on the argument wire, not
+    // on the atom's own head wire — the drop-target resolution fails.
+    drag(h.controller, { x: 300, y: 300 }, { x: 100, y: 500 })
+
+    expect(h.committed).toEqual([])
+    expect(h.refusals).toEqual([
+      'release on a parallel end, an own argument port, an identity dot on this wire, or open space',
+    ])
+  })
+})
+
 describe('object-typed drag dispatch', () => {
   it('strand onto another strand commits wireJoin', () => {
     const builder = new DiagramBuilder()

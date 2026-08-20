@@ -1,4 +1,4 @@
-import type { Diagram, IdentityDiagramNode, NodeId, WireId } from '../../kernel/diagram/diagram'
+import type { Diagram, Endpoint, IdentityDiagramNode, NodeId, WireId } from '../../kernel/diagram/diagram'
 import { isAncestorOrEqual } from '../../kernel/diagram/regions'
 import {
   applyIdentification,
@@ -92,6 +92,16 @@ export function collapseStep(d: Diagram, node: NodeId): ProofStep {
   return {
     rule: 'identification',
     input: { kind: 'collapse', node, survivor, absorbed: attached.filter((w) => w !== survivor) },
+  }
+}
+
+/** Expose `transfer` off `wire` at `dot`: the survivor keeps its remaining
+    endpoints and `transfer` moves to a fresh wire equated to `dot`'s
+    fresh port — identification's other direction from collapse. */
+export function exposeStep(_d: Diagram, dot: NodeId, wire: WireId, transfer: Endpoint): ProofStep {
+  return {
+    rule: 'identification',
+    input: { kind: 'expose', node: dot, survivor: wire, freshWire: 'w', transfer: [transfer] },
   }
 }
 
@@ -266,6 +276,15 @@ export class IdentityOpsController {
         return
       }
       case 'endDisc': {
+        const dot = identityDiscAt(engine, point)
+        if (dot !== null && diagram.wires[grab.wire]!.endpoints.some((ep) => ep.node === dot)) {
+          this.#options.commit(
+            'identification',
+            [exposeStep(diagram, dot, grab.wire, { node: grab.node, port: { kind: 'head' } })],
+            sample.client,
+          )
+          return
+        }
         this.#options.refuse('release on an identity dot on this wire to expose', sample.client)
         return
       }

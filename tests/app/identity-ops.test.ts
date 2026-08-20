@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { IdentityOpsController, applyIdentitySteps, collapseStep, fuseStep } from '../../src/app/interact/identity-ops'
+import { IdentityOpsController, applyIdentitySteps, collapseStep, exposeStep, fuseStep } from '../../src/app/interact/identity-ops'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
-import { IOTA } from '../../src/kernel/diagram/sig'
+import { IOTA, relSig } from '../../src/kernel/diagram/sig'
 import { applyAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import type { ProofStep } from '../../src/kernel/proof/step'
@@ -10,6 +10,9 @@ import { mkEngine, type Engine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import type { Vec2 } from '../../src/view/vec'
 import { farBlank, place, placeRegion, pointerSample } from './helpers/gesture'
+import { segment } from './helpers/build'
+
+const BINARY = relSig([IOTA, IOTA])
 
 /** Two wires meeting at an arity-2 dot at the root, each held by a pin. */
 function dotJoined() {
@@ -213,6 +216,68 @@ describe('stub: dot rim pulled into open space', () => {
     drag(h.controller, rim, { x: 300, y: 300 })
     expect(h.committed).toEqual([])
     expect(h.refusals).toEqual(['pull the stub into open space'])
+  })
+})
+
+/** A BINARY atom's head wire holding two pins — one ordinary, one "the
+    dot" the expose gesture drags onto — as in wire-ops `pluming()` plus
+    a second `pin()` call. The two required argument wires are left to
+    `build()`'s auto-completion. */
+function exposeFixture() {
+  const builder = new DiagramBuilder()
+  const atom = builder.atom(builder.root, BINARY)
+  const wire = builder.wire([{ node: atom, port: { kind: 'head' } }], BINARY)
+  builder.pin(wire, builder.root)
+  const dot = builder.pin(wire, builder.root)
+  const diagram = builder.build()
+  const engine = mkEngine(diagram, [])
+  engine.scale = 12
+  place(engine, atom, { x: 300, y: 300 })
+  place(engine, dot, { x: 300, y: 80 })
+  return { diagram, engine, atom, wire, dot }
+}
+
+describe('expose: an atom/ref end dragged onto an identity dot on this wire (edit mode)', () => {
+  it('commits identification-expose: the dot gains a port and a fresh wire carries the transferred end', () => {
+    const { diagram, engine, atom, wire, dot } = exposeFixture()
+    const h = harness(diagram, engine, true)
+    drag(h.controller, { x: 300, y: 300 }, { x: 300, y: 80 })
+    expect(h.refusals).toEqual([])
+    expect(h.committed).toHaveLength(1)
+    const step = h.committed[0]!.steps[0]!
+    expect(step).toEqual(exposeStep(diagram, dot, wire, { node: atom, port: { kind: 'head' } }))
+    const after = h.diagram()
+    const wiresOnDot = Object.entries(after.wires)
+      .filter(([, w]) => w.endpoints.some((ep) => ep.node === dot))
+      .map(([id]) => id)
+    expect(wiresOnDot).toHaveLength(2)
+    expect(after.nodes[dot]).toMatchObject({ kind: 'identity', arity: 2 })
+  })
+
+  it('refuses off the dot, naming the expose option', () => {
+    const { diagram, engine } = exposeFixture()
+    const h = harness(diagram, engine, true)
+    drag(h.controller, { x: 300, y: 300 }, farBlank())
+    expect(h.committed).toEqual([])
+    expect(h.refusals).toEqual(['release on an identity dot on this wire to expose'])
+  })
+
+  it('precedence: a pin dragged onto a dot on the same wire fuses (presentation), never exposes', () => {
+    const builder = new DiagramBuilder()
+    const seg = segment(builder, builder.root)
+    const dot = builder.pin(seg.wire, builder.root)
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    engine.scale = 12
+    place(engine, seg.ends[0], { x: 300, y: 300 })
+    place(engine, seg.ends[1], { x: 100, y: 300 })
+    place(engine, dot, { x: 300, y: 80 })
+    const h = harness(diagram, engine, true)
+    drag(h.controller, { x: 300, y: 300 }, { x: 300, y: 80 })
+    expect(h.refusals).toEqual([])
+    expect(h.committed).toHaveLength(1)
+    const step = h.committed[0]!.steps[0]!
+    expect(step.rule).toBe('presentation')
   })
 })
 

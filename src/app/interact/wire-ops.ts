@@ -13,6 +13,7 @@ import { computeLegs } from '../../view/wires'
 import { length, sub } from '../../view/vec'
 import type { Vec2 } from '../../view/vec'
 import { wireManipulationHitTest } from '../hittest'
+import { exposeStep, identityDiscAt } from './identity-ops'
 import type { PointerClaim, PointerSample } from './viewport'
 
 /** What a press grabbed, in the object vocabulary of the drag table. */
@@ -49,6 +50,17 @@ export function headWireOf(diagram: Diagram, node: NodeId): WireId | null {
   for (const [wireId, wire] of Object.entries(diagram.wires)) {
     if (wire.endpoints.some((endpoint) =>
       endpoint.node === node && endpoint.port.kind === 'head')) return wireId
+  }
+  return null
+}
+
+/** The wire attached to `node`'s argument port at `position` — the actual
+    wire an argument-port grab manipulates, as opposed to `grab.wire`
+    (the node's own head wire, used by the arity-editing rows). */
+function argWireOf(diagram: Diagram, node: NodeId, position: number): WireId | null {
+  for (const [wireId, wire] of Object.entries(diagram.wires)) {
+    if (wire.endpoints.some((endpoint) =>
+      endpoint.node === node && endpoint.port.kind === 'arg' && endpoint.port.index === position)) return wireId
   }
   return null
 }
@@ -306,8 +318,17 @@ export class WireOpsDragController {
           }, sample)
           return
         }
+        const dot = identityDiscAt(engine, point)
+        if (dot !== null && diagram.wires[grab.wire]!.endpoints.some((ep) => ep.node === dot)) {
+          this.#commit(
+            'identification',
+            exposeStep(diagram, dot, grab.wire, { node: grab.node, port: { kind: 'head' } }),
+            sample,
+          )
+          return
+        }
         this.#options.refuse(
-          'release on a parallel end, an own argument port, or open space',
+          'release on a parallel end, an own argument port, an identity dot on this wire, or open space',
           sample.client,
         )
         return
@@ -395,6 +416,18 @@ export class WireOpsDragController {
             permutation,
           }, sample)
           return
+        }
+        const dot = identityDiscAt(engine, point)
+        if (dot !== null) {
+          const argWire = argWireOf(diagram, grab.node, grab.position)
+          if (argWire !== null && diagram.wires[argWire]!.endpoints.some((ep) => ep.node === dot)) {
+            this.#commit(
+              'identification',
+              exposeStep(diagram, dot, argWire, { node: grab.node, port: { kind: 'arg', index: grab.position } }),
+              sample,
+            )
+            return
+          }
         }
         // Off the node: remove the position. Unshift and drop produce the
         // same diagram when both apply; the ungated unshift is preferred and
