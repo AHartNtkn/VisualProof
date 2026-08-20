@@ -14,6 +14,27 @@ def ExternalTwoEnded (boundaryWire : Vars external boundary)
     2 ≤ boundaryWire.countIndex wire.index.val +
       (body.incidencePaths wire.index.val).length
 
+theorem externalTwoEnded_iff_fin
+    (boundaryWire : Vars external boundary) (body : Region external) :
+    ExternalTwoEnded boundaryWire body ↔
+      ∀ index : Fin external.length,
+        2 ≤ boundaryWire.countIndex index.val +
+          (body.incidencePaths index.val).length := by
+  constructor
+  · intro validity index
+    simpa using validity (Var.ofIndex index)
+  · intro validity signature wire
+    exact validity wire.index
+
+instance (boundaryWire : Vars external boundary) (body : Region external) :
+    Decidable (ExternalTwoEnded boundaryWire body) := by
+  letI : Decidable (∀ index : Fin external.length,
+      2 ≤ boundaryWire.countIndex index.val +
+        (body.incidencePaths index.val).length) :=
+    VisualProof.Data.Finite.decidableForallFin _ fun _ => inferInstance
+  exact decidable_of_iff _
+    (externalTwoEnded_iff_fin boundaryWire body).symm
+
 end OpenDiagram
 
 /-- A recursively scoped open diagram with an ordered typed boundary. -/
@@ -28,6 +49,49 @@ structure OpenDiagram (boundary : List Sig) where
   externalTwoEnded : OpenDiagram.ExternalTwoEnded boundaryWire body
 
 namespace OpenDiagram
+
+/-- Raw executable output before the finite diagram-validity checks run. -/
+structure Candidate (boundary : List Sig) where
+  external : List Sig
+  boundaryWire : Vars external boundary
+  body : Region external
+
+def Candidate.Valid (candidate : Candidate boundary) : Prop :=
+  (∀ wire : Fin candidate.external.length,
+      ∃ position : Fin boundary.length,
+        (candidate.boundaryWire.get position).index = wire) ∧
+    candidate.body.Canonical ∧
+    ExternalTwoEnded candidate.boundaryWire candidate.body
+
+instance (candidate : Candidate boundary) : Decidable candidate.Valid := by
+  unfold Candidate.Valid
+  infer_instance
+
+def Candidate.toOpen (candidate : Candidate boundary)
+    (valid : candidate.Valid) : OpenDiagram boundary where
+  external := candidate.external
+  boundaryWire := candidate.boundaryWire
+  boundarySurjective := valid.1
+  body := candidate.body
+  canonical := valid.2.1
+  externalTwoEnded := valid.2.2
+
+def Candidate.validate (candidate : Candidate boundary) :
+    Option (OpenDiagram boundary) :=
+  if valid : candidate.Valid then some (candidate.toOpen valid) else none
+
+@[simp] theorem Candidate.validate_of_valid
+    (candidate : Candidate boundary) (valid : candidate.Valid) :
+    candidate.validate = some (candidate.toOpen valid) := by
+  simp [Candidate.validate, valid]
+
+theorem Candidate.valid_of_validate_eq_some
+    (candidate : Candidate boundary) (target : OpenDiagram boundary)
+    (computed : candidate.validate = some target) : candidate.Valid := by
+  simp only [Candidate.validate] at computed
+  split at computed
+  · assumption
+  · simp at computed
 
 /-- Replace the body while preserving the typed interface. The replacement
 must independently establish canonical DCA placement. -/

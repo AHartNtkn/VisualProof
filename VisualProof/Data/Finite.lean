@@ -84,6 +84,22 @@ namespace VisualProof.Data.Finite
 
 /-! Deterministic enumeration and reindexing for finite carriers. -/
 
+def decidableForallFin : {n : Nat} → (predicate : Fin n → Prop) →
+    (∀ index, Decidable (predicate index)) → Decidable (∀ index, predicate index)
+  | 0, _, _ => isTrue fun index => Fin.elim0 index
+  | _ + 1, predicate, decidePredicate => by
+      letI : Decidable (predicate 0) := decidePredicate 0
+      letI : Decidable (∀ (index : Fin _), predicate index.succ) :=
+        decidableForallFin (fun (index : Fin _) => predicate index.succ)
+          (fun (index : Fin _) => decidePredicate index.succ)
+      apply decidable_of_iff
+        (predicate 0 ∧ ∀ (index : Fin _), predicate index.succ)
+      constructor
+      · rintro ⟨head, tail⟩ index
+        exact Fin.cases head tail index
+      · intro all
+        exact ⟨all 0, fun (index : Fin _) => all index.succ⟩
+
 def allFin : (n : Nat) -> List (Fin n)
   | 0 => []
   | n + 1 => 0 :: (allFin n).map Fin.succ

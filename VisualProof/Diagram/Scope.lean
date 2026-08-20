@@ -1,3 +1,4 @@
+import VisualProof.Data.Finite
 import VisualProof.Diagram.Core
 
 namespace VisualProof.Diagram
@@ -472,6 +473,46 @@ mutual
     | .nil => True
     | .cons head tail => head.ChildrenCanonical ∧ tail.ChildrenCanonical
 end
+
+mutual
+  def Region.decidableCanonical : (region : Region outer) →
+      Decidable region.Canonical
+    | .mk locals items => by
+        letI : Decidable (∀ localIndex : Fin locals.length,
+            RegionPath.RootedTwo
+              (items.incidencePaths (outer.length + localIndex.val) 0)) :=
+          VisualProof.Data.Finite.decidableForallFin _ fun _ => inferInstance
+        letI : Decidable items.ChildrenCanonical :=
+          ItemSeq.decidableChildrenCanonical items
+        simp only [Region.Canonical]
+        infer_instance
+
+  def Item.decidableChildrenCanonical : (item : Item wires) →
+      Decidable item.ChildrenCanonical
+    | .atom _ _ => isTrue trivial
+    | .identity _ _ _ => isTrue trivial
+    | .cut body => Region.decidableCanonical body
+
+  def ItemSeq.decidableChildrenCanonical : (items : ItemSeq wires) →
+      Decidable items.ChildrenCanonical
+    | .nil => isTrue trivial
+    | .cons head tail => by
+        letI : Decidable head.ChildrenCanonical :=
+          Item.decidableChildrenCanonical head
+        letI : Decidable tail.ChildrenCanonical :=
+          ItemSeq.decidableChildrenCanonical tail
+        simp only [ItemSeq.ChildrenCanonical]
+        infer_instance
+end
+
+instance (region : Region outer) : Decidable region.Canonical :=
+  Region.decidableCanonical region
+
+instance (item : Item wires) : Decidable item.ChildrenCanonical :=
+  Item.decidableChildrenCanonical item
+
+instance (items : ItemSeq wires) : Decidable items.ChildrenCanonical :=
+  ItemSeq.decidableChildrenCanonical items
 
 theorem ItemSeq.childrenCanonical_append
     (first second : ItemSeq wires) :
