@@ -8,7 +8,10 @@ Public trust audit for recursive diagram semantics and rule soundness.
 #print axioms VisualProof.Diagram.Region.denote_spliceAt
 #print axioms VisualProof.Diagram.denoteItem_identity
 
+#print axioms VisualProof.Rule.Step.Evidence.sound
 #print axioms VisualProof.Rule.Step.sound
+#print axioms VisualProof.Rule.Step.forward_execution_complete
+#print axioms VisualProof.Rule.Step.backward_execution_complete
 #print axioms VisualProof.Rule.Comprehension.sound
 
 #print axioms VisualProof.Rule.Erasure.forward_exact

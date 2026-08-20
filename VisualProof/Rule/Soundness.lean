@@ -14,10 +14,10 @@ namespace VisualProof.Rule
 open VisualProof.Theory
 open VisualProof.Diagram
 
-theorem Step.sound
+theorem Step.Evidence.sound
     {boundary : List Sig}
     {source target : OpenDiagram boundary}
-    (step : Step source target) :
+    (step : Step.Evidence source target) :
     ∀ (model : Model) (args : Values model boundary),
       denoteOpen model source args → denoteOpen model target args := by
   cases step with
@@ -51,5 +51,15 @@ theorem Step.sound
       exact WirePrimitive.FormalApplication.sound step
   | identityLeaf step =>
       exact WirePrimitive.IdentityLeaf.sound step
+
+theorem Step.sound
+    {boundary : List Sig}
+    {source target : OpenDiagram boundary}
+    (step : Step source target) :
+    ∀ (model : Model) (args : Values model boundary),
+      denoteOpen model source args → denoteOpen model target args := by
+  intro model args sourceDenotation
+  rcases step with ⟨evidence⟩
+  exact Step.Evidence.sound evidence model args sourceDenotation
 
 end VisualProof.Rule

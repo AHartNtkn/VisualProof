@@ -11,38 +11,97 @@ namespace VisualProof.Rule
 open Diagram
 open Theory
 
-inductive Step {boundary : List Sig} :
-    OpenDiagram boundary → OpenDiagram boundary → Prop
-  | wireSever : WireSever source target → Step source target
-  | iteration : Iteration source target → Step source target
-  | doubleCut : DoubleCut source target → Step source target
-  | vacuity : Vacuity source target → Step source target
-  | presentation : Presentation source target → Step source target
-  | identification : Identification source target → Step source target
-  | cutShape : WirePrimitive.CutShape source target → Step source target
+/-- The authoritative proof-relevant inventory of primitive one-step rules. -/
+inductive Step.Evidence {boundary : List Sig} :
+    OpenDiagram boundary → OpenDiagram boundary → Type
+  | wireSever : WireSever source target → Evidence source target
+  | iteration : Iteration source target → Evidence source target
+  | doubleCut : DoubleCut source target → Evidence source target
+  | vacuity : Vacuity source target → Evidence source target
+  | presentation : Presentation source target → Evidence source target
+  | identification : Identification source target → Evidence source target
+  | cutShape : WirePrimitive.CutShape source target → Evidence source target
   | parallelShape : WirePrimitive.ParallelShape source target →
-      Step source target
-  | ends : WirePrimitive.Ends source target → Step source target
-  | arity : WirePrimitive.Arity source target → Step source target
+      Evidence source target
+  | ends : WirePrimitive.Ends source target → Evidence source target
+  | arity : WirePrimitive.Arity source target → Evidence source target
   | argumentPermutation : WirePrimitive.ArgumentPermutation source target →
-      Step source target
+      Evidence source target
   | argumentDuplicate : WirePrimitive.ArgumentDuplicate source target →
-      Step source target
+      Evidence source target
   | argumentProjection : WirePrimitive.ArgumentProjection source target →
-      Step source target
+      Evidence source target
   | formalApplication : WirePrimitive.FormalApplication source target →
-      Step source target
+      Evidence source target
   | identityLeaf : WirePrimitive.IdentityLeaf source target →
-      Step source target
+      Evidence source target
 
-theorem Step.iso
+/-- The relational view of the proof-relevant one-step evidence. -/
+def Step {boundary : List Sig}
+    (source target : OpenDiagram boundary) : Prop :=
+  Nonempty (Step.Evidence source target)
+
+namespace Step
+
+def wireSever (step : WireSever source target) : Step source target :=
+  ⟨.wireSever step⟩
+
+def iteration (step : Iteration source target) : Step source target :=
+  ⟨.iteration step⟩
+
+def doubleCut (step : DoubleCut source target) : Step source target :=
+  ⟨.doubleCut step⟩
+
+def vacuity (step : Vacuity source target) : Step source target :=
+  ⟨.vacuity step⟩
+
+def presentation (step : Presentation source target) : Step source target :=
+  ⟨.presentation step⟩
+
+def identification (step : Identification source target) : Step source target :=
+  ⟨.identification step⟩
+
+def cutShape (step : WirePrimitive.CutShape source target) : Step source target :=
+  ⟨.cutShape step⟩
+
+def parallelShape (step : WirePrimitive.ParallelShape source target) :
+    Step source target :=
+  ⟨.parallelShape step⟩
+
+def ends (step : WirePrimitive.Ends source target) : Step source target :=
+  ⟨.ends step⟩
+
+def arity (step : WirePrimitive.Arity source target) : Step source target :=
+  ⟨.arity step⟩
+
+def argumentPermutation
+    (step : WirePrimitive.ArgumentPermutation source target) : Step source target :=
+  ⟨.argumentPermutation step⟩
+
+def argumentDuplicate
+    (step : WirePrimitive.ArgumentDuplicate source target) : Step source target :=
+  ⟨.argumentDuplicate step⟩
+
+def argumentProjection
+    (step : WirePrimitive.ArgumentProjection source target) : Step source target :=
+  ⟨.argumentProjection step⟩
+
+def formalApplication
+    (step : WirePrimitive.FormalApplication source target) : Step source target :=
+  ⟨.formalApplication step⟩
+
+def identityLeaf
+    (step : WirePrimitive.IdentityLeaf source target) : Step source target :=
+  ⟨.identityLeaf step⟩
+
+def Evidence.iso
     {boundary : List Sig}
     {source source' target target' : OpenDiagram boundary}
     (sourceIso : OpenDiagramIso source source')
-    (step : Step source target)
+    (evidence : Evidence source target)
     (targetIso : OpenDiagramIso target target') :
-    Step source' target' := by
-  cases step with
+    Evidence source' target' := by
+  cases evidence with
   | wireSever step =>
       exact .wireSever (WireSever.iso sourceIso step targetIso)
   | iteration step =>
@@ -79,5 +138,17 @@ theorem Step.iso
   | identityLeaf step =>
       exact .identityLeaf
         (WirePrimitive.IdentityLeaf.iso sourceIso step targetIso)
+
+theorem iso
+    {boundary : List Sig}
+    {source source' target target' : OpenDiagram boundary}
+    (sourceIso : OpenDiagramIso source source')
+    (step : Step source target)
+    (targetIso : OpenDiagramIso target target') :
+    Step source' target' := by
+  rcases step with ⟨evidence⟩
+  exact ⟨Evidence.iso sourceIso evidence targetIso⟩
+
+end Step
 
 end VisualProof.Rule
