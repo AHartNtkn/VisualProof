@@ -382,6 +382,52 @@ export class ProofMoveController {
       })
       return true
     }
+    // Delete on a single identity node reads as the vacuity shape it names:
+    // a nullary point vanishes outright, a unary node either retracts a stub
+    // (its wire's only other end is itself an identity node — the two-end
+    // floor means that end can't be a detach target) or detaches as a spare
+    // pin. Arity ≥ 2 is content in a path, not apparatus, so it falls
+    // through to discovery unchanged.
+    if (sample.key === 'Delete' || sample.key === 'Backspace') {
+      const hits = this.#options.selection()
+      if (hits.length === 1 && hits[0]!.kind === 'node') {
+        const diagram = this.#options.diagram()
+        const node = diagram.nodes[hits[0]!.id]
+        if (node?.kind === 'identity') {
+          if (node.arity === 0) {
+            this.#commit({
+              rule: 'vacuity',
+              direction: 'delete',
+              instance: { kind: 'point', node: hits[0]!.id, region: node.region, sig: node.sig },
+            })
+            return true
+          }
+          if (node.arity === 1) {
+            const [wireId, wire] = Object.entries(diagram.wires)
+              .find(([, w]) => w.endpoints.some((ep) => ep.node === hits[0]!.id))!
+            const other = wire.endpoints.find((ep) => ep.node !== hits[0]!.id)
+            const stubShaped = wire.endpoints.length === 2
+              && other !== undefined
+              && diagram.nodes[other.node]?.kind === 'identity'
+            this.#commit(stubShaped
+              ? {
+                  rule: 'vacuity',
+                  direction: 'delete',
+                  instance: {
+                    kind: 'stub', base: other.node, wire: wireId, end: hits[0]!.id,
+                    region: node.region,
+                  },
+                }
+              : {
+                  rule: 'vacuity',
+                  direction: 'delete',
+                  instance: { kind: 'pin', wire: wireId, node: hits[0]!.id, region: node.region },
+                })
+            return true
+          }
+        }
+      }
+    }
     // Delete on a lone attached wire deletes its ends; the wire itself
     // stays, quantified. This never forms a subgraph selection (the ends
     // stay behind), so it dispatches before discovery.

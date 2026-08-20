@@ -8,7 +8,7 @@ import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { IOTA, relSig } from '../../src/kernel/diagram/sig'
 import { bareWireDeletionSteps, bareWireInsertSteps } from '../../src/kernel/proof/bare-wire'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
-import type { ProofAction } from '../../src/kernel/proof/action'
+import { applyAction, type ProofAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import type { ProofStep } from '../../src/kernel/proof/step'
 import { mkEngine } from '../../src/view/engine'
@@ -59,6 +59,38 @@ function harness(diagram: Diagram, selection: readonly Hit[] = []) {
     context: () => EMPTY_PROOF_CONTEXT,
     orientation: () => 'forward',
     apply: (action) => { applied.push(action) },
+    refuse: (text) => { refusals.push(text) },
+    theme: () => LIGHT,
+    fuel: () => 0,
+    openSpawn: () => undefined,
+  })
+  return { moves, engine, applied, refusals }
+}
+
+/**
+ * A harness variant whose `apply` runs the kernel for real via `applyAction`,
+ * so a step the kernel refuses springs back through moves.ts's own
+ * `#commitSteps` catch — the standard `harness` above only records actions
+ * and never exercises that path.
+ */
+function harnessKernel(diagram: Diagram, selection: readonly Hit[] = []) {
+  const engine = mkEngine(diagram, [])
+  const applied: ProofAction[] = []
+  const refusals: string[] = []
+  const moves = new ProofMoveController({
+    host: { ownerDocument: {} } as unknown as HTMLElement,
+    active: () => true,
+    diagram: () => diagram,
+    engine: () => engine,
+    viewScale: () => 1,
+    selection: () => selection,
+    setSelection: () => undefined,
+    context: () => EMPTY_PROOF_CONTEXT,
+    orientation: () => 'forward',
+    apply: (action) => {
+      applyAction(diagram, action, EMPTY_PROOF_CONTEXT, 'forward')
+      applied.push(action)
+    },
     refuse: (text) => { refusals.push(text) },
     theme: () => LIGHT,
     fuel: () => 0,
@@ -156,6 +188,59 @@ describe('proof move vocabulary', () => {
     expect(bareCase.applied).toHaveLength(1)
     expect(bareCase.applied[0]!.steps)
       .toEqual(bareWireDeletionSteps(bareDiagram, bare.wire))
+  })
+
+  it('Delete on one pin of a bare segment retracts the stub, leaving the lone point', () => {
+    const builder = new DiagramBuilder()
+    const seg = segment(builder, builder.root)
+    const diagram = builder.build()
+    const { moves, applied } = harness(diagram, [{ kind: 'node', id: seg.ends[0] }])
+    expect(moves.keyDown(keySample('Delete'))).toBe(true)
+    expect(applied).toHaveLength(1)
+    expect(applied[0]!.steps[0]).toMatchObject({
+      rule: 'vacuity',
+      direction: 'delete',
+      instance: { kind: 'stub', wire: seg.wire, end: seg.ends[0], base: seg.ends[1] },
+    })
+  })
+
+  it('Delete on a spare pin of a three-ended wire detaches it', () => {
+    const builder = new DiagramBuilder()
+    const seg = segment(builder, builder.root)
+    const spare = builder.pin(seg.wire, builder.root)
+    const diagram = builder.build()
+    const { moves, applied } = harness(diagram, [{ kind: 'node', id: spare }])
+    expect(moves.keyDown(keySample('Delete'))).toBe(true)
+    expect(applied[0]!.steps[0]).toMatchObject({
+      rule: 'vacuity',
+      direction: 'delete',
+      instance: { kind: 'pin', wire: seg.wire, node: spare },
+    })
+  })
+
+  it('Delete on a load-bearing pin surfaces the kernel refusal', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const seg = segment(builder, cut)          // two ends inside the cut
+    const root = builder.pin(seg.wire, builder.root)  // scope-holding root pin
+    const diagram = builder.build()
+    const { moves, applied, refusals } = harnessKernel(diagram, [{ kind: 'node', id: root }])
+    expect(moves.keyDown(keySample('Delete'))).toBe(true)
+    expect(applied).toHaveLength(0)
+    expect(refusals.some((text) => /load-bearing/.test(text))).toBe(true)
+  })
+
+  it('Delete on a lone point deletes it as vacuity', () => {
+    const builder = new DiagramBuilder()
+    const point = builder.point(builder.root)
+    const diagram = builder.build()
+    const { moves, applied } = harness(diagram, [{ kind: 'node', id: point }])
+    expect(moves.keyDown(keySample('Delete'))).toBe(true)
+    expect(applied[0]!.steps[0]).toMatchObject({
+      rule: 'vacuity',
+      direction: 'delete',
+      instance: { kind: 'point', node: point, region: diagram.root },
+    })
   })
 
   it('Q over a strand pins the wire at the hovered region', () => {
