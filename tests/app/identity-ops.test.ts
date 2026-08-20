@@ -9,7 +9,7 @@ import type { ProofStep } from '../../src/kernel/proof/step'
 import { mkEngine, type Engine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import type { Vec2 } from '../../src/view/vec'
-import { farBlank, place, pointerSample } from './helpers/gesture'
+import { farBlank, place, placeRegion, pointerSample } from './helpers/gesture'
 
 /** Two wires meeting at an arity-2 dot at the root, each held by a pin. */
 function dotJoined() {
@@ -75,6 +75,24 @@ function bridgedDotsAcrossRegions() {
   place(engine, aPin, { x: 100, y: 300 })
   place(engine, bPin, { x: 700, y: 300 })
   return { diagram, engine, dot1, dot2 }
+}
+
+/** An arity-1 dot homed inside a cut, held by a pin at the cut — the cut's
+    engine region circle sits close around the dot so a far drop resolves
+    (via `regionAt`'s fallback) to the diagram's root, above the cut. */
+function dotInCut() {
+  const builder = new DiagramBuilder()
+  const cut = builder.cut(builder.root)
+  const dot = builder.identity(cut, IOTA, 1)
+  const w = builder.wire([{ node: dot, port: { kind: 'identity', index: 0 } }])
+  const pin = builder.pin(w, cut)
+  const diagram = builder.build()
+  const engine = mkEngine(diagram, [])
+  engine.scale = 12
+  place(engine, dot, { x: 300, y: 300 })
+  place(engine, pin, { x: 500, y: 300 })
+  placeRegion(engine, cut, { x: 300, y: 300 }, 100)
+  return { diagram, engine, dot, cut }
 }
 
 type Committed = { readonly label: string; readonly steps: readonly ProofStep[] }
@@ -151,6 +169,50 @@ describe('fuse: dot dragged onto another dot', () => {
     expect(h.committed).toEqual([])
     expect(h.refusals).toHaveLength(1)
     expect(h.refusals[0]).toMatch(/homed at/)
+  })
+})
+
+describe('stub: dot rim pulled into open space', () => {
+  it('commits a vacuity-insert stub step: the dot gains a port and a fresh wire runs to a fresh arity-1 node', () => {
+    const { diagram, engine, dot, a, b } = dotJoined()
+    const h = harness(diagram, engine)
+    const body = engine.bodies.get(dot)!
+    const rim = { x: body.pos.x + body.discR * engine.scale, y: body.pos.y }
+    drag(h.controller, rim, farBlank())
+    expect(h.refusals).toEqual([])
+    expect(h.committed).toHaveLength(1)
+    const step = h.committed[0]!.steps[0]!
+    expect(step).toMatchObject({ rule: 'vacuity', direction: 'insert', instance: { kind: 'stub', base: dot } })
+    const after = h.diagram()
+    expect(after.nodes[dot]).toMatchObject({ kind: 'identity', arity: 3 })
+    const stubWire = Object.keys(after.wires).find((id) => id !== a && id !== b)
+    expect(stubWire).toBeDefined()
+    const endpoints = after.wires[stubWire!]!.endpoints
+    expect(endpoints).toHaveLength(2)
+    expect(endpoints.some((ep) => ep.node === dot)).toBe(true)
+    const end = endpoints.find((ep) => ep.node !== dot)!.node
+    expect(after.nodes[end]).toMatchObject({ kind: 'identity', arity: 1 })
+  })
+
+  it('refuses when the drop region is not at-or-under the dot\'s region', () => {
+    const { diagram, engine, dot } = dotInCut()
+    const h = harness(diagram, engine)
+    const body = engine.bodies.get(dot)!
+    const rim = { x: body.pos.x + body.discR * engine.scale, y: body.pos.y }
+    drag(h.controller, rim, farBlank())
+    expect(h.committed).toEqual([])
+    expect(h.refusals).toHaveLength(1)
+    expect(h.refusals[0]).toMatch(/not.*at-or-under|gated quantifier movement/)
+  })
+
+  it('refuses a non-open-space drop with the placeholder message', () => {
+    const { diagram, engine, dot } = dotJoined()
+    const h = harness(diagram, engine)
+    const body = engine.bodies.get(dot)!
+    const rim = { x: body.pos.x + body.discR * engine.scale, y: body.pos.y }
+    drag(h.controller, rim, { x: 300, y: 300 })
+    expect(h.committed).toEqual([])
+    expect(h.refusals).toEqual(['pull the stub into open space'])
   })
 })
 

@@ -12,7 +12,7 @@ import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import { length, sub } from '../../view/vec'
 import type { Vec2 } from '../../view/vec'
-import { wireManipulationHitTest } from '../hittest'
+import { regionAt, wireManipulationHitTest } from '../hittest'
 import { headWireOf } from './wire-ops'
 import type { PointerClaim, PointerSample } from './viewport'
 
@@ -229,9 +229,7 @@ export class IdentityOpsController {
           this.#options.commit('presentation', [fuseStep(diagram, grab.node, target)], sample.client)
           return
         }
-        const manipulation = wireManipulationHitTest(engine, point, viewport)
-        const endDisc = this.#options.claimEndDiscs ? this.#endDiscAt(point) : null
-        if (manipulation !== null || target !== null || endDisc !== null) {
+        if (!this.#isOpenSpace(point, viewport) || target !== null) {
           this.#options.refuse(
             'release in open space to collapse, or on another dot to fuse',
             sample.client,
@@ -250,7 +248,17 @@ export class IdentityOpsController {
         return
       }
       case 'dotRim': {
-        this.#options.refuse('pull the stub into open space', sample.client)
+        if (!this.#isOpenSpace(point, viewport)) {
+          this.#options.refuse('pull the stub into open space', sample.client)
+          return
+        }
+        const dropRegion = regionAt(engine, diagram, point)
+        const step: ProofStep = {
+          rule: 'vacuity',
+          direction: 'insert',
+          instance: { kind: 'stub', base: grab.node, wire: 'w', end: 'w_end', region: dropRegion },
+        }
+        this.#options.commit('vacuity', [step], sample.client)
         return
       }
       case 'leg': {
@@ -262,6 +270,16 @@ export class IdentityOpsController {
         return
       }
     }
+  }
+
+  /** No wire-manipulation hit, no identity disc, no end disc — the point a
+      dot (or its rim) may be dropped onto to grow or collapse. */
+  #isOpenSpace(point: Vec2, viewport: { readonly scale: number }): boolean {
+    const engine = this.#options.engine()
+    if (wireManipulationHitTest(engine, point, viewport) !== null) return false
+    if (identityDiscAt(engine, point) !== null) return false
+    if (this.#options.claimEndDiscs && this.#endDiscAt(point) !== null) return false
+    return true
   }
 
   #endDiscAt(point: Vec2): { readonly node: NodeId; readonly wire: WireId } | null {
