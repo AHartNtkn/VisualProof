@@ -204,7 +204,10 @@ mutual
         {arity : Nat} {ambient : WireEquiv sourceWires targetWires}
         {sourcePorts : Fin arity → Var sourceWires signature}
         {targetPorts : Fin arity → Var targetWires signature}
-        (ports_eq : (fun index => ambient (sourcePorts index)) = targetPorts) :
+        (positions : FiniteEquiv (Fin arity) (Fin arity))
+        (ports_eq : ∀ sourceIndex,
+          ambient (sourcePorts sourceIndex) =
+            targetPorts (positions sourceIndex)) :
         ItemIso ambient (.identity signature arity sourcePorts)
           (.identity signature arity targetPorts)
     | cut {sourceWires targetWires : List Sig}
@@ -270,7 +273,7 @@ private noncomputable def itemIsoReflIdentity
     (signature : Sig) (arity : Nat)
     (ports : Fin arity → Var wires signature) :
     ItemIsoReflMotive wires (.identity signature arity ports) :=
-  .identity rfl
+  .identity (FiniteEquiv.refl _) fun _ => rfl
 
 private noncomputable def itemIsoReflCut
     (body : Region wires) (bodyIH : RegionIsoReflMotive wires body) :
@@ -340,10 +343,16 @@ mutual
         (by
           rw [← ports_eq]
           exact Vars.map_equiv_left_inv ambient sourcePorts)
-    | @ItemIso.identity _ _ _ _ _ _ _ ports_eq => .identity (by
-        funext index
-        rw [← congrFun ports_eq index]
-        exact ambient.left_inv _)
+    | @ItemIso.identity _ _ _ _ _ sourcePorts targetPorts positions
+          ports_eq =>
+        .identity positions.symm (by
+          intro targetIndex
+          let sourceIndex := positions.symm targetIndex
+          change ambient.symm (targetPorts targetIndex) =
+            sourcePorts sourceIndex
+          rw [← positions.apply_symm_apply targetIndex,
+            ← ports_eq sourceIndex]
+          exact ambient.left_inv _)
     | .cut body => .cut body.symm
 
   noncomputable def ItemSeqIso.symm
@@ -402,13 +411,16 @@ mutual
               _ = middlePorts.map (fun wire => secondAmbient wire) := by
                 rw [firstPorts]
               _ = targetPorts := secondPorts)
-    | @ItemIso.identity _ _ _ _ _ sourcePorts middlePorts firstPorts,
-        @ItemIso.identity _ _ _ _ _ _ targetPorts secondPorts =>
-      .identity (by
-        funext index
-        change secondAmbient (firstAmbient (sourcePorts index)) =
-          targetPorts index
-        rw [congrFun firstPorts index, congrFun secondPorts index])
+    | @ItemIso.identity _ _ _ _ _ sourcePorts middlePorts firstPositions
+          firstPorts,
+        @ItemIso.identity _ _ _ _ _ _ targetPorts secondPositions
+          secondPorts =>
+      .identity (firstPositions.trans secondPositions) (by
+        intro sourceIndex
+        change secondAmbient (firstAmbient (sourcePorts sourceIndex)) =
+          targetPorts (secondPositions (firstPositions sourceIndex))
+        rw [firstPorts sourceIndex,
+          secondPorts (firstPositions sourceIndex)])
     | .cut firstBody, .cut secondBody => .cut (firstBody.trans secondBody)
 
   noncomputable def ItemSeqIso.trans

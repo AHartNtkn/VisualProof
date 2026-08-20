@@ -157,19 +157,27 @@ private theorem identityDenotationCase
     {ambient : WireEquiv sourceWires targetWires}
     {sourcePorts : Fin arity → Var sourceWires signature}
     {targetPorts : Fin arity → Var targetWires signature}
-    (ports_eq : (fun index => ambient (sourcePorts index)) = targetPorts) :
+    (positions : FiniteEquiv (Fin arity) (Fin arity))
+    (ports_eq : ∀ sourceIndex,
+      ambient (sourcePorts sourceIndex) =
+        targetPorts (positions sourceIndex)) :
     ItemDenotationMotive ambient (.identity signature arity sourcePorts)
-      (.identity signature arity targetPorts) (.identity ports_eq) := by
+      (.identity signature arity targetPorts) (.identity positions ports_eq) := by
   intro model sourceEnv targetEnv agree
-  subst targetPorts
   simp only [denoteItem_identity]
   constructor
-  · intro sourceDenotes left right
-    rw [← agree (sourcePorts left), ← agree (sourcePorts right)]
-    exact sourceDenotes left right
-  · intro targetDenotes left right
-    rw [agree (sourcePorts left), agree (sourcePorts right)]
-    exact targetDenotes left right
+  · intro sourceDenotes targetLeft targetRight
+    let sourceLeft := positions.symm targetLeft
+    let sourceRight := positions.symm targetRight
+    rw [← positions.apply_symm_apply targetLeft,
+      ← positions.apply_symm_apply targetRight,
+      ← ports_eq sourceLeft, ← ports_eq sourceRight,
+      ← agree (sourcePorts sourceLeft), ← agree (sourcePorts sourceRight)]
+    exact sourceDenotes sourceLeft sourceRight
+  · intro targetDenotes sourceLeft sourceRight
+    rw [agree (sourcePorts sourceLeft), agree (sourcePorts sourceRight),
+      ports_eq sourceLeft, ports_eq sourceRight]
+    exact targetDenotes (positions sourceLeft) (positions sourceRight)
 
 private theorem cutDenotationCase
     {sourceWires targetWires : List Sig}
