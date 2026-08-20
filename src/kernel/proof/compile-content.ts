@@ -1114,7 +1114,7 @@ export function compileRelationSever(
 }
 
 /** The planning-world inverse of one emitted join step. */
-function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
+export function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
   const preWire = (wireId: WireId): Wire => {
     const wire = pre.wires[wireId]
     if (wire === undefined) {
@@ -1249,22 +1249,22 @@ function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
         scope: derivedScope(pre, step.wire),
       }
     case 'wireJoin': {
-      const dying = preWire(step.input.b)
-      const survivorPost = post.wires[step.input.a] !== undefined
-        ? step.input.a
-        : step.input.b
-      const movedKeys = new Set(dying.endpoints.map((endpoint) =>
+      const aSurvived = post.wires[step.input.a] !== undefined
+      const survivorPost = aSurvived ? step.input.a : step.input.b
+      const dyingId = aSurvived ? step.input.b : step.input.a
+      const dying = preWire(dyingId)
+      const key = (endpoint: Endpoint): string =>
         `${endpoint.node}|${endpoint.port.kind}|${
-          endpoint.port.kind === 'head' ? '' : endpoint.port.index}`))
+          endpoint.port.kind === 'head' ? '' : endpoint.port.index}`
+      const movedKeys = new Set(dying.endpoints.map(key))
       const keep = post.wires[survivorPost]!.endpoints.filter((endpoint) =>
-        !movedKeys.has(`${endpoint.node}|${endpoint.port.kind}|${
-          endpoint.port.kind === 'head' ? '' : endpoint.port.index}`))
+        !movedKeys.has(key(endpoint)))
       return {
         rule: 'wireSever',
         input: {
           wire: survivorPost,
           keep,
-          scope: derivedScope(pre, step.input.b),
+          scope: derivedScope(pre, dyingId),
         },
       }
     }

@@ -6,6 +6,7 @@ import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import {
   compileRelationJoin,
   compileRelationSever,
+  invertStep,
 } from '../../../src/kernel/proof/compile-content'
 import {
   EMPTY_PROOF_CONTEXT,
@@ -14,6 +15,7 @@ import {
 } from '../../../src/kernel/proof/context'
 import { applyAction } from '../../../src/kernel/proof/action'
 import { bareWire } from '../../fixtures/pins'
+import { applyWireJoin, applyWireSever } from '../../../src/kernel/rules/wire-quantifier'
 
 const UNARY = relSig([IOTA])
 const BINARY = relSig([IOTA, IOTA])
@@ -378,5 +380,34 @@ describe('compileRelationJoin against hand-built expectations', () => {
       attach(builder, x!, site, { kind: 'arg', index: 1 })
     })
     expect(sameDiagram(compiled, expected)).toBe(true)
+  })
+})
+
+describe('invertStep for wireJoin', () => {
+  /** a: P(a) inside a cut, pinned there. b: Q(b) on the sheet, pinned there. Join a into b (b is outer). */
+  function joinFixture() {
+    const P = relSig([IOTA])
+    const bld = new DiagramBuilder()
+    const cut = bld.cut(bld.root)
+    const pa = bld.atom(cut, P)
+    const qb = bld.atom(bld.root, P)
+    const hp = bld.wire([{ node: pa, port: { kind: 'head' } }], P); bld.pin(hp, cut)
+    const hq = bld.wire([{ node: qb, port: { kind: 'head' } }], P); bld.pin(hq, bld.root)
+    const a = bld.wire([{ node: pa, port: { kind: 'arg', index: 0 } }]); bld.pin(a, cut)
+    const b = bld.wire([{ node: qb, port: { kind: 'arg', index: 0 } }]); bld.pin(b, bld.root)
+    return { pre: bld.build(), a, b }
+  }
+
+  it('severs the wire that died, at its scope, when b was the outer survivor', () => {
+    const { pre, a, b } = joinFixture()
+    const step = { rule: 'wireJoin', input: { a, b } } as const
+    const post = applyWireJoin(pre, step.input)          // inner a (cut) dies into b (sheet)
+    expect(post.wires[a]).toBeUndefined()
+    const inverse = invertStep(step, pre, post)
+    expect(inverse.rule).toBe('wireSever')
+    if (inverse.rule !== 'wireSever') throw new Error('unreachable')
+    // BUG: dying was taken to be b, so keep = a's old endpoints and scope = sheet.
+    const restored = applyWireSever(post, inverse.input, 'backward')
+    expect(sameDiagram(restored, pre, [], [])).toBe(true)
   })
 })
