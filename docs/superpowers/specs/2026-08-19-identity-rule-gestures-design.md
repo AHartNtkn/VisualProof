@@ -45,14 +45,24 @@ exposure are visible operations and get gestures.
 | Drag identity dot rim → open space | Vacuity **stub grow**: fresh wire from the dot to a fresh far pin at the drop region | `vacuity insert { kind: 'stub' }` | same |
 | Drag identity dot → another identity dot | Presentation **fuse**: one dot covering the union of both dots' ports | `presentation` | same |
 | Drag a wire's end (atom/ref disc) or arg-port leg → an identity dot on that wire | Identification **expose**: that endpoint peels onto a fresh wire equated at the dot | `identification { kind: 'expose' }` | same |
-| Drag a leg (identity-port attachment) → a leg of a *different* wire on the same dot | Presentation **fission**: fresh dot takes the dragged wire plus the target wire (the target is the drawn bridge); the old dot keeps everything but the dragged wire | `presentation` | same |
-| Drag a leg → its own dot's disc interior | Presentation **duplicate**: the wire gains a second port on that dot | `presentation` | same |
-| Drag a leg → a leg of the *same* wire on the same dot | Presentation **contract**: the two ports become one | `presentation` | same |
+| Drag wire `a`'s strand → wire `c`'s strand, where `a` and `c` meet at exactly one dot | Presentation **fission**: fresh dot takes `a` plus `c` (the target is the drawn bridge); the old dot keeps everything but `a`. Lines sharing no dot keep meaning join; sharing several dots refuses | `presentation` | same |
+| Drag a wire's strand → a dot it is attached to | Presentation **duplicate**: the wire gains a second leg on that dot | `presentation` | same |
+| Drag a dot → the strand of a wire holding two of its legs | Presentation **contract**: the two legs become one | `presentation` | same |
 | `Q` over blank | Bare segment (point∘stub composite) at the region under the pointer; `Shift+Q` = nullary-relation sig | existing vacuity composite | `addRelationWire` |
 | `Q` over a wire strand | Vacuity **pin insert** on that wire at the region under the pointer | `vacuity insert { kind: 'pin' }` | `applyVacuityInsert` |
 | Delete with one identity node selected | Shape-determined vacuity delete: arity-0 → point delete; pin whose 2-end wire's other end is an identity node → stub retract; otherwise → pin detach | `vacuity delete` | existing `deleteHits` (edit deletes freely) |
 | Right-drag straight line (**slash**) crossing wire legs | Sever the crossed endpoints | `wireSever` (one step per crossed wire; `scope` omitted → derived scope) | existing `severEndpoint` loop |
 | Still right-click | Spawn palette / context surface (unchanged, both modes) | — | — |
+
+AMENDMENT (2026-08-20, user-ordered): ports are not objects — "a wire+node is
+all you need for any rule." The original fission/duplicate/contract rows
+designated legs by identity-port index; those are banned as designations and
+provably unhittable (identity ports all anchor at the dot's centre). The
+rows above are the re-grounded versions: every designation is a wire or a
+node. Any residual port-index choice is invisible (isomorphic results) and
+resolved internally. The strand→strand drag means join ONLY for lines not
+already meeting at a dot; for lines meeting at exactly one dot it means
+fission (join's result there stays reachable by collapse-then-duplicate).
 
 Precedence rulings:
 - Dot-onto-dot always reads as **fuse**, even when the dragged dot is a pin
