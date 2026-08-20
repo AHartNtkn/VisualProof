@@ -4,7 +4,7 @@ import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
-import { applyAction, type ProofAction } from '../../../src/kernel/proof/action'
+import { applyAction, singleStepAction, type ProofAction } from '../../../src/kernel/proof/action'
 import { compileRelationJoinAction } from '../../../src/kernel/proof/compile-content'
 import {
   EMPTY_PROOF_CONTEXT,
@@ -12,6 +12,7 @@ import {
   registerTheorem,
   type ProofContext,
 } from '../../../src/kernel/proof/context'
+import { ProofError } from '../../../src/kernel/proof/error'
 import { theoremFromJson, theoremToJson } from '../../../src/kernel/proof/json'
 import { replayProof, type ProofStep } from '../../../src/kernel/proof/step'
 import {
@@ -709,5 +710,76 @@ describe('theorem proof steps', () => {
     expect(Object.values(result.nodes).filter((node) => node.kind === 'atom'))
       .toHaveLength(1)
     expect(Object.values(result.nodes)).toHaveLength(2)
+  })
+})
+
+describe('boundary wires are not local binders', () => {
+  const PROP = relSig([])
+
+  /** lhs: a bare boundary wire R (pin + frame entry). rhs: R applied once. */
+  function topToR(): { lhs: ReturnType<DiagramBuilder['buildOpen']>; rhs: ReturnType<DiagramBuilder['buildOpen']>; lw: string; lpin: string; rw: string } {
+    const left = new DiagramBuilder()
+    const lw = left.wire([], PROP)
+    const lpin = left.pin(lw, left.root)
+    const lhs = left.buildOpen([lw])
+    const right = new DiagramBuilder()
+    const atom = right.atom(right.root, PROP)
+    const rw = right.wire([{ node: atom, port: { kind: 'head' } }], PROP)
+    const rhs = right.buildOpen([rw])
+    return { lhs, rhs, lw, lpin, rw }
+  }
+
+  it('rejects a backward ends-delete on the boundary wire', () => {
+    const { lhs, rhs, rw } = topToR()
+    const thm: Theorem = {
+      name: 'topImpliesR', lhs, rhs, actions: [],
+      backActions: [singleStepAction('delete R ends', { rule: 'endsDelete', wire: rw })],
+    }
+    // accepting this would certify ⊤ ⊢ R() with R free, from which
+    // applyTheorem derives ∀Q.Q() against a host equivalent to ⊤
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, thm)).toThrow(ProofError)
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, thm)).toThrow(/rebinds boundary wire/)
+  })
+
+  it('rejects a forward ends-spawn on the boundary wire', () => {
+    const { lhs, rhs, lw, lpin } = topToR()
+    const thm: Theorem = {
+      name: 'topImpliesR_fwd', lhs, rhs,
+      actions: [
+        singleStepAction('spawn R end', {
+          rule: 'endsSpawn', wire: lw, sites: [{ region: lhs.diagram.root, args: [] }],
+        }),
+        singleStepAction('shed pin', {
+          rule: 'vacuity', direction: 'delete',
+          instance: { kind: 'pin', wire: lw, node: lpin, region: lhs.diagram.root },
+        }),
+      ],
+    }
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, thm)).toThrow(/rebinds boundary wire/)
+  })
+
+  it('still accepts severing a boundary wire (the new wire is a genuine local)', () => {
+    // lhs: P() ∧ Q() on one boundary wire R; rhs: R applied as P, fresh Q' applied.
+    const left = new DiagramBuilder()
+    const p = left.atom(left.root, PROP)
+    const q = left.atom(left.root, PROP)
+    const R = left.wire([{ node: p, port: { kind: 'head' } }, { node: q, port: { kind: 'head' } }], PROP)
+    const lhs = left.buildOpen([R])
+    const right = new DiagramBuilder()
+    const rp = right.atom(right.root, PROP)
+    const rq = right.atom(right.root, PROP)
+    const rR = right.wire([{ node: rp, port: { kind: 'head' } }], PROP)
+    // buildOpen/pinnedForReplay supply the ends: rR gets its frame pin, and the
+    // severed-off wire the completion pin that completeWireEnds mints forward.
+    right.wire([{ node: rq, port: { kind: 'head' } }], PROP)
+    const rhs = right.buildOpen([rR])
+    const thm: Theorem = {
+      name: 'severBoundary', lhs, rhs,
+      actions: [singleStepAction('sever', {
+        rule: 'wireSever',
+        input: { wire: R, keep: [{ node: p, port: { kind: 'head' } }] },
+      })],
+    }
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, thm)).not.toThrow()
   })
 })

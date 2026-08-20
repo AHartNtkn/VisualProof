@@ -105,6 +105,57 @@ export type ProofStep =
   | { readonly rule: 'refLeaf'; readonly wire: WireId; readonly defId: string }
   | { readonly rule: 'refAbstract'; readonly nodes: readonly NodeId[]; readonly scope: RegionId }
 
+/**
+ * The wires a step REBINDS: the relation wire whose applications it rewrites
+ * (the selected local binder of the Lean wire primitives, leaf rules and
+ * ends). Such a wire must be a local binder of the region the step acts in;
+ * a boundary wire of an open diagram never is, so a theorem replay may not
+ * let these steps act on one. Steps that only add incidences to a wire, or
+ * split/merge wires (sever, join, identification), are not listed.
+ */
+export function reboundWires(step: ProofStep): readonly WireId[] {
+  switch (step.rule) {
+    case 'cutWrap':
+    case 'cutAbsorb':
+    case 'parallelSplit':
+    case 'endsDelete':
+    case 'endsSpawn':
+    case 'arityShift':
+    case 'arityUnshift':
+    case 'argPermute':
+    case 'argDuplicate':
+    case 'argContract':
+    case 'argDrop':
+    case 'argExtend':
+    case 'applyFormal':
+    case 'identityLeaf':
+    case 'refLeaf':
+      return [step.wire]
+    case 'parallelFuse':
+      return [step.a, step.b]
+    case 'refSpawn':
+    case 'atomSpawn':
+    case 'identityInsert':
+    case 'wireJoin':
+    case 'erasure':
+    case 'wireSever':
+    case 'iteration':
+    case 'deiteration':
+    case 'doubleCutIntro':
+    case 'doubleCutElim':
+    case 'theorem':
+    case 'vacuity':
+    case 'presentation':
+    case 'identification':
+    case 'unfold':
+    case 'fold':
+    case 'abstractFormal':
+    case 'identityAbstract':
+    case 'refAbstract':
+      return []
+  }
+}
+
 /** Logical transport of source wire identities through one proof step. */
 export type WireInterfaceTransport = {
   readonly image: (wire: WireId) => WireId | undefined

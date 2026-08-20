@@ -13,7 +13,7 @@ import { diagramToJson } from '../diagram/json'
 import { RuleError } from '../rules/error'
 import type { ProofContext } from './context'
 import { assertProofContext } from './context'
-import { transportBoundary } from './step'
+import { reboundWires, transportBoundary } from './step'
 import type { StepReceipt } from './step'
 import type { ProofAction } from './action'
 import { replayActions } from './action'
@@ -86,10 +86,18 @@ export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
     )
   }
   const backActions = thm.backActions ?? []
-  const carry = (initial: readonly WireId[]) => {
+  const carry = (initial: readonly WireId[], actions: readonly ProofAction[]) => {
     let boundary = initial
     return {
       afterStep(_d: Diagram, actionIndex: number, stepIndex: number, receipt: StepReceipt): void {
+        const step = actions[actionIndex]!.steps[stepIndex]!
+        const rebound = reboundWires(step).find((wire) => boundary.includes(wire))
+        if (rebound !== undefined) {
+          throw new ProofError(
+            `theorem '${thm.name}': step ${stepIndex} (${step.rule}) of action ${actionIndex} `
+            + `rebinds boundary wire '${rebound}'; a boundary wire is not a local binder`,
+          )
+        }
         const mapped = transportBoundary(receipt.interface, boundary)
         if (mapped === undefined) {
           const missing = boundary.find((wire) => receipt.interface.image(wire) === undefined)
@@ -102,11 +110,11 @@ export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
       boundary: () => boundary,
     }
   }
-  const fwdInterface = carry(thm.lhs.boundary)
+  const fwdInterface = carry(thm.lhs.boundary, thm.actions)
   const fwd = replayActions(pinnedForReplay(thm.lhs), thm.actions, ctx, fwdInterface.afterStep)
   // the backward half replays from the RHS with flipped gates — each step
   // asserts its result entails its input, so the chain runs rhs-ward
-  const bwdInterface = carry(thm.rhs.boundary)
+  const bwdInterface = carry(thm.rhs.boundary, backActions)
   const bwd = replayActions(pinnedForReplay(thm.rhs), backActions, ctx, bwdInterface.afterStep, 'backward')
   if (!sameDiagram(fwd, bwd, fwdInterface.boundary(), bwdInterface.boundary())) {
     const detail = process.env.THEOREM_DEBUG
