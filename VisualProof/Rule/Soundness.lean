@@ -7,6 +7,7 @@ import VisualProof.Rule.Soundness.Comprehension
 import VisualProof.Rule.Soundness.Vacuity
 import VisualProof.Rule.Soundness.Presentation
 import VisualProof.Rule.Soundness.Identification
+import VisualProof.Rule.Soundness.WirePrimitive
 
 namespace VisualProof.Rule
 
@@ -36,5 +37,23 @@ theorem Step.sound
       exact Presentation.sound step
   | identification step =>
       exact Identification.sound step
+  | cutShape step =>
+      exact WirePrimitive.CutShape.sound step
+  | parallelShape step =>
+      exact WirePrimitive.ParallelShape.sound step
+  | ends step =>
+      exact WirePrimitive.Ends.sound step
+  | arity step =>
+      exact WirePrimitive.Arity.sound step
+  | argumentPermutation step =>
+      exact WirePrimitive.ArgumentPermutation.sound step
+  | argumentDuplicate step =>
+      exact WirePrimitive.ArgumentDuplicate.sound step
+  | argumentProjection step =>
+      exact WirePrimitive.ArgumentProjection.sound step
+  | formalApplication step =>
+      exact WirePrimitive.FormalApplication.sound step
+  | identityLeaf step =>
+      exact WirePrimitive.IdentityLeaf.sound step
 
 end VisualProof.Rule
