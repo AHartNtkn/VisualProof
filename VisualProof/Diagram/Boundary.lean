@@ -95,7 +95,7 @@ theorem Candidate.validateWhen_eq_some_iff
     (candidate : Candidate boundary) (condition : Prop)
     [Decidable condition] (output : OpenDiagram boundary) :
     candidate.validateWhen condition = some output ↔
-      ∃ (conditionEvidence : condition) (valid : candidate.Valid),
+      ∃ (_conditionEvidence : condition) (valid : candidate.Valid),
         output = candidate.toOpen valid := by
   constructor
   · intro computed

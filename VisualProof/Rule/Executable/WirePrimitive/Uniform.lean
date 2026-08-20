@@ -40,7 +40,7 @@ theorem validateBodyWhen_eq_some_iff
     (interface : OpenDiagram boundary) (body : Region interface.external)
     (output : OpenDiagram boundary) :
     validateBodyWhen condition interface body = some output ↔
-      ∃ (evidence : condition) (canonical : body.Canonical)
+      ∃ (_evidence : condition) (canonical : body.Canonical)
         (twoEnded : OpenDiagram.ExternalTwoEnded interface.boundaryWire body),
         output = interface.withBody body canonical twoEnded := by
   constructor
