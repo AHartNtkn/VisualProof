@@ -29,13 +29,30 @@ def selected (outer before after : List Sig) (arguments : List Sig) :
     Var (outer ++ (before ++ (.rel arguments :: after))) (.rel arguments) :=
   Var.appendRight outer (Var.appendRight before .here)
 
-/-- A pattern-boundary attachment. Surjectivity of the pattern boundary makes
-this assignment determine every external pattern wire. -/
-structure BoundaryAssignment (pattern : OpenDiagram arguments)
-    (targetWires : List Sig) where
-  wire : WireRenaming pattern.external targetWires
-
 namespace Instantiation
+
+def equalityPorts (left right : Var wires signature) :
+    Fin 2 → Var wires signature :=
+  Fin.cases left (fun _ => right)
+
+def Equalities : {signatures : List Sig} →
+    Vars wires signatures → Vars wires signatures → Region wires
+  | [], .nil, .nil => Region.blank wires
+  | _ :: _, .cons left leftTail, .cons right rightTail =>
+      (Region.singleton (.identity _ 2 (equalityPorts left right))).conjoin
+        (Equalities leftTail rightTail)
+
+/-- Instantiate an open pattern by binding its external wires locally and
+equating its ordered boundary to the actual application ports. -/
+def instantiate (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments) : Region targetWires :=
+  Region.adjoinAt pattern.external .nil
+    ((pattern.body.renameWires
+      ⟨fun wire => Var.appendRight targetWires wire⟩).conjoin
+      (Equalities
+        (ports.map fun wire => wire.appendLeft pattern.external)
+        (pattern.boundaryWire.map
+          fun wire => Var.appendRight targetWires wire)))
 
 mutual
   /-- Recursive instantiation under cuts. The selected relation remains an
@@ -95,13 +112,10 @@ mutual
     | selectedAtom
         {retain : WireRenaming targetWires sourceWires}
         {selected : Var sourceWires (.rel arguments)}
-        (assignment : BoundaryAssignment pattern targetWires) :
+        (ports : Vars targetWires arguments) :
         ItemResult pattern retain selected
-          (.atom selected
-            ((pattern.boundaryWire.map
-              (fun wire => assignment.wire wire)).map
-                (fun wire => retain wire)))
-          (pattern.body.renameWires assignment.wire)
+          (.atom selected (ports.map (fun wire => retain wire)))
+          (instantiate pattern ports)
     | identity
         {retain : WireRenaming targetWires sourceWires}
         {selected : Var sourceWires (.rel arguments)}

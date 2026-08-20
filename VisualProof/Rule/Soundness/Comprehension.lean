@@ -108,38 +108,90 @@ private theorem denote_singleton_iff
       (env.append PUnit.unit) item).mpr
     rwa [envEq]
 
-private theorem Rule.Comprehension.BoundaryAssignment.denote_iff
-    (assignment : Rule.Comprehension.BoundaryAssignment pattern targetWires)
+
+private theorem Rule.Comprehension.Instantiation.Equalities.denote_iff
+    (left right : Vars wires signatures)
+    (model : Model) (env : Values model wires) :
+    denoteRegion model env (Equalities left right) ↔
+      evaluateVars left env = evaluateVars right env := by
+  induction left with
+  | nil =>
+      cases right
+      change (∃ localEnv : Values model [], True) ↔ PUnit.unit = PUnit.unit
+      exact ⟨fun _ => rfl, fun _ => ⟨PUnit.unit, trivial⟩⟩
+  | cons head tail induction =>
+      cases right with
+      | cons other otherTail =>
+          rw [Equalities, Region.denote_conjoin, denote_singleton_iff,
+            induction]
+          simp only [denoteItem_identity, evaluateVars]
+          constructor
+          · rintro ⟨headDenotes, tailDenotes⟩
+            exact Prod.ext (headDenotes 0 1) tailDenotes
+          · intro valuesEqual
+            have headEqual := congrArg Prod.fst valuesEqual
+            have tailEqual := congrArg Prod.snd valuesEqual
+            refine ⟨?_, tailEqual⟩
+            intro leftPosition rightPosition
+            have each (position : Fin 2) :
+                env.lookup (equalityPorts head other position) =
+                  env.lookup head := by
+              refine Fin.cases rfl (fun rest => ?_) position
+              simpa [equalityPorts] using headEqual.symm
+            exact (each leftPosition).trans (each rightPosition).symm
+
+private theorem Rule.Comprehension.Instantiation.instantiate_denote_iff
+    (pattern : OpenDiagram arguments) (ports : Vars targetWires arguments)
     (model : Model) (targetEnv : Values model targetWires) :
-    denoteRegion model targetEnv
-        (pattern.body.renameWires assignment.wire) ↔
-      pattern.asRelation model
-        (evaluateVars
-          (pattern.boundaryWire.map (fun wire => assignment.wire wire))
-          targetEnv) := by
-  rw [denoteRegion_renameWires]
-  let externalEnv := Values.rename assignment.wire targetEnv
-  have boundaryEq :
-      evaluateVars
-          (pattern.boundaryWire.map (fun wire => assignment.wire wire))
-          targetEnv =
-        evaluateVars pattern.boundaryWire externalEnv :=
-    evaluateVars_map_eq pattern.boundaryWire assignment.wire
-      externalEnv targetEnv (fun _ => by
-        simp [externalEnv])
-  change denoteRegion model externalEnv pattern.body ↔
-    denoteOpen model pattern
-      (evaluateVars
-        (pattern.boundaryWire.map (fun wire => assignment.wire wire))
-        targetEnv)
+    denoteRegion model targetEnv (instantiate pattern ports) ↔
+      pattern.asRelation model (evaluateVars ports targetEnv) := by
+  rw [instantiate, Region.denote_adjoinAt]
+  simp only [denoteItemSeq_nil, true_and]
   constructor
-  · intro bodyDenotes
-    exact ⟨externalEnv, boundaryEq.symm, bodyDenotes⟩
-  · rintro ⟨witnessEnv, witnessBoundary, bodyDenotes⟩
-    have witnessEq : witnessEnv = externalEnv :=
-      pattern.external_env_eq_of_boundary witnessEnv externalEnv
-        (witnessBoundary.trans boundaryEq)
-    rwa [← witnessEq]
+  · rintro ⟨externalEnv, combinedDenotes⟩
+    rw [Region.denote_conjoin, denoteRegion_renameWires,
+      Equalities.denote_iff] at combinedDenotes
+    rcases combinedDenotes with ⟨bodyDenotes, equalitiesDenote⟩
+    have renamedEnv : Values.rename
+        (⟨fun wire => Var.appendRight targetWires wire⟩ :
+          WireRenaming pattern.external (targetWires ++ pattern.external))
+        (targetEnv.append externalEnv) = externalEnv := by
+      apply Values.ext
+      intro signature wire
+      simp
+    rw [renamedEnv] at bodyDenotes
+    have actualEq := evaluateVars_map_eq ports
+      (⟨fun wire => wire.appendLeft pattern.external⟩ :
+        WireRenaming targetWires (targetWires ++ pattern.external))
+      targetEnv (targetEnv.append externalEnv) (fun wire => by simp)
+    have boundaryEq := evaluateVars_map_eq pattern.boundaryWire
+      (⟨fun wire => Var.appendRight targetWires wire⟩ :
+        WireRenaming pattern.external (targetWires ++ pattern.external))
+      externalEnv (targetEnv.append externalEnv) (fun wire => by simp)
+    exact ⟨externalEnv,
+      boundaryEq.symm.trans (equalitiesDenote.symm.trans actualEq),
+      bodyDenotes⟩
+  · rintro ⟨externalEnv, boundaryDenotes, bodyDenotes⟩
+    refine ⟨externalEnv, ?_⟩
+    rw [Region.denote_conjoin, denoteRegion_renameWires,
+      Equalities.denote_iff]
+    have renamedEnv : Values.rename
+        (⟨fun wire => Var.appendRight targetWires wire⟩ :
+          WireRenaming pattern.external (targetWires ++ pattern.external))
+        (targetEnv.append externalEnv) = externalEnv := by
+      apply Values.ext
+      intro signature wire
+      simp
+    have actualEq := evaluateVars_map_eq ports
+      (⟨fun wire => wire.appendLeft pattern.external⟩ :
+        WireRenaming targetWires (targetWires ++ pattern.external))
+      targetEnv (targetEnv.append externalEnv) (fun wire => by simp)
+    have boundaryEq := evaluateVars_map_eq pattern.boundaryWire
+      (⟨fun wire => Var.appendRight targetWires wire⟩ :
+        WireRenaming pattern.external (targetWires ++ pattern.external))
+      externalEnv (targetEnv.append externalEnv) (fun wire => by simp)
+    exact ⟨by rwa [renamedEnv],
+      actualEq.trans (boundaryDenotes.symm.trans boundaryEq.symm)⟩
 
 private def Diagram.Values.insertAt
     (before : List Sig) (value : denoteSig model inserted) :
@@ -348,12 +400,11 @@ mutual
       have argumentsEq := evaluateVars_map_eq ports retain
         targetEnv sourceEnv (fun wire => (realizes.1 wire).symm)
       rw [argumentsEq]
-    | selectedAtom assignment =>
-      rw [assignment.denote_iff]
+    | selectedAtom ports =>
+      rw [instantiate_denote_iff]
       simp only [denoteItem_atom]
       rw [realizes.2]
-      have argumentsEq := evaluateVars_map_eq
-        (pattern.boundaryWire.map (fun wire => assignment.wire wire)) retain
+      have argumentsEq := evaluateVars_map_eq ports retain
         targetEnv sourceEnv (fun wire => (realizes.1 wire).symm)
       rw [argumentsEq]
     | identity signature arity ports =>

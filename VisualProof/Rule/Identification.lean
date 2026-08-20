@@ -237,19 +237,22 @@ def Data.exposedRegion (data : Data outer) : Region outer :=
         (freshLocalWire outer data.locals data.signature))
       data.exposedAway)
 
-/-- Local applicability.  `absorbedNonIdentity` selects a non-identity port
-in the away syntax whose active port-partition output is each fresh wire.
-The selected identity and ports on every other identity node are excluded. -/
+/-- Local applicability records exactly the retained external support needed
+to replace a collapsed local presentation by its expanded presentation. -/
 structure Applicability (data : Data outer) : Prop where
-  absorbedNonIdentity : ∀ wire : Fin data.count,
-    ∃ port : ItemSeq.Port data.away data.node.survivor,
-      port.IsNonIdentity ∧
-        (data.awayPartition.output data.node.survivor port).val =
-          freshLocalWire outer data.locals data.signature wire
-  retainedSupport : ∀ {wireSignature}
-      (wire : Var outer wireSignature),
-    data.collapsedRegion.incidencePaths wire.index.val ≠ [] ↔
-      data.exposedRegion.incidencePaths wire.index.val ≠ []
+  retainedSupport : ∀ wireIndex : Fin outer.length,
+    data.collapsedRegion.incidencePaths wireIndex.val ≠ [] ↔
+      data.exposedRegion.incidencePaths wireIndex.val ≠ []
+
+instance (data : Data outer) : Decidable (Applicability data) := by
+  let decideSupport := VisualProof.Data.Finite.decidableForallFin
+    (fun wireIndex : Fin outer.length =>
+      data.collapsedRegion.incidencePaths wireIndex.val ≠ [] ↔
+        data.exposedRegion.incidencePaths wireIndex.val ≠ [])
+    (fun _ => inferInstance)
+  letI := decideSupport
+  exact decidable_of_iff _ ⟨fun support => ⟨support⟩,
+    fun applicability => applicability.retainedSupport⟩
 
 theorem collapsedRegion_rename (data : Data outer) :
     data.exposedAway.renameWires
@@ -267,7 +270,7 @@ theorem exposedValidity
         (occurrence.context.fill data.exposedRegion) := by
   have replaced := occurrence.context.replaceCanonical
     data.collapsedRegion data.exposedRegion occurrence.sourceCanonical
-    targetCanonical applicability.retainedSupport
+    targetCanonical (fun wire => applicability.retainedSupport wire.index)
   let sourceEndpoint := occurrence.interface.withBody
     (occurrence.context.fill data.collapsedRegion)
     occurrence.sourceCanonical occurrence.sourceExternalTwoEnded
@@ -286,7 +289,8 @@ theorem collapsedValidity
   intro targetCanonical
   have replaced := occurrence.context.replaceCanonical
     data.exposedRegion data.collapsedRegion occurrence.sourceCanonical
-    targetCanonical (fun wire => (applicability.retainedSupport wire).symm)
+    targetCanonical (fun wire =>
+      (applicability.retainedSupport wire.index).symm)
   let sourceEndpoint := occurrence.interface.withBody
     (occurrence.context.fill data.exposedRegion)
     occurrence.sourceCanonical occurrence.sourceExternalTwoEnded
@@ -457,25 +461,24 @@ def Data.exposedBoundary (data : Data boundary external) :
     (collapseOpen external data.survivor data.count)
     data.collapsedBoundary data.boundaryPartition
 
-/-- Root applicability.  Every fresh external wire receives either an
-ordered boundary position or one exact non-identity body port through the
-active partition.  The selected identity and every other identity-node port
-are excluded from body coverage.  `boundarySurjective` is the exact
-boundary-partition obligation required to construct the expanded endpoint. -/
+/-- Root applicability is the exact boundary-partition obligation required
+to construct the expanded endpoint. -/
 structure Applicability (data : Data boundary external) : Prop where
-  absorbedNonIdentity : ∀ wire : Fin data.count,
-    0 < data.exposedBoundary.countIndex
-          (freshOpenWire external data.signature wire).index.val ∨
-      ∃ port : ItemSeq.Port data.away
-          data.node.survivor,
-        port.IsNonIdentity ∧
-          (data.awayPartition.output
-            data.node.survivor port).val =
-            (freshOpenWire external data.signature wire).appendLeft data.locals
   boundarySurjective : ∀ wire : Fin
       (external ++ List.replicate data.count data.signature).length,
     ∃ position : Fin boundary.length,
       (data.exposedBoundary.get position).index = wire
+
+instance (data : Data boundary external) : Decidable (Applicability data) := by
+  let decideSurjective := VisualProof.Data.Finite.decidableForallFin
+    (fun wire : Fin
+        (external ++ List.replicate data.count data.signature).length =>
+      ∃ position : Fin boundary.length,
+        (data.exposedBoundary.get position).index = wire)
+    (fun _ => inferInstance)
+  letI := decideSurjective
+  exact decidable_of_iff _ ⟨fun surjective => ⟨surjective⟩,
+    fun applicability => applicability.boundarySurjective⟩
 
 theorem exposedBoundary_collapse (data : Data boundary external) :
     data.exposedBoundary.map
