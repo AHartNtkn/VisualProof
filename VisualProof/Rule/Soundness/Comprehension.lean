@@ -7,30 +7,6 @@ namespace VisualProof
 open Theory
 open Diagram
 
-private theorem Var.eq_of_index_eq
-    (left right : Var context signature) (equal : left.index = right.index) :
-    left = right := by
-  induction context with
-  | nil => exact nomatch left
-  | cons head tail induction =>
-      cases left with
-      | here =>
-          cases right with
-          | here => rfl
-          | there right =>
-              have values := congrArg Fin.val equal
-              simp [Var.index] at values
-      | there left =>
-          cases right with
-          | here =>
-              have values := congrArg Fin.val equal
-              simp [Var.index] at values
-          | there right =>
-              exact congrArg Var.there (induction left right (by
-                apply Fin.ext
-                have values := congrArg Fin.val equal
-                simpa [Var.index] using values))
-
 private theorem Var.context_get_index
     (wire : Var context signature) : context.get wire.index = signature := by
   induction wire with

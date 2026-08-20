@@ -17,6 +17,35 @@ def index : Var context signature → Fin context.length
   | .here => 0
   | .there tail => tail.index.succ
 
+theorem eq_of_index_eq
+    (left right : Var context signature) (equal : left.index = right.index) :
+    left = right := by
+  induction context with
+  | nil => exact nomatch left
+  | cons head tail induction =>
+      cases left with
+      | here =>
+          cases right with
+          | here => rfl
+          | there right =>
+              have values := congrArg Fin.val equal
+              simp [index] at values
+      | there left =>
+          cases right with
+          | here =>
+              have values := congrArg Fin.val equal
+              simp [index] at values
+          | there right =>
+              exact congrArg Var.there (induction left right (by
+                apply Fin.ext
+                have values := congrArg Fin.val equal
+                simpa [index] using values))
+
+instance : DecidableEq (Var context signature) :=
+  fun left right => decidable_of_iff (left.index = right.index)
+    ⟨fun equal => eq_of_index_eq left right equal,
+      fun equal => congrArg index equal⟩
+
 /-- Recover the intrinsically typed wire at a context position. -/
 def ofIndex (position : Fin context.length) :
     Var context (context.get position) :=
