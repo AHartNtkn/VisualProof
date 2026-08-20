@@ -75,10 +75,6 @@ export class ConnectionDragController {
     this.#options = options
   }
 
-  get hasPendingInteraction(): boolean {
-    return this.#preview !== null
-  }
-
   claim(sample: PointerSample): PointerClaim | null {
     if (
       !this.#options.active()
