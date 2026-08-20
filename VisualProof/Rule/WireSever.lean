@@ -1,5 +1,4 @@
 import VisualProof.Diagram.PortPartition
-import VisualProof.Diagram.UnaryIdentity
 import VisualProof.Rule.Relation
 
 namespace VisualProof.Rule
@@ -91,47 +90,14 @@ def collapseLocal
           Var [signature] signature))) = joined := by
   simp [collapseLocal]
 
-private def inheritedTarget : WireRenaming wires
-    (wires ++ (localWires ++ [signature])) :=
-  ⟨fun wire => wire.appendLeft (localWires ++ [signature])⟩
-
-private def localTarget : WireRenaming (localWires ++ [signature])
-    (wires ++ (localWires ++ [signature])) :=
-  ⟨fun wire => Var.appendRight wires wire⟩
-
-def localCompletion
-    (joined : Var (wires ++ localWires) signature)
-    (raw : ItemSeq (wires ++ (localWires ++ [signature]))) :
-    ItemSeq (wires ++ (localWires ++ [signature])) :=
-  let collapse := collapseLocal wires localWires joined
-  let inheritedPins := ItemSeq.pinWires wires inheritedTarget
-    (fun inherited => decide
-      ((raw.renameWires collapse).incidencePaths inherited.index.val 0 ≠ [] ∧
-        raw.incidencePaths inherited.index.val 0 = []))
-  inheritedPins.append (ItemSeq.rootedTwoPins (localWires ++ [signature])
-    localTarget (fun wire =>
-      raw.incidencePaths (wires.length + wire.index.val) 0))
-
-def completeLocal
-    (joined : Var (wires ++ localWires) signature)
+def separateLocal
+    (_joined : Var (wires ++ localWires) signature)
     (raw : ItemSeq (wires ++ (localWires ++ [signature]))) : Region wires :=
-  .mk (localWires ++ [signature]) (raw.append (localCompletion joined raw))
+  .mk (localWires ++ [signature]) raw
 
-private def externalTarget (external locals : List Sig) :
-    WireRenaming external (external ++ locals) :=
-  ⟨fun wire => wire.appendLeft locals⟩
-
-def openCompletion (boundaryWire : Vars external boundary)
-    (raw : Region external) : ItemSeq (external ++ raw.locals) :=
-  ItemSeq.rootedTwoPins external (externalTarget external raw.locals)
-    (fun wire => List.replicate (boundaryWire.countIndex wire.index.val) [] ++
-      raw.incidencePaths wire.index.val)
-
-def completeOpen (boundaryWire : Vars external boundary)
+def separateOpen (_boundaryWire : Vars external boundary)
     (raw : Region external) : Region external :=
-  match raw with
-  | .mk locals items =>
-      .mk locals (items.append (openCompletion boundaryWire (.mk locals items)))
+  raw
 
 inductive Local : LocalRule
   | sever
@@ -141,7 +107,7 @@ inductive Local : LocalRule
         (collapseLocal wires localWires joined) joinedItems) :
       Local
         (.mk localWires joinedItems)
-        (completeLocal joined (joinedItems.partitionOutput
+        (separateLocal joined (joinedItems.partitionOutput
           (collapseLocal wires localWires joined) partition))
 
 /-- An open sever step expressed through exact typed presentations of both
@@ -167,13 +133,13 @@ structure Open
       sourceExternal (source.boundaryWire.get position)
   partition : Region.PortPartition collapse sourceBody
   target_body : RegionIso targetExternal target.body
-    (completeOpen (presentedBoundary target targetExternal)
+    (separateOpen (presentedBoundary target targetExternal)
       (sourceBody.partitionOutput collapse partition))
-  targetCanonical : (completeOpen (presentedBoundary target targetExternal)
+  targetCanonical : (separateOpen (presentedBoundary target targetExternal)
     (sourceBody.partitionOutput collapse partition)).Canonical
   targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
     (presentedBoundary target targetExternal)
-    (completeOpen (presentedBoundary target targetExternal)
+    (separateOpen (presentedBoundary target targetExternal)
       (sourceBody.partitionOutput collapse partition))
 
 noncomputable def Open.iso
