@@ -406,7 +406,9 @@ describe('invertStep for wireJoin', () => {
     const inverse = invertStep(step, pre, post)
     expect(inverse.rule).toBe('wireSever')
     if (inverse.rule !== 'wireSever') throw new Error('unreachable')
-    // BUG: dying was taken to be b, so keep = a's old endpoints and scope = sheet.
+    // invertStep must identify the dying wire from which id survives in
+    // `post`: here a died (scoped at the cut), so keep and scope must be
+    // computed from that, not from treating b as the wire that died on the sheet.
     const restored = applyWireSever(post, inverse.input, 'backward')
     expect(sameDiagram(restored, pre, [], [])).toBe(true)
   })

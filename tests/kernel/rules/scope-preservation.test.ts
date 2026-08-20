@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Diagram, WireId } from '../../../src/kernel/diagram/diagram'
-import { mkDiagram } from '../../../src/kernel/diagram/diagram'
+import { DiagramError, mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
@@ -10,6 +10,7 @@ import { applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/r
 import { applyVacuityInsert } from '../../../src/kernel/rules/identity-rules'
 import { applyCutWrap, applyEndsDelete } from '../../../src/kernel/rules/wire-content'
 import { applyWireSever } from '../../../src/kernel/rules/wire-quantifier'
+import { pinMovedQuantifiers, type PartsInProgress } from '../../../src/kernel/rules/wire-ends'
 
 const P = relSig([IOTA])
 
@@ -369,8 +370,9 @@ describe('cut wrap keeps argument quantifiers where they were', () => {
     const root = d.root
     expect(derivedScope(d, w)).toBe(root)
     const out = applyCutWrap(d, R)
-    // BUG: without the cap, w's incidences all sit inside the fresh cut and
-    // ∃w sinks under a negation — a satisfiable diagram becomes unsatisfiable.
+    // w's quantifier must stay outside the wrap: both of w's incidences move
+    // into the fresh cut, so the rule must cap it at the old scope, or ∃w
+    // sinks under a negation and a satisfiable diagram becomes unsatisfiable.
     expect(derivedScope(out, w)).toBe(root)
     const pins = out.wires[w]!.endpoints.filter((ep) => {
       const node = out.nodes[ep.node]!
@@ -390,5 +392,53 @@ describe('cut wrap keeps argument quantifiers where they were', () => {
       return node.kind === 'identity' && node.arity === 1
     }).length
     expect(pinCount).toBe(1)
+  })
+})
+
+describe('pinMovedQuantifiers refuses to lower a quantifier', () => {
+  /** w's two endpoints — an atom's argument port and a pin — both sit in `cut`. */
+  function movedUpFixture(): Diagram {
+    return mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' }, cut: { kind: 'cut', parent: 'r0' } },
+      nodes: {
+        p: { kind: 'atom', region: 'cut', sig: P },
+        pin: { kind: 'identity', region: 'cut', sig: IOTA, arity: 1 },
+        hpin: { kind: 'identity', region: 'cut', sig: P, arity: 1 },
+      },
+      wires: {
+        w: {
+          sig: IOTA,
+          endpoints: [
+            { node: 'p', port: { kind: 'arg', index: 0 } },
+            { node: 'pin', port: { kind: 'identity', index: 0 } },
+          ],
+        },
+        phead: {
+          sig: P,
+          endpoints: [
+            { node: 'p', port: { kind: 'head' } },
+            { node: 'hpin', port: { kind: 'identity', index: 0 } },
+          ],
+        },
+      },
+    })
+  }
+
+  it('throws when a rebuild moves the wire\'s incidences shallower than its old scope', () => {
+    const d = movedUpFixture()
+    expect(derivedScope(d, 'w')).toBe('cut')
+    // Simulate a rebuild that reparents w's pin from `cut` up to the sheet:
+    // w's incidence DCA rises from `cut` to `r0`. A pin minted at the OLD
+    // scope ('cut') cannot pull that DCA back down — the quantifier would
+    // have to move, which pinMovedQuantifiers must refuse rather than mint
+    // a pin that silently mislocates it.
+    const parts: PartsInProgress = {
+      regions: { ...d.regions },
+      nodes: { ...d.nodes, pin: { ...d.nodes.pin!, region: 'r0' } },
+      wires: { ...d.wires },
+    }
+    expect(() => pinMovedQuantifiers(d, parts, ['w'], 'test op')).toThrow(DiagramError)
+    expect(() => pinMovedQuantifiers(d, parts, ['w'], 'test op')).toThrow(/cannot lower/)
   })
 })

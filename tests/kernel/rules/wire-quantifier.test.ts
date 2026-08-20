@@ -164,8 +164,9 @@ describe('sever scope is bounded by the severed wire\'s scope', () => {
   it('refuses a fresh scope strictly above the wire\'s derived scope', () => {
     const { d, x, r1, keep } = forallFixture()
     expect(derivedScope(d, x)).toBe(r1)
-    // BUG: the gate looked only at the fresh scope (the sheet, positive) and
-    // accepted ∀x φ(x,x) → ∃y ∀x φ(x,y).
+    // The fresh scope must lie at-or-below the wire's own derived scope, not
+    // merely pass the polarity gate — otherwise this would accept
+    // ∀x φ(x,x) → ∃y ∀x φ(x,y).
     expect(() => applyWireSever(d, { wire: x, keep, scope: d.root })).toThrow(RuleError)
     expect(() => applyWireSever(d, { wire: x, keep, scope: d.root })).toThrow(/does not lie within/)
   })

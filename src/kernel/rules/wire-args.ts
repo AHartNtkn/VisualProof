@@ -387,7 +387,6 @@ export function applyArgDrop(
     reservation,
   )
   for (const attachment of new Set(dropped)) {
-    if (result.wires[attachment] === undefined) continue
     const before = derivedScope(diagram, attachment)
     const after = derivedScope(result, attachment)
     if (after !== before) {

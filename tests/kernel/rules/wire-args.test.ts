@@ -277,8 +277,8 @@ describe('argument drop keeps the dropped attachment quantifier in place', () =>
   it('refuses the ungated uniform drop that would sink the attachment under a cut', () => {
     const { d, R, p } = dropFixture()
     expect(derivedScope(d, p)).toBe(d.root)
-    // BUG: p is "kept elsewhere" (position 1 of the cut end) and was exempt
-    // from the scope check, so the drop went through and ∃p moved into the cut.
+    // p is kept elsewhere (position 1 of the cut end), but the scope check
+    // must still cover it — otherwise the drop lets ∃p move into the cut.
     expect(() => applyArgDrop(d, R, 0)).toThrow(ScopePreservationError)
   })
 

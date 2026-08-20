@@ -25,9 +25,9 @@ export type WireSeverInput = {
   readonly wire: WireId
   readonly keep: readonly Endpoint[]
   /**
-   * Scope for the split-off wire. Must enclose every moved endpoint; the
-   * polarity gate follows this region. Defaults to the wire's own derived
-   * scope.
+   * Scope for the split-off wire. Must enclose every moved endpoint and lie
+   * at-or-below the severed wire's derived scope; the polarity gate follows
+   * this region. Defaults to the wire's own derived scope.
    */
   readonly scope?: RegionId
 }

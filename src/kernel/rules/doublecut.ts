@@ -52,7 +52,7 @@ export function applyDoubleCutIntro(d: Diagram, sel: SubgraphSelection, reservat
   void c
 
   const parts: PartsInProgress = { regions, nodes, wires: { ...d.wires } }
-  pinMovedQuantifiers(d, parts, Object.keys(d.wires), reservation?.nodes)
+  pinMovedQuantifiers(d, parts, Object.keys(d.wires), 'double cut', reservation?.nodes)
   return mkDiagram({ root: d.root, ...parts })
 }
 

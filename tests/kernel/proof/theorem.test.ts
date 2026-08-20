@@ -782,4 +782,30 @@ describe('boundary wires are not local binders', () => {
     }
     expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, thm)).not.toThrow()
   })
+
+  it('rejects a parallelFuse that fuses the boundary wire away', () => {
+    // lhs: two co-scoped root wires x (atom ax) and R (atom ar), R the
+    // boundary. Fusing x with R would replace R by a fresh fused wire —
+    // rebinding the boundary identity the theorem is stated against.
+    const left = new DiagramBuilder()
+    const ax = left.atom(left.root, PROP)
+    const x = left.wire([{ node: ax, port: { kind: 'head' } }], PROP)
+    const ar = left.atom(left.root, PROP)
+    const R = left.wire([{ node: ar, port: { kind: 'head' } }], PROP)
+    const lhs = left.buildOpen([R])
+
+    const right = new DiagramBuilder()
+    const rAtom = right.atom(right.root, PROP)
+    const rWire = right.wire([{ node: rAtom, port: { kind: 'head' } }], PROP)
+    const rhs = right.buildOpen([rWire])
+
+    const thm: Theorem = {
+      name: 'fuseBoundary', lhs, rhs,
+      actions: [singleStepAction('fuse', { rule: 'parallelFuse', a: x, b: R })],
+    }
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, thm)).toThrow(ProofError)
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, thm)).toThrow(
+      new RegExp(`rebinds boundary wire '${R}'`),
+    )
+  })
 })

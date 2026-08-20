@@ -245,12 +245,18 @@ export function completeWireEnds(
 /**
  * Class-(c) scope transport (spec §5): any listed wire whose incidence DCA the
  * rebuild moved receives one pin at its OLD derived scope, so the quantifier
- * stays exactly where it was. Wires whose DCA did not move get nothing.
+ * stays exactly where it was. Wires whose DCA did not move get nothing. A
+ * pin can only restore a scope the rebuild moved DEEPER (the new DCA lies
+ * at-or-below the old scope); when the rebuild instead moved incidences
+ * shallower than the old scope, no pin at the old scope can pull the DCA
+ * back down, and minting one anyway would silently mislocate the
+ * quantifier — this throws instead.
  */
 export function pinMovedQuantifiers(
   before: Diagram,
   parts: PartsInProgress,
   wireIds: Iterable<WireId>,
+  operation: string,
   reservation?: IdNamespaceReservation,
 ): void {
   const taken = new Set(Object.keys(parts.nodes))
@@ -258,7 +264,14 @@ export function pinMovedQuantifiers(
     const wire = parts.wires[wireId]
     if (wire === undefined) continue
     const oldScope = derivedScope(before, wireId)
-    if (endpointDca(parts, wire.endpoints) === oldScope) continue
+    const dca = endpointDca(parts, wire.endpoints)
+    if (dca === oldScope) continue
+    if (dca !== null && !partsAncestorOrEqual(parts, oldScope, dca)) {
+      throw new DiagramError(
+        `${operation}: wire '${wireId}' incidences rose from '${oldScope}' to `
+        + `'${dca}'; a pin cannot lower a quantifier`,
+      )
+    }
     const node = freshId(taken, 'pin', reservation)
     taken.add(node)
     parts.nodes[node] = { kind: 'identity', region: oldScope, sig: wire.sig, arity: 1 }
