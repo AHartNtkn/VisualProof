@@ -16,9 +16,10 @@ import { RuleError } from './error'
 /**
  * Durable single-wire sever input. Splitting one wire's endpoint set into
  * two wires forgets the equality between the parts; the fresh wire's scope
- * may be chosen anywhere enclosing the moved endpoints, and the choice is
- * materialized as pins by the completion clause — each side of the split is
- * completed at its declared scope until it has two ends.
+ * may be chosen anywhere between the moved endpoints' DCA and the severed
+ * wire's own derived scope (inclusive), and the choice is materialized as
+ * pins by the completion clause — each side of the split is completed at
+ * its declared scope until it has two ends.
  */
 export type WireSeverInput = {
   readonly wire: WireId
@@ -63,6 +64,16 @@ export function applyWireSever(
   const freshScope = input.scope ?? oldScope
   if (d.regions[freshScope] === undefined) {
     throw new DiagramError(`unknown region '${freshScope}'`)
+  }
+  // The fresh wire is a new binder at-or-below the severed wire's own binder
+  // (Lean: the new local lives in the region the rule is applied in). A
+  // scope above it would hoist an existential over every intervening
+  // quantifier and cut.
+  if (!isAncestorOrEqual(d, oldScope, freshScope)) {
+    throw new RuleError(
+      `fresh wire scope '${freshScope}' does not lie within the scope `
+      + `'${oldScope}' of wire '${input.wire}'`,
+    )
   }
   const need = orientation === 'forward' ? 'positive' : 'negative'
   const have = polarity(d, freshScope)

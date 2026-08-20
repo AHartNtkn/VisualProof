@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { compileRelationSever } from '../../../src/kernel/proof/compile-content'
 import { EMPTY_PROOF_CONTEXT } from '../../../src/kernel/proof/context'
+import { applyWireSever } from '../../../src/kernel/rules/wire-quantifier'
+import { RuleError } from '../../../src/kernel/rules/error'
 import { bareWire } from '../../fixtures/pins'
 
 const UNARY = relSig([IOTA])
@@ -126,5 +129,52 @@ describe('relation abstraction refusals', () => {
       scope: builder.root,
       occurrences: [empty, empty],
     }, EMPTY_PROOF_CONTEXT)).toThrowError(/duplicate empty content/)
+  })
+})
+
+describe('sever scope is bounded by the severed wire\'s scope', () => {
+  /**
+   * ¬[r1: ∃x pin(x) ¬[r2: ¬[r3: P(x) ¬[r4: P(x)]] ¬[r5: P(x) ¬[r6: P(x)]]]]
+   *   = ∀x ((Px → Px) ∧ (Px → Px)); x is scoped at r1 (negative).
+   */
+  function forallFixture() {
+    const P = relSig([IOTA])
+    const b = new DiagramBuilder()
+    const r1 = b.cut(b.root)
+    const r2 = b.cut(r1)
+    const r3 = b.cut(r2)
+    const r4 = b.cut(r3)
+    const r5 = b.cut(r2)
+    const r6 = b.cut(r5)
+    const p3 = b.atom(r3, P)
+    const p4 = b.atom(r4, P)
+    const p5 = b.atom(r5, P)
+    const p6 = b.atom(r6, P)
+    const head = b.wire([
+      { node: p3, port: { kind: 'head' } }, { node: p4, port: { kind: 'head' } },
+      { node: p5, port: { kind: 'head' } }, { node: p6, port: { kind: 'head' } },
+    ], P)
+    void head
+    const arg = (node: string) => ({ node, port: { kind: 'arg', index: 0 } as const })
+    const x = b.wire([arg(p3), arg(p4), arg(p5), arg(p6)])
+    const pin = b.pin(x, r1)
+    return { d: b.build(), x, r1, keep: [arg(p3), arg(p6), { node: pin, port: { kind: 'identity', index: 0 } as const }] }
+  }
+
+  it('refuses a fresh scope strictly above the wire\'s derived scope', () => {
+    const { d, x, r1, keep } = forallFixture()
+    expect(derivedScope(d, x)).toBe(r1)
+    // BUG: the gate looked only at the fresh scope (the sheet, positive) and
+    // accepted ∀x φ(x,x) → ∃y ∀x φ(x,y).
+    expect(() => applyWireSever(d, { wire: x, keep, scope: d.root })).toThrow(RuleError)
+    expect(() => applyWireSever(d, { wire: x, keep, scope: d.root })).toThrow(/does not lie within/)
+  })
+
+  it('still accepts a fresh scope at or below the wire\'s scope (gated there)', () => {
+    const { d, x, r1, keep } = forallFixture()
+    // r1 is negative: forward sever refused by polarity, backward accepted.
+    expect(() => applyWireSever(d, { wire: x, keep, scope: r1 })).toThrow(/requires a positive scope/)
+    const out = applyWireSever(d, { wire: x, keep, scope: r1 }, 'backward')
+    expect(derivedScope(out, x)).toBe(r1)
   })
 })
