@@ -1,4 +1,4 @@
-import type { Diagram, NodeId, WireId } from '../../kernel/diagram/diagram'
+import type { Diagram, IdentityDiagramNode, NodeId, WireId } from '../../kernel/diagram/diagram'
 import { isAncestorOrEqual } from '../../kernel/diagram/regions'
 import {
   applyIdentification,
@@ -95,13 +95,40 @@ export function collapseStep(d: Diagram, node: NodeId): ProofStep {
   }
 }
 
+/** `node`'s identity-port wires, ordered by port index (one entry per port —
+    multiplicity preserved when a wire occupies more than one of its ports). */
+function portWires(d: Diagram, node: NodeId): WireId[] {
+  const out: [number, WireId][] = []
+  for (const [wireId, wire] of Object.entries(d.wires)) {
+    for (const ep of wire.endpoints) {
+      if (ep.node === node && ep.port.kind === 'identity') out.push([ep.port.index, wireId])
+    }
+  }
+  return out.sort(([i], [j]) => i - j).map(([, w]) => w)
+}
+
+/** Fuse `a` and `b` into a single identity node presenting the union of
+    their ports — presentation invariance, so the kernel is the sole
+    authority on the region/sig match. */
+export function fuseStep(d: Diagram, a: NodeId, b: NodeId): ProofStep {
+  const region = (d.nodes[a] as IdentityDiagramNode).region
+  return {
+    rule: 'presentation',
+    input: {
+      region,
+      removeNodes: [a, b],
+      addNodes: { dot: [...portWires(d, a), ...portWires(d, b)] },
+    },
+  }
+}
+
 /**
  * The shared identity-rule gesture surface: grabs on an identity dot, its
  * rim, an attached leg, or (edit mode) an atom/ref end disc, dispatched by
  * object kind exactly as WireOpsDragController dispatches wire grabs. This
- * task implements only the dot-into-open-space collapse row; the remaining
- * rows refuse with placeholder-free messages naming their gesture until
- * later tasks land them.
+ * task implements the dot-into-open-space collapse row and the
+ * dot-onto-dot fuse row; the remaining rows refuse with placeholder-free
+ * messages naming their gesture until later tasks land them.
  */
 export class IdentityOpsController {
   readonly #options: IdentityOpsOptions
@@ -197,10 +224,14 @@ export class IdentityOpsController {
     const point = sample.world
     switch (grab.kind) {
       case 'dot': {
+        const target = identityDiscAt(engine, point)
+        if (target !== null && target !== grab.node) {
+          this.#options.commit('presentation', [fuseStep(diagram, grab.node, target)], sample.client)
+          return
+        }
         const manipulation = wireManipulationHitTest(engine, point, viewport)
-        const disc = identityDiscAt(engine, point)
         const endDisc = this.#options.claimEndDiscs ? this.#endDiscAt(point) : null
-        if (manipulation !== null || disc !== null || endDisc !== null) {
+        if (manipulation !== null || target !== null || endDisc !== null) {
           this.#options.refuse(
             'release in open space to collapse, or on another dot to fuse',
             sample.client,
