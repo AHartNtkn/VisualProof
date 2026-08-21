@@ -600,7 +600,7 @@ private theorem telescopeTrans
 exact staged and raw endpoints, validity, presentation isomorphisms, and
 preparation, but deliberately contains neither a `Step` injection nor a
 compiled result. -/
-structure PrimitivePhase (localRule : LocalRule) (goal : Goal) where
+private structure PrimitivePhase (localRule : LocalRule) (goal : Goal) where
   staged : Region goal.holeWires
   rawPrepared : Region goal.holeWires
   rawPending : Region goal.holeWires
@@ -618,14 +618,15 @@ structure PrimitivePhase (localRule : LocalRule) (goal : Goal) where
 
 /-- Internal conversion of fixed-family phase evidence to the mandatory
 primitive core. Public structural plans below never receive this injection. -/
-private theorem compilePrimitive
+private def dischargePrimitive
     {localRule : LocalRule}
     {goal : Goal}
     (inject : ∀ {stepBoundary : List Sig}
       {stepSource stepTarget : OpenDiagram stepBoundary},
       Contextual localRule stepSource stepTarget →
         Step stepSource stepTarget)
-    (phase : PrimitivePhase localRule goal) : goal.Result := by
+    (phase : PrimitivePhase localRule goal) :
+    goal.request.Discharge phase.staged := by
   let branch : goal.request.Branch phase.preparation.prepared := {
     rawPrepared := phase.rawPrepared
     rawPending := phase.rawPending
@@ -644,77 +645,7 @@ private theorem compilePrimitive
     localStep := phase.localStep
     preparation := phase.preparation.telescope
   }
-  exact (Telescope.Request.Discharge.primitive branch phase.stagedIso).compile
-
-/-- Fixed CutShape local family. -/
-abbrev CutLocal : LocalRule :=
-  fun before after => symmetric Content.Cut.Local before after
-
-/-- Fixed ParallelShape local family. -/
-abbrev ParallelLocal : LocalRule :=
-  fun before after => symmetric Content.Parallel.Local before after
-
-/-- Fixed Arity local family. -/
-abbrev ArityLocal : LocalRule :=
-  fun before after => symmetric Arity.Local before after
-
-/-- Fixed ArgumentPermutation local family. -/
-abbrev PermutationLocal : LocalRule :=
-  fun before after => symmetric ArgumentPermutation.Local before after
-
-/-- Fixed ArgumentDuplicate local family. -/
-abbrev DuplicateLocal : LocalRule :=
-  fun before after => symmetric Argument.Duplicate.Local before after
-
-/-- Fixed directed ArgumentProjection local family. -/
-abbrev ProjectionLocal : LocalRule := Argument.Projection.Local
-
-/-- Exact evidence for one CutShape phase. -/
-abbrev CutPhase (goal : Goal) := PrimitivePhase CutLocal goal
-
-/-- Exact evidence for one ParallelShape phase. -/
-abbrev ParallelPhase (goal : Goal) := PrimitivePhase ParallelLocal goal
-
-/-- Exact evidence for one Arity phase. -/
-abbrev ArityPhase (goal : Goal) := PrimitivePhase ArityLocal goal
-
-/-- Exact evidence for one ArgumentPermutation phase. -/
-abbrev PermutationPhase (goal : Goal) := PrimitivePhase PermutationLocal goal
-
-/-- Exact evidence for one ArgumentDuplicate phase. -/
-abbrev DuplicatePhase (goal : Goal) := PrimitivePhase DuplicateLocal goal
-
-/-- Exact evidence for one directed ArgumentProjection phase. -/
-abbrev ProjectionPhase (goal : Goal) := PrimitivePhase ProjectionLocal goal
-
-/-- Cut phases always inject the fixed CutShape primitive. -/
-theorem CutPhase.compile (phase : CutPhase goal) : goal.Result := by
-  exact compilePrimitive (fun step => Step.cutShape step) phase
-
-/-- Parallel phases always inject the fixed ParallelShape primitive. -/
-theorem ParallelPhase.compile (phase : ParallelPhase goal) : goal.Result := by
-  exact compilePrimitive (fun step => Step.parallelShape step) phase
-
-/-- Arity phases always inject the fixed Arity primitive. -/
-theorem ArityPhase.compile (phase : ArityPhase goal) : goal.Result := by
-  exact compilePrimitive (fun step => Step.arity step) phase
-
-/-- Permutation phases always inject the fixed ArgumentPermutation
-primitive. -/
-theorem PermutationPhase.compile
-    (phase : PermutationPhase goal) : goal.Result := by
-  exact compilePrimitive (fun step => Step.argumentPermutation step) phase
-
-/-- Duplication phases always inject the fixed ArgumentDuplicate primitive. -/
-theorem DuplicatePhase.compile
-    (phase : DuplicatePhase goal) : goal.Result := by
-  exact compilePrimitive (fun step => Step.argumentDuplicate step) phase
-
-/-- Projection phases always inject the fixed directed ArgumentProjection
-primitive. -/
-theorem ProjectionPhase.compile
-    (phase : ProjectionPhase goal) : goal.Result := by
-  exact compilePrimitive (fun step => Step.argumentProjection step) phase
+  exact Telescope.Request.Discharge.primitive branch phase.stagedIso
 
 /-- The fixed endpoint data for one exact primitive. The preparation
 telescope is deliberately absent; structural recursion must supply it from
@@ -740,405 +671,783 @@ private structure PrimitiveTarget (localRule : LocalRule) (goal : Goal) where
 private noncomputable def PrimitiveTarget.phase
     {localRule : LocalRule} {goal : Goal}
     (target : PrimitiveTarget localRule goal)
-    (telescope : Telescope goal.request.polarity
-      goal.request.occurrence.interface goal.request.occurrence.context
-      goal.instantiated target.rawPrepared
-      goal.request.instantiatedCanonical
-      goal.request.instantiatedExternalTwoEnded target.rawPreparedCanonical
-      target.rawPreparedExternalTwoEnded) : PrimitivePhase localRule goal := {
-  staged := target.rawPrepared
+    (staged : Region goal.holeWires)
+    (preparation : goal.request.Preparation target.rawPrepared)
+    (stagedIso : RegionIso (WireEquiv.refl goal.holeWires)
+      staged target.rawPrepared) : PrimitivePhase localRule goal := {
+  staged := staged
   rawPrepared := target.rawPrepared
   rawPending := target.rawPending
-  preparation := {
-    prepared := target.rawPrepared
-    preparedCanonical := target.rawPreparedCanonical
-    preparedExternalTwoEnded := target.rawPreparedExternalTwoEnded
-    rawPreparedCanonical := target.rawPreparedCanonical
-    rawPreparedExternalTwoEnded := target.rawPreparedExternalTwoEnded
-    preparedIso := RegionIso.refl _
-    telescope := telescope
-  }
+  preparation := preparation
   rawPendingCanonical := target.rawPendingCanonical
   rawPendingExternalTwoEnded := target.rawPendingExternalTwoEnded
   pendingIso := target.pendingIso
   localStep := target.localStep
-  stagedIso := RegionIso.refl _
+  stagedIso := stagedIso
 }
 
-/-- Exact CutShape annotation at an existing cut constructor. The relational
-description fixes both raw endpoints; the remaining fields prove validity and
-the actual pending presentation. -/
-structure CutTarget (target : Goal) where
-  description : Content.Cut.Wrap.Description target.holeWires
-  preparedCanonical :
-    (target.request.occurrence.context.fill description.target).Canonical
-  preparedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill description.target)
-  pendingCanonical :
-    (target.request.occurrence.context.fill description.source).Canonical
-  pendingExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill description.source)
-  pendingIso : RegionIso (WireEquiv.refl target.holeWires)
-    target.pending description.source
+/-- Exact open-pattern data indexed by the existing region syntax. -/
+structure PatternShape
+    {patternWires : List Sig}
+    (body : Region patternWires)
+    (arguments : List Sig) where
+  boundaryWire : Vars patternWires arguments
+  boundarySurjective : ∀ wire : Fin patternWires.length,
+    ∃ position : Fin arguments.length,
+      (boundaryWire.get position).index = wire
+  canonical : body.Canonical
+  externalTwoEnded : OpenDiagram.ExternalTwoEnded boundaryWire body
 
-/-- A cut plan's child goal is definitionally the exact segment from the
-parent's instantiated endpoint to the CutShape target. -/
-inductive CutPlan : Goal → Goal → Type
-  | mk {target : Goal} (cut : CutTarget target) :
-      CutPlan
-        (Goal.preparation target cut.description.target
-          cut.preparedCanonical cut.preparedExternalTwoEnded)
-        target
+/-- The only open diagram associated with an exact syntax-indexed shape. -/
+def PatternShape.pattern
+    {patternWires arguments : List Sig}
+    {body : Region patternWires}
+    (shape : PatternShape body arguments) : OpenDiagram arguments := {
+  external := patternWires
+  boundaryWire := shape.boundaryWire
+  boundarySurjective := shape.boundarySurjective
+  body := body
+  canonical := shape.canonical
+  externalTwoEnded := shape.externalTwoEnded
+}
 
-/-- Consume the exact child telescope and close the parent only through the
-backward CutShape primitive. -/
-theorem CutPlan.compile
-    (plan : CutPlan source target)
-    (result : source.Result) : target.Result := by
-  cases plan with
-  | mk cut =>
-      let primitive : PrimitiveTarget CutLocal target := {
-        rawPrepared := cut.description.target
-        rawPending := cut.description.source
-        rawPreparedCanonical := cut.preparedCanonical
-        rawPreparedExternalTwoEnded := cut.preparedExternalTwoEnded
-        rawPendingCanonical := cut.pendingCanonical
-        rawPendingExternalTwoEnded := cut.pendingExternalTwoEnded
-        pendingIso := cut.pendingIso
-        localStep := Or.inr (.wrap (.mk cut.description))
-      }
-      exact CutPhase.compile
-        (primitive.phase (Goal.preparationResult result))
+/-- The authoritative all-sites inputs for one structural primitive. It
+contains no edit: the constrained compiler fold is the sole producer of that
+edit and of its exact staged endpoint. -/
+structure ItemsAuthority
+    {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+    (pattern : OpenDiagram arguments)
+    (operation : Transform.Operation arguments)
+    (frame : Transform.Frame arguments (outer ++ resultLocals)
+      sourceWires (outer ++ stagedLocals))
+    (data : operation.Data frame)
+    (source : ItemSeq sourceWires)
+    (result : Region (outer ++ resultLocals))
+    (pending : Region outer) where
+  evidence :
+    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      frame.sourceKeep frame.selected source result
+  sites : ItemsSites operation data evidence
+  request : Telescope.Request
+    (Region.adjoinAt resultLocals .nil result) pending
+  stagedCanonical : ∀ output : ExactEdit
+      (Transform.ItemsEdit operation frame data source)
+      (fun edit => edit.run),
+    (request.occurrence.context.fill
+      (Region.adjoinAt stagedLocals .nil output.endpoint)).Canonical
+  stagedExternalTwoEnded : ∀ output : ExactEdit
+      (Transform.ItemsEdit operation frame data source)
+      (fun edit => edit.run),
+    OpenDiagram.ExternalTwoEnded
+      request.occurrence.interface.boundaryWire
+      (request.occurrence.context.fill
+        (Region.adjoinAt stagedLocals .nil output.endpoint))
 
-/-- Exact ParallelShape annotation for one existing item-sequence
-conjunction. `afterHead` is the actual endpoint shared definitionally by the
-two consecutive child goals. -/
-structure ParallelTarget (target : Goal) where
-  description : Content.Parallel.Split.Description target.holeWires
-  afterHead : Region target.holeWires
-  afterHeadCanonical :
-    (target.request.occurrence.context.fill afterHead).Canonical
-  afterHeadExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill afterHead)
-  preparedCanonical :
-    (target.request.occurrence.context.fill description.target).Canonical
-  preparedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill description.target)
-  pendingCanonical :
-    (target.request.occurrence.context.fill description.source).Canonical
-  pendingExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill description.source)
-  pendingIso : RegionIso (WireEquiv.refl target.holeWires)
-    target.pending description.source
+namespace ItemsAuthority
 
-/-- A parallel plan fixes the head and tail to consecutive exact segments;
-neither child may select a different start, middle, or final prepared
-endpoint. -/
-inductive ParallelPlan : Goal → Goal → Goal → Type
-  | mk {target : Goal} (parallel : ParallelTarget target) :
-      ParallelPlan
-        (Goal.exact target.request.polarity
-          target.request.occurrence.interface
-          target.request.occurrence.context target.request.continuation.1
-          target.instantiated parallel.afterHead
-          target.request.instantiatedCanonical
-          target.request.instantiatedExternalTwoEnded
-          parallel.afterHeadCanonical parallel.afterHeadExternalTwoEnded)
-        (Goal.exact target.request.polarity
-          target.request.occurrence.interface
-          target.request.occurrence.context target.request.continuation.1
-          parallel.afterHead parallel.description.target
-          parallel.afterHeadCanonical parallel.afterHeadExternalTwoEnded
-          parallel.preparedCanonical parallel.preparedExternalTwoEnded)
-        target
+abbrev Output
+    {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+    {pattern : OpenDiagram arguments}
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments (outer ++ resultLocals)
+      sourceWires (outer ++ stagedLocals)}
+    {data : operation.Data frame}
+    {source : ItemSeq sourceWires}
+    {result : Region (outer ++ resultLocals)}
+    {pending : Region outer}
+    (_authority : ItemsAuthority pattern operation frame data source result
+      pending) :=
+  ExactEdit (Transform.ItemsEdit operation frame data source)
+    (fun edit => edit.run)
 
-/-- Compose both actual child telescope results and close only through the
-backward ParallelShape primitive. -/
-theorem ParallelPlan.compile
-    (plan : ParallelPlan head tail target)
-    (headResult : head.Result)
-    (tailResult : tail.Result) : target.Result := by
-  cases plan with
-  | mk parallel =>
-      let preparation := telescopeTrans
-        (Goal.exactResult headResult) (Goal.exactResult tailResult)
-      let primitive : PrimitiveTarget ParallelLocal target := {
-        rawPrepared := parallel.description.target
-        rawPending := parallel.description.source
-        rawPreparedCanonical := parallel.preparedCanonical
-        rawPreparedExternalTwoEnded := parallel.preparedExternalTwoEnded
-        rawPendingCanonical := parallel.pendingCanonical
-        rawPendingExternalTwoEnded := parallel.pendingExternalTwoEnded
-        pendingIso := parallel.pendingIso
-        localStep := Or.inr (.split (.mk parallel.description))
-      }
-      exact ParallelPhase.compile (primitive.phase preparation)
+def staged
+    {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+    {pattern : OpenDiagram arguments}
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments (outer ++ resultLocals)
+      sourceWires (outer ++ stagedLocals)}
+    {data : operation.Data frame}
+    {source : ItemSeq sourceWires}
+    {result : Region (outer ++ resultLocals)}
+    {pending : Region outer}
+    (authority : ItemsAuthority pattern operation frame data source result
+      pending)
+    (output : authority.Output) : Region outer :=
+  Region.adjoinAt stagedLocals .nil output.endpoint
 
-/-- Exact Arity annotation for one pattern-local wire. Its relational
-description uses `Arity.operation`, whose selected-site output contains the
-fresh local argument and its unary identity pin and whose selected-pin branch
-is supplied by the current target relation. -/
-structure ArityTarget (target : Goal) where
-  description : Arity.Shift.Description target.holeWires
-  preparedCanonical :
-    (target.request.occurrence.context.fill description.target).Canonical
-  preparedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill description.target)
-  pendingCanonical :
-    (target.request.occurrence.context.fill description.source).Canonical
-  pendingExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill description.source)
-  pendingIso : RegionIso (WireEquiv.refl target.holeWires)
-    target.pending description.source
+abbrev goal
+    {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+    {pattern : OpenDiagram arguments}
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments (outer ++ resultLocals)
+      sourceWires (outer ++ stagedLocals)}
+    {data : operation.Data frame}
+    {source : ItemSeq sourceWires}
+    {result : Region (outer ++ resultLocals)}
+    {pending : Region outer}
+    (authority : ItemsAuthority pattern operation frame data source result
+      pending) : Goal :=
+  Goal.ofRequest authority.request
 
-/-- Each Arity step consumes exactly the preparation goal ending at its
-`Shift.Description.target`. -/
-inductive ArityStep : Goal → Goal → Type
-  | mk {target : Goal} (arity : ArityTarget target) :
-      ArityStep
-        (Goal.preparation target arity.description.target
-          arity.preparedCanonical arity.preparedExternalTwoEnded)
-        target
+end ItemsAuthority
 
-/-- Consume one exact child segment and close only through backward Arity. -/
-theorem ArityStep.compile
-    (step : ArityStep source target)
-    (result : source.Result) : target.Result := by
-  cases step with
-  | mk arity =>
-      let primitive : PrimitiveTarget ArityLocal target := {
-        rawPrepared := arity.description.target
-        rawPending := arity.description.source
-        rawPreparedCanonical := arity.preparedCanonical
-        rawPreparedExternalTwoEnded := arity.preparedExternalTwoEnded
-        rawPendingCanonical := arity.pendingCanonical
-        rawPendingExternalTwoEnded := arity.pendingExternalTwoEnded
-        pendingIso := arity.pendingIso
-        localStep := Or.inr (.shift (.mk arity.description))
-      }
-      exact ArityPhase.compile
-        (primitive.phase (Goal.preparationResult result))
+/-- Build the fixed primitive discharge after recursive compilation has
+supplied only the telescope ending at the authoritative edit endpoint. -/
+private noncomputable def dischargeAtAuthoritativeEdit
+    {localRule : LocalRule}
+    {goal : Goal}
+    (inject : ∀ {stepBoundary : List Sig}
+      {stepSource stepTarget : OpenDiagram stepBoundary},
+      Contextual localRule stepSource stepTarget → Step stepSource stepTarget)
+    {staged rawPrepared rawPending : Region goal.holeWires}
+    (stagedCanonical :
+      (goal.request.occurrence.context.fill staged).Canonical)
+    (stagedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      goal.request.occurrence.interface.boundaryWire
+      (goal.request.occurrence.context.fill staged))
+    (telescope : Telescope goal.request.polarity
+      goal.request.occurrence.interface goal.request.occurrence.context
+      goal.instantiated staged goal.request.instantiatedCanonical
+      goal.request.instantiatedExternalTwoEnded stagedCanonical
+      stagedExternalTwoEnded)
+    (stagedEq : staged = rawPrepared)
+    (rawPendingCanonical :
+      (goal.request.occurrence.context.fill rawPending).Canonical)
+    (rawPendingExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      goal.request.occurrence.interface.boundaryWire
+      (goal.request.occurrence.context.fill rawPending))
+    (pendingIso : RegionIso (WireEquiv.refl goal.holeWires)
+      goal.pending rawPending)
+    (localStep : localRule rawPrepared rawPending) :
+    goal.request.Discharge staged := by
+  let supplied : goal.request.Preparation staged := {
+    prepared := staged
+    preparedCanonical := stagedCanonical
+    preparedExternalTwoEnded := stagedExternalTwoEnded
+    rawPreparedCanonical := stagedCanonical
+    rawPreparedExternalTwoEnded := stagedExternalTwoEnded
+    preparedIso := RegionIso.refl _
+    telescope := telescope
+  }
+  let preparation : goal.request.Preparation rawPrepared := stagedEq ▸ supplied
+  let primitive : PrimitiveTarget localRule goal := {
+    rawPrepared := rawPrepared
+    rawPending := rawPending
+    rawPreparedCanonical := by
+      rw [← stagedEq]
+      exact stagedCanonical
+    rawPreparedExternalTwoEnded := by
+      rw [← stagedEq]
+      exact stagedExternalTwoEnded
+    rawPendingCanonical := rawPendingCanonical
+    rawPendingExternalTwoEnded := rawPendingExternalTwoEnded
+    pendingIso := pendingIso
+    localStep := localStep
+  }
+  exact dischargePrimitive inject
+    (primitive.phase staged preparation (by
+      rw [stagedEq]
+      exact RegionIso.refl _))
 
-/-- A finite zero-or-more chain of fixed Arity phases between exact goals. -/
-inductive ArityPlan : Goal → Goal → Type
-  | nil (goal : Goal) : ArityPlan goal goal
-  | cons {source middle target : Goal}
-      (head : ArityStep source middle)
-      (tail : ArityPlan middle target) : ArityPlan source target
+/-- Exact authoritative CutShape inputs at an existing cut constructor. -/
+structure CutTarget
+    {patternWires arguments : List Sig}
+    (body : Region patternWires)
+    (shape : PatternShape (Region.singleton (.cut body)) arguments) where
+  outer : List Sig
+  before : List Sig
+  after : List Sig
+  source : ItemSeq
+    (outer ++ (before ++ .rel arguments :: after))
+  result : Region (outer ++ (before ++ after))
+  authority : ItemsAuthority shape.pattern
+    (Content.Cut.operation arguments)
+    (Content.Cut.rootFrame outer before after arguments)
+    (Content.Cut.targetHead outer before after arguments)
+    source result (.mk (before ++ .rel arguments :: after) source)
 
-/-- Interpret every Arity phase in sequence; the zero case preserves the
-same exact request index. -/
-def ArityPlan.compile
-    (plan : ArityPlan source target)
-    (result : source.Result) : target.Result :=
-  match plan with
-  | .nil _ => result
-  | .cons head tail =>
-      tail.compile (head.compile result)
+namespace CutTarget
 
-/-- Exact boundary-reordering annotation. -/
-structure PermutationTarget (target : Goal) where
-  description : ArgumentPermutation.Permutes.Description target.holeWires
-  preparedCanonical :
-    (target.request.occurrence.context.fill description.target).Canonical
-  preparedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill description.target)
-  pendingCanonical :
-    (target.request.occurrence.context.fill description.source).Canonical
-  pendingExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill description.source)
-  pendingIso : RegionIso (WireEquiv.refl target.holeWires)
-    target.pending description.source
+variable {patternWires arguments : List Sig}
+variable {body : Region patternWires}
+variable {shape : PatternShape (Region.singleton (.cut body)) arguments}
 
-/-- Boundary reordering consumes the exact segment ending at the permuted
-relation presentation. -/
-inductive PermutationStep : Goal → Goal → Type 1
-  | mk {target : Goal} (permutation : PermutationTarget target) :
-      PermutationStep
-        (Goal.preparation target permutation.description.target
-          permutation.preparedCanonical
-          permutation.preparedExternalTwoEnded)
-        target
+abbrev goal (target : CutTarget body shape) : Goal := target.authority.goal
+abbrev Output (target : CutTarget body shape) : Type :=
+  ItemsAuthority.Output target.authority
+def staged (target : CutTarget body shape) (output : target.Output) :
+    Region target.outer := target.authority.staged output
 
-/-- Consume one exact segment and close only through backward
-ArgumentPermutation. -/
-theorem PermutationStep.compile
-    (step : PermutationStep source target)
-    (result : source.Result) : target.Result := by
-  cases step with
-  | mk permutation =>
-      let primitive : PrimitiveTarget PermutationLocal target := {
-        rawPrepared := permutation.description.target
-        rawPending := permutation.description.source
-        rawPreparedCanonical := permutation.preparedCanonical
-        rawPreparedExternalTwoEnded :=
-          permutation.preparedExternalTwoEnded
-        rawPendingCanonical := permutation.pendingCanonical
-        rawPendingExternalTwoEnded := permutation.pendingExternalTwoEnded
-        pendingIso := permutation.pendingIso
-        localStep := Or.inr (.permute (.mk permutation.description))
-      }
-      exact PermutationPhase.compile
-        (primitive.phase (Goal.preparationResult result))
+private def description (target : CutTarget body shape) (output : target.Output) :
+    Content.Cut.Wrap.Description target.outer := {
+  arguments := arguments
+  before := target.before
+  after := target.after
+  items := target.source
+  itemsEdit := output.edit
+}
 
-/-- Exact boundary-repetition annotation. -/
-structure DuplicateTarget (target : Goal) where
-  description : Argument.Duplicate.Duplicates.Description target.holeWires
-  preparedCanonical :
-    (target.request.occurrence.context.fill description.target).Canonical
-  preparedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill description.target)
-  pendingCanonical :
-    (target.request.occurrence.context.fill description.source).Canonical
-  pendingExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill description.source)
-  pendingIso : RegionIso (WireEquiv.refl target.holeWires)
-    target.pending description.source
+private theorem staged_eq_target (target : CutTarget body shape)
+    (output : target.Output) :
+    target.staged output = (target.description output).target := by
+  change Region.adjoinAt
+    (target.before ++ .rel arguments :: target.after) .nil output.endpoint =
+      Region.adjoinAt
+        (target.before ++ .rel arguments :: target.after) .nil output.edit.run
+  rw [output.run_eq]
 
-/-- Boundary repetition consumes the exact segment ending at the duplicated
-relation presentation. -/
-inductive DuplicateStep : Goal → Goal → Type
-  | mk {target : Goal} (duplicate : DuplicateTarget target) :
-      DuplicateStep
-        (Goal.preparation target duplicate.description.target
-          duplicate.preparedCanonical duplicate.preparedExternalTwoEnded)
-        target
+private noncomputable def discharge (target : CutTarget body shape)
+    (output : target.Output)
+    (result : (Goal.preparation target.goal (target.staged output)
+      (target.authority.stagedCanonical output)
+      (target.authority.stagedExternalTwoEnded output)).Result) :
+    target.authority.request.Discharge (target.staged output) := by
+  let description := target.description output
+  exact dischargeAtAuthoritativeEdit
+    (goal := target.goal)
+    (staged := target.staged output)
+    (rawPrepared := description.target)
+    (rawPending := description.source)
+    (fun step => Step.cutShape step)
+    (target.authority.stagedCanonical output)
+    (target.authority.stagedExternalTwoEnded output)
+    (Goal.preparationResult result) (target.staged_eq_target output)
+    (by exact target.authority.request.pendingCanonical)
+    (by exact target.authority.request.pendingExternalTwoEnded)
+    (RegionIso.refl _) (Or.inr (.wrap (.mk description)))
 
-/-- Consume one exact segment and close only through backward
-ArgumentDuplicate. -/
-theorem DuplicateStep.compile
-    (step : DuplicateStep source target)
-    (result : source.Result) : target.Result := by
-  cases step with
-  | mk duplicate =>
-      let primitive : PrimitiveTarget DuplicateLocal target := {
-        rawPrepared := duplicate.description.target
-        rawPending := duplicate.description.source
-        rawPreparedCanonical := duplicate.preparedCanonical
-        rawPreparedExternalTwoEnded := duplicate.preparedExternalTwoEnded
-        rawPendingCanonical := duplicate.pendingCanonical
-        rawPendingExternalTwoEnded := duplicate.pendingExternalTwoEnded
-        pendingIso := duplicate.pendingIso
-        localStep := Or.inr (.duplicate (.mk duplicate.description))
-      }
-      exact DuplicatePhase.compile
-        (primitive.phase (Goal.preparationResult result))
+end CutTarget
 
-/-- Exact boundary-omission annotation. The directed local description fixes
-whether the current phase is an extension, uniform drop, or uniform
-extension; no symmetric projection direction is invented by the compiler. -/
-structure ProjectionTarget (target : Goal) where
-  description : Argument.Projection.Local.Description target.holeWires
-  preparedCanonical :
-    (target.request.occurrence.context.fill description.source).Canonical
-  preparedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill description.source)
-  pendingCanonical :
-    (target.request.occurrence.context.fill description.target).Canonical
-  pendingExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-    target.request.occurrence.interface.boundaryWire
-    (target.request.occurrence.context.fill description.target)
-  pendingIso : RegionIso (WireEquiv.refl target.holeWires)
-    target.pending description.target
+/-- Exact authoritative ParallelShape inputs at one existing conjunction. -/
+structure ParallelTarget
+    {patternWires arguments : List Sig}
+    (head : Item patternWires)
+    (tail : ItemSeq patternWires)
+    (shape : PatternShape (Region.ofItems (.cons head tail)) arguments) where
+  outer : List Sig
+  before : List Sig
+  after : List Sig
+  source : ItemSeq
+    (outer ++ (before ++ .rel arguments :: after))
+  result : Region (outer ++ (before ++ after))
+  authority : ItemsAuthority shape.pattern
+    (Content.Parallel.operation arguments)
+    (Content.Parallel.rootFrame outer before after arguments)
+    (Content.Parallel.firstHead outer before after arguments,
+      Content.Parallel.secondHead outer before after arguments)
+    source result (.mk (before ++ .rel arguments :: after) source)
+  afterHead : authority.Output → Region outer
+  afterHeadCanonical : ∀ output : authority.Output,
+    (authority.request.occurrence.context.fill (afterHead output)).Canonical
+  afterHeadExternalTwoEnded : ∀ output : authority.Output,
+    OpenDiagram.ExternalTwoEnded
+      authority.request.occurrence.interface.boundaryWire
+      (authority.request.occurrence.context.fill (afterHead output))
 
-/-- Boundary omission consumes the exact segment ending at the directed
-projection source. -/
-inductive ProjectionStep : Goal → Goal → Type
-  | mk {target : Goal} (projection : ProjectionTarget target) :
-      ProjectionStep
-        (Goal.preparation target projection.description.source
-          projection.preparedCanonical projection.preparedExternalTwoEnded)
-        target
+namespace ParallelTarget
 
-/-- Consume one exact segment and close only through directed
-ArgumentProjection. -/
-theorem ProjectionStep.compile
-    (step : ProjectionStep source target)
-    (result : source.Result) : target.Result := by
-  cases step with
-  | mk projection =>
-      let primitive : PrimitiveTarget ProjectionLocal target := {
-        rawPrepared := projection.description.source
-        rawPending := projection.description.target
-        rawPreparedCanonical := projection.preparedCanonical
-        rawPreparedExternalTwoEnded := projection.preparedExternalTwoEnded
-        rawPendingCanonical := projection.pendingCanonical
-        rawPendingExternalTwoEnded := projection.pendingExternalTwoEnded
-        pendingIso := projection.pendingIso
-        localStep := .mk projection.description
-      }
-      exact ProjectionPhase.compile
-        (primitive.phase (Goal.preparationResult result))
+variable {patternWires arguments : List Sig}
+variable {head : Item patternWires} {tail : ItemSeq patternWires}
+variable {shape : PatternShape (Region.ofItems (.cons head tail)) arguments}
 
-/-- A finite exact boundary-normalization chain. Every constructor names one
-of the three required primitive families and shares its intermediate `Goal`
-index definitionally with the next phase. -/
-inductive BoundaryPlan : Goal → Goal → Type 1
-  | nil (goal : Goal) : BoundaryPlan goal goal
-  | permutation {source middle target : Goal}
-      (head : PermutationStep source middle)
-      (tail : BoundaryPlan middle target) : BoundaryPlan source target
-  | duplicate {source middle target : Goal}
-      (head : DuplicateStep source middle)
-      (tail : BoundaryPlan middle target) : BoundaryPlan source target
-  | projection {source middle target : Goal}
-      (head : ProjectionStep source middle)
-      (tail : BoundaryPlan middle target) : BoundaryPlan source target
+abbrev goal (target : ParallelTarget head tail shape) : Goal :=
+  target.authority.goal
+abbrev Output (target : ParallelTarget head tail shape) : Type :=
+  ItemsAuthority.Output target.authority
+def staged (target : ParallelTarget head tail shape) (output : target.Output) :
+    Region target.outer := target.authority.staged output
 
-/-- Interpret every exact boundary phase in order. -/
-theorem BoundaryPlan.compile
-    (plan : BoundaryPlan source target)
-    (result : source.Result) : target.Result := by
-  induction plan with
-  | nil _ => exact result
-  | permutation head _ induction =>
-      exact induction (head.compile result)
-  | duplicate head _ induction =>
-      exact induction (head.compile result)
-  | projection head _ induction =>
-      exact induction (head.compile result)
+private def description (target : ParallelTarget head tail shape)
+    (output : target.Output) :
+    Content.Parallel.Split.Description target.outer := {
+  arguments := arguments
+  before := target.before
+  after := target.after
+  items := target.source
+  itemsEdit := output.edit
+}
+
+private theorem staged_eq_target (target : ParallelTarget head tail shape)
+    (output : target.Output) :
+    target.staged output = (target.description output).target := by
+  change Region.adjoinAt
+    (target.before ++ .rel arguments :: .rel arguments :: target.after)
+      .nil output.endpoint =
+    Region.adjoinAt
+      (target.before ++ .rel arguments :: .rel arguments :: target.after)
+      .nil output.edit.run
+  rw [output.run_eq]
+
+private noncomputable def discharge
+    (target : ParallelTarget head tail shape)
+    (output : target.Output)
+    (headResult : (Goal.exact target.goal.request.polarity
+      target.goal.request.occurrence.interface
+      target.goal.request.occurrence.context
+      target.goal.request.continuation.1 target.goal.instantiated
+      (target.afterHead output) target.goal.request.instantiatedCanonical
+      target.goal.request.instantiatedExternalTwoEnded
+      (target.afterHeadCanonical output)
+      (target.afterHeadExternalTwoEnded output)).Result)
+    (tailResult : (Goal.exact target.goal.request.polarity
+      target.goal.request.occurrence.interface
+      target.goal.request.occurrence.context
+      target.goal.request.continuation.1 (target.afterHead output)
+      (target.staged output) (target.afterHeadCanonical output)
+      (target.afterHeadExternalTwoEnded output)
+      (target.authority.stagedCanonical output)
+      (target.authority.stagedExternalTwoEnded output)).Result) :
+    target.authority.request.Discharge (target.staged output) := by
+  let description := target.description output
+  exact dischargeAtAuthoritativeEdit
+    (goal := target.goal)
+    (staged := target.staged output)
+    (rawPrepared := description.target)
+    (rawPending := description.source)
+    (fun step => Step.parallelShape step)
+    (target.authority.stagedCanonical output)
+    (target.authority.stagedExternalTwoEnded output)
+    (telescopeTrans
+      (Goal.exactResult
+        (preparedExternalTwoEnded := target.afterHeadExternalTwoEnded output)
+        headResult)
+      (Goal.exactResult
+        (preparedExternalTwoEnded :=
+          target.authority.stagedExternalTwoEnded output)
+        tailResult))
+    (target.staged_eq_target output)
+    (by exact target.authority.request.pendingCanonical)
+    (by exact target.authority.request.pendingExternalTwoEnded)
+    (RegionIso.refl _) (Or.inr (.split (.mk description)))
+
+end ParallelTarget
+
+/-- Exact authoritative Arity inputs for one pattern-local wire. -/
+structure ArityTarget
+    {patternWires arguments : List Sig}
+    (body : Region patternWires)
+    (shape : PatternShape body arguments) where
+  outer : List Sig
+  before : List Sig
+  after : List Sig
+  added : Sig
+  source : ItemSeq
+    (outer ++ (before ++ .rel arguments :: after))
+  result : Region (outer ++ (before ++ after))
+  authority : ItemsAuthority shape.pattern
+    (Arity.operation arguments added)
+    (Arity.rootFrame outer before after arguments added)
+    (Arity.targetHead outer before after arguments added)
+    source result (.mk (before ++ .rel arguments :: after) source)
+
+namespace ArityTarget
+
+variable {patternWires arguments : List Sig}
+variable {body : Region patternWires}
+variable {shape : PatternShape body arguments}
+
+abbrev goal (target : ArityTarget body shape) : Goal := target.authority.goal
+abbrev Output (target : ArityTarget body shape) : Type :=
+  ItemsAuthority.Output target.authority
+def staged (target : ArityTarget body shape) (output : target.Output) :
+    Region target.outer := target.authority.staged output
+
+private def description (target : ArityTarget body shape) (output : target.Output) :
+    Arity.Shift.Description target.outer := {
+  arguments := arguments
+  before := target.before
+  after := target.after
+  added := target.added
+  items := target.source
+  itemsEdit := output.edit
+}
+
+private theorem staged_eq_target (target : ArityTarget body shape)
+    (output : target.Output) :
+    target.staged output = (target.description output).target := by
+  change Region.adjoinAt
+    (target.before ++ .rel (arguments ++ [target.added]) :: target.after)
+      .nil output.endpoint =
+    Region.adjoinAt
+      (target.before ++ .rel (arguments ++ [target.added]) :: target.after)
+      .nil output.edit.run
+  rw [output.run_eq]
+
+private noncomputable def discharge (target : ArityTarget body shape)
+    (output : target.Output)
+    (result : (Goal.preparation target.goal (target.staged output)
+      (target.authority.stagedCanonical output)
+      (target.authority.stagedExternalTwoEnded output)).Result) :
+    target.authority.request.Discharge (target.staged output) := by
+  let description := target.description output
+  exact dischargeAtAuthoritativeEdit
+    (goal := target.goal)
+    (staged := target.staged output)
+    (rawPrepared := description.target)
+    (rawPending := description.source)
+    (fun step => Step.arity step)
+    (target.authority.stagedCanonical output)
+    (target.authority.stagedExternalTwoEnded output)
+    (Goal.preparationResult result) (target.staged_eq_target output)
+    (by exact target.authority.request.pendingCanonical)
+    (by exact target.authority.request.pendingExternalTwoEnded)
+    (RegionIso.refl _) (Or.inr (.shift (.mk description)))
+
+end ArityTarget
+
+/-- Exact authoritative ArgumentPermutation inputs for one boundary order. -/
+structure PermutationTarget
+    {patternWires sourceArguments : List Sig}
+    (body : Region patternWires)
+    (shape : PatternShape body sourceArguments) where
+  targetArguments : List Sig
+  permutation : ArgumentPermutation.Permutation sourceArguments
+    targetArguments
+  outer : List Sig
+  before : List Sig
+  after : List Sig
+  source : ItemSeq
+    (outer ++ (before ++ .rel sourceArguments :: after))
+  result : Region (outer ++ (before ++ after))
+  authority : ItemsAuthority shape.pattern
+    (ArgumentPermutation.operation sourceArguments targetArguments permutation)
+    (ArgumentPermutation.rootFrame outer before after sourceArguments
+      targetArguments)
+    (ArgumentPermutation.targetHead outer before after targetArguments)
+    source result (.mk (before ++ .rel sourceArguments :: after) source)
+
+namespace PermutationTarget
+
+variable {patternWires sourceArguments : List Sig}
+variable {body : Region patternWires}
+variable {shape : PatternShape body sourceArguments}
+
+abbrev goal (target : PermutationTarget body shape) : Goal :=
+  target.authority.goal
+abbrev Output (target : PermutationTarget body shape) : Type :=
+  ItemsAuthority.Output target.authority
+def staged (target : PermutationTarget body shape)
+    (output : target.Output) : Region target.outer :=
+  target.authority.staged output
+
+private def description (target : PermutationTarget body shape)
+    (output : target.Output) :
+    ArgumentPermutation.Permutes.Description target.outer := {
+  sourceArguments := sourceArguments
+  targetArguments := target.targetArguments
+  before := target.before
+  after := target.after
+  permutation := target.permutation
+  items := target.source
+  itemsEdit := output.edit
+}
+
+private theorem staged_eq_target (target : PermutationTarget body shape)
+    (output : target.Output) :
+    target.staged output = (target.description output).target := by
+  change Region.adjoinAt
+    (target.before ++ .rel target.targetArguments :: target.after)
+      .nil output.endpoint =
+    Region.adjoinAt
+      (target.before ++ .rel target.targetArguments :: target.after)
+      .nil output.edit.run
+  rw [output.run_eq]
+
+private noncomputable def discharge
+    (target : PermutationTarget body shape)
+    (output : target.Output)
+    (result : (Goal.preparation target.goal (target.staged output)
+      (target.authority.stagedCanonical output)
+      (target.authority.stagedExternalTwoEnded output)).Result) :
+    target.authority.request.Discharge (target.staged output) := by
+  let description := target.description output
+  exact dischargeAtAuthoritativeEdit
+    (goal := target.goal)
+    (staged := target.staged output)
+    (rawPrepared := description.target)
+    (rawPending := description.source)
+    (fun step => Step.argumentPermutation step)
+    (target.authority.stagedCanonical output)
+    (target.authority.stagedExternalTwoEnded output)
+    (Goal.preparationResult result) (target.staged_eq_target output)
+    (by exact target.authority.request.pendingCanonical)
+    (by exact target.authority.request.pendingExternalTwoEnded)
+    (RegionIso.refl _) (Or.inr (.permute (.mk description)))
+
+end PermutationTarget
+
+/-- Exact authoritative ArgumentDuplicate inputs for one repeated boundary
+position. -/
+structure DuplicateTarget
+    {patternWires before after : List Sig}
+    {signature : Sig}
+    (body : Region patternWires)
+    (shape : PatternShape body (before ++ signature :: after)) where
+  outer : List Sig
+  localBefore : List Sig
+  localAfter : List Sig
+  source : ItemSeq (outer ++ (localBefore ++
+    .rel (before ++ signature :: after) :: localAfter))
+  result : Region (outer ++ (localBefore ++ localAfter))
+  authority : ItemsAuthority shape.pattern
+    (Argument.Duplicate.operation before after signature)
+    (Argument.Duplicate.rootFrame outer localBefore localAfter before after
+      signature)
+    (Argument.Duplicate.targetHead outer localBefore localAfter before after
+      signature)
+    source result (.mk (localBefore ++
+      .rel (before ++ signature :: after) :: localAfter) source)
+
+namespace DuplicateTarget
+
+variable {patternWires before after : List Sig} {signature : Sig}
+variable {body : Region patternWires}
+variable {shape : PatternShape body (before ++ signature :: after)}
+
+abbrev goal (target : DuplicateTarget body shape) : Goal :=
+  target.authority.goal
+abbrev Output (target : DuplicateTarget body shape) : Type :=
+  ItemsAuthority.Output target.authority
+def staged (target : DuplicateTarget body shape) (output : target.Output) :
+    Region target.outer := target.authority.staged output
+
+private def description (target : DuplicateTarget body shape)
+    (output : target.Output) :
+    Argument.Duplicate.Duplicates.Description target.outer := {
+  before := before
+  after := after
+  localBefore := target.localBefore
+  localAfter := target.localAfter
+  signature := signature
+  items := target.source
+  itemsEdit := output.edit
+}
+
+private theorem staged_eq_target (target : DuplicateTarget body shape)
+    (output : target.Output) :
+    target.staged output = (target.description output).target := by
+  change Region.adjoinAt (target.localBefore ++
+    .rel (before ++ signature :: signature :: after) :: target.localAfter)
+      .nil output.endpoint =
+    Region.adjoinAt (target.localBefore ++
+      .rel (before ++ signature :: signature :: after) :: target.localAfter)
+      .nil output.edit.run
+  rw [output.run_eq]
+
+private noncomputable def discharge (target : DuplicateTarget body shape)
+    (output : target.Output)
+    (result : (Goal.preparation target.goal (target.staged output)
+      (target.authority.stagedCanonical output)
+      (target.authority.stagedExternalTwoEnded output)).Result) :
+    target.authority.request.Discharge (target.staged output) := by
+  let description := target.description output
+  exact dischargeAtAuthoritativeEdit
+    (goal := target.goal)
+    (staged := target.staged output)
+    (rawPrepared := description.target)
+    (rawPending := description.source)
+    (fun step => Step.argumentDuplicate step)
+    (target.authority.stagedCanonical output)
+    (target.authority.stagedExternalTwoEnded output)
+    (Goal.preparationResult result) (target.staged_eq_target output)
+    (by exact target.authority.request.pendingCanonical)
+    (by exact target.authority.request.pendingExternalTwoEnded)
+    (RegionIso.refl _) (Or.inr (.duplicate (.mk description)))
+
+end DuplicateTarget
+
+/-- Exact authoritative ArgumentProjection inputs for one omitted boundary
+position. The compiler fixes the directed local phase to extension. -/
+structure ProjectionTarget
+    {patternWires before after : List Sig}
+    {signature : Sig}
+    (body : Region patternWires)
+    (shape : PatternShape body (before ++ signature :: after)) where
+  outer : List Sig
+  localBefore : List Sig
+  localAfter : List Sig
+  source : ItemSeq (outer ++ (localBefore ++
+    .rel (before ++ signature :: after) :: localAfter))
+  result : Region (outer ++ (localBefore ++ localAfter))
+  authority : ItemsAuthority shape.pattern
+    (Argument.Projection.operation before after signature)
+    (Argument.Projection.rootFrame outer localBefore localAfter before after
+      signature)
+    (Argument.Projection.targetHead outer localBefore localAfter before after)
+    source result (.mk (localBefore ++
+      .rel (before ++ signature :: after) :: localAfter) source)
+
+namespace ProjectionTarget
+
+variable {patternWires before after : List Sig} {signature : Sig}
+variable {body : Region patternWires}
+variable {shape : PatternShape body (before ++ signature :: after)}
+
+abbrev goal (target : ProjectionTarget body shape) : Goal :=
+  target.authority.goal
+abbrev Output (target : ProjectionTarget body shape) : Type :=
+  ItemsAuthority.Output target.authority
+def staged (target : ProjectionTarget body shape) (output : target.Output) :
+    Region target.outer := target.authority.staged output
+
+private def dropsDescription (target : ProjectionTarget body shape)
+    (output : target.Output) : Argument.Projection.Drops.Description
+      target.outer := {
+  before := before
+  after := after
+  localBefore := target.localBefore
+  localAfter := target.localAfter
+  signature := signature
+  items := target.source
+  itemsEdit := output.edit
+}
+
+private def description (target : ProjectionTarget body shape)
+    (output : target.Output) : Argument.Projection.Local.Description
+      target.outer :=
+  .extend (target.dropsDescription output)
+
+private theorem staged_eq_source (target : ProjectionTarget body shape)
+    (output : target.Output) :
+    target.staged output = (target.description output).source := by
+  change Region.adjoinAt
+    (target.localBefore ++ .rel (before ++ after) :: target.localAfter)
+      .nil output.endpoint =
+    Region.adjoinAt
+      (target.localBefore ++ .rel (before ++ after) :: target.localAfter)
+      .nil output.edit.run
+  rw [output.run_eq]
+
+private noncomputable def discharge (target : ProjectionTarget body shape)
+    (output : target.Output)
+    (result : (Goal.preparation target.goal (target.staged output)
+      (target.authority.stagedCanonical output)
+      (target.authority.stagedExternalTwoEnded output)).Result) :
+    target.authority.request.Discharge (target.staged output) := by
+  let description := target.description output
+  exact dischargeAtAuthoritativeEdit
+    (goal := target.goal)
+    (staged := target.staged output)
+    (rawPrepared := description.source)
+    (rawPending := description.target)
+    (fun step => Step.argumentProjection step)
+    (target.authority.stagedCanonical output)
+    (target.authority.stagedExternalTwoEnded output)
+    (Goal.preparationResult result) (target.staged_eq_source output)
+    (by exact target.authority.request.pendingCanonical)
+    (by exact target.authority.request.pendingExternalTwoEnded)
+    (RegionIso.refl _) (.mk description)
+
+end ProjectionTarget
 
 mutual
-  /-- Type-valued compiler evidence indexed by an existing region. -/
+  /-- Type-valued compiler evidence indexed by one existing region. -/
   inductive RegionPlan :
       {wires : List Sig} → Region wires → Goal → Type 1
     | mk
         {outer locals : List Sig}
         {items : ItemSeq (outer ++ locals)}
-        {itemsGoal arityGoal target : Goal}
-        (itemsPlan : ItemsPlan items itemsGoal)
-        (arityPlan : ArityPlan itemsGoal arityGoal)
-        (boundaryPlan : BoundaryPlan arityGoal target) :
-        RegionPlan (.mk locals items) target
+        {goal : Goal}
+        (boundary : BoundaryPlan (.mk locals items) goal) :
+        RegionPlan (.mk locals items) goal
 
-  /-- Type-valued compiler evidence indexed by an existing item sequence. -/
+  /-- Boundary normalization retains the exact existing region syntax and
+  recurses only at the endpoint returned by the authoritative edit fold. -/
+  inductive BoundaryPlan :
+      {wires : List Sig} → Region wires → Goal → Type 1
+    | arity
+        {wires : List Sig} {body : Region wires} {goal : Goal}
+        (plan : ArityPlan body goal) : BoundaryPlan body goal
+    | permutation
+        {wires sourceArguments : List Sig}
+        {body : Region wires}
+        {shape : PatternShape body sourceArguments}
+        (target : PermutationTarget body shape)
+        (child : ∀ output : target.Output,
+          BoundaryPlan body (Goal.preparation target.goal
+            (target.staged output)
+            (target.authority.stagedCanonical output)
+            (target.authority.stagedExternalTwoEnded output))) :
+        BoundaryPlan body target.goal
+    | duplicate
+        {wires before after : List Sig} {signature : Sig}
+        {body : Region wires}
+        {shape : PatternShape body (before ++ signature :: after)}
+        (target : DuplicateTarget body shape)
+        (child : ∀ output : target.Output,
+          BoundaryPlan body (Goal.preparation target.goal
+            (target.staged output)
+            (target.authority.stagedCanonical output)
+            (target.authority.stagedExternalTwoEnded output))) :
+        BoundaryPlan body target.goal
+    | projection
+        {wires before after : List Sig} {signature : Sig}
+        {body : Region wires}
+        {shape : PatternShape body (before ++ signature :: after)}
+        (target : ProjectionTarget body shape)
+        (child : ∀ output : target.Output,
+          BoundaryPlan body (Goal.preparation target.goal
+            (target.staged output)
+            (target.authority.stagedCanonical output)
+            (target.authority.stagedExternalTwoEnded output))) :
+        BoundaryPlan body target.goal
+
+  /-- Pattern-local arity compilation ends at the exact existing region and
+  recurses only at the authoritative shifted endpoint. -/
+  inductive ArityPlan :
+      {wires : List Sig} → Region wires → Goal → Type 1
+    | items
+        {outer locals : List Sig}
+        {bodyItems : ItemSeq (outer ++ locals)}
+        {goal : Goal}
+        (plan : ItemsPlan bodyItems goal) :
+        ArityPlan (.mk locals bodyItems) goal
+    | shift
+        {wires arguments : List Sig}
+        {body : Region wires}
+        {shape : PatternShape body arguments}
+        (target : ArityTarget body shape)
+        (child : ∀ output : target.Output,
+          ArityPlan body (Goal.preparation target.goal
+            (target.staged output)
+            (target.authority.stagedCanonical output)
+            (target.authority.stagedExternalTwoEnded output))) :
+        ArityPlan body target.goal
+
+  /-- Item-sequence compilation fixes cons to ParallelShape and indexes both
+  recursive children by the exact edit endpoint and shared midpoint. -/
   inductive ItemsPlan :
       {wires : List Sig} → ItemSeq wires → Goal → Type 1
     | nil {wires : List Sig} (phase : Compiler.NilPhase wires) :
         ItemsPlan (.nil : ItemSeq wires) (nilGoal phase)
     | cons
-        {wires : List Sig}
+        {wires arguments : List Sig}
         {head : Item wires} {tail : ItemSeq wires}
-        {headGoal tailGoal target : Goal}
-        (headPlan : ItemPlan head headGoal)
-        (tailPlan : ItemsPlan tail tailGoal)
-        (parallel : ParallelPlan headGoal tailGoal target) :
-        ItemsPlan (.cons head tail) target
+        {shape : PatternShape (Region.ofItems (.cons head tail)) arguments}
+        (target : ParallelTarget head tail shape)
+        (headPlan : ∀ output : target.Output,
+          ItemPlan head (Goal.exact target.goal.request.polarity
+            target.goal.request.occurrence.interface
+            target.goal.request.occurrence.context
+            target.goal.request.continuation.1 target.goal.instantiated
+            (target.afterHead output)
+            target.goal.request.instantiatedCanonical
+            target.goal.request.instantiatedExternalTwoEnded
+            (target.afterHeadCanonical output)
+            (target.afterHeadExternalTwoEnded output)))
+        (tailPlan : ∀ output : target.Output,
+          ItemsPlan tail (Goal.exact target.goal.request.polarity
+            target.goal.request.occurrence.interface
+            target.goal.request.occurrence.context
+            target.goal.request.continuation.1 (target.afterHead output)
+            (target.staged output) (target.afterHeadCanonical output)
+            (target.afterHeadExternalTwoEnded output)
+            (target.authority.stagedCanonical output)
+            (target.authority.stagedExternalTwoEnded output))) :
+        ItemsPlan (.cons head tail) target.goal
 
-  /-- Type-valued compiler evidence indexed by an existing item. Leaf
-  constructors carry only their exact production phases. -/
+  /-- Item compilation fixes each existing constructor to its production
+  primitive family. -/
   inductive ItemPlan : {wires : List Sig} → Item wires → Goal → Type 1
     | atom
         {patternWires atomArguments : List Sig}
@@ -1155,46 +1464,132 @@ mutual
         (phase : IdentityPhase shape) :
         ItemPlan (.identity signature arity ports) phase.goal
     | cut
-        {wires : List Sig} {body : Region wires}
-        {childGoal target : Goal}
-        (child : RegionPlan body childGoal)
-        (cutPlan : CutPlan childGoal target) :
-        ItemPlan (.cut body) target
+        {wires arguments : List Sig}
+        {body : Region wires}
+        {shape : PatternShape (Region.singleton (.cut body)) arguments}
+        (target : CutTarget body shape)
+        (child : ∀ output : target.Output,
+          RegionPlan body (Goal.preparation target.goal
+            (target.staged output)
+            (target.authority.stagedCanonical output)
+            (target.authority.stagedExternalTwoEnded output))) :
+        ItemPlan (.cut body) target.goal
 end
 
 mutual
-  /-- Interpret an exact region plan. Structural callbacks produce evidence;
-  this fold alone converts every phase into a compiler result. -/
+  /-- Interpret one exact region plan. -/
   def regionResult
       {wires : List Sig} {body : Region wires} {goal : Goal}
       (plan : RegionPlan body goal) : goal.Result :=
     match plan with
-    | .mk itemsPlan arityPlan boundaryPlan =>
-        boundaryPlan.compile
-          (arityPlan.compile (itemsResult itemsPlan))
+    | .mk boundary => boundaryResult boundary
   termination_by structural plan
 
-  /-- Interpret an exact item-sequence plan. Nil is fixed to Ends and cons is
-  fixed to ParallelShape. -/
+  /-- Interpret boundary phases through their authoritative all-sites folds. -/
+  def boundaryResult
+      {wires : List Sig} {body : Region wires} {goal : Goal}
+      (plan : BoundaryPlan body goal) : goal.Result :=
+    match plan with
+    | .arity arity => arityResult arity
+    | .permutation target child =>
+        Compiler.items
+          (operation := ArgumentPermutation.operation _ _ target.permutation)
+          (frame := ArgumentPermutation.rootFrame target.outer target.before
+            target.after _ target.targetArguments)
+          (ArgumentPermutation.targetHead target.outer target.before
+            target.after target.targetArguments)
+          target.authority.evidence
+          target.authority.sites target.authority.request {
+            close := fun (output : target.Output) =>
+              target.discharge output (boundaryResult (child output))
+          }
+    | .duplicate target child =>
+        Compiler.items
+          (operation := Argument.Duplicate.operation _ _ _)
+          (frame := Argument.Duplicate.rootFrame target.outer
+            target.localBefore target.localAfter _ _ _)
+          (Argument.Duplicate.targetHead target.outer target.localBefore
+            target.localAfter _ _ _)
+          target.authority.evidence target.authority.sites
+          target.authority.request {
+            close := fun (output : target.Output) =>
+              target.discharge output (boundaryResult (child output))
+          }
+    | .projection target child =>
+        Compiler.items
+          (operation := Argument.Projection.operation _ _ _)
+          (frame := Argument.Projection.rootFrame target.outer
+            target.localBefore target.localAfter _ _ _)
+          (Argument.Projection.targetHead target.outer target.localBefore
+            target.localAfter _ _)
+          target.authority.evidence target.authority.sites
+          target.authority.request {
+            close := fun (output : target.Output) =>
+              target.discharge output (boundaryResult (child output))
+          }
+  termination_by structural plan
+
+  /-- Interpret arity phases through their authoritative all-sites folds. -/
+  def arityResult
+      {wires : List Sig} {body : Region wires} {goal : Goal}
+      (plan : ArityPlan body goal) : goal.Result :=
+    match plan with
+    | .items items => itemsResult items
+    | .shift target child =>
+        Compiler.items
+          (operation := Arity.operation _ target.added)
+          (frame := Arity.rootFrame target.outer target.before target.after _
+            target.added)
+          (Arity.targetHead target.outer target.before target.after _
+            target.added)
+          target.authority.evidence target.authority.sites
+          target.authority.request {
+            close := fun output =>
+              target.discharge output (arityResult (child output))
+          }
+  termination_by structural plan
+
+  /-- Interpret item sequences, deriving ParallelShape only after the exact
+  all-sites edit is returned. -/
   def itemsResult
       {wires : List Sig} {bodyItems : ItemSeq wires} {goal : Goal}
       (plan : ItemsPlan bodyItems goal) : goal.Result :=
     match plan with
     | .nil phase => phase.compile
-    | .cons headPlan tailPlan parallel =>
-        parallel.compile (itemResult headPlan) (itemsResult tailPlan)
+    | .cons target headPlan tailPlan =>
+        Compiler.items
+          (operation := Content.Parallel.operation _)
+          (frame := Content.Parallel.rootFrame target.outer target.before
+            target.after _)
+          (Content.Parallel.firstHead target.outer target.before target.after _,
+            Content.Parallel.secondHead target.outer target.before
+              target.after _)
+          target.authority.evidence target.authority.sites
+          target.authority.request {
+            close := fun output => target.discharge output
+              (itemResult (headPlan output)) (itemsResult (tailPlan output))
+          }
   termination_by structural plan
 
-  /-- Interpret an exact item plan. Every constructor fixes its primitive
-  family and no annotation can supply a compiled result. -/
+  /-- Interpret items, deriving CutShape only after the exact all-sites edit
+  is returned. -/
   def itemResult
       {wires : List Sig} {bodyItem : Item wires} {goal : Goal}
       (plan : ItemPlan bodyItem goal) : goal.Result :=
     match plan with
     | .atom _ phase => phase.compile
     | .identity _ phase => phase.compile
-    | .cut child cutPlan =>
-        cutPlan.compile (regionResult child)
+    | .cut target child =>
+        Compiler.items
+          (operation := Content.Cut.operation _)
+          (frame := Content.Cut.rootFrame target.outer target.before
+            target.after _)
+          (Content.Cut.targetHead target.outer target.before target.after _)
+          target.authority.evidence target.authority.sites
+          target.authority.request {
+            close := fun output =>
+              target.discharge output (regionResult (child output))
+          }
   termination_by structural plan
 end
 
