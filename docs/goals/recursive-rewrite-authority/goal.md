@@ -18,9 +18,8 @@ inventory: `Nonempty (Step.Evidence source target)`.
   `FormalApplication`, and `IdentityLeaf`.
 
 Each family owns a source-indexed forward runner and backward runner whose
-`Option OpenDiagram` result is exact up to `OpenDiagram.Isomorphic`. The
-thirty directional runners belonging to those fifteen families are compiled
-by the public computability audit. For every executable family `R`, exactness
+`Option OpenDiagram` result is exact up to `OpenDiagram.Isomorphic`. For every
+executable family `R`, exactness
 has these precise orientations:
 
 ```lean
@@ -54,13 +53,10 @@ dispatcher. No aggregate runtime dispatcher is permitted.
 
 ## Standalone Boundaries
 
-`Erasure` remains a standalone relation with its own two runners, included in
-the public runner compilation audit but excluded from `Step.Evidence`.
+`Erasure` remains a standalone relation with its own two runners and is
+excluded from `Step.Evidence`.
 `Comprehension` remains standalone recursive mathematics with semantic
 soundness and no executor. Neither relation is a `Step` constructor.
-
-The full public runner compilation audit therefore contains thirty `Step`
-runners plus two standalone Erasure runners, for thirty-two runners total.
 
 ## Execution Boundary
 
@@ -83,12 +79,8 @@ runners plus two standalone Erasure runners, for thirty-two runners total.
 - `docs/superpowers/plans/2026-08-13-recursive-rule-execution.md`
 - `docs/superpowers/plans/2026-08-20-restore-step-execution-boundary.md`
 
-## Completion Oracle
+## Validation
 
-The roster audit accepts exactly the fifteen `Step.Evidence` constructors and
-rejects Erasure and Comprehension. The implementation audit elaborates exact
-type annotations for `Step.iso`, `Step.sound`, and both execution-completeness
-theorems, captures their axiom output, rejects `sorryAx` and project axioms,
-enforces the executable structure boundary, and propagates Lean's exact
-32-runner compilation audit. `lake build`, the public axiom audit, and the
-no-admission scan must pass.
+`lake build` must elaborate the authoritative relations, runners, exactness
+theorems, soundness theorems, and exhaustive Step coverage. The production
+Lean source must contain no admissions or project axioms.

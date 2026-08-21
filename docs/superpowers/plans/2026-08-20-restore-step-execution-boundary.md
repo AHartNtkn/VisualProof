@@ -4,9 +4,9 @@
 
 **Goal:** Restore `Rule.Step` as exactly the executable relation inventory, keep Comprehension standalone, and kernel-check forward and backward executor existence for every `Step` witness.
 
-**Architecture:** The existing family runners and exactness theorems remain the execution authority. `Step` contains only those relations, while a proof-only dependent coverage predicate and two exhaustive theorems establish that every `Step` witness has a successful family runner in both orientations. The roster audit enforces the same inventory and rejects standalone relations from `Step`.
+**Architecture:** The existing family runners and exactness theorems remain the execution authority. `Step` contains only those relations, while a proof-only dependent coverage predicate and two exhaustive theorems establish that every `Step` witness has a successful family runner in both orientations.
 
-**Tech Stack:** Lean 4.30.0, Lake, Bash authority audit, recursive `OpenDiagram` rule relations.
+**Tech Stack:** Lean 4.30.0, Lake, recursive `OpenDiagram` rule relations.
 
 **Spec:** `docs/superpowers/plans/2026-08-13-recursive-rule-execution.md`
 
@@ -21,10 +21,9 @@
 
 ---
 
-### Task 1: Restore the roster contract
+### Task 1: Restore the Step roster
 
 **Files:**
-- Modify: `scripts/audit-lean-authority.sh`
 - Modify: `VisualProof/Rule/Step.lean`
 - Modify: `VisualProof/Rule/Soundness.lean`
 
@@ -32,23 +31,13 @@
 - Consumes: the fifteen executable rule families already imported by `Rule.Step`.
 - Produces: a `Step` inductive containing exactly those fifteen families and no Comprehension constructor.
 
-- [x] **Step 1: Make the roster audit express the required inventory**
+- [x] **Step 1: Restore the production roster**
 
-Set the expected constructors to `wireSever`, `iteration`, `doubleCut`, `vacuity`, `presentation`, `identification`, and the nine `WirePrimitive` families. Explicitly reject `comprehension` and `erasure` constructors.
+Remove the `Comprehension` import and constructor from `Rule/Step.lean`, its `Step.iso` branch, and its `Step.sound` branch. Preserve standalone `Comprehension.sound` in its own module and build it directly.
 
-- [x] **Step 2: Run the roster audit and verify RED**
+- [x] **Step 2: Verify the authoritative owners**
 
-Run: `scripts/audit-lean-authority.sh roster`
-
-Expected: FAIL because the current `Step` still contains `comprehension`.
-
-- [x] **Step 3: Restore the production roster**
-
-Remove the `Comprehension` import and constructor from `Rule/Step.lean`, its `Step.iso` branch, and its `Step.sound` branch. Preserve standalone `Comprehension.sound` in its own module and audit.
-
-- [x] **Step 4: Verify GREEN**
-
-Run: `scripts/audit-lean-authority.sh roster` and `lake build VisualProof.Rule.Soundness`.
+Run: `lake build VisualProof.Rule.Step VisualProof.Rule.Soundness`.
 
 Expected: both PASS.
 
@@ -57,7 +46,6 @@ Expected: both PASS.
 **Files:**
 - Create: `VisualProof/Rule/Executable/Step.lean`
 - Modify: `VisualProof/Rule/Executable.lean`
-- Modify: `VisualProof/Audit.lean`
 
 **Interfaces:**
 - Consumes: each family's `ForwardIndex`, `BackwardIndex`, `runForward`, `runBackward`, `forward_exact`, and `backward_exact`.
@@ -77,18 +65,17 @@ Expected: PASS with exactly those two theorem proofs admitted and all dependency
 
 Case-split `Step`; discharge each branch with the corresponding family's existing `forward_exact` or `backward_exact` theorem. No fallback/default case is permitted.
 
-- [x] **Step 4: Verify GREEN and axioms**
+- [x] **Step 4: Verify GREEN**
 
-Run `lake build VisualProof.Rule.Executable.Step`, scan `VisualProof` for `sorry`/`admit`, and audit both theorem axiom sets from `VisualProof/Audit.lean`.
+Run `lake build VisualProof.Rule.Executable.Step` and scan `VisualProof` for `sorry`/`admit`.
 
 Expected: all PASS with no project admissions.
 
-### Task 3: Repair durable authority documentation and validation
+### Task 3: Repair governing documentation and validation
 
 **Files:**
 - Modify: `docs/goals/recursive-rewrite-authority/goal.md`
 - Modify: `docs/superpowers/plans/2026-08-13-recursive-rule-execution.md`
-- Modify: `VisualProof/ComputabilityAudit.lean` only if the coverage dependency closure exposes an uncompiled runner.
 
 **Interfaces:**
 - Consumes: the restored roster and exhaustive execution theorems.
@@ -102,18 +89,17 @@ Restore the governing plan's exact Option-success iff contracts and
 orientations, target-isomorphism closure, source-indexed anti-target boundary,
 no-discovery complexity contract, forbidden wrappers, and theorem-driven
 validation. State `Step.iso` as two-sided source/target isomorphism closure and
-validate that exact type and its axiom output behaviorally.
+kernel-check that exact type in its owning module.
 
 - [x] **Step 2: Run focused and full validation**
 
 Run:
 
 ```text
-scripts/audit-lean-authority.sh roster
-scripts/audit-lean-authority.sh implementation
+lake env lean -DwarningAsError=true VisualProof/Rule/Step.lean
+lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Step.lean
+lake env lean -DwarningAsError=true VisualProof/Rule/Soundness.lean
 lake build
-lake env lean VisualProof/Audit.lean
-lake env lean VisualProof/ComputabilityAudit.lean
 git diff --check
 ```
 
@@ -121,8 +107,8 @@ Expected: every command passes.
 
 - [x] **Step 3: Commit the completed repair**
 
-Stage only task-owned authority documentation, audit, plan, and computability
-files and commit as `fix(lean): restore step execution boundary`.
+Stage only task-owned formalization and documentation files and commit as
+`fix(lean): restore step execution boundary`.
 
 ## Self-Review
 

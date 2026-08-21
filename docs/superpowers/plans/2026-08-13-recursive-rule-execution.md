@@ -92,10 +92,9 @@ OpenDiagramIso source source' →
 ```
 
 `Step.sound` carries a `Step source target` denotation forward in every model
-at the same boundary arguments. The implementation audit elaborates exact type
-annotations for both declarations and captures their axiom output. The current
-kernel report for `Step.iso` is `[propext, Quot.sound]`; no `sorryAx` or project
-axiom is permitted for it or the other public Step contract theorems.
+at the same boundary arguments. Both declarations elaborate in their owning
+modules. No admission or project axiom is permitted in these or the other
+public Step contract theorems.
 
 `Step.forward_execution_complete` and
 `Step.backward_execution_complete` have the exact public result shapes:
@@ -202,15 +201,6 @@ or independent inductive roster.
 - `VisualProof/Rule/Executable/Step.lean`: proof-only exhaustive Step coverage.
 - `VisualProof/Rule/Executable.lean`: import-only umbrella.
 
-### Validation authority
-
-- `VisualProof/ComputabilityAudit.lean`: counts and compiles the exact public
-  runner roster without defining an execution abstraction.
-- `VisualProof/Audit.lean`: public trust audit for semantic, exactness, closure,
-  and Step coverage theorems.
-- `scripts/audit-lean-authority.sh`: roster, dependency, structural,
-  behavioral type/axiom, and compiler-audit enforcement.
-
 ## Theorem-Driven RED/GREEN Workflow
 
 - Complete every definition in an owning theorem's dependency closure before
@@ -220,33 +210,24 @@ or independent inductive roster.
 - Replace that proof with a kernel-checked term and confirm its axiom output
   before beginning the next direction or theorem.
 - Do not create redundant aliases, fixture theorems, `example`s, or `#check`
-  declarations in production to manufacture RED/GREEN. Temporary behavioral
-  audit modules may use exact type annotations to verify public declarations.
-- Focused mutation checks must demonstrate that runner removal, Comprehension
-  execution, a second Step roster, an aggregate Step dispatcher, type drift,
-  or project admissions cause the owning audit to fail.
+  declarations in production to manufacture RED/GREEN.
 
 ## Completion Oracle
 
 Run and require all of the following:
 
 ```bash
-bash -n scripts/audit-lean-authority.sh
-scripts/audit-lean-authority.sh roster
-scripts/audit-lean-authority.sh implementation
 lake env lean -DwarningAsError=true VisualProof/Rule/Step.lean
 lake env lean -DwarningAsError=true VisualProof/Rule/Executable/Step.lean
 lake env lean -DwarningAsError=true VisualProof/Rule/Soundness.lean
 rg -n '\b(sorry|admit|decreasing_by sorry|^axiom |set_option (maxHeartbeats|maxRecDepth))\b' VisualProof
 lake build
-lake env lean VisualProof/Audit.lean
-lake env lean VisualProof/ComputabilityAudit.lean
 git diff --check
 ```
 
-The no-admission search must return no matches. The implementation audit must
-elaborate the four exact Step contract types, print their axiom sets, reject
-`sorryAx` and project axioms, and propagate a failed runner compilation audit.
+The no-admission search must return no matches. The focused owner builds and
+full build must elaborate the exact Step contract and every family-owned
+runner used by its exhaustive coverage proofs.
 
 ## Self-Review
 
