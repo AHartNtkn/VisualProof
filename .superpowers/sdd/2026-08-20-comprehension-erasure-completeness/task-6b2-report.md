@@ -205,3 +205,218 @@ No correctness blocker remains. The nonempty `StrictEquates` layer realizes
 unchanged cases by a symmetric Vacuity round trip so later endpoint
 presentations can be transported kernel-safely; the public theorem projects
 this to the requested optional reachability relation.
+
+## Fix round 1: authoritative validity, exposure, ownership, and reflexivity
+
+Date: 2026-08-21
+
+**GREEN.** This section records the current contracts and supersedes the
+earlier surface and unchanged-case descriptions above.
+
+### Current owning contracts
+
+The selected-site owner now has the approved three-explicit-argument call
+shape. The retained host is inferred from the occurrence index, and callers
+supply no target endpoint or validity proof:
+
+```lean
+theorem EqualityNormalization.equatesIdentityBoundary
+    {boundary outer arguments : List Sig}
+    (pattern : OpenDiagram arguments)
+    {hostLocals : List Sig}
+    {hostItems : ItemSeq (outer ++ hostLocals)}
+    (ports : Vars (outer ++ hostLocals) arguments)
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence
+      (Region.adjoinAt hostLocals hostItems
+        (Instantiation.instantiate pattern ports)) source) :
+    ∃ targetCanonical :
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals hostItems
+            (Instantiation.instantiate
+              (identityBoundary pattern) ports))).Canonical,
+      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill
+            (Region.adjoinAt hostLocals hostItems
+              (Instantiation.instantiate
+                (identityBoundary pattern) ports))),
+        Equates occurrence
+          (Region.adjoinAt hostLocals hostItems
+            (Instantiation.instantiate (identityBoundary pattern) ports))
+          targetCanonical targetExternalTwoEnded
+```
+
+It computes hosted scope preservation, the exact normalized combined
+canonical proof, and external-two-ended validity internally. The
+`selectedAtom` branch calls it directly as
+`equatesIdentityBoundary pattern mappedPorts presentedOccurrence`.
+
+The single public Exposure owner preserves the Task 2 premises and returned
+validity witnesses while strengthening reachability symmetrically:
+
+```lean
+theorem Erasure.Exposure.equates
+    (description : Rule.Erasure.Description outer)
+    (occurrence : Occurrence description.source source)
+    (erasedCanonical :
+      (occurrence.context.fill description.target).Canonical)
+    (erasedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill description.target)) :
+    ∃ materialCanonical : description.material.Canonical,
+      ∃ exposedCanonical :
+          (occurrence.context.fill
+            (exposedRegion description materialCanonical)).Canonical,
+        ∃ exposedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+            occurrence.interface.boundaryWire
+            (occurrence.context.fill
+              (exposedRegion description materialCanonical)),
+          Equates occurrence
+            (exposedRegion description materialCanonical)
+            exposedCanonical exposedExternalTwoEnded
+```
+
+After destructuring the returned validity witnesses, Task 2's forward
+reachability is `equivalent.1`; the all-sites fold uses both components. There
+is one public Exposure equivalence theorem and no parallel forward wrapper.
+
+### Private ownership and exact unchanged dispatch
+
+`Occurrence.nest`, `StrictEquates` and its algebra, structural pin generation,
+`contextPins`, pin incidence/canonical facts, and
+`adjoinPinsEquatesNonempty` are private Compiler implementation details.
+`Reachability.lean` is byte-identical to the reviewed `f4dfb727` base.
+
+The five private relational definitions now accept positive selected-site
+evidence before entering strict recursion. `normalizedItemsEquates` first
+computes `itemsHaveSelection sites`:
+
+- when it is false, `normalizedItems_eq_of_noSelection` proves that the
+  normalized region is definitionally unchanged, the normalization phase is
+  exactly `⟨Relation.ReflTransGen.refl, Relation.ReflTransGen.refl⟩`, and no
+  presentation, support-pin, worker, or target-pin phase runs;
+- the one `StrictEquates.refl` at this public boundary bridges only the
+  caller's arbitrary `Occurrence.host_iso` to its exact filled endpoint;
+- when it is true, positive selection proofs route recursion only through
+  selected items or selected descendants. Unchanged head/tail siblings are
+  proved equal and skipped. Nil, retained atoms, and retained identities do
+  not create strict cycles;
+- structural pins are batched only when `outer ++ hostLocals` is nonempty.
+  The empty ambient branch establishes canonicality directly and invokes the
+  selected worker without pin/cycle/unpin phases.
+
+The remaining internal `StrictEquates.refl` use is local to
+`strictEquates_of_equates`: the public Exposure result is optional, while an
+actual selected phase must be nonempty to transport a distinct endpoint
+presentation. No unchanged normalization path uses that bridge.
+
+### Theorem-driven RED / GREEN receipts
+
+Exposure RED, with only the owning `Exposure.equates` proof admitted:
+
+```text
+$ lake env lean VisualProof/Rule/Completeness/Erasure/Exposure.lean
+VisualProof/Rule/Completeness/Erasure/Exposure.lean:3264:8: warning: declaration uses `sorry`
+```
+
+Exit status `0`. Its dependencies and strengthened statement elaborated.
+
+The selected-site owner RED, with only
+`EqualityNormalization.equatesIdentityBoundary` admitted:
+
+```text
+$ lake env lean VisualProof/Rule/Completeness/Comprehension/Compiler.lean
+VisualProof/Rule/Completeness/Comprehension/Compiler.lean:3392:8: warning: declaration uses `sorry`
+```
+
+Exit status `0`.
+
+After the exact unchanged dispatcher and all five relational definitions
+were complete, the public all-sites RED was repeated with only
+`normalizeItemsEquates` admitted:
+
+```text
+$ lake env lean VisualProof/Rule/Completeness/Comprehension/Compiler.lean
+VisualProof/Rule/Completeness/Comprehension/Compiler.lean:4921:8: warning: declaration uses `sorry`
+```
+
+Exit status `0`. Restoring each owning proof produced GREEN with no proof
+holes.
+
+### Validation receipts
+
+Focused elaboration:
+
+```text
+$ lake env lean VisualProof/Rule/Completeness/Reachability.lean
+$ lake env lean VisualProof/Rule/Completeness/Erasure/Exposure.lean
+$ lake env lean VisualProof/Rule/Completeness/Comprehension/Compiler.lean
+```
+
+All three exited `0` with no output.
+
+Task 2/current Exposure contract audit:
+
+```text
+$ rg -n '^theorem equates$|\(erasedCanonical :|∃ materialCanonical|Equates occurrence' \
+    VisualProof/Rule/Completeness/Erasure/Exposure.lean
+```
+
+Exit status `0`; it found the public owner at line 3264, erased-target
+canonicality at line 3269, returned material validity at line 3274, and the
+symmetric result at line 3282.
+
+Surface audits:
+
+```text
+$ rg -n 'Exposure\.(derives|equatesEmptyHost)' VisualProof
+$ rg -n '^(theorem|def|structure) (StrictEquates|contextPins|contextPins_incidence_nonempty|pinnedHostCanonical|adjoinPinsEquatesNonempty|pinnedHost_incidence_nonempty|Occurrence\.nest)' \
+    VisualProof/Rule/Completeness/Comprehension/Compiler.lean \
+    VisualProof/Rule/Completeness/Erasure/Exposure.lean \
+    VisualProof/Rule/Completeness/Reachability.lean
+```
+
+Both exited `1` with no matches. Caller scans found direct production uses for
+every task-owned private helper.
+
+Proof-hole and forbidden-construction audits:
+
+```text
+$ rg -n '\b(sorry|admit)\b|^\s*axiom\b' VisualProof
+$ git diff --unified=0 f4dfb727 -- \
+    VisualProof/Rule/Completeness/Reachability.lean \
+    VisualProof/Rule/Completeness/Erasure/Exposure.lean \
+    VisualProof/Rule/Completeness/Comprehension/Compiler.lean | \
+    rg '^\+.*\b(cast|Eq\.rec|occurrenceCongr|Argument\.Projection|WireSever|xor|Xor)\b'
+```
+
+Both exited `1` with no matches.
+
+Diff hygiene and the full build:
+
+```text
+$ git diff --check
+$ lake build
+```
+
+`git diff --check` exited `0`. `lake build` exited `0` with all 77 jobs
+successful. Its only output was the established replayed unused-simp warnings
+in `Diagram/Isomorphism.lean` and `Diagram/Scope/Rename.lean`; all touched
+modules remain warning-free under focused elaboration.
+
+### Fix-round self-review and concerns
+
+- The approved selected-site owner has no caller-supplied normalized endpoint
+  or validity premises.
+- Exposure preserves the original erased-target premise/result contract and
+  provides symmetric reachability through one public theorem.
+- General strict algebra and every structural pin fact are private to the
+  Compiler implementation that uses them.
+- The unchanged result is proven from the exact evidence/sites indices and
+  uses a literal reflexive normalization phase before any selected machinery.
+- Selected sibling and cut composition retain the accepted explicit
+  Region/ItemSeq presentations and symmetric occurrence composition.
+- No BoundaryPlan or compiler integration code is in scope.
+
+No correctness concern or validation blocker remains.

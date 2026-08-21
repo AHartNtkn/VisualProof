@@ -884,87 +884,6 @@ private theorem exposureDescriptionWithHost_exposedRegion
   rw [supportPattern_eq_identityBoundary pattern materialCanonical,
     exposureDescriptionWithHost_applicationPorts]
 
-/-- One selected instantiation in its exact retained host is bidirectionally
-equivalent to the same application through the ordered identity boundary. -/
-theorem equatesIdentityBoundary
-    {boundary outer arguments : List Sig}
-    (pattern : OpenDiagram arguments)
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (ports : Vars (outer ++ hostLocals) arguments)
-    {source : OpenDiagram boundary}
-    (occurrence : Occurrence
-      (Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          pattern ports)) source)
-    (targetCanonical :
-      (occurrence.context.fill
-        (Region.adjoinAt hostLocals hostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-            (identityBoundary pattern) ports))).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire
-      (occurrence.context.fill
-        (Region.adjoinAt hostLocals hostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-            (identityBoundary pattern) ports)))) :
-    Equates occurrence
-      (Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          (identityBoundary pattern) ports))
-      targetCanonical targetExternalTwoEnded := by
-  let description := exposureDescriptionWithHost pattern hostLocals hostItems
-    ports
-  have sourceEq : description.source =
-      Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          pattern ports) := by
-    simpa only [description] using
-      exposureDescriptionWithHost_source pattern hostLocals hostItems ports
-  let exposureOccurrence : Occurrence description.source source := {
-    interface := occurrence.interface
-    context := occurrence.context
-    sourceCanonical := by
-      rw [sourceEq]
-      exact occurrence.sourceCanonical
-    sourceExternalTwoEnded := by
-      intro signature wire
-      rw [sourceEq]
-      exact occurrence.sourceExternalTwoEnded wire
-    host_iso := by
-      simpa only [sourceEq] using occurrence.host_iso
-  }
-  have materialCanonical : description.material.Canonical := by
-    simpa only [description, exposureDescriptionWithHost] using
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
-        pattern (formalPorts arguments)
-  have exposedEq :
-      Erasure.Exposure.exposedRegion description materialCanonical =
-        Region.adjoinAt hostLocals hostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-            (identityBoundary pattern) ports) := by
-    simpa only [description] using
-      exposureDescriptionWithHost_exposedRegion pattern hostLocals hostItems
-        ports materialCanonical
-  have exposedCanonical :
-      (exposureOccurrence.context.fill
-        (Erasure.Exposure.exposedRegion description
-          materialCanonical)).Canonical := by
-    rw [exposedEq]
-    exact targetCanonical
-  have exposedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      exposureOccurrence.interface.boundaryWire
-      (exposureOccurrence.context.fill
-        (Erasure.Exposure.exposedRegion description
-          materialCanonical)) := by
-    intro signature wire
-    rw [exposedEq]
-    exact targetExternalTwoEnded wire
-  have equivalent := Erasure.Exposure.equates description
-    exposureOccurrence materialCanonical exposedCanonical
-      exposedExternalTwoEnded
-  simpa only [Equates, exposureOccurrence, sourceEq, exposedEq] using
-    equivalent
-
 private theorem Vars.exists_get_index_of_countIndex_pos
     (variables : Vars context signatures) (wireIndex : Nat)
     (positive : 0 < variables.countIndex wireIndex) :
@@ -1150,6 +1069,148 @@ mutual
         ⟨Region.singleton (.cut childOutput.1),
           _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
             childOutput.2⟩
+  termination_by structural sites
+end
+
+mutual
+  /-- Whether the exact site annotation contains any selected application. -/
+  private def regionHasSelection
+      {arguments common sourceWires targetWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Region sourceWires} {result : Region common}
+      {evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          pattern frame.sourceKeep frame.selected source result}
+      (sites : RegionSites operation data evidence) : Bool :=
+    match sites with
+    | .mk childSites => itemsHaveSelection childSites
+  termination_by structural sites
+
+  private def itemsHaveSelection
+      {arguments common sourceWires targetWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : ItemSeq sourceWires} {result : Region common}
+      {evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          pattern frame.sourceKeep frame.selected source result}
+      (sites : ItemsSites operation data evidence) : Bool :=
+    match sites with
+    | .nil _ => false
+    | .cons itemSites tailSites =>
+        itemHasSelection itemSites || itemsHaveSelection tailSites
+  termination_by structural sites
+
+  private def itemHasSelection
+      {arguments common sourceWires targetWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Item sourceWires} {result : Region common}
+      {evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          pattern frame.sourceKeep frame.selected source result}
+      (sites : ItemSites operation data evidence) : Bool :=
+    match sites with
+    | .atom _ _ => false
+    | .selectedAtom _ _ => true
+    | .identity _ _ _ => false
+    | .cut childSites => regionHasSelection childSites
+  termination_by structural sites
+end
+
+mutual
+  private theorem normalizedRegion_eq_of_noSelection
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Region sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : RegionSites operation data evidence)
+      (none : regionHasSelection sites = false) :
+      (normalizedRegion pattern evidence sites).1 = result :=
+    match sites with
+    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
+        childSites => by
+        change Region.adjoinAt locals .nil
+            (normalizedItems pattern childEvidence childSites).1 =
+          Region.adjoinAt locals .nil childResult
+        rw [normalizedItems_eq_of_noSelection pattern childEvidence
+          childSites (by simpa only [regionHasSelection] using none)]
+  termination_by structural sites
+
+  private theorem normalizedItems_eq_of_noSelection
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : ItemSeq sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemsSites operation data evidence)
+      (none : itemsHaveSelection sites = false) :
+      (normalizedItems pattern evidence sites).1 = result :=
+    match sites with
+    | .nil _ => rfl
+    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
+        itemEvidence tailEvidence itemSites tailSites => by
+        have itemNone : itemHasSelection itemSites = false := by
+          cases selected : itemHasSelection itemSites with
+          | false => rfl
+          | true => simp_all only [itemsHaveSelection, Bool.true_or,
+              Bool.true_eq_false]
+        have tailNone : itemsHaveSelection tailSites = false := by
+          cases selected : itemsHaveSelection tailSites with
+          | false => rfl
+          | true => simp_all only [itemsHaveSelection, Bool.or_true,
+              Bool.true_eq_false]
+        change
+          (normalizedItem pattern itemEvidence itemSites).1.conjoin
+              (normalizedItems pattern tailEvidence tailSites).1 =
+            itemResult.conjoin tailResult
+        rw [normalizedItem_eq_of_noSelection pattern itemEvidence itemSites
+          itemNone]
+        rw [normalizedItems_eq_of_noSelection pattern tailEvidence tailSites
+          tailNone]
+  termination_by structural sites
+
+  private theorem normalizedItem_eq_of_noSelection
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Item sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemSites operation data evidence)
+      (none : itemHasSelection sites = false) :
+      (normalizedItem pattern evidence sites).1 = result :=
+    match sites with
+    | .atom _ _ => rfl
+    | .selectedAtom _ _ => by
+        simp only [itemHasSelection, Bool.true_eq_false] at none
+    | .identity _ _ _ => rfl
+    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
+        childSites => by
+        change Region.singleton
+            (.cut (normalizedRegion pattern childEvidence childSites).1) =
+          Region.singleton (.cut childResult)
+        rw [normalizedRegion_eq_of_noSelection pattern childEvidence
+          childSites (by simpa only [itemHasSelection] using none)]
   termination_by structural sites
 end
 
@@ -1767,6 +1828,177 @@ private theorem canonical_left_of_conjoin
               (ItemSeq.childrenCanonical_append _ _).mp canonical.2 |>.1
             exact (ItemSeq.ChildrenCanonical.renameWires_adjoinHost_iff
               firstItems).mp children
+/-- Refine an actual occurrence through one further exact recursive context.
+The composed context is the only occurrence path; `fill_comp` identifies its
+source with the caller's actual filled endpoint. -/
+private noncomputable def Occurrence.nest
+    {boundary middle holeWires : List Sig}
+    {before : Region holeWires}
+    {source : OpenDiagram boundary}
+    {inner : DiagramContext middle holeWires}
+    (occurrence : Occurrence (inner.fill before) source) :
+    Occurrence before source where
+  interface := occurrence.interface
+  context := occurrence.context.comp inner
+  sourceCanonical := by
+    simpa only [DiagramContext.fill_comp] using occurrence.sourceCanonical
+  sourceExternalTwoEnded := by
+    intro signature wire
+    simpa only [DiagramContext.fill_comp] using
+      occurrence.sourceExternalTwoEnded wire
+  host_iso := by
+    simpa only [DiagramContext.fill_comp] using occurrence.host_iso
+
+/-- Bidirectional nonempty reachability between exact occurrence endpoints.
+This stronger internal form permits endpoint presentation transport while
+the public equality phase remains optional when no selected site exists. -/
+private def StrictEquates
+    {boundary holeWires : List Sig}
+    {before : Region holeWires}
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence before source)
+    (after : Region holeWires)
+    (targetCanonical : (occurrence.context.fill after).Canonical)
+    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill after)) : Prop :=
+  let target := occurrence.interface.withBody
+    (occurrence.context.fill after) targetCanonical targetExternalTwoEnded
+  Relation.TransGen Step source target ∧
+    Relation.TransGen Step target source
+
+private theorem StrictEquates.toEquates
+    {boundary holeWires : List Sig}
+    {before after : Region holeWires}
+    {source : OpenDiagram boundary}
+    {occurrence : Occurrence before source}
+    {targetCanonical : (occurrence.context.fill after).Canonical}
+    {targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill after)}
+    (strict : StrictEquates occurrence after targetCanonical
+      targetExternalTwoEnded) :
+    Equates occurrence after targetCanonical targetExternalTwoEnded := by
+  have optional : ∀ {first last : OpenDiagram boundary},
+      Relation.TransGen Step first last →
+        Relation.ReflTransGen Step first last := by
+    intro first last steps
+    induction steps with
+    | single step => exact .tail .refl step
+    | tail steps step induction => exact .tail induction step
+  exact ⟨optional strict.1, optional strict.2⟩
+
+/-- A nonempty symmetric loop at an exact occurrence. The two Vacuity steps
+insert and immediately remove one structurally fixed point, so presentation
+transport never relies on a zero-length derivation. -/
+private theorem StrictEquates.refl
+    {boundary holeWires : List Sig}
+    {before : Region holeWires}
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence before source) :
+    StrictEquates occurrence before occurrence.sourceCanonical
+      occurrence.sourceExternalTwoEnded := by
+  have regionEta :
+      Vacuity.Point.plain before.locals before.items = before := by
+    cases before
+    rfl
+  let pointOccurrence : Occurrence
+      (Vacuity.Point.plain before.locals before.items) source := by
+    rw [regionEta]
+    exact occurrence
+  have pointValidity :=
+    Vacuity.Point.introduceValidity pointOccurrence Sig.iota
+  let pointEndpoint := pointOccurrence.interface.withBody
+    (pointOccurrence.context.fill
+      (Vacuity.Point.present before.locals before.items Sig.iota))
+    pointValidity.1 pointValidity.2
+  have introduction : Vacuity source pointEndpoint := by
+    exact ⟨holeWires,
+      Vacuity.Point.plain before.locals before.items,
+      Vacuity.Point.present before.locals before.items Sig.iota,
+      pointOccurrence, pointValidity.1, pointValidity.2,
+      OpenDiagramIso.refl _,
+      atPolarity_symmetric_of pointOccurrence.context.polarity
+        (.mk (.point before.locals before.items Sig.iota))⟩
+  let exact := occurrence.interface.withBody
+    (occurrence.context.fill before) occurrence.sourceCanonical
+      occurrence.sourceExternalTwoEnded
+  have exactIntroduction : Vacuity exact pointEndpoint := by
+    exact Vacuity.iso occurrence.host_iso introduction
+      (OpenDiagramIso.refl pointEndpoint)
+  exact ⟨(Relation.TransGen.single (Step.vacuity introduction)).tail
+      (Step.vacuity exactIntroduction.symm),
+    (Relation.TransGen.single (Step.vacuity exactIntroduction)).tail
+      (Step.vacuity introduction.symm)⟩
+
+/-- Transport the exact target presentation of a nonempty symmetric phase. -/
+private theorem StrictEquates.targetIso
+    {boundary holeWires : List Sig}
+    {before middle after : Region holeWires}
+    {source : OpenDiagram boundary}
+    {occurrence : Occurrence before source}
+    {middleCanonical : (occurrence.context.fill middle).Canonical}
+    {middleExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire (occurrence.context.fill middle)}
+    {targetCanonical : (occurrence.context.fill after).Canonical}
+    {targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire (occurrence.context.fill after)}
+    (strict : StrictEquates occurrence middle middleCanonical
+      middleExternalTwoEnded)
+    (targetIso : OpenDiagramIso
+      (occurrence.interface.withBody (occurrence.context.fill middle)
+        middleCanonical middleExternalTwoEnded)
+      (occurrence.interface.withBody (occurrence.context.fill after)
+        targetCanonical targetExternalTwoEnded)) :
+    StrictEquates occurrence after targetCanonical targetExternalTwoEnded := by
+  exact ⟨transGen_iso (OpenDiagramIso.refl source) strict.1 targetIso,
+    transGen_iso targetIso strict.2 (OpenDiagramIso.refl source)⟩
+
+/-- Consecutive nonempty symmetric phases compose at their exact midpoint. -/
+private theorem StrictEquates.trans
+    {boundary holeWires : List Sig}
+    {before middle after : Region holeWires}
+    {source : OpenDiagram boundary}
+    {occurrence : Occurrence before source}
+    {middleCanonical : (occurrence.context.fill middle).Canonical}
+    {middleExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire (occurrence.context.fill middle)}
+    {targetCanonical : (occurrence.context.fill after).Canonical}
+    {targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire (occurrence.context.fill after)}
+    (first : StrictEquates occurrence middle middleCanonical
+      middleExternalTwoEnded)
+    (second : StrictEquates
+      (exactOccurrence occurrence.interface occurrence.context middle
+        middleCanonical middleExternalTwoEnded)
+      after targetCanonical targetExternalTwoEnded) :
+    StrictEquates occurrence after targetCanonical targetExternalTwoEnded := by
+  exact ⟨first.1.trans second.1, second.2.trans first.2⟩
+
+/-- Consecutive bidirectional phases at the same actual occurrence compose. -/
+private theorem Equates.trans
+    {boundary holeWires : List Sig}
+    {before middle after : Region holeWires}
+    {source : OpenDiagram boundary}
+    {occurrence : Occurrence before source}
+    {middleCanonical : (occurrence.context.fill middle).Canonical}
+    {middleExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill middle)}
+    {targetCanonical : (occurrence.context.fill after).Canonical}
+    {targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill after)}
+    (first : Equates occurrence middle middleCanonical
+      middleExternalTwoEnded)
+    (second : Equates
+      (exactOccurrence occurrence.interface occurrence.context middle
+        middleCanonical middleExternalTwoEnded)
+      after targetCanonical targetExternalTwoEnded) :
+    Equates occurrence after targetCanonical targetExternalTwoEnded := by
+  exact ⟨first.1.trans second.1, second.2.trans first.2⟩
+
+
 private noncomputable def presentationOccurrence
     {boundary holeWires : List Sig}
     {before after : Region holeWires}
@@ -1999,15 +2231,640 @@ private noncomputable def adjoinAtIso
       refine .mk localAmbient ?_
       simpa only [ambient] using ItemSeqIso.append hostIso materialItems'
 
+private theorem pinStep
+    {boundary holeWires locals : List Sig}
+    {items : ItemSeq (holeWires ++ locals)}
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence (Vacuity.Pin.plain locals items) source)
+    (signature : Sig) (wire : Var (holeWires ++ locals) signature) :
+    ∃ targetCanonical :
+        (occurrence.context.fill
+          (Vacuity.Pin.present locals items signature wire)).Canonical,
+      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill
+            (Vacuity.Pin.present locals items signature wire)),
+        Step source
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (Vacuity.Pin.present locals items signature wire))
+              targetCanonical targetExternalTwoEnded) ∧
+          Step
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (Vacuity.Pin.present locals items signature wire))
+              targetCanonical targetExternalTwoEnded)
+            source := by
+  have validity := Vacuity.Pin.introduceValidity occurrence signature wire
+  let step : Vacuity source
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (Vacuity.Pin.present locals items signature wire))
+        validity.1 validity.2) := ⟨holeWires, Vacuity.Pin.plain locals items,
+    Vacuity.Pin.present locals items signature wire, occurrence,
+    validity.1, validity.2, OpenDiagramIso.refl _,
+    atPolarity_symmetric_of occurrence.context.polarity
+      (.mk (.pin locals items signature wire))⟩
+  exact ⟨validity.1, validity.2,
+    Step.vacuity step, Step.vacuity step.symm⟩
+
+/-- One unary identity for every wire in a typed source context. -/
+private def allPins (source : List Sig)
+    (rename : WireRenaming source target) : ItemSeq target :=
+  ItemSeq.pinWires source rename (fun _ => true)
+
+/-- Add one pin for every selected source wire at an exact occurrence. -/
+private theorem pinAllExact
+    {boundary holeWires locals pinWires : List Sig}
+    (interface : OpenDiagram boundary)
+    (context : DiagramContext interface.external holeWires)
+    (items : ItemSeq (holeWires ++ locals))
+    (rename : WireRenaming pinWires (holeWires ++ locals))
+    (sourceCanonical :
+      (context.fill (.mk locals items)).Canonical)
+    (sourceExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill (.mk locals items))) :
+    ∃ targetCanonical :
+        (context.fill
+          (.mk locals (items.append (allPins pinWires rename)))).Canonical,
+      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          interface.boundaryWire
+          (context.fill
+            (.mk locals (items.append (allPins pinWires rename)))),
+        Equates
+          (exactOccurrence interface context (.mk locals items)
+            sourceCanonical sourceExternalTwoEnded)
+          (.mk locals (items.append (allPins pinWires rename)))
+          targetCanonical targetExternalTwoEnded := by
+  induction pinWires generalizing items with
+  | nil =>
+      refine ⟨by simpa [allPins, ItemSeq.pinWires, ItemSeq.append_nil] using
+          sourceCanonical,
+        by
+          intro wireSignature wire
+          simpa [allPins, ItemSeq.pinWires, ItemSeq.append_nil] using
+            sourceExternalTwoEnded wire,
+        ?_⟩
+      simpa [allPins, ItemSeq.pinWires, ItemSeq.append_nil] using
+        (show Equates
+          (exactOccurrence interface context (.mk locals items)
+            sourceCanonical sourceExternalTwoEnded)
+          (.mk locals items) sourceCanonical sourceExternalTwoEnded from
+          ⟨.refl, .refl⟩)
+  | cons signature tail induction =>
+      let tailRename : WireRenaming tail (holeWires ++ locals) :=
+        ⟨fun wire => rename (.there wire)⟩
+      let pin := Item.identity signature 1 (fun _ => rename .here)
+      let occurrence := exactOccurrence interface context (.mk locals items)
+        sourceCanonical sourceExternalTwoEnded
+      obtain ⟨firstCanonical, firstExternalTwoEnded, firstSteps⟩ :=
+        pinStep occurrence signature (rename .here)
+      let firstItems := items.append (.cons pin .nil)
+      have firstCanonical' :
+          (context.fill (.mk locals firstItems)).Canonical := by
+        simpa only [occurrence, pin, firstItems, Vacuity.Pin.present,
+          Vacuity.Pin.plain] using firstCanonical
+      have firstExternalTwoEnded' : OpenDiagram.ExternalTwoEnded
+          interface.boundaryWire (context.fill (.mk locals firstItems)) := by
+        intro wireSignature wire
+        simpa only [occurrence, pin, firstItems, Vacuity.Pin.present,
+          Vacuity.Pin.plain] using firstExternalTwoEnded wire
+      obtain ⟨targetCanonical, targetExternalTwoEnded, rest⟩ :=
+        induction firstItems tailRename firstCanonical'
+          firstExternalTwoEnded'
+      refine ⟨?_, ?_, ?_⟩
+      · simpa only [allPins, ItemSeq.pinWires, if_true, firstItems, pin,
+          ItemSeq.append_assoc] using targetCanonical
+      · intro wireSignature wire
+        simpa only [allPins, ItemSeq.pinWires, if_true, firstItems, pin,
+          ItemSeq.append_assoc] using targetExternalTwoEnded wire
+      · have firstEquates : Equates occurrence
+            (.mk locals firstItems) firstCanonical' firstExternalTwoEnded' := by
+          exact ⟨.tail .refl (by
+              simpa only [occurrence, pin, firstItems, Vacuity.Pin.present,
+                Vacuity.Pin.plain] using firstSteps.1),
+            .tail .refl (by
+              simpa only [occurrence, pin, firstItems, Vacuity.Pin.present,
+                Vacuity.Pin.plain] using firstSteps.2)⟩
+        have combined := Equates.trans firstEquates rest
+        simpa only [allPins, ItemSeq.pinWires, if_true, firstItems, pin,
+          ItemSeq.append_assoc] using combined
+
+/-- A nonempty all-wire pin batch has a genuine Vacuity step in each
+direction, even when the supplied occurrence uses a nontrivial source
+presentation. -/
+private theorem pinAllNonempty
+    {boundary holeWires locals : List Sig}
+    {signature : Sig} {tail : List Sig}
+    {items : ItemSeq (holeWires ++ locals)}
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence (Vacuity.Pin.plain locals items) source)
+    (rename : WireRenaming (signature :: tail) (holeWires ++ locals)) :
+    ∃ targetCanonical :
+        (occurrence.context.fill
+          (.mk locals
+            (items.append (allPins (signature :: tail) rename)))).Canonical,
+      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill
+            (.mk locals
+              (items.append (allPins (signature :: tail) rename)))),
+        Relation.TransGen Step source
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (.mk locals
+                  (items.append (allPins (signature :: tail) rename))))
+              targetCanonical targetExternalTwoEnded) ∧
+          Relation.TransGen Step
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (.mk locals
+                  (items.append (allPins (signature :: tail) rename))))
+              targetCanonical targetExternalTwoEnded)
+            source := by
+  let tailRename : WireRenaming tail (holeWires ++ locals) :=
+    ⟨fun wire => rename (.there wire)⟩
+  let pin := Item.identity signature 1 (fun _ => rename .here)
+  obtain ⟨firstCanonical, firstExternalTwoEnded, firstSteps⟩ :=
+    pinStep occurrence signature (rename .here)
+  let firstItems := items.append (.cons pin .nil)
+  have firstCanonical' :
+      (occurrence.context.fill (.mk locals firstItems)).Canonical := by
+    simpa only [pin, firstItems, Vacuity.Pin.present,
+      Vacuity.Pin.plain] using firstCanonical
+  have firstExternalTwoEnded' : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill (.mk locals firstItems)) := by
+    intro wireSignature wire
+    simpa only [pin, firstItems, Vacuity.Pin.present,
+      Vacuity.Pin.plain] using firstExternalTwoEnded wire
+  obtain ⟨targetCanonical, targetExternalTwoEnded, rest⟩ :=
+    pinAllExact occurrence.interface occurrence.context firstItems tailRename
+      firstCanonical' firstExternalTwoEnded'
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · simpa only [allPins, ItemSeq.pinWires, if_true, firstItems, pin,
+      ItemSeq.append_assoc] using targetCanonical
+  · intro wireSignature wire
+    simpa only [allPins, ItemSeq.pinWires, if_true, firstItems, pin,
+      ItemSeq.append_assoc] using targetExternalTwoEnded wire
+  · have first : Step source
+        (occurrence.interface.withBody
+          (occurrence.context.fill (.mk locals firstItems))
+          firstCanonical' firstExternalTwoEnded') := by
+      simpa only [pin, firstItems, Vacuity.Pin.present,
+        Vacuity.Pin.plain] using firstSteps.1
+    have combined := (Relation.TransGen.single first).reflTransGen rest.1
+    simpa only [allPins, ItemSeq.pinWires, if_true, firstItems, pin,
+      ItemSeq.append_assoc] using combined
+  · have first : Step
+        (occurrence.interface.withBody
+          (occurrence.context.fill (.mk locals firstItems))
+          firstCanonical' firstExternalTwoEnded') source := by
+      simpa only [pin, firstItems, Vacuity.Pin.present,
+        Vacuity.Pin.plain] using firstSteps.2
+    have combined := rest.2.transGen (Relation.TransGen.single first)
+    simpa only [allPins, ItemSeq.pinWires, if_true, firstItems, pin,
+      ItemSeq.append_assoc] using combined
+
+/-- Two complete pin batches provide two root incidences for every selected
+wire and remain a nonempty symmetric Vacuity derivation. -/
+private theorem pinAllTwiceNonempty
+    {boundary holeWires locals : List Sig}
+    {signature : Sig} {tail : List Sig}
+    {items : ItemSeq (holeWires ++ locals)}
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence (.mk locals items) source)
+    (rename : WireRenaming (signature :: tail) (holeWires ++ locals)) :
+    let pins := allPins (signature :: tail) rename
+    ∃ targetCanonical :
+        (occurrence.context.fill
+          (.mk locals ((items.append pins).append pins))).Canonical,
+      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill
+            (.mk locals ((items.append pins).append pins))),
+        Relation.TransGen Step source
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (.mk locals ((items.append pins).append pins)))
+              targetCanonical targetExternalTwoEnded) ∧
+          Relation.TransGen Step
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (.mk locals ((items.append pins).append pins)))
+              targetCanonical targetExternalTwoEnded)
+            source := by
+  dsimp only
+  obtain ⟨firstCanonical, firstExternalTwoEnded, first⟩ :=
+    pinAllNonempty occurrence rename
+  let pins := allPins (signature :: tail) rename
+  let firstItems := items.append pins
+  have firstCanonical' :
+      (occurrence.context.fill (.mk locals firstItems)).Canonical := by
+    simpa only [pins, firstItems] using firstCanonical
+  have firstExternalTwoEnded' : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill (.mk locals firstItems)) := by
+    intro wireSignature wire
+    simpa only [pins, firstItems] using firstExternalTwoEnded wire
+  obtain ⟨targetCanonical, targetExternalTwoEnded, second⟩ :=
+    pinAllExact occurrence.interface occurrence.context firstItems rename
+      firstCanonical' firstExternalTwoEnded'
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · simpa only [pins, firstItems] using targetCanonical
+  · intro wireSignature wire
+    simpa only [pins, firstItems] using targetExternalTwoEnded wire
+  · have first' : Relation.TransGen Step source
+        (occurrence.interface.withBody
+          (occurrence.context.fill (.mk locals firstItems))
+          firstCanonical' firstExternalTwoEnded') := by
+      simpa only [pins, firstItems] using first.1
+    exact first'.reflTransGen (by
+      simpa only [pins, firstItems] using second.1)
+  · have first' : Relation.TransGen Step
+        (occurrence.interface.withBody
+          (occurrence.context.fill (.mk locals firstItems))
+          firstCanonical' firstExternalTwoEnded') source := by
+      simpa only [pins, firstItems] using first.2
+    have secondReverse : Relation.ReflTransGen Step
+        (occurrence.interface.withBody
+          (occurrence.context.fill
+            (.mk locals ((items.append pins).append pins)))
+          targetCanonical targetExternalTwoEnded)
+        (occurrence.interface.withBody
+          (occurrence.context.fill (.mk locals firstItems))
+          firstCanonical' firstExternalTwoEnded') := by
+      simpa only [pins, firstItems] using second.2
+    exact secondReverse.transGen first'
+
+private theorem pinAllTwiceOfNonempty
+    {boundary holeWires locals pinWires : List Sig}
+    {items : ItemSeq (holeWires ++ locals)}
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence (.mk locals items) source)
+    (rename : WireRenaming pinWires (holeWires ++ locals))
+    (nonempty : pinWires ≠ []) :
+    let pins := allPins pinWires rename
+    ∃ targetCanonical :
+        (occurrence.context.fill
+          (.mk locals ((items.append pins).append pins))).Canonical,
+      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill
+            (.mk locals ((items.append pins).append pins))),
+        Relation.TransGen Step source
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (.mk locals ((items.append pins).append pins)))
+              targetCanonical targetExternalTwoEnded) ∧
+          Relation.TransGen Step
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (.mk locals ((items.append pins).append pins)))
+              targetCanonical targetExternalTwoEnded)
+            source := by
+  cases pinWires with
+  | nil => exact False.elim (nonempty rfl)
+  | cons signature tail => exact pinAllTwiceNonempty occurrence rename
+
+private theorem allPins_renameWires
+    (source : List Sig) (rename : WireRenaming source middle)
+    (next : WireRenaming middle target) :
+    (allPins source rename).renameWires next =
+      allPins source (WireRenaming.comp next rename) := by
+  induction source with
+  | nil => rfl
+  | cons signature tail induction =>
+      simp only [allPins, ItemSeq.pinWires, if_true,
+        ItemSeq.renameWires, Item.renameWires]
+      exact congrArg (ItemSeq.cons
+        (.identity signature 1
+          (fun _ => next (rename (.here : Var (signature :: tail)
+            signature)))))
+        (induction ⟨fun wire => rename (.there wire)⟩)
+
+private theorem allPins_mem_nil
+    (source : List Sig) (rename : WireRenaming source target)
+    (wire : Var source signature) (itemIndex : Nat) :
+    [] ∈ (allPins source rename).incidencePaths
+      (rename wire).index.val itemIndex := by
+  exact ItemSeq.pinWires_mem_nil source rename (fun _ => true) wire
+    itemIndex rfl
+
+/-- Two complete pin batches root every selected wire at the current region. -/
+private theorem allPins_twice_rooted
+    (source : List Sig) (rename : WireRenaming source target)
+    (wire : Var source signature) (itemIndex : Nat) :
+    RegionPath.RootedTwo
+      (((allPins source rename).append (allPins source rename)).incidencePaths
+        (rename wire).index.val itemIndex) := by
+  rw [ItemSeq.incidencePaths_append]
+  have firstMem : [] ∈ (allPins source rename).incidencePaths
+      (rename wire).index.val itemIndex :=
+    allPins_mem_nil source rename wire itemIndex
+  have secondMem : [] ∈ (allPins source rename).incidencePaths
+      (rename wire).index.val
+        (itemIndex + (allPins source rename).length) :=
+    allPins_mem_nil source rename wire
+      (itemIndex + (allPins source rename).length)
+  constructor
+  · have firstPositive := List.length_pos_iff.mpr
+      (List.ne_nil_of_mem firstMem)
+    have secondPositive := List.length_pos_iff.mpr
+      (List.ne_nil_of_mem secondMem)
+    simp only [List.length_append]
+    omega
+  · exact RegionPath.deepestCommonAncestor_eq_nil_of_mem_nil _
+      (List.mem_append.mpr (Or.inl firstMem))
+
+private theorem allPins_twice_childrenCanonical
+    (source : List Sig) (rename : WireRenaming source target) :
+    ((allPins source rename).append
+      (allPins source rename)).ChildrenCanonical := by
+  exact (ItemSeq.childrenCanonical_append _ _).mpr
+    ⟨ItemSeq.pinWires_childrenCanonical source rename (fun _ => true),
+      ItemSeq.pinWires_childrenCanonical source rename (fun _ => true)⟩
+private def appendAdjoinedPins
+    (hostLocals : List Sig) (hostItems pins : ItemSeq (outer ++ hostLocals))
+    (material : Region (outer ++ hostLocals)) : Region outer :=
+  match material with
+  | .mk materialLocals materialItems =>
+      let hostRename := Region.adjoinHostWire outer hostLocals materialLocals
+      let materialRename :=
+        Region.adjoinMaterialWire outer hostLocals materialLocals
+      .mk (hostLocals ++ materialLocals)
+        (((hostItems.renameWires hostRename).append
+          (materialItems.renameWires materialRename)).append
+            (pins.renameWires hostRename))
+
+/-- Moving a pin block from after adjoined material into the host item block
+is a presentation isomorphism and changes no rewrite authority. -/
+private noncomputable def adjoinPinsIso
+    (hostLocals : List Sig) (hostItems pins : ItemSeq (outer ++ hostLocals))
+    (material : Region (outer ++ hostLocals)) :
+    RegionIso (WireEquiv.refl outer)
+      (appendAdjoinedPins hostLocals hostItems pins material)
+      (Region.adjoinAt hostLocals (hostItems.append pins) material) := by
+  cases material with
+  | mk materialLocals materialItems =>
+      let hostRename := Region.adjoinHostWire outer hostLocals materialLocals
+      let materialRename :=
+        Region.adjoinMaterialWire outer hostLocals materialLocals
+      let host := hostItems.renameWires hostRename
+      let material := materialItems.renameWires materialRename
+      let pinItems := pins.renameWires hostRename
+      let reordered : ItemSeqIso
+          (WireEquiv.refl (outer ++ (hostLocals ++ materialLocals)))
+          ((host.append material).append pinItems)
+          ((host.append pinItems).append material) := by
+        let moved := ItemSeqIso.append (ItemSeqIso.refl host)
+          (ItemSeqIso.swapAppend material pinItems)
+        simpa only [ItemSeq.append_assoc] using moved
+      refine .mk (WireEquiv.refl (hostLocals ++ materialLocals)) ?_
+      simpa only [Region.adjoinAt, Region.locals, Region.items,
+        ItemSeq.renameWires_append, hostRename, materialRename, host,
+        material, pinItems] using
+        reordered.castAmbient
+          (WireEquiv.append_refl outer
+            (hostLocals ++ materialLocals)).symm
+
+private theorem ItemSeq.incidencePaths_append_nonempty_iff
+    (first second : ItemSeq wires) (wireIndex itemIndex : Nat) :
+    (first.append second).incidencePaths wireIndex itemIndex ≠ [] ↔
+      first.incidencePaths wireIndex 0 ≠ [] ∨
+        second.incidencePaths wireIndex 0 ≠ [] := by
+  constructor
+  · intro joinedNonempty
+    by_cases firstEmpty : first.incidencePaths wireIndex 0 = []
+    · apply Or.inr
+      intro secondEmpty
+      apply joinedNonempty
+      rw [ItemSeq.incidencePaths_append]
+      rw [(ItemSeq.incidencePaths_eq_nil_iff_itemIndex first wireIndex
+        itemIndex 0).mpr firstEmpty]
+      rw [(ItemSeq.incidencePaths_eq_nil_iff_itemIndex second wireIndex
+        (itemIndex + first.length) 0).mpr secondEmpty]
+      rfl
+    · exact Or.inl firstEmpty
+  · intro nonempty
+    intro joinedEmpty
+    rw [ItemSeq.incidencePaths_append] at joinedEmpty
+    have parts := List.append_eq_nil_iff.mp joinedEmpty
+    rcases nonempty with firstNonempty | secondNonempty
+    · exact firstNonempty
+        ((ItemSeq.incidencePaths_eq_nil_iff_itemIndex first wireIndex
+          itemIndex 0).mp parts.1)
+    · exact secondNonempty
+        ((ItemSeq.incidencePaths_eq_nil_iff_itemIndex second wireIndex
+          (itemIndex + first.length) 0).mp parts.2)
+
+private theorem ItemSeq.incidencePaths_rotate_nonempty_iff
+    (host material pins : ItemSeq wires) (wireIndex itemIndex : Nat) :
+    ((host.append material).append pins).incidencePaths
+        wireIndex itemIndex ≠ [] ↔
+      ((host.append pins).append material).incidencePaths
+        wireIndex itemIndex ≠ [] := by
+  simp only [ItemSeq.incidencePaths_append_nonempty_iff]
+  constructor
+  · rintro ((hostNonempty | materialNonempty) | pinsNonempty)
+    · exact Or.inl (Or.inl hostNonempty)
+    · exact Or.inr materialNonempty
+    · exact Or.inl (Or.inr pinsNonempty)
+  · rintro ((hostNonempty | pinsNonempty) | materialNonempty)
+    · exact Or.inl (Or.inl hostNonempty)
+    · exact Or.inr pinsNonempty
+    · exact Or.inl (Or.inr materialNonempty)
+
+private def contextPins (outer hostLocals : List Sig) :
+    ItemSeq (outer ++ hostLocals) :=
+  let pins := allPins (outer ++ hostLocals) WireRenaming.id
+  pins.append pins
+
+private theorem contextPins_incidence_nonempty
+    (outer hostLocals : List Sig)
+    (wire : Var (outer ++ hostLocals) signature) (itemIndex : Nat) :
+    (contextPins outer hostLocals).incidencePaths
+      wire.index.val itemIndex ≠ [] := by
+  let pins := allPins (outer ++ hostLocals) WireRenaming.id
+  have member : [] ∈ pins.incidencePaths wire.index.val itemIndex := by
+    simpa only [WireRenaming.id] using
+      allPins_mem_nil (outer ++ hostLocals) WireRenaming.id wire itemIndex
+  rw [show contextPins outer hostLocals = pins.append pins by rfl,
+    ItemSeq.incidencePaths_append]
+  exact List.append_ne_nil_of_left_ne_nil (List.ne_nil_of_mem member) _
+
+private theorem pinnedHostCanonical
+    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
+    (material : Region (outer ++ hostLocals))
+    (sourceCanonical :
+      (Region.adjoinAt hostLocals hostItems material).Canonical) :
+    (Region.mk hostLocals
+      (hostItems.append (contextPins outer hostLocals))).Canonical := by
+  cases material with
+  | mk materialLocals materialItems =>
+      have hostRenamedChildren :
+          (hostItems.renameWires
+            (Region.adjoinHostWire outer hostLocals
+              materialLocals)).ChildrenCanonical := by
+        have sourceChildren := sourceCanonical.2
+        simp only at sourceChildren
+        exact (ItemSeq.childrenCanonical_append _ _).mp
+          sourceChildren |>.1
+      have hostChildren : hostItems.ChildrenCanonical :=
+        (ItemSeq.ChildrenCanonical.renameWires_adjoinHost_iff
+          hostItems).mp hostRenamedChildren
+      constructor
+      · intro localIndex
+        let localWire := Var.appendRight outer (Var.ofIndex localIndex)
+        have pinRoot := allPins_twice_rooted
+          (outer ++ hostLocals) WireRenaming.id localWire
+          hostItems.length
+        rw [ItemSeq.incidencePaths_append]
+        apply RegionPath.RootedTwo.of_sublist
+          (List.sublist_append_right _ _)
+        simpa [contextPins, localWire, WireRenaming.id] using pinRoot
+      · exact (ItemSeq.childrenCanonical_append _ _).mpr
+          ⟨hostChildren,
+            allPins_twice_childrenCanonical
+              (outer ++ hostLocals) WireRenaming.id⟩
+/-- Add the structural double-pin block around arbitrary adjoined material,
+transporting the nonempty Vacuity derivation through the exact item
+permutation that places those pins in the host block. -/
+private theorem adjoinPinsEquatesNonempty
+    {boundary outer : List Sig}
+    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
+    (material : Region (outer ++ hostLocals))
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence
+      (Region.adjoinAt hostLocals hostItems material) source)
+    (nonempty : outer ++ hostLocals ≠ []) :
+    let target := Region.adjoinAt hostLocals
+      (hostItems.append (contextPins outer hostLocals)) material
+    ∃ targetCanonical : (occurrence.context.fill target).Canonical,
+      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill target),
+        Relation.TransGen Step source
+            (occurrence.interface.withBody
+              (occurrence.context.fill target)
+              targetCanonical targetExternalTwoEnded) ∧
+          Relation.TransGen Step
+            (occurrence.interface.withBody
+              (occurrence.context.fill target)
+              targetCanonical targetExternalTwoEnded)
+            source := by
+  dsimp only
+  cases material with
+  | mk materialLocals materialItems =>
+      let hostRename :=
+        Region.adjoinHostWire outer hostLocals materialLocals
+      let materialRename :=
+        Region.adjoinMaterialWire outer hostLocals materialLocals
+      let host := hostItems.renameWires hostRename
+      let material := materialItems.renameWires materialRename
+      let pin := allPins (outer ++ hostLocals) hostRename
+      let base := host.append material
+      let directOccurrence : Occurrence
+          (.mk (hostLocals ++ materialLocals) base) source := by
+        simpa only [Region.adjoinAt, hostRename, materialRename, host,
+          material, base] using occurrence
+      obtain ⟨rawCanonical, rawExternalTwoEnded, rawSteps⟩ :=
+        pinAllTwiceOfNonempty directOccurrence hostRename nonempty
+      let raw := Region.mk (hostLocals ++ materialLocals)
+        ((base.append pin).append pin)
+      have rawCanonical' : (occurrence.context.fill raw).Canonical := by
+        simpa only [directOccurrence, pin, base, raw] using rawCanonical
+      have rawExternalTwoEnded' : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill raw) := by
+        intro wireSignature wire
+        simpa only [directOccurrence, pin, base, raw] using
+          rawExternalTwoEnded wire
+      have compId : WireRenaming.comp hostRename WireRenaming.id =
+          hostRename := by
+        apply WireRenaming.ext
+        intro wireSignature wire
+        rfl
+      have pinsRename :
+          (contextPins outer hostLocals).renameWires hostRename =
+            pin.append pin := by
+        simp only [contextPins, ItemSeq.renameWires_append,
+          allPins_renameWires, compId, pin]
+      have rawEq : raw = appendAdjoinedPins hostLocals hostItems
+          (contextPins outer hostLocals)
+          (.mk materialLocals materialItems) := by
+        simp only [raw, appendAdjoinedPins, hostRename, materialRename,
+          host, material, base, pinsRename, ItemSeq.append_assoc]
+      let target := Region.adjoinAt hostLocals
+        (hostItems.append (contextPins outer hostLocals))
+        (.mk materialLocals materialItems)
+      let presentation : RegionIso (WireEquiv.refl outer) raw target := by
+        rw [rawEq]
+        exact adjoinPinsIso hostLocals hostItems
+          (contextPins outer hostLocals)
+          (.mk materialLocals materialItems)
+      have sourceLocalCanonical :
+          (Region.adjoinAt hostLocals hostItems
+            (.mk materialLocals materialItems)).Canonical :=
+        occurrence.context.holeCanonical _ occurrence.sourceCanonical
+      have materialCanonical :
+          (Region.mk materialLocals materialItems).Canonical :=
+        Region.Canonical.material_of_adjoinAt hostLocals hostItems _
+          sourceLocalCanonical
+      have targetLocalCanonical : target.Canonical := by
+        exact Region.Canonical.adjoinAt hostLocals
+          (hostItems.append (contextPins outer hostLocals))
+          (.mk materialLocals materialItems)
+          (pinnedHostCanonical hostLocals hostItems
+            (.mk materialLocals materialItems) sourceLocalCanonical)
+          materialCanonical
+      have sameNonempty : ∀ {wireSignature}
+          (wire : Var outer wireSignature),
+          raw.incidencePaths wire.index.val ≠ [] ↔
+            target.incidencePaths wire.index.val ≠ [] := by
+        intro wireSignature wire
+        simpa only [raw, target, Region.adjoinAt, Region.incidencePaths,
+          hostRename, materialRename, host, material, base, pinsRename,
+          ItemSeq.renameWires_append, ItemSeq.append_assoc] using
+          ItemSeq.incidencePaths_rotate_nonempty_iff host material
+            (pin.append pin) wire.index.val 0
+      have replacement := occurrence.context.replaceCanonical raw target
+        rawCanonical' targetLocalCanonical sameNonempty
+      let targetCanonical := replacement.1
+      let rawEndpoint := occurrence.interface.withBody
+        (occurrence.context.fill raw) rawCanonical' rawExternalTwoEnded'
+      have targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill target) :=
+        rawEndpoint.externalTwoEnded_of_nonempty_iff
+          (occurrence.context.fill target) replacement.2
+      let targetEndpoint := occurrence.interface.withBody
+        (occurrence.context.fill target) targetCanonical
+          targetExternalTwoEnded
+      let endpointIso : OpenDiagramIso rawEndpoint targetEndpoint :=
+        OpenDiagram.withBody_iso rawCanonical' targetCanonical
+          rawExternalTwoEnded' targetExternalTwoEnded
+          (DiagramContext.fillIso occurrence.context presentation)
+      have rawForward : Relation.TransGen Step source rawEndpoint := by
+        simpa only [directOccurrence, pin, base, raw, rawEndpoint] using
+          rawSteps.1
+      have rawReverse : Relation.TransGen Step rawEndpoint source := by
+        simpa only [directOccurrence, pin, base, raw, rawEndpoint] using
+          rawSteps.2
+      refine ⟨targetCanonical, targetExternalTwoEnded, ?_, ?_⟩
+      · exact transGen_iso (OpenDiagramIso.refl source) rawForward endpointIso
+      · exact transGen_iso endpointIso rawReverse
+          (OpenDiagramIso.refl source)
+
 private theorem pinnedHost_incidence_nonempty
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
     (wire : Var outer signature) :
     (Region.mk hostLocals
       (hostItems.append
-        (Erasure.Exposure.contextPins outer hostLocals))).incidencePaths
+        (contextPins outer hostLocals))).incidencePaths
           wire.index.val ≠ [] := by
   let embedded := wire.appendLeft hostLocals
-  have pinsNonempty := Erasure.Exposure.contextPins_incidence_nonempty
+  have pinsNonempty := contextPins_incidence_nonempty
     outer hostLocals embedded hostItems.length
   simp only [Region.incidencePaths, ItemSeq.incidencePaths_append,
     Nat.zero_add]
@@ -2439,6 +3296,448 @@ private noncomputable def adjoinAtNilRenameIso
   rw [adjoinAt_nil_renameWires_appendNil]
   exact RegionIso.refl _
 
+private def hostedMaterial
+    (hostItems : ItemSeq wires)
+    (material : Region wires) : Region wires :=
+  (Region.ofItems hostItems).conjoin material
+
+private theorem identityBoundaryMaterial_scope
+    (pattern : OpenDiagram arguments)
+    (ports : Vars wires arguments) :
+    ScopePreservation
+      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        pattern ports)
+      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (identityBoundary pattern) ports) := by
+  constructor
+  · intro _
+    exact
+      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+        (identityBoundary pattern) ports
+  · intro signature wire
+    rw [instantiate_incidence_nonempty_iff,
+      instantiate_incidence_nonempty_iff]
+  · intro signature wire sourceRoot
+    rw [instantiate_rootedTwo_iff] at sourceRoot ⊢
+    exact sourceRoot
+
+private theorem hostedMaterial_scope
+    (hostItems : ItemSeq wires)
+    (sourceMaterial targetMaterial : Region wires)
+    (materialScope : ScopePreservation sourceMaterial targetMaterial) :
+    ScopePreservation
+      (hostedMaterial hostItems sourceMaterial)
+      (hostedMaterial hostItems targetMaterial) := by
+  let host := Region.ofItems hostItems
+  have combined := Region.conjoin_preserves_scope
+    host sourceMaterial host targetMaterial
+    (fun canonical => canonical) materialScope.canonical
+    (fun _ => Iff.rfl) materialScope.incidenceNonempty
+    (fun _ rooted => rooted) materialScope.rootedTwo
+  exact {
+    canonical := combined.1
+    incidenceNonempty := fun wire => (combined.2 wire).1
+    rootedTwo := fun wire => (combined.2 wire).2
+  }
+
+private theorem adjoinAt_hostedMaterial
+    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
+    (material : Region (outer ++ hostLocals)) :
+    Region.adjoinAt hostLocals hostItems material =
+      Region.adjoinAt hostLocals .nil
+        (hostedMaterial hostItems material) := by
+  cases material with
+  | mk materialLocals materialItems =>
+      let appendNil : WireRenaming (outer ++ hostLocals)
+          ((outer ++ hostLocals) ++ []) :=
+        ⟨fun wire => wire.appendLeft []⟩
+      have hostMap : WireRenaming.comp
+          (Region.adjoinMaterialWire outer hostLocals materialLocals)
+          (WireRenaming.comp
+            (Region.conjoinLeftWire (outer ++ hostLocals) [] materialLocals)
+            appendNil) =
+          Region.adjoinHostWire outer hostLocals materialLocals := by
+        apply WireRenaming.ext
+        intro signature wire
+        apply Var.appendCases (left := outer) (right := hostLocals)
+          (motive := fun wire =>
+            WireRenaming.comp
+                (Region.adjoinMaterialWire outer hostLocals materialLocals)
+                (WireRenaming.comp
+                  (Region.conjoinLeftWire (outer ++ hostLocals) []
+                    materialLocals) appendNil) wire =
+              Region.adjoinHostWire outer hostLocals materialLocals wire)
+        · intro inheritedSignature inherited
+          simp [WireRenaming.comp, appendNil, Region.conjoinLeftWire,
+            Region.adjoinMaterialWire, Region.adjoinHostWire]
+        · intro localSignature localWire
+          simp [WireRenaming.comp, appendNil, Region.conjoinLeftWire,
+            Region.adjoinMaterialWire, Region.adjoinHostWire]
+      have materialMap : WireRenaming.comp
+          (Region.adjoinMaterialWire outer hostLocals materialLocals)
+          (Region.conjoinRightWire (outer ++ hostLocals) [] materialLocals) =
+          Region.adjoinMaterialWire outer hostLocals materialLocals := by
+        apply WireRenaming.ext
+        intro signature wire
+        apply Var.appendCases (left := outer ++ hostLocals)
+          (right := materialLocals)
+          (motive := fun wire =>
+            WireRenaming.comp
+                (Region.adjoinMaterialWire outer hostLocals materialLocals)
+                (Region.conjoinRightWire (outer ++ hostLocals) []
+                  materialLocals) wire =
+              Region.adjoinMaterialWire outer hostLocals materialLocals wire)
+        · intro inheritedSignature inherited
+          simp [WireRenaming.comp, Region.conjoinRightWire,
+            Region.adjoinMaterialWire]
+        · intro localSignature localWire
+          apply Var.eq_of_index_eq
+          apply Fin.ext
+          simp [WireRenaming.comp, Region.conjoinRightWire,
+            Region.adjoinMaterialWire]
+          simpa only [List.length_nil, Nat.zero_add] using
+            (Var.index_appendRight ([] : List Sig) localWire)
+      simp only [hostedMaterial, Region.ofItems, Region.conjoin,
+        Region.adjoinAt, ItemSeq.renameWires_append,
+        ItemSeq.renameWires_comp, ItemSeq.renameWires,
+        ItemSeq.nil_append, List.nil_append]
+      rw [hostMap, materialMap]
+
+private theorem adjoinAt_preserves_scope
+    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
+    (sourceMaterial targetMaterial : Region (outer ++ hostLocals))
+    (materialScope : ScopePreservation sourceMaterial targetMaterial) :
+    ScopePreservation
+      (Region.adjoinAt hostLocals hostItems sourceMaterial)
+      (Region.adjoinAt hostLocals hostItems targetMaterial) := by
+  let sourceHosted := hostedMaterial hostItems sourceMaterial
+  let targetHosted := hostedMaterial hostItems targetMaterial
+  have sourceEq : Region.adjoinAt hostLocals hostItems sourceMaterial =
+      Region.adjoinAt hostLocals .nil sourceHosted := by
+    simpa only [sourceHosted] using
+      adjoinAt_hostedMaterial hostLocals hostItems sourceMaterial
+  have targetEq : Region.adjoinAt hostLocals hostItems targetMaterial =
+      Region.adjoinAt hostLocals .nil targetHosted := by
+    simpa only [targetHosted] using
+      adjoinAt_hostedMaterial hostLocals hostItems targetMaterial
+  have hostedScope : ScopePreservation sourceHosted targetHosted := by
+    exact hostedMaterial_scope hostItems sourceMaterial targetMaterial
+      materialScope
+  constructor
+  · intro sourceCanonical
+    have sourceAdjoinedCanonical :
+        (Region.adjoinAt hostLocals .nil sourceHosted).Canonical := by
+      rw [← sourceEq]
+      exact sourceCanonical
+    have sourceHostedCanonical : sourceHosted.Canonical :=
+      Region.Canonical.material_of_adjoinAt hostLocals .nil sourceHosted
+        sourceAdjoinedCanonical
+    have targetHostedCanonical : targetHosted.Canonical :=
+      hostedScope.canonical sourceHostedCanonical
+    rw [targetEq]
+    apply Region.Canonical.adjoinAt_of_material_roots hostLocals .nil
+      targetHosted True.intro targetHostedCanonical
+    intro localIndex
+    let localWire := Var.appendRight outer (Var.ofIndex localIndex)
+    have sourceRoot : RegionPath.RootedTwo
+        (sourceHosted.incidencePaths localWire.index.val) := by
+      simpa [localWire] using
+        Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil
+          sourceHosted sourceAdjoinedCanonical localIndex
+    have targetRoot := hostedScope.rootedTwo localWire sourceRoot
+    simpa [localWire] using targetRoot
+  · intro signature wire
+    let hostedWire := wire.appendLeft hostLocals
+    have sourcePaths := Region.incidencePaths_adjoinAt_nil sourceHosted
+      hostedWire
+    have targetPaths := Region.incidencePaths_adjoinAt_nil targetHosted
+      hostedWire
+    have wireIndex : hostedWire.index.val = wire.index.val := by
+      simp [hostedWire]
+    rw [wireIndex] at sourcePaths targetPaths
+    rw [sourceEq, targetEq, sourcePaths, targetPaths]
+    simpa only [hostedWire, Var.index_appendLeft] using
+      hostedScope.incidenceNonempty hostedWire
+  · intro signature wire sourceRoot
+    let hostedWire := wire.appendLeft hostLocals
+    have sourcePaths := Region.incidencePaths_adjoinAt_nil sourceHosted
+      hostedWire
+    have targetPaths := Region.incidencePaths_adjoinAt_nil targetHosted
+      hostedWire
+    have wireIndex : hostedWire.index.val = wire.index.val := by
+      simp [hostedWire]
+    rw [wireIndex] at sourcePaths targetPaths
+    rw [sourceEq, sourcePaths] at sourceRoot
+    rw [targetEq, targetPaths]
+    simpa only [hostedWire, Var.index_appendLeft] using
+      hostedScope.rootedTwo hostedWire (by
+        simpa only [hostedWire, Var.index_appendLeft] using sourceRoot)
+
+/-- One selected instantiation in its exact inferred retained host is
+bidirectionally equivalent to the same application through the ordered
+identity boundary. The normalized combined endpoint and both validity proofs
+are constructed internally. -/
+theorem equatesIdentityBoundary
+    {boundary outer arguments : List Sig}
+    (pattern : OpenDiagram arguments)
+    {hostLocals : List Sig}
+    {hostItems : ItemSeq (outer ++ hostLocals)}
+    (ports : Vars (outer ++ hostLocals) arguments)
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence
+      (Region.adjoinAt hostLocals hostItems
+        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          pattern ports)) source) :
+    ∃ targetCanonical :
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals hostItems
+            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+              (identityBoundary pattern) ports))).Canonical,
+      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill
+            (Region.adjoinAt hostLocals hostItems
+              (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+                (identityBoundary pattern) ports))),
+        Equates occurrence
+          (Region.adjoinAt hostLocals hostItems
+            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+              (identityBoundary pattern) ports))
+          targetCanonical targetExternalTwoEnded := by
+  let sourceMaterial :=
+    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      pattern ports
+  let targetMaterial :=
+    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (identityBoundary pattern) ports
+  let sourceRegion := Region.adjoinAt hostLocals hostItems sourceMaterial
+  let targetRegion := Region.adjoinAt hostLocals hostItems targetMaterial
+  have sourceLocalCanonical : sourceRegion.Canonical := by
+    exact occurrence.context.holeCanonical _ occurrence.sourceCanonical
+  have regionScope : ScopePreservation sourceRegion targetRegion := by
+    exact adjoinAt_preserves_scope hostLocals hostItems sourceMaterial
+      targetMaterial (identityBoundaryMaterial_scope pattern ports)
+  have targetLocalCanonical : targetRegion.Canonical :=
+    regionScope.canonical sourceLocalCanonical
+  have replacement := occurrence.context.replaceCanonical sourceRegion
+    targetRegion occurrence.sourceCanonical targetLocalCanonical
+      regionScope.incidenceNonempty
+  let targetCanonical := replacement.1
+  let sourceEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill sourceRegion) occurrence.sourceCanonical
+      occurrence.sourceExternalTwoEnded
+  let targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill targetRegion) :=
+    sourceEndpoint.externalTwoEnded_of_nonempty_iff _ replacement.2
+  refine ⟨targetCanonical, targetExternalTwoEnded, ?_⟩
+  by_cases nonempty : outer ++ hostLocals ≠ []
+  · obtain ⟨pinnedSourceCanonical, pinnedSourceExternalTwoEnded,
+        sourcePins⟩ := adjoinPinsEquatesNonempty hostLocals hostItems
+      sourceMaterial (by simpa only [sourceMaterial] using occurrence)
+        nonempty
+    let pinnedItems := hostItems.append (contextPins outer hostLocals)
+    let pinnedSource := Region.adjoinAt hostLocals pinnedItems sourceMaterial
+    let pinnedSourceOccurrence : Occurrence pinnedSource
+        (occurrence.interface.withBody
+          (occurrence.context.fill pinnedSource) pinnedSourceCanonical
+            pinnedSourceExternalTwoEnded) :=
+      exactOccurrence occurrence.interface occurrence.context pinnedSource
+        pinnedSourceCanonical pinnedSourceExternalTwoEnded
+    let description := exposureDescriptionWithHost pattern hostLocals
+      pinnedItems ports
+    have sourceEq : description.source = pinnedSource := by
+      simpa only [description, pinnedSource] using
+        exposureDescriptionWithHost_source pattern hostLocals pinnedItems ports
+    let exposureOccurrence : Occurrence description.source
+        (occurrence.interface.withBody
+          (occurrence.context.fill pinnedSource) pinnedSourceCanonical
+            pinnedSourceExternalTwoEnded) := {
+      interface := pinnedSourceOccurrence.interface
+      context := pinnedSourceOccurrence.context
+      sourceCanonical := by
+        rw [sourceEq]
+        exact pinnedSourceOccurrence.sourceCanonical
+      sourceExternalTwoEnded := by
+        intro signature wire
+        rw [sourceEq]
+        exact pinnedSourceOccurrence.sourceExternalTwoEnded wire
+      host_iso := by
+        simpa only [sourceEq] using pinnedSourceOccurrence.host_iso
+    }
+    have erasedLocalCanonical : description.target.Canonical := by
+      have canonical := pinnedHostCanonical hostLocals hostItems
+        sourceMaterial sourceLocalCanonical
+      simpa only [description, exposureDescriptionWithHost,
+        Rule.Erasure.Description.target, pinnedItems] using canonical
+    have erasedNonempty : ∀ {signature} (wire : Var outer signature),
+        description.target.incidencePaths wire.index.val ≠ [] := by
+      intro signature wire
+      simpa only [description, exposureDescriptionWithHost,
+        Rule.Erasure.Description.target, pinnedItems] using
+        pinnedHost_incidence_nonempty hostLocals hostItems wire
+    have pinnedSourceNonempty : ∀ {signature}
+        (wire : Var outer signature),
+        pinnedSource.incidencePaths wire.index.val ≠ [] := by
+      intro signature wire
+      have hostPositive := List.length_pos_iff.mpr (erasedNonempty wire)
+      have sublist := Region.incidencePaths_adjoinAt_host_sublist
+        hostLocals pinnedItems sourceMaterial wire
+      exact List.length_pos_iff.mp
+        (Nat.lt_of_lt_of_le hostPositive sublist.length_le)
+    have erasedSameNonempty : ∀ {signature} (wire : Var outer signature),
+        pinnedSource.incidencePaths wire.index.val ≠ [] ↔
+          description.target.incidencePaths wire.index.val ≠ [] := by
+      intro signature wire
+      exact ⟨fun _ => erasedNonempty wire,
+        fun _ => pinnedSourceNonempty wire⟩
+    have erasedReplacement := occurrence.context.replaceCanonical
+      pinnedSource description.target pinnedSourceCanonical
+        erasedLocalCanonical erasedSameNonempty
+    let pinnedSourceEndpoint := occurrence.interface.withBody
+      (occurrence.context.fill pinnedSource) pinnedSourceCanonical
+        pinnedSourceExternalTwoEnded
+    have erasedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+        occurrence.interface.boundaryWire
+        (occurrence.context.fill description.target) :=
+      pinnedSourceEndpoint.externalTwoEnded_of_nonempty_iff _
+        erasedReplacement.2
+    obtain ⟨materialCanonical, exposedCanonical,
+        exposedExternalTwoEnded, exposedEquates⟩ :=
+      Erasure.Exposure.equates description exposureOccurrence
+        erasedReplacement.1 erasedExternalTwoEnded
+    have exposedEq :
+        Erasure.Exposure.exposedRegion description materialCanonical =
+          Region.adjoinAt hostLocals pinnedItems targetMaterial := by
+      simpa only [description, targetMaterial] using
+        exposureDescriptionWithHost_exposedRegion pattern hostLocals
+          pinnedItems ports materialCanonical
+    let targetOccurrence : Occurrence targetRegion
+        (occurrence.interface.withBody
+          (occurrence.context.fill targetRegion) targetCanonical
+            targetExternalTwoEnded) :=
+      exactOccurrence occurrence.interface occurrence.context targetRegion
+        targetCanonical targetExternalTwoEnded
+    obtain ⟨pinnedTargetCanonical, pinnedTargetExternalTwoEnded,
+        targetPins⟩ := adjoinPinsEquatesNonempty hostLocals hostItems
+      targetMaterial (by simpa only [targetRegion, targetMaterial] using
+        targetOccurrence) nonempty
+    have forwardExposure : Relation.ReflTransGen Step
+        pinnedSourceEndpoint
+        (occurrence.interface.withBody
+          (occurrence.context.fill
+            (Region.adjoinAt hostLocals pinnedItems targetMaterial))
+          pinnedTargetCanonical pinnedTargetExternalTwoEnded) := by
+      simpa only [exposureOccurrence, pinnedSourceOccurrence,
+        exactOccurrence, sourceEq, exposedEq, pinnedSourceEndpoint] using
+        exposedEquates.1
+    have reverseExposure : Relation.ReflTransGen Step
+        (occurrence.interface.withBody
+          (occurrence.context.fill
+            (Region.adjoinAt hostLocals pinnedItems targetMaterial))
+          pinnedTargetCanonical pinnedTargetExternalTwoEnded)
+        pinnedSourceEndpoint := by
+      simpa only [exposureOccurrence, pinnedSourceOccurrence,
+        exactOccurrence, sourceEq, exposedEq, pinnedSourceEndpoint] using
+        exposedEquates.2
+    have forwardPins : Relation.TransGen Step source pinnedSourceEndpoint := by
+      simpa only [pinnedSourceEndpoint, pinnedSource, pinnedItems,
+        sourceMaterial] using sourcePins.1
+    have reversePins : Relation.TransGen Step pinnedSourceEndpoint source := by
+      simpa only [pinnedSourceEndpoint, pinnedSource, pinnedItems,
+        sourceMaterial] using sourcePins.2
+    have unpinForward : Relation.TransGen Step
+        (occurrence.interface.withBody
+          (occurrence.context.fill
+            (Region.adjoinAt hostLocals pinnedItems targetMaterial))
+          pinnedTargetCanonical pinnedTargetExternalTwoEnded)
+        (occurrence.interface.withBody
+          (occurrence.context.fill targetRegion) targetCanonical
+            targetExternalTwoEnded) := by
+      simpa only [targetOccurrence, exactOccurrence, targetRegion,
+        pinnedItems, targetMaterial] using targetPins.2
+    have unpinReverse : Relation.TransGen Step
+        (occurrence.interface.withBody
+          (occurrence.context.fill targetRegion) targetCanonical
+            targetExternalTwoEnded)
+        (occurrence.interface.withBody
+          (occurrence.context.fill
+            (Region.adjoinAt hostLocals pinnedItems targetMaterial))
+          pinnedTargetCanonical pinnedTargetExternalTwoEnded) := by
+      simpa only [targetOccurrence, exactOccurrence, targetRegion,
+        pinnedItems, targetMaterial] using targetPins.1
+    refine ⟨?_, ?_⟩
+    · have core := forwardPins.reflTransGen forwardExposure
+      have strictForward := core.trans unpinForward
+      exact (show StrictEquates occurrence targetRegion targetCanonical
+        targetExternalTwoEnded from
+          ⟨strictForward,
+            (unpinReverse.reflTransGen reverseExposure).trans reversePins⟩).toEquates.1
+    · have core := unpinReverse.reflTransGen reverseExposure
+      have strictReverse := core.trans reversePins
+      exact (show StrictEquates occurrence targetRegion targetCanonical
+        targetExternalTwoEnded from
+          ⟨(forwardPins.reflTransGen forwardExposure).trans unpinForward,
+            strictReverse⟩).toEquates.2
+  · have empty : outer ++ hostLocals = [] :=
+      Classical.not_not.mp nonempty
+    have outerEmpty : outer = [] := (List.append_eq_nil_iff.mp empty).1
+    have localsEmpty : hostLocals = [] :=
+      (List.append_eq_nil_iff.mp empty).2
+    subst outer
+    subst hostLocals
+    let description := exposureDescriptionWithHost pattern [] hostItems ports
+    have sourceEq : description.source = sourceRegion := by
+      simpa only [description, sourceRegion, sourceMaterial] using
+        exposureDescriptionWithHost_source pattern [] hostItems ports
+    let exposureOccurrence : Occurrence description.source source := {
+      interface := occurrence.interface
+      context := occurrence.context
+      sourceCanonical := by
+        rw [sourceEq]
+        exact occurrence.sourceCanonical
+      sourceExternalTwoEnded := by
+        intro signature wire
+        rw [sourceEq]
+        exact occurrence.sourceExternalTwoEnded wire
+      host_iso := by
+        simpa only [sourceEq, sourceRegion, sourceMaterial] using
+          occurrence.host_iso
+    }
+    have erasedLocalCanonical : description.target.Canonical := by
+      have canonical := pinnedHostCanonical ([] : List Sig) hostItems
+        sourceMaterial sourceLocalCanonical
+      simpa only [description, exposureDescriptionWithHost,
+        Rule.Erasure.Description.target, contextPins, allPins,
+        List.nil_append, ItemSeq.pinWires, ItemSeq.nil_append,
+        ItemSeq.append_nil] using canonical
+    have erasedSameNonempty : ∀ {signature} (wire : Var [] signature),
+        sourceRegion.incidencePaths wire.index.val ≠ [] ↔
+          description.target.incidencePaths wire.index.val ≠ [] := by
+      intro signature wire
+      exact Fin.elim0 wire.index
+    have erasedReplacement := occurrence.context.replaceCanonical
+      sourceRegion description.target occurrence.sourceCanonical
+        erasedLocalCanonical erasedSameNonempty
+    have erasedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+        occurrence.interface.boundaryWire
+        (occurrence.context.fill description.target) :=
+      sourceEndpoint.externalTwoEnded_of_nonempty_iff _
+        erasedReplacement.2
+    obtain ⟨materialCanonical, exposedCanonical,
+        exposedExternalTwoEnded, exposedEquates⟩ :=
+      Erasure.Exposure.equates description exposureOccurrence
+        erasedReplacement.1 erasedExternalTwoEnded
+    have exposedEq :
+        Erasure.Exposure.exposedRegion description materialCanonical =
+          targetRegion := by
+      simpa only [description, targetRegion, targetMaterial] using
+        exposureDescriptionWithHost_exposedRegion pattern [] hostItems ports
+          materialCanonical
+    simpa only [Equates, exposureOccurrence, sourceEq, exposedEq,
+      sourceRegion, sourceMaterial, targetRegion, targetMaterial] using
+      exposedEquates
+
 private theorem strictEquates_of_equates
     {boundary holeWires : List Sig}
     {before after : Region holeWires}
@@ -2465,7 +3764,8 @@ mutual
       (evidence :
         _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected sourceRegion result)
-      (sites : RegionSites operation data evidence) :
+      (sites : RegionSites operation data evidence)
+      (hasSelection : regionHasSelection sites = true) :
       ∀ (outer : List Sig) (rename : WireRenaming common outer)
         {boundary : List Sig} {source : OpenDiagram boundary}
         (occurrence : Occurrence (result.renameWires rename) source)
@@ -2558,8 +3858,10 @@ mutual
                   (normalizedItems pattern childEvidence childSites).1))) := by
           intro signature wire
           exact targetAfterExternalTwoEnded wire
+        have childSelection : itemsHaveSelection childSites = true := by
+          simpa only [regionHasSelection] using hasSelection
         have folded := normalizedItemsStrict pattern
-          childEvidence childSites locals childRename childHostItems
+          childEvidence childSites childSelection locals childRename childHostItems
           childOccurrence childTargetCanonical childTargetExternalTwoEnded
         have finalBodyIso : RegionIso (WireEquiv.refl outer) targetAfter
             targetBefore := by
@@ -2589,6 +3891,7 @@ mutual
         _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected sourceItems result)
       (sites : ItemsSites operation data evidence)
+      (hasSelection : itemsHaveSelection sites = true)
       (hostLocals : List Sig)
       (rename : WireRenaming common (outer ++ hostLocals))
       (hostItems : ItemSeq (outer ++ hostLocals))
@@ -2614,11 +3917,13 @@ mutual
     let sourceMaterial := result.renameWires rename
     let targetMaterial :=
       (Region.renameWires rename (normalizedItems pattern evidence sites).1)
+    by_cases nonempty : outer ++ hostLocals ≠ []
+    · exact (by
     obtain ⟨pinnedSourceCanonical, pinnedSourceExternalTwoEnded,
-        sourcePins⟩ := Erasure.Exposure.adjoinPinsEquates hostLocals
-      hostItems sourceMaterial occurrence
+        sourcePins⟩ := adjoinPinsEquatesNonempty hostLocals
+      hostItems sourceMaterial occurrence nonempty
     let pinnedItems := hostItems.append
-      (Erasure.Exposure.contextPins outer hostLocals)
+      (contextPins outer hostLocals)
     let pinnedSource := Region.adjoinAt hostLocals pinnedItems sourceMaterial
     let pinnedSourceOccurrence : Occurrence pinnedSource
         (occurrence.interface.withBody
@@ -2631,7 +3936,7 @@ mutual
       occurrence.context.holeCanonical _ occurrence.sourceCanonical
     have pinnedHostCanonical :
         (Region.mk hostLocals pinnedItems).Canonical := by
-      exact Erasure.Exposure.pinnedHostCanonical hostLocals hostItems
+      exact pinnedHostCanonical hostLocals hostItems
         sourceMaterial sourceLocalCanonical
     have pinnedHostNonempty : ∀ {signature}
         (wire : Var outer signature),
@@ -2649,7 +3954,7 @@ mutual
       pinnedItems pinnedSourceOccurrence pinnedHostCanonical
       pinnedHostNonempty targetMaterialCanonical
     have folded := normalizedItemsSupportedStrict pattern evidence
-      sites outer hostLocals rename pinnedItems pinnedSourceOccurrence
+      sites hasSelection outer hostLocals rename pinnedItems pinnedSourceOccurrence
       pinnedHostCanonical pinnedHostNonempty pinnedTargetValidity.1
       pinnedTargetValidity.2
     let targetOccurrence : Occurrence
@@ -2661,8 +3966,8 @@ mutual
       exactOccurrence occurrence.interface occurrence.context _
         targetCanonical targetExternalTwoEnded
     obtain ⟨pinnedTargetCanonical, pinnedTargetExternalTwoEnded,
-        targetPins⟩ := Erasure.Exposure.adjoinPinsEquates hostLocals
-      hostItems targetMaterial targetOccurrence
+        targetPins⟩ := adjoinPinsEquatesNonempty hostLocals
+      hostItems targetMaterial targetOccurrence nonempty
     have forwardPins : Relation.TransGen Step source
         (occurrence.interface.withBody
           (occurrence.context.fill pinnedSource) pinnedSourceCanonical
@@ -2714,7 +4019,31 @@ mutual
       simpa only [targetOccurrence, exactOccurrence, pinnedItems] using
         targetPins.1
     exact ⟨(forwardPins.trans middleForward).trans unpinForward,
-      (unpinReverse.trans middleReverse).trans reversePins⟩
+      (unpinReverse.trans middleReverse).trans reversePins⟩)
+    · have empty : outer ++ hostLocals = [] :=
+        Classical.not_not.mp nonempty
+      have outerEmpty : outer = [] := (List.append_eq_nil_iff.mp empty).1
+      have localsEmpty : hostLocals = [] :=
+        (List.append_eq_nil_iff.mp empty).2
+      subst outer
+      subst hostLocals
+      have sourceLocalCanonical :
+          (Region.adjoinAt [] hostItems sourceMaterial).Canonical :=
+        occurrence.context.holeCanonical _ occurrence.sourceCanonical
+      have hostCanonical : (Region.mk [] hostItems).Canonical := by
+        have canonical := pinnedHostCanonical ([] : List Sig) hostItems
+          sourceMaterial sourceLocalCanonical
+        simpa only [contextPins, allPins, List.nil_append,
+          ItemSeq.pinWires, ItemSeq.nil_append, ItemSeq.append_nil] using
+          canonical
+      have hostNonempty : ∀ {signature} (wire : Var [] signature),
+          (Region.mk [] hostItems).incidencePaths wire.index.val ≠ [] := by
+        intro signature wire
+        exact Fin.elim0 wire.index
+      have folded := normalizedItemsSupportedStrict pattern evidence sites
+        hasSelection [] [] rename hostItems occurrence hostCanonical
+          hostNonempty targetCanonical targetExternalTwoEnded
+      simpa only [sourceMaterial, targetMaterial] using folded
   termination_by 5 * sizeOf sites + 4
 
   private noncomputable def normalizedItemsSupportedStrict
@@ -2725,7 +4054,8 @@ mutual
       (evidence :
         _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected sourceItems result)
-      (sites : ItemsSites operation data evidence) :
+      (sites : ItemsSites operation data evidence)
+      (hasSelection : itemsHaveSelection sites = true) :
       ∀ (outer : List Sig) (hostLocals : List Sig)
         (rename : WireRenaming common (outer ++ hostLocals))
         (hostItems : ItemSeq (outer ++ hostLocals))
@@ -2753,9 +4083,7 @@ mutual
           targetCanonical targetExternalTwoEnded :=
     match sites with
     | .nil _ => by
-        intro outer hostLocals rename hostItems boundary source occurrence
-          hostCanonical hostNonempty targetCanonical targetExternalTwoEnded
-        simpa only [normalizedItems] using StrictEquates.refl occurrence
+        simp only [itemsHaveSelection, Bool.false_eq_true] at hasSelection
     | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
         itemEvidence tailEvidence itemSites tailSites => by
         intro outer hostLocals rename hostItems boundary source occurrence
@@ -2821,11 +4149,14 @@ mutual
           canonical_left_of_conjoin targetMaterialCanonical
         have tailAfterCanonical :=
           canonical_right_of_conjoin targetMaterialCanonical
+        by_cases itemSelected : itemHasSelection itemSites = true
+        · by_cases tailSelected : itemsHaveSelection tailSites = true
+          · exact (by
         have itemPhaseValidity := supportedAdjoinValidity hostLocals hostItems
           sourceOccurrence hostCanonical hostNonempty
           (canonical_conjoin itemAfterCanonical tailBeforeCanonical)
         have itemPhase := normalizedItemWithTailStrict pattern
-          itemEvidence itemSites hostLocals rename hostItems tailBefore
+          itemEvidence itemSites itemSelected hostLocals rename hostItems tailBefore
           sourceOccurrence hostCanonical hostNonempty itemBeforeCanonical
           tailBeforeCanonical itemAfterCanonical itemPhaseValidity.1
           itemPhaseValidity.2
@@ -2883,7 +4214,8 @@ mutual
           (hostLocals ++ itemAfter.locals) nextHostItems alignedFlattened
           nextHostCanonical nextHostNonempty flatTargetMaterialCanonical
         have tailPhase := normalizedItemsSupportedStrict pattern
-          tailEvidence tailSites outer (hostLocals ++ itemAfter.locals) nextRename
+          tailEvidence tailSites tailSelected outer
+          (hostLocals ++ itemAfter.locals) nextRename
           nextHostItems alignedFlattened nextHostCanonical nextHostNonempty
           tailTargetValidity.1 tailTargetValidity.2
         let flatTarget := Region.adjoinAt
@@ -2946,7 +4278,207 @@ mutual
           alignedFlattened, nextHostItems, hostWire, nextRename,
           flatTargetMaterial, flatTarget, flatTargetEndpoint,
           normalizedHead, normalizedTail, targetBefore, normalizedItems]
-          using exactCombined
+          using exactCombined)
+          · have tailNone : itemsHaveSelection tailSites = false := by
+              cases selected : itemsHaveSelection tailSites with
+              | false => rfl
+              | true => exact False.elim (tailSelected selected)
+            have normalizedTailEq : normalizedTail = tailResult := by
+              simpa only [normalizedTail] using
+                normalizedItems_eq_of_noSelection pattern tailEvidence
+                  tailSites tailNone
+            have tailAfterEq : tailAfter = tailBefore := by
+              change Region.renameWires rename normalizedTail =
+                Region.renameWires rename tailResult
+              rw [normalizedTailEq]
+            have itemPhaseValidity := supportedAdjoinValidity hostLocals
+              hostItems sourceOccurrence hostCanonical hostNonempty
+              (canonical_conjoin itemAfterCanonical tailBeforeCanonical)
+            have itemPhase := normalizedItemWithTailStrict pattern
+              itemEvidence itemSites itemSelected hostLocals rename hostItems
+              tailBefore sourceOccurrence hostCanonical hostNonempty
+              itemBeforeCanonical tailBeforeCanonical itemAfterCanonical
+              itemPhaseValidity.1 itemPhaseValidity.2
+            let afterItem := Region.adjoinAt hostLocals hostItems
+              (itemAfter.conjoin tailBefore)
+            have itemPhase' : StrictEquates sourceOccurrence afterItem
+                itemPhaseValidity.1 itemPhaseValidity.2 := by
+              simpa only [afterItem, itemBefore, tailBefore, itemAfter,
+                sourceOccurrence] using itemPhase
+            have materialIso : RegionIso
+                (WireEquiv.refl (outer ++ hostLocals))
+                (itemAfter.conjoin tailBefore) targetBefore := by
+              rw [← tailAfterEq]
+              simpa only [itemAfter, tailAfter, normalizedHead,
+                normalizedTail, targetBefore] using
+                (renameWiresConjoinIso normalizedHead normalizedTail
+                  rename).symm
+            have finalBodyIso : RegionIso (WireEquiv.refl outer) afterItem
+                (Region.adjoinAt hostLocals hostItems targetBefore) := by
+              exact adjoinAtIso hostLocals hostItems materialIso
+            have finalIso : OpenDiagramIso
+                (sourceOccurrence.interface.withBody
+                  (sourceOccurrence.context.fill afterItem)
+                  itemPhaseValidity.1 itemPhaseValidity.2)
+                (sourceOccurrence.interface.withBody
+                  (sourceOccurrence.context.fill
+                    (Region.adjoinAt hostLocals hostItems targetBefore))
+                  presentedTargetCanonical
+                    presentedTargetExternalTwoEnded) :=
+              OpenDiagram.withBody_iso itemPhaseValidity.1
+                presentedTargetCanonical itemPhaseValidity.2
+                presentedTargetExternalTwoEnded
+                (DiagramContext.fillIso sourceOccurrence.context finalBodyIso)
+            have presented := StrictEquates.targetIso itemPhase' finalIso
+            have outputIso : OpenDiagramIso
+                (sourceOccurrence.interface.withBody
+                  (sourceOccurrence.context.fill
+                    (Region.adjoinAt hostLocals hostItems targetBefore))
+                  presentedTargetCanonical
+                    presentedTargetExternalTwoEnded)
+                (occurrence.interface.withBody
+                  (occurrence.context.fill
+                    (Region.adjoinAt hostLocals hostItems targetBefore))
+                  targetCanonical targetExternalTwoEnded) :=
+              OpenDiagram.withBody_iso presentedTargetCanonical
+                targetCanonical presentedTargetExternalTwoEnded
+                targetExternalTwoEnded (RegionIso.refl _)
+            have exactPresented : StrictEquates occurrence
+                (Region.adjoinAt hostLocals hostItems targetBefore)
+                targetCanonical targetExternalTwoEnded :=
+              ⟨transGen_iso (OpenDiagramIso.refl source) presented.1
+                  outputIso,
+                transGen_iso outputIso presented.2
+                  (OpenDiagramIso.refl source)⟩
+            simpa only [itemBefore, tailBefore, itemAfter, tailAfter,
+              sourceOccurrence, afterItem, normalizedHead, normalizedTail,
+              targetBefore, normalizedItems] using exactPresented
+        · have itemNone : itemHasSelection itemSites = false := by
+            cases selected : itemHasSelection itemSites with
+            | false => rfl
+            | true => exact False.elim (itemSelected selected)
+          have tailSelected : itemsHaveSelection tailSites = true := by
+            cases selected : itemsHaveSelection tailSites with
+            | true => rfl
+            | false =>
+                simp only [itemsHaveSelection, itemNone, selected,
+                  Bool.false_or, Bool.false_eq_true] at hasSelection
+          have normalizedHeadEq : normalizedHead = itemResult := by
+            simpa only [normalizedHead] using
+              normalizedItem_eq_of_noSelection pattern itemEvidence itemSites
+                itemNone
+          have itemAfterEq : itemAfter = itemBefore := by
+            change Region.renameWires rename normalizedHead =
+              Region.renameWires rename itemResult
+            rw [normalizedHeadEq]
+          let flattened := flattenAdjoinOccurrence hostLocals hostItems
+            itemBefore tailBefore sourceOccurrence hostCanonical hostNonempty
+            itemBeforeCanonical tailBeforeCanonical
+          let nextHostItems := extendHostItems hostLocals hostItems itemBefore
+          let hostWire :=
+            Region.adjoinHostWire outer hostLocals itemBefore.locals
+          let nextRename := WireRenaming.comp hostWire rename
+          have nextHostCanonical := extendHostCanonical hostLocals hostItems
+            itemBefore hostCanonical itemBeforeCanonical
+          have nextHostNonempty : ∀ {signature}
+              (wire : Var outer signature),
+              (Region.mk (hostLocals ++ itemBefore.locals)
+                nextHostItems).incidencePaths wire.index.val ≠ [] := by
+            intro signature wire
+            exact extendHost_incidence_nonempty hostLocals hostItems itemBefore
+              hostNonempty wire
+          have tailResultCanonical : tailResult.Canonical :=
+            (Region.Canonical.renameWires_iff tailResult rename).mp
+              tailBeforeCanonical
+          have alignedTailCanonical :
+              (tailResult.renameWires nextRename).Canonical :=
+            (Region.Canonical.renameWires_iff tailResult nextRename).mpr
+              tailResultCanonical
+          let alignedFlattened : Occurrence
+              (Region.adjoinAt (hostLocals ++ itemBefore.locals)
+                nextHostItems (tailResult.renameWires nextRename)) source :=
+            supportedAdjoinOccurrence (hostLocals ++ itemBefore.locals)
+              nextHostItems flattened nextHostCanonical nextHostNonempty
+              alignedTailCanonical (by
+                simpa only [tailBefore, hostWire, nextRename] using
+                  renameWiresCompIso tailResult rename hostWire)
+          have normalizedTailCanonical : normalizedTail.Canonical :=
+            (Region.Canonical.renameWires_iff normalizedTail rename).mp
+              tailAfterCanonical
+          let flatTargetMaterial := normalizedTail.renameWires nextRename
+          have flatTargetMaterialCanonical : flatTargetMaterial.Canonical :=
+            (Region.Canonical.renameWires_iff normalizedTail nextRename).mpr
+              normalizedTailCanonical
+          have tailTargetValidity := supportedAdjoinValidity
+            (hostLocals ++ itemBefore.locals) nextHostItems alignedFlattened
+            nextHostCanonical nextHostNonempty flatTargetMaterialCanonical
+          have tailPhase := normalizedItemsSupportedStrict pattern
+            tailEvidence tailSites tailSelected outer
+            (hostLocals ++ itemBefore.locals) nextRename nextHostItems
+            alignedFlattened nextHostCanonical nextHostNonempty
+            tailTargetValidity.1 tailTargetValidity.2
+          let flatTarget := Region.adjoinAt
+            (hostLocals ++ itemBefore.locals) nextHostItems flatTargetMaterial
+          let flatTargetEndpoint := alignedFlattened.interface.withBody
+            (alignedFlattened.context.fill flatTarget) tailTargetValidity.1
+              tailTargetValidity.2
+          have finalBodyIso : RegionIso (WireEquiv.refl outer) flatTarget
+              (Region.adjoinAt hostLocals hostItems targetBefore) := by
+            exact (adjoinAtIso (hostLocals ++ itemBefore.locals)
+              nextHostItems (by
+                simpa only [flatTargetMaterial, tailAfter, normalizedTail,
+                  nextRename, hostWire] using
+                    (renameWiresCompIso normalizedTail rename hostWire).symm)).trans
+              ((adjoinAssocIso hostLocals hostItems itemBefore
+                tailAfter).symm.trans
+                (adjoinAtIso hostLocals hostItems (by
+                  rw [← itemAfterEq]
+                  simpa only [itemAfter, tailAfter, normalizedHead,
+                    normalizedTail, targetBefore] using
+                    (renameWiresConjoinIso normalizedHead normalizedTail
+                      rename).symm)))
+          have finalIso : OpenDiagramIso flatTargetEndpoint
+              (sourceOccurrence.interface.withBody
+                (sourceOccurrence.context.fill
+                  (Region.adjoinAt hostLocals hostItems targetBefore))
+                presentedTargetCanonical
+                  presentedTargetExternalTwoEnded) :=
+            OpenDiagram.withBody_iso tailTargetValidity.1
+              presentedTargetCanonical tailTargetValidity.2
+              presentedTargetExternalTwoEnded
+              (DiagramContext.fillIso sourceOccurrence.context finalBodyIso)
+          have tailPhase' : StrictEquates alignedFlattened
+              (Region.adjoinAt hostLocals hostItems targetBefore)
+              presentedTargetCanonical presentedTargetExternalTwoEnded :=
+            StrictEquates.targetIso tailPhase finalIso
+          have presented : StrictEquates sourceOccurrence
+              (Region.adjoinAt hostLocals hostItems targetBefore)
+              presentedTargetCanonical presentedTargetExternalTwoEnded := by
+            simpa only [sourceOccurrence, flattened, alignedFlattened,
+              supportedAdjoinOccurrence] using tailPhase'
+          have outputIso : OpenDiagramIso
+              (sourceOccurrence.interface.withBody
+                (sourceOccurrence.context.fill
+                  (Region.adjoinAt hostLocals hostItems targetBefore))
+                presentedTargetCanonical presentedTargetExternalTwoEnded)
+              (occurrence.interface.withBody
+                (occurrence.context.fill
+                  (Region.adjoinAt hostLocals hostItems targetBefore))
+                targetCanonical targetExternalTwoEnded) :=
+            OpenDiagram.withBody_iso presentedTargetCanonical targetCanonical
+              presentedTargetExternalTwoEnded targetExternalTwoEnded
+              (RegionIso.refl _)
+          have exactPresented : StrictEquates occurrence
+              (Region.adjoinAt hostLocals hostItems targetBefore)
+              targetCanonical targetExternalTwoEnded :=
+            ⟨transGen_iso (OpenDiagramIso.refl source) presented.1 outputIso,
+              transGen_iso outputIso presented.2
+                (OpenDiagramIso.refl source)⟩
+          simpa only [itemBefore, tailBefore, itemAfter, tailAfter,
+            sourceOccurrence, flattened, alignedFlattened, nextHostItems,
+            hostWire, nextRename, flatTargetMaterial, flatTarget,
+            flatTargetEndpoint, normalizedHead, normalizedTail, targetBefore,
+            normalizedItems] using exactPresented
   termination_by 5 * sizeOf sites + 3
 
   private noncomputable def normalizedItemWithTailStrict
@@ -2958,6 +4490,7 @@ mutual
         _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected sourceItem result)
       (sites : ItemSites operation data evidence)
+      (hasSelection : itemHasSelection sites = true)
       (hostLocals : List Sig)
       (rename : WireRenaming common (outer ++ hostLocals))
       (hostItems : ItemSeq (outer ++ hostLocals))
@@ -3036,7 +4569,7 @@ mutual
     have flatTargetValidity := supportedAdjoinValidity
       (hostLocals ++ tail.locals) nextHostItems alignedFlattened
       nextHostCanonical nextHostNonempty flatTargetMaterialCanonical
-    have core := normalizedItemStrict pattern evidence sites
+    have core := normalizedItemStrict pattern evidence sites hasSelection
       outer (hostLocals ++ tail.locals) nextRename nextHostItems alignedFlattened
       flatTargetValidity.1 flatTargetValidity.2
     let flatTarget := Region.adjoinAt (hostLocals ++ tail.locals)
@@ -3107,7 +4640,8 @@ mutual
       (evidence :
         _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected sourceItem result)
-      (sites : ItemSites operation data evidence) :
+      (sites : ItemSites operation data evidence)
+      (hasSelection : itemHasSelection sites = true) :
       ∀ (outer : List Sig) (hostLocals : List Sig)
         (rename : WireRenaming common (outer ++ hostLocals))
         (hostItems : ItemSeq (outer ++ hostLocals))
@@ -3132,9 +4666,7 @@ mutual
           targetCanonical targetExternalTwoEnded :=
     match sites with
     | .atom head ports => by
-        intro outer hostLocals rename hostItems boundary source occurrence
-          targetCanonical targetExternalTwoEnded
-        simpa [normalizedItem] using StrictEquates.refl occurrence
+        simp only [itemHasSelection, Bool.false_eq_true] at hasSelection
     | .selectedAtom ports _ => by
         intro outer hostLocals rename hostItems boundary source occurrence
           targetCanonical targetExternalTwoEnded
@@ -3204,9 +4736,9 @@ mutual
             (presentedOccurrence.context.fill targetAfter) := by
           intro signature wire
           exact targetAfterExternalTwoEnded wire
-        have equivalent := equatesIdentityBoundary pattern hostLocals
-          hostItems mappedPorts presentedOccurrence presentedTargetCanonical
-            presentedTargetExternalTwoEnded
+        obtain ⟨ownedTargetCanonical, ownedTargetExternalTwoEnded,
+            equivalent⟩ :=
+          equatesIdentityBoundary pattern mappedPorts presentedOccurrence
         have strict := strictEquates_of_equates presentedOccurrence equivalent
         have finalBodyIso : RegionIso (WireEquiv.refl outer) targetAfter
             targetBefore :=
@@ -3215,20 +4747,18 @@ mutual
         have finalIso : OpenDiagramIso
             (presentedOccurrence.interface.withBody
               (presentedOccurrence.context.fill targetAfter)
-              presentedTargetCanonical presentedTargetExternalTwoEnded)
+              ownedTargetCanonical ownedTargetExternalTwoEnded)
             (occurrence.interface.withBody
               (occurrence.context.fill targetBefore) targetCanonical
                 targetExternalTwoEnded) :=
-          OpenDiagram.withBody_iso presentedTargetCanonical targetCanonical
-            presentedTargetExternalTwoEnded targetExternalTwoEnded
+          OpenDiagram.withBody_iso ownedTargetCanonical targetCanonical
+            ownedTargetExternalTwoEnded targetExternalTwoEnded
             (DiagramContext.fillIso occurrence.context finalBodyIso)
         have presented := StrictEquates.targetIso strict finalIso
         simpa only [normalizedItem, targetBefore, sourceHostBefore,
           sourceBefore] using presented
     | .identity signature arity ports => by
-        intro outer hostLocals rename hostItems boundary source occurrence
-          targetCanonical targetExternalTwoEnded
-        simpa only [normalizedItem] using StrictEquates.refl occurrence
+        simp only [itemHasSelection, Bool.false_eq_true] at hasSelection
     | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
         childSites => by
         intro outer hostLocals rename hostItems boundary source occurrence
@@ -3333,8 +4863,11 @@ mutual
           simpa only [childOccurrence, Occurrence.nest,
             DiagramContext.fill_comp, targetAfter] using
               outerTargetExternalTwoEnded wire
+        have childSelection : regionHasSelection childSites = true := by
+          simpa only [itemHasSelection] using hasSelection
         have child := normalizedRegionStrict pattern childEvidence
-          childSites (outer ++ (hostLocals ++ [])) childRename childOccurrence
+          childSites childSelection (outer ++ (hostLocals ++ [])) childRename
+          childOccurrence
           childTargetCanonical
           childTargetExternalTwoEnded
         have finalBodyIso : RegionIso (WireEquiv.refl outer) targetAfter
@@ -3414,6 +4947,23 @@ theorem normalizeItemsEquates
       (occurrence.context.fill output.1) replacement.2
   have targetCanonical : (occurrence.context.fill output.1).Canonical :=
     replacement.1
+  by_cases noSelection : itemsHaveSelection sites = false
+  · have outputEq : output.1 = result := by
+      simpa only [output] using
+        normalizedItems_eq_of_noSelection pattern evidence sites noSelection
+    let exactResultOccurrence : Occurrence result sourceEndpoint :=
+      exactOccurrence occurrence.interface occurrence.context result
+        occurrence.sourceCanonical occurrence.sourceExternalTwoEnded
+    have unchanged : Equates exactResultOccurrence result
+        occurrence.sourceCanonical occurrence.sourceExternalTwoEnded := by
+      exact ⟨.refl, .refl⟩
+    have bridge := (StrictEquates.refl occurrence).toEquates
+    have combined := Equates.trans bridge unchanged
+    refine ⟨output.1, output.2, targetCanonical,
+      targetExternalTwoEnded, ?_⟩
+    simpa only [outputEq, exactResultOccurrence, exactOccurrence,
+      sourceEndpoint] using combined
+  · exact (by
   let appendNil : WireRenaming common (common ++ []) :=
     ⟨fun wire => wire.appendLeft []⟩
   let sourceAfter := Region.adjoinAt []
@@ -3449,8 +4999,13 @@ theorem normalizeItemsEquates
     intro signature wire
     rw [targetEq]
     exact targetExternalTwoEnded wire
+  have hasSelection : itemsHaveSelection sites = true := by
+    cases selected : itemsHaveSelection sites with
+    | false => exact False.elim (noSelection selected)
+    | true => rfl
   have folded := normalizedItemsStrict (outer := common) pattern evidence sites
-    [] appendNil (.nil : ItemSeq (common ++ [])) presentedOccurrence
+    hasSelection [] appendNil (.nil : ItemSeq (common ++ []))
+      presentedOccurrence
       foldedTargetCanonical foldedTargetExternalTwoEnded
   have finalBodyIso : RegionIso (WireEquiv.refl common) targetAfter
       output.1 := by
@@ -3471,7 +5026,7 @@ theorem normalizeItemsEquates
     ⟨transGen_iso (OpenDiagramIso.refl host) folded.1 finalIso,
       transGen_iso finalIso folded.2 (OpenDiagramIso.refl host)⟩
   exact ⟨output.1, output.2, targetCanonical, targetExternalTwoEnded,
-    exactStrict.toEquates⟩
+    exactStrict.toEquates⟩)
 
 end EqualityNormalization
 
