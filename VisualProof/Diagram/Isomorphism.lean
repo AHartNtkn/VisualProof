@@ -254,9 +254,6 @@ def rotate (leading middle suffix : List Sig) :
     equivalence (equivalence.symm wire) = wire :=
   equivalence.right_inv wire
 
-@[simp] theorem symm_refl (context : List Sig) :
-    (WireEquiv.refl context).symm = WireEquiv.refl context := rfl
-
 end WireEquiv
 
 theorem WireEquiv.append_refl (left right : List Sig) :
@@ -474,6 +471,35 @@ noncomputable def ItemSeqIso.cons
           have values := congrArg Fin.val equality
           simp [FiniteEquiv.finSucc] at values
           exact values
+
+private noncomputable def ItemSeqIso.frameRefl
+    (before : ItemSeq wires)
+    {sourceItem targetItem : Item wires}
+    (focus : ItemIso (WireEquiv.refl wires) sourceItem targetItem)
+    (after : ItemSeq wires) :
+    ItemSeqIso (WireEquiv.refl wires)
+      (before.append (.cons sourceItem after))
+      (before.append (.cons targetItem after)) := by
+  cases before with
+  | nil => exact ItemSeqIso.cons focus (ItemSeqIso.refl after)
+  | cons head tail =>
+      exact ItemSeqIso.cons (ItemIso.refl head)
+        (ItemSeqIso.frameRefl tail focus after)
+
+/-- Lift a region isomorphism through one exact recursive diagram context. -/
+noncomputable def DiagramContext.fillIso
+    (context : DiagramContext outer holeWires)
+    {before after : Region holeWires}
+    (body : RegionIso (WireEquiv.refl holeWires) before after) :
+    RegionIso (WireEquiv.refl outer)
+      (context.fill before) (context.fill after) := by
+  induction context with
+  | hole => exact body
+  | @cut currentOuter currentHole locals leading trailing child induction =>
+      exact .mk (WireEquiv.refl locals)
+        ((ItemSeqIso.frameRefl leading (.cut (induction body))
+          trailing).castAmbient
+            (WireEquiv.append_refl currentOuter locals).symm)
 
 private theorem Vars.map_commutes
     (variables : Vars wires signatures)

@@ -530,20 +530,11 @@ theorem Region.Canonical.renameWires_preservesIndex_iff
           (ItemSeq.childrenCanonical_rename_embedding items
             (rename.appendRight locals) (embedding.appendRight locals)).mpr children⟩
 
-private theorem adjoinHost_index (wire : Var (outer ++ hostLocals) signature) :
-    (Region.adjoinHostWire outer hostLocals addedLocals wire).index.val =
-      wire.index.val := by
-  apply Var.appendCases (left := outer) (right := hostLocals)
-    (motive := fun wire =>
-      (Region.adjoinHostWire outer hostLocals addedLocals wire).index.val =
-        wire.index.val)
-  · intros; simp [Region.adjoinHostWire, Region.conjoinLeftWire]
-  · intros; simp [Region.adjoinHostWire, Region.conjoinLeftWire]
-
 private theorem adjoinHost_embedding (outer hostLocals addedLocals : List Sig) :
     IndexEmbedding (Region.adjoinHostWire outer hostLocals addedLocals) := by
   intro signature selected
-  exact ⟨fun other => by simp only [adjoinHost_index], selected.index.isLt,
+  exact ⟨fun other => by simp only [Region.adjoinHostWire_index_val],
+    selected.index.isLt,
     (Region.adjoinHostWire outer hostLocals addedLocals selected).index.isLt⟩
 
 theorem ItemSeq.incidencePaths_renameWires_adjoinHost
@@ -554,7 +545,7 @@ theorem ItemSeq.incidencePaths_renameWires_adjoinHost
         wire.index.val itemIndex =
       items.incidencePaths wire.index.val itemIndex := by
   apply ItemSeq.incidencePaths_rename_reflect
-  simpa only [adjoinHost_index] using
+  simpa only [Region.adjoinHostWire_index_val] using
     adjoinHost_embedding outer hostLocals addedLocals wire
 
 theorem ItemSeq.ChildrenCanonical.renameWires_adjoinHost_iff
@@ -576,34 +567,12 @@ theorem Region.Canonical.renameWires_adjoinHost_iff
   simpa only [wrapper, ItemSeq.renameWires, Item.renameWires,
     ItemSeq.ChildrenCanonical, Item.ChildrenCanonical, and_true] using wrapperIff
 
-private theorem adjoinMaterial_index
-    (wire : Var ((outer ++ hostLocals) ++ addedLocals) signature) :
-    (Region.adjoinMaterialWire outer hostLocals addedLocals wire).index.val =
-      wire.index.val := by
-  apply Var.appendCases (left := outer ++ hostLocals) (right := addedLocals)
-    (motive := fun wire =>
-      (Region.adjoinMaterialWire outer hostLocals addedLocals wire).index.val =
-        wire.index.val)
-  · intro signature contextWire
-    refine Var.appendCases (left := outer) (right := hostLocals)
-      (motive := fun contextWire =>
-        (Region.adjoinMaterialWire outer hostLocals addedLocals
-            ((contextWire).appendLeft addedLocals)).index.val =
-          ((contextWire).appendLeft addedLocals).index.val)
-      ?_ ?_ contextWire
-    · intro signature outerWire
-      simp [Region.adjoinMaterialWire]
-    · intro signature localWire
-      simp [Region.adjoinMaterialWire]
-  · intro signature materialWire
-    simp [Region.adjoinMaterialWire, List.length_append, Nat.add_assoc]
-
 private theorem adjoinMaterial_embedding
     (outer hostLocals addedLocals : List Sig) :
     IndexEmbedding (Region.adjoinMaterialWire outer hostLocals addedLocals) :=
   indexEmbedding_of_preservesIndex _
     (by simp [List.length_append])
-    (fun wire => adjoinMaterial_index wire)
+    (fun wire => Region.adjoinMaterialWire_index_val wire)
 
 theorem ItemSeq.incidencePaths_renameWires_adjoinMaterial
     (items : ItemSeq ((outer ++ hostLocals) ++ addedLocals))
@@ -614,7 +583,7 @@ theorem ItemSeq.incidencePaths_renameWires_adjoinMaterial
         wire.index.val itemIndex =
       items.incidencePaths wire.index.val itemIndex := by
   apply ItemSeq.incidencePaths_rename_reflect
-  simpa only [adjoinMaterial_index] using
+  simpa only [Region.adjoinMaterialWire_index_val] using
     adjoinMaterial_embedding outer hostLocals addedLocals wire
 
 /-- Canonicality of an adjoined region always contains canonicality of the
@@ -653,7 +622,7 @@ theorem Region.Canonical.material_of_adjoinAt
             simp only [List.length_append]
             omega
           · intro signature wire
-            rw [adjoinHost_index]
+            rw [Region.adjoinHostWire_index_val]
             have wireBound := wire.index.isLt
             have materialIndex : materialWire.index.val =
                 (outer ++ hostLocals).length + localIndex.val := by
@@ -744,7 +713,7 @@ theorem Region.Canonical.adjoinAt
             · simp [materialWire]
               omega
             · intro signature wire
-              rw [adjoinHost_index]
+              rw [Region.adjoinHostWire_index_val]
               have wireBound := wire.index.isLt
               simp only [materialWire, Var.index_appendRight,
                 Var.index_ofIndex, List.length_append] at wireBound ⊢
@@ -924,7 +893,7 @@ theorem Region.Canonical.adjoinAt_of_material_roots
             · simp [materialWire]
               omega
             · intro signature wire
-              rw [adjoinHost_index]
+              rw [Region.adjoinHostWire_index_val]
               have wireBound := wire.index.isLt
               simp only [materialWire, Var.index_appendRight,
                 Var.index_ofIndex, List.length_append] at wireBound ⊢

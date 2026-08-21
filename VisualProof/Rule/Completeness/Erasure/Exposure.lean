@@ -246,7 +246,7 @@ private theorem supportInstantiation_canonical
       have bodyPathsEq : body.incidencePaths embedded.index.val =
           (supportBody (Region.mk materialLocals materialItems)).incidencePaths
             external.index.val := by
-        simp only [body, Region.renameWires, Region.incidencePaths]
+        simp only [body]
         apply ItemSeq.incidencePaths_renameWires_of_index_iff
         · have bound := external.index.isLt
           simp only [List.length_append, Region.locals]
@@ -993,7 +993,7 @@ private theorem State.batchSupports_eq
           exact selectedFinal.symm
         rw [tailEq]
         simp only [supportSuffix, supportPins, unused, if_pos,
-          ItemSeq.renameWires, ItemSeq.nil_append]
+          ItemSeq.renameWires]
         exact congrArg (fun item => ItemSeq.cons item
           ((supportPins material signatures tail).renameWires
             (next.advanceAll tail).materialMap)) pinEq
@@ -1235,86 +1235,6 @@ private theorem pinStep
     validity.1, validity.2, OpenDiagramIso.refl _,
     atPolarity_symmetric_of occurrence.context.polarity
       (.mk (.pin locals items signature wire))⟩
-
-private def FiniteEquiv.succ
-    (equivalence : FiniteEquiv (Fin source) (Fin target)) :
-    FiniteEquiv (Fin (source + 1)) (Fin (target + 1)) where
-  toFun position := Fin.cases 0 (fun rest => (equivalence rest).succ) position
-  invFun position :=
-    Fin.cases 0 (fun rest => (equivalence.symm rest).succ) position
-  left_inv := by
-    intro position
-    refine Fin.cases rfl (fun rest => ?_) position
-    apply Fin.ext
-    change (equivalence.symm (equivalence rest)).val + 1 = rest.val + 1
-    rw [FiniteEquiv.symm_apply_apply]
-  right_inv := by
-    intro position
-    refine Fin.cases rfl (fun rest => ?_) position
-    apply Fin.ext
-    change (equivalence (equivalence.symm rest)).val + 1 = rest.val + 1
-    rw [FiniteEquiv.apply_symm_apply]
-
-private noncomputable def consIso
-    {sourceHead targetHead : Item wires}
-    {sourceTail targetTail : ItemSeq wires}
-    (head : ItemIso (WireEquiv.refl wires) sourceHead targetHead)
-    (tail : ItemSeqIso (WireEquiv.refl wires) sourceTail targetTail) :
-    ItemSeqIso (WireEquiv.refl wires)
-      (.cons sourceHead sourceTail) (.cons targetHead targetTail) := by
-  cases tail with
-  | permute positions items =>
-      refine .permute (FiniteEquiv.succ positions) (fun sourceIndex => ?_)
-      change Fin (sourceTail.length + 1) at sourceIndex
-      refine Fin.cases
-        (fun targetIndex equality => ?_)
-        (fun sourceRest targetIndex equality => ?_) sourceIndex
-      · change Fin (targetTail.length + 1) at targetIndex
-        have targetZero : targetIndex.val = 0 := by
-          have values := congrArg Fin.val equality
-          simp [FiniteEquiv.succ] at values
-          exact values.symm
-        have targetEq : targetIndex = (0 : Fin (targetTail.length + 1)) :=
-          Fin.ext targetZero
-        subst targetIndex
-        exact head
-      · change Fin (targetTail.length + 1) at targetIndex
-        revert equality
-        refine Fin.cases (fun equality => ?_)
-          (fun targetRest equality => ?_) targetIndex
-        · have values := congrArg Fin.val equality
-          simp [FiniteEquiv.succ] at values
-        · apply items sourceRest targetRest
-          apply Fin.ext
-          have values := congrArg Fin.val equality
-          simp [FiniteEquiv.succ] at values
-          exact values
-
-private noncomputable def frameIso
-    (before : ItemSeq wires)
-    {sourceItem targetItem : Item wires}
-    (focus : ItemIso (WireEquiv.refl wires) sourceItem targetItem)
-    (after : ItemSeq wires) :
-    ItemSeqIso (WireEquiv.refl wires)
-      (before.append (.cons sourceItem after))
-      (before.append (.cons targetItem after)) := by
-  cases before with
-  | nil => exact consIso focus (ItemSeqIso.refl after)
-  | cons head tail =>
-      exact consIso (ItemIso.refl head) (frameIso tail focus after)
-
-private noncomputable def fillIso
-    (context : DiagramContext outer holeWires)
-    {before after : Region holeWires}
-    (body : RegionIso (WireEquiv.refl holeWires) before after) :
-    RegionIso (WireEquiv.refl outer)
-      (context.fill before) (context.fill after) := by
-  induction context with
-  | hole => exact body
-  | @cut currentOuter currentHole locals leading trailing child induction =>
-      exact .mk (WireEquiv.refl locals)
-        ((frameIso leading (.cut (induction body)) trailing).castAmbient
-          (WireEquiv.append_refl currentOuter locals).symm)
 
 private def advanceAway
     (state : State outer materialWires material)
@@ -1679,7 +1599,7 @@ private theorem collapseLocal_reflects_otherWire
       have selectedBound := selectedWire.index.isLt
       constructor <;> intro equality
       · exact False.elim (different (by simpa using equality))
-      · simp only [List.length_append, List.length_singleton] at selectedBound
+      · simp only [List.length_append] at selectedBound
         omega
 
 private theorem exposureData_applicability
@@ -1754,8 +1674,7 @@ private theorem exposureData_applicability
     simp only [Identification.Local.Data.collapsedRegion,
       Identification.Local.Data.exposedRegion, Region.incidencePaths,
       ItemSeq.incidencePaths, Identification.NodeData.collapsedNode,
-      Identification.NodeData.exposedNode,
-      Identification.NodeData.exposedPorts]
+      Identification.NodeData.exposedNode]
     have retainedDifferent :
         (Identification.retainWire outer state.locals signature 1 survivor).index.val ≠
           wireIndex.val := by
@@ -1873,7 +1792,7 @@ private theorem State.advance_childrenCanonical
     split
     · exact ⟨True.intro, True.intro⟩
     · exact True.intro
-  simp only [State.advance, State.items, ItemSeq.ChildrenCanonical]
+  simp only [State.advance, State.items]
   exact ⟨True.intro,
     (ItemSeq.childrenCanonical_append _ _).mpr
       ⟨beforeCanonical,
@@ -1929,7 +1848,7 @@ private theorem advanceAway_fresh_nonempty
         simpa [advanceAway, renamedBefore, renamedMaterial,
           renamedAfter, retain] using targetMember
       rw [awayEmpty] at targetMember'
-      simpa using targetMember'
+      simp at targetMember'
     exact supportNonempty supportEmpty
   · have materialPaths' :
         renamedMaterial.incidencePaths fresh.index.val 0 =
@@ -1979,7 +1898,7 @@ private theorem advanceAway_fresh_nonempty
         simpa [advanceAway, renamedBefore, renamedMaterial,
           renamedAfter, retain] using targetMember
       rw [awayEmpty] at targetMember'
-      simpa using targetMember'
+      simp at targetMember'
     exact materialNonempty materialEmpty
 
 private theorem State.advance_canonical
@@ -2018,7 +1937,7 @@ private theorem State.advance_canonical
             simp only [wireIndex, List.length_append]
             omega
           · have bound := oldIndex.isLt
-            simp only [wireIndex, List.length_append, List.length_singleton]
+            simp only [wireIndex, List.length_append]
             omega
           · intro wireSignature wire
             rw [retainWire_index]
@@ -2090,8 +2009,7 @@ private theorem State.advance_canonical
       let fresh := Identification.freshLocalWire outer state.locals signature
         (0 : Fin 1)
       have freshIndex : fresh.index.val = outer.length + localIndex.val := by
-        simp [fresh, Identification.freshLocalWire, freshValue,
-          List.length_append]
+        simp [fresh, Identification.freshLocalWire, freshValue]
       change RegionPath.RootedTwo
         ((state.advance selected).items.incidencePaths
           (outer.length + localIndex.val) 0)
@@ -2237,7 +2155,7 @@ private theorem State.supports_advance_tail
     have freshIndex :
         (Identification.freshLocalWire outer state.locals signature
           (0 : Fin 1)).index.val = outer.length + localIndex.val := by
-      simp [Identification.freshLocalWire, freshValue, List.length_append]
+      simp [Identification.freshLocalWire, freshValue]
     have redirectedFresh :
         (redirectMaterial state.materialMap selected
           (wire.appendLeft material.locals)).index.val =
@@ -2398,7 +2316,7 @@ private theorem oneWire
         (Vacuity.Pin.present state.locals baseItems signature survivor))
       (occurrence.context.fill
         (Vacuity.Pin.front state.locals baseItems signature survivor)) :=
-    fillIso occurrence.context
+    DiagramContext.fillIso occurrence.context
       (RegionIso.appendSingletonFront state.locals baseItems
         (.identity signature 1 (fun _ => survivor)))
   have equalityCollapsedIso : OpenDiagramIso equalityEndpoint
@@ -2627,28 +2545,6 @@ private theorem endpointEqualityItems_eq
   rw [Comprehension.Instantiation.equalityItems_renameWires]
   rw [leftEq, rightEq]
 
-private noncomputable def equalityItemsIso
-    (ambient : WireEquiv source target)
-    (sourceLeft sourceRight : Vars source signatures)
-    (targetLeft targetRight : Vars target signatures)
-    (leftEq : sourceLeft.map (fun wire => ambient wire) = targetLeft)
-    (rightEq : sourceRight.map (fun wire => ambient wire) = targetRight) :
-    ItemSeqIso ambient
-      (Comprehension.Instantiation.equalityItems sourceLeft sourceRight)
-      (Comprehension.Instantiation.equalityItems targetLeft targetRight) := by
-  let renamed := ItemSeqIso.renameWires
-    (Comprehension.Instantiation.equalityItems sourceLeft sourceRight)
-    WireRenaming.id ambient.toRenaming ambient (fun _ => rfl)
-  have sourceLeftEq :
-      sourceLeft.map (fun wire => WireRenaming.id wire) = sourceLeft := by
-    simpa [WireRenaming.id] using vars_map_id sourceLeft
-  have sourceRightEq :
-      sourceRight.map (fun wire => WireRenaming.id wire) = sourceRight := by
-    simpa [WireRenaming.id] using vars_map_id sourceRight
-  simpa only [ItemSeq.renameWires_id,
-    Comprehension.Instantiation.equalityItems_renameWires,
-    sourceLeftEq, sourceRightEq, leftEq, rightEq] using renamed
-
 private def endpointItems
     (description : Rule.Erasure.Description outer) :
     ItemSeq (outer ++ (description.hostLocals ++
@@ -2777,16 +2673,8 @@ private noncomputable def exposedRegionEndpointIso
             apply Var.eq_of_index_eq
             apply Fin.ext
             rw [ambientIndex]
-            simpa [actualHost, targetHost, endpointHostWire, description,
-              Region.locals] using
-              ((Region.adjoinHostWire_index_val
-                (outer := outer) (hostLocals := hostLocals)
-                (addedLocals := materialWires ++ (materialLocals ++ []))
-                wire).trans
-              (Region.adjoinHostWire_index_val
-                (outer := outer) (hostLocals := hostLocals)
-                (addedLocals := materialWires ++ materialLocals)
-                wire).symm)
+            simp [actualHost, targetHost, endpointHostWire, description,
+              Region.locals]
           have bodyCommutes : ∀ {signature}
               (wire : Var (materialWires ++ materialLocals) signature),
               ambient (actualBody wire) = targetBody wire := by
@@ -3217,7 +3105,8 @@ private noncomputable def endpointRegionIso
             (supportPins (Region.mk materialLocals materialItems)
               materialWires variables)
             rawMaterial targetMaterial ambient materialCommutes
-          let equalityIso := equalityItemsIso ambient
+          let equalityIso :=
+            Comprehension.Instantiation.equalityItemsIso ambient
             (state.batchLeft variables) (state.batchRight variables)
             (endpointLeft description) (endpointRight description)
             leftCommutes rightCommutes
@@ -3249,7 +3138,7 @@ private noncomputable def endpointRegionIso
           have composed' : RegionIso (WireEquiv.refl outer)
               finalState.region
               (exposedRegion description materialCanonical) :=
-            RegionIso.castAmbient (by simp) composed
+            RegionIso.castAmbient (by rfl) composed
           simpa [description, state, variables, finalState] using composed'
 
 /-- Erasure material can be exposed as one exact comprehension-instantiation
@@ -3406,7 +3295,7 @@ theorem derives
       (initialOccurrence.context.fill
         (exposedRegion description materialCanonical)) := by
     simpa only [state, variables] using
-      fillIso initialOccurrence.context
+      DiagramContext.fillIso initialOccurrence.context
         (endpointRegionIso description materialCanonical)
   let endpointIso : OpenDiagramIso
       (initialOccurrence.interface.withBody

@@ -8,24 +8,15 @@ namespace Region
 
 def blank (outer : List Sig) : Region outer := .mk [] .nil
 
-@[simp] theorem locals_blank (outer : List Sig) :
-    (blank outer).locals = [] := rfl
-
 /-- One item sequence as an independently conjoinable zero-local region. -/
 def ofItems (items : ItemSeq outer) : Region outer :=
   let appendNil : WireRenaming outer (outer ++ []) :=
     ⟨fun wire => wire.appendLeft []⟩
   .mk [] (items.renameWires appendNil)
 
-@[simp] theorem locals_ofItems (items : ItemSeq outer) :
-    (ofItems items).locals = [] := rfl
-
 /-- One item as an independently conjoinable zero-local region. -/
 def singleton (item : Item outer) : Region outer :=
   ofItems (ItemSeq.cons item ItemSeq.nil)
-
-@[simp] theorem locals_singleton (item : Item outer) :
-    (singleton item).locals = [] := rfl
 
 /-- Embed the first conjunct's wires into the combined local context. -/
 def conjoinLeftWire (outer firstLocals secondLocals : List Sig) :
@@ -65,12 +56,6 @@ def conjoin : Region outer → Region outer → Region outer
             (conjoinLeftWire outer firstLocals secondLocals)).append
           (secondItems.renameWires
             (conjoinRightWire outer firstLocals secondLocals)))
-
-@[simp] theorem locals_conjoin (first second : Region outer) :
-    (conjoin first second).locals = first.locals ++ second.locals := by
-  cases first
-  cases second
-  rfl
 
 theorem ofItems_conjoin (first second : ItemSeq outer) :
     (ofItems first).conjoin (ofItems second) =
@@ -148,14 +133,6 @@ def adjoinAt (hostLocals : List Sig)
             (adjoinHostWire outer hostLocals addedLocals)).append
           (addedItems.renameWires
             (adjoinMaterialWire outer hostLocals addedLocals)))
-
-@[simp] theorem locals_adjoinAt (hostLocals : List Sig)
-    (hostItems : ItemSeq (outer ++ hostLocals))
-    (material : Region (outer ++ hostLocals)) :
-    (adjoinAt hostLocals hostItems material).locals =
-      hostLocals ++ material.locals := by
-  cases material
-  rfl
 
 /-- Capture-avoiding insertion of recursively typed material. -/
 def spliceAt (hostLocals : List Sig)

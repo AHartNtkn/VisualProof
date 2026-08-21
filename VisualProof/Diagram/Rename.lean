@@ -25,12 +25,6 @@ mutual
         .cons (head.renameWires rename) (tail.renameWires rename)
 end
 
-@[simp] theorem Region.locals_renameWires
-    (region : Region source) (rename : WireRenaming source target) :
-    (region.renameWires rename).locals = region.locals := by
-  cases region
-  rfl
-
 @[simp] theorem ItemSeq.renameWires_append
     (first second : ItemSeq source) (rename : WireRenaming source target) :
     (first.append second).renameWires rename =

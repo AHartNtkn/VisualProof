@@ -104,22 +104,37 @@ theorem equalityItems_right_mem_nil
             exact Fin.cases rfl (fun _ => rfl) index
           rw [portsEq, induction rightTail]
 
+/-- Equality-item presentations commute with a typed ambient wire
+equivalence when both ordered port lists commute with that equivalence. -/
+noncomputable def equalityItemsIso
+    (ambient : WireEquiv source target)
+    (sourceLeft sourceRight : Vars source signatures)
+    (targetLeft targetRight : Vars target signatures)
+    (leftEq : sourceLeft.map (fun wire => ambient wire) = targetLeft)
+    (rightEq : sourceRight.map (fun wire => ambient wire) = targetRight) :
+    ItemSeqIso ambient
+      (equalityItems sourceLeft sourceRight)
+      (equalityItems targetLeft targetRight) := by
+  let renamed := ItemSeqIso.renameWires
+    (equalityItems sourceLeft sourceRight)
+    WireRenaming.id ambient.toRenaming ambient (fun _ => rfl)
+  have sourceLeftEq :
+      sourceLeft.map (fun wire => WireRenaming.id wire) = sourceLeft := by
+    change sourceLeft.map (fun wire => wire) = sourceLeft
+    exact vars_map_id sourceLeft
+  have sourceRightEq :
+      sourceRight.map (fun wire => WireRenaming.id wire) = sourceRight := by
+    change sourceRight.map (fun wire => wire) = sourceRight
+    exact vars_map_id sourceRight
+  simpa only [ItemSeq.renameWires_id, equalityItems_renameWires,
+    sourceLeftEq, sourceRightEq, leftEq, rightEq] using renamed
+
 def Equalities : {signatures : List Sig} →
     Vars wires signatures → Vars wires signatures → Region wires
   | [], .nil, .nil => Region.blank wires
   | _ :: _, .cons left leftTail, .cons right rightTail =>
       (Region.singleton (.identity _ 2 (equalityPorts left right))).conjoin
         (Equalities leftTail rightTail)
-
-@[simp] theorem Equalities_locals
-    (left right : Vars wires signatures) :
-    (Equalities left right).locals = [] := by
-  induction left with
-  | nil => cases right; rfl
-  | cons leftHead leftTail induction =>
-      cases right with
-      | cons rightHead rightTail =>
-          simp [Equalities, induction]
 
 theorem Equalities_eq_ofItems
     (left right : Vars wires signatures) :
@@ -148,12 +163,6 @@ def instantiate (pattern : OpenDiagram arguments)
         (ports.map fun wire => wire.appendLeft pattern.external)
         (pattern.boundaryWire.map
           fun wire => Var.appendRight targetWires wire)))
-
-@[simp] theorem instantiate_locals (pattern : OpenDiagram arguments)
-    (ports : Vars targetWires arguments) :
-    (instantiate pattern ports).locals =
-      pattern.external ++ pattern.body.locals := by
-  simp [instantiate]
 
 mutual
   /-- Recursive instantiation under cuts. The selected relation remains an

@@ -76,7 +76,7 @@ def front (locals : List Sig)
     (signature : Sig) (wire : Var (outer ++ locals) signature) : Region outer :=
   .mk locals (.cons (.identity signature 1 (fun _ => wire)) items)
 
-theorem canonical (locals : List Sig)
+private theorem canonical (locals : List Sig)
     (items : ItemSeq (outer ++ locals))
     (signature : Sig) (wire : Var (outer ++ locals) signature)
     (sourceCanonical : (plain locals items).Canonical) :
@@ -174,24 +174,6 @@ theorem present_front_incidence_nonempty_iff
     exact ⟨(List.append_eq_nil_iff.mp empty).2,
       shiftedEmpty.mp (List.append_eq_nil_iff.mp empty).1⟩
 
-private theorem rootedTwo_of_sublist {source target : List RegionPath}
-    (sublist : source.Sublist target) (rooted : RegionPath.RootedTwo source) :
-    RegionPath.RootedTwo target := by
-  have sourceRoot := (RegionPath.rooted_iff_not_commonHead source).mp
-    ⟨rooted.nonempty, rooted.2⟩
-  have targetNonempty : target ≠ [] := by
-    obtain ⟨path, member⟩ := List.exists_mem_of_ne_nil source rooted.nonempty
-    intro empty
-    have := sublist.mem member
-    simp [empty] at this
-  have targetNoCommon : ¬RegionPath.CommonHead target := by
-    rintro ⟨index, allTarget⟩
-    exact sourceRoot.2
-      ⟨index, fun path member => allTarget path (sublist.mem member)⟩
-  exact ⟨Nat.le_trans rooted.1 sublist.length_le,
-    ((RegionPath.rooted_iff_not_commonHead target).mpr
-      ⟨targetNonempty, targetNoCommon⟩).2⟩
-
 private theorem incidencePaths_sublist (locals : List Sig)
     (items : ItemSeq (outer ++ locals))
     (signature : Sig) (selected : Var (outer ++ locals) signature)
@@ -238,7 +220,7 @@ private theorem fillCanonical
       have childCanonical := induction items selected leadingAndRest.2.1
       constructor
       · intro localIndex
-        exact rootedTwo_of_sublist
+        exact RegionPath.RootedTwo.of_sublist
           (fill_incidencePaths_sublist
             (.cut contextLocals leading trailing child)
             locals items signature selected
