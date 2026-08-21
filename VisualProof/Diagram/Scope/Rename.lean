@@ -766,6 +766,533 @@ theorem Region.incidencePaths_adjoinAt_host_sublist
       rw [renamed]
       exact List.sublist_append_left _ _
 
+private theorem ItemSeq.length_renameWires
+    (items : ItemSeq source) (rename : WireRenaming source target) :
+    (items.renameWires rename).length = items.length := by
+  let regionMotive : ∀ context, Region context → Prop := fun _ _ => True
+  let itemMotive : ∀ context, Item context → Prop := fun _ _ => True
+  let itemsMotive := fun (context : List Sig) (items : ItemSeq context) =>
+    ∀ {target} (rename : WireRenaming context target),
+      (items.renameWires rename).length = items.length
+  exact ItemSeq.rec (motive_1 := regionMotive) (motive_2 := itemMotive)
+    (motive_3 := itemsMotive)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (by intro _ _ _; rfl)
+    (by
+      intro _ head tail _ tailInduction _ rename
+      simp only [ItemSeq.renameWires, ItemSeq.length]
+      rw [tailInduction rename])
+    items rename
+
+private theorem ItemSeq.startsWith_of_mem_incidencePaths_lt
+    (items : ItemSeq wires) (wireIndex itemIndex : Nat)
+    {path : RegionPath} {index : Nat}
+    (member : path ∈ items.incidencePaths wireIndex itemIndex)
+    (starts : RegionPath.StartsWith index path) :
+    index < itemIndex + items.length := by
+  let regionMotive : ∀ context, Region context → Prop := fun _ _ => True
+  let itemMotive : ∀ context, Item context → Prop := fun _ _ => True
+  let itemsMotive := fun (context : List Sig) (items : ItemSeq context) =>
+    ∀ (wireIndex itemIndex : Nat) {path : RegionPath} {index : Nat},
+      path ∈ items.incidencePaths wireIndex itemIndex →
+        RegionPath.StartsWith index path →
+          index < itemIndex + items.length
+  exact ItemSeq.rec (motive_1 := regionMotive) (motive_2 := itemMotive)
+    (motive_3 := itemsMotive)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (by
+      intro _ wireIndex itemIndex path index member starts
+      simp only [ItemSeq.incidencePaths, List.not_mem_nil] at member)
+    (by
+      intro _ head tail _ tailInduction wireIndex itemIndex path index
+        member starts
+      simp only [ItemSeq.incidencePaths, List.mem_append] at member
+      rcases member with headMember | tailMember
+      · cases head with
+        | atom head ports =>
+            have pathEq := List.eq_of_mem_replicate headMember
+            subst path
+            simp [RegionPath.StartsWith] at starts
+        | identity signature arity ports =>
+            have pathEq := List.eq_of_mem_replicate headMember
+            subst path
+            simp [RegionPath.StartsWith] at starts
+        | cut body =>
+            simp only [Item.incidencePaths, List.mem_map] at headMember
+            obtain ⟨inner, _, rfl⟩ := headMember
+            rcases starts with ⟨rest, equality⟩
+            injection equality with indexEq
+            subst index
+            simp only [ItemSeq.length]
+            omega
+      · have bound := tailInduction wireIndex (itemIndex + 1)
+          tailMember starts
+        simp only [ItemSeq.length]
+        omega)
+    items wireIndex itemIndex member starts
+
+private theorem Region.incidencePaths_conjoin
+    (first second : Region outer) (wire : Var outer signature) :
+    (first.conjoin second).incidencePaths wire.index.val =
+      first.incidencePaths wire.index.val ++
+        (second.incidencePaths wire.index.val).map
+          (RegionPath.shiftHead first.items.length) := by
+  cases first with
+  | mk firstLocals firstItems =>
+      cases second with
+      | mk secondLocals secondItems =>
+          let firstWire := wire.appendLeft firstLocals
+          have firstPaths :
+              (firstItems.renameWires
+                (Region.conjoinLeftWire outer firstLocals
+                  secondLocals)).incidencePaths wire.index.val 0 =
+                firstItems.incidencePaths wire.index.val 0 := by
+            have renamed := ItemSeq.incidencePaths_renameWires_adjoinHost
+              (addedLocals := secondLocals) firstItems firstWire 0
+            simpa [firstWire, Region.adjoinHostWire] using renamed
+          have secondPaths :
+              (secondItems.renameWires
+                (Region.conjoinRightWire outer firstLocals
+                  secondLocals)).incidencePaths wire.index.val
+                    firstItems.length =
+                secondItems.incidencePaths wire.index.val
+                  firstItems.length := by
+            apply ItemSeq.incidencePaths_renameWires_of_index_iff
+            · simpa using (wire.appendLeft secondLocals).index.isLt
+            · simpa using
+                (wire.appendLeft (firstLocals ++ secondLocals)).index.isLt
+            · intro inheritedSignature inherited
+              apply Var.appendCases (left := outer) (right := secondLocals)
+                (motive := fun inherited =>
+                  (Region.conjoinRightWire outer firstLocals secondLocals
+                      inherited).index.val = wire.index.val ↔
+                    inherited.index.val = wire.index.val)
+              · intro outerSignature outerWire
+                simp [Region.conjoinRightWire]
+              · intro localSignature localWire
+                have wireBound := wire.index.isLt
+                have sourceIndex :
+                    (Var.appendRight outer localWire).index.val =
+                      outer.length + localWire.index.val := by simp
+                have targetIndex :
+                    (Region.conjoinRightWire outer firstLocals secondLocals
+                      (Var.appendRight outer localWire)).index.val =
+                        outer.length + firstLocals.length +
+                          localWire.index.val := by
+                  simp [Region.conjoinRightWire, Nat.add_assoc]
+                rw [sourceIndex, targetIndex]
+                constructor <;> intro equality <;> omega
+          simp only [Region.conjoin, Region.incidencePaths,
+            ItemSeq.incidencePaths_append, ItemSeq.length_renameWires,
+            Nat.zero_add, firstPaths, secondPaths]
+          have shifted := ItemSeq.incidencePaths_add_itemIndex secondItems
+            wire.index.val 0 firstItems.length
+          simp only [Nat.zero_add] at shifted
+          rw [shifted]
+          rfl
+
+/-- An inherited wire occurs in a conjunction exactly when it occurs in at
+least one component. -/
+private theorem Region.incidencePaths_conjoin_ne_nil_iff
+    (first second : Region outer) (wire : Var outer signature) :
+    (first.conjoin second).incidencePaths wire.index.val ≠ [] ↔
+      first.incidencePaths wire.index.val ≠ [] ∨
+        second.incidencePaths wire.index.val ≠ [] := by
+  rw [Region.incidencePaths_conjoin]
+  constructor
+  · intro combined
+    by_cases firstEmpty : first.incidencePaths wire.index.val = []
+    · exact Or.inr (fun secondEmpty => combined (by
+        simp [firstEmpty, secondEmpty]))
+    · exact Or.inl firstEmpty
+  · rintro (firstNonempty | secondNonempty) combinedEmpty
+    · exact firstNonempty (List.append_eq_nil_iff.mp combinedEmpty).1
+    · exact secondNonempty ((List.map_eq_nil_iff).mp
+        (List.append_eq_nil_iff.mp combinedEmpty).2)
+
+/-- Rooted two-endedness of an inherited wire in a conjunction is exactly
+supplied by either rooted component or by one incidence from each component.
+The characterization is independent of the number of leading items. -/
+private theorem Region.rootedTwo_incidencePaths_conjoin_iff
+    (first second : Region outer) (wire : Var outer signature) :
+    RegionPath.RootedTwo
+        ((first.conjoin second).incidencePaths wire.index.val) ↔
+      RegionPath.RootedTwo (first.incidencePaths wire.index.val) ∨
+      RegionPath.RootedTwo (second.incidencePaths wire.index.val) ∨
+        (first.incidencePaths wire.index.val ≠ [] ∧
+          second.incidencePaths wire.index.val ≠ []) := by
+  rw [Region.incidencePaths_conjoin]
+  let firstPaths := first.incidencePaths wire.index.val
+  let secondPaths := second.incidencePaths wire.index.val
+  let shiftedSecond := secondPaths.map
+    (RegionPath.shiftHead first.items.length)
+  change RegionPath.RootedTwo (firstPaths ++ shiftedSecond) ↔
+    RegionPath.RootedTwo firstPaths ∨ RegionPath.RootedTwo secondPaths ∨
+      (firstPaths ≠ [] ∧ secondPaths ≠ [])
+  have shiftedRooted : RegionPath.RootedTwo shiftedSecond ↔
+      RegionPath.RootedTwo secondPaths :=
+    RegionPath.RootedTwo.map_shiftHead_iff first.items.length secondPaths
+  have shiftedNonempty : shiftedSecond ≠ [] ↔ secondPaths ≠ [] := by
+    exact not_congr (List.map_eq_nil_iff
+      (f := RegionPath.shiftHead first.items.length) (l := secondPaths))
+  constructor
+  · intro combinedRooted
+    by_cases firstRooted : RegionPath.RootedTwo firstPaths
+    · exact Or.inl firstRooted
+    · by_cases secondRooted : RegionPath.RootedTwo secondPaths
+      · exact Or.inr (Or.inl secondRooted)
+      · apply Or.inr (Or.inr ?_)
+        constructor
+        · intro firstEmpty
+          rw [firstEmpty, List.nil_append] at combinedRooted
+          exact secondRooted (shiftedRooted.mp combinedRooted)
+        · intro secondEmpty
+          have shiftedEmpty : shiftedSecond = [] := by
+            simp [shiftedSecond, secondEmpty]
+          rw [shiftedEmpty, List.append_nil] at combinedRooted
+          exact firstRooted combinedRooted
+  · intro source
+    rcases source with firstRooted | secondRooted | bothNonempty
+    · exact RegionPath.RootedTwo.of_sublist
+        (List.sublist_append_left _ _) firstRooted
+    · exact RegionPath.RootedTwo.of_sublist
+        (List.sublist_append_right _ _)
+        (shiftedRooted.mpr secondRooted)
+    · have shiftedSecondNonempty : shiftedSecond ≠ [] :=
+          shiftedNonempty.mpr bothNonempty.2
+      have combinedNonempty : firstPaths ++ shiftedSecond ≠ [] :=
+        List.append_ne_nil_of_left_ne_nil bothNonempty.1 _
+      have noCommon : ¬RegionPath.CommonHead
+          (firstPaths ++ shiftedSecond) := by
+        rintro ⟨index, allStart⟩
+        obtain ⟨firstPath, firstMember⟩ :=
+          List.exists_mem_of_ne_nil firstPaths bothNonempty.1
+        obtain ⟨secondPath, secondMember⟩ :=
+          List.exists_mem_of_ne_nil secondPaths bothNonempty.2
+        have firstStarts := allStart firstPath
+          (List.mem_append_left _ firstMember)
+        have firstMember' : firstPath ∈
+            first.items.incidencePaths wire.index.val 0 := by
+          simpa only [firstPaths, Region.incidencePaths_eq_items] using
+            firstMember
+        have firstBound := ItemSeq.startsWith_of_mem_incidencePaths_lt
+          first.items wire.index.val 0 firstMember' firstStarts
+        have shiftedMember :
+            RegionPath.shiftHead first.items.length secondPath ∈
+              shiftedSecond := by
+          exact List.mem_map.mpr ⟨secondPath, secondMember, rfl⟩
+        have secondStarts := allStart
+          (RegionPath.shiftHead first.items.length secondPath)
+          (List.mem_append_right _ shiftedMember)
+        cases secondPath with
+        | nil =>
+            simp [RegionPath.shiftHead, RegionPath.StartsWith] at secondStarts
+        | cons secondIndex secondTail =>
+            rcases secondStarts with ⟨rest, equality⟩
+            injection equality with indexEq
+            omega
+      exact ⟨by
+        have firstPositive := List.length_pos_iff.mpr bothNonempty.1
+        have secondPositive := List.length_pos_iff.mpr shiftedSecondNonempty
+        simp only [List.length_append]
+        omega,
+        ((RegionPath.rooted_iff_not_commonHead
+          (firstPaths ++ shiftedSecond)).mpr
+            ⟨combinedNonempty, noCommon⟩).2⟩
+
+private theorem Region.rootedTwo_conjoin_firstLocal_iff
+    (firstItems : ItemSeq (outer ++ firstLocals))
+    (second : Region outer) (localIndex : Fin firstLocals.length) :
+    RegionPath.RootedTwo
+        (((Region.mk firstLocals firstItems).conjoin second).incidencePaths
+          (outer.length + localIndex.val)) ↔
+      RegionPath.RootedTwo
+        (firstItems.incidencePaths (outer.length + localIndex.val) 0) := by
+  cases second with
+  | mk secondLocals secondItems =>
+      let firstWire := Var.appendRight outer (Var.ofIndex localIndex)
+      have firstIndex : firstWire.index.val =
+          outer.length + localIndex.val := by simp [firstWire]
+      have firstPaths :
+          (firstItems.renameWires
+            (Region.conjoinLeftWire outer firstLocals
+              secondLocals)).incidencePaths firstWire.index.val 0 =
+            firstItems.incidencePaths firstWire.index.val 0 := by
+        have renamed := ItemSeq.incidencePaths_renameWires_adjoinHost
+          (addedLocals := secondLocals) firstItems firstWire 0
+        simpa [Region.adjoinHostWire] using renamed
+      have secondEmpty :
+          (secondItems.renameWires
+            (Region.conjoinRightWire outer firstLocals
+              secondLocals)).incidencePaths firstWire.index.val
+                firstItems.length = [] := by
+        apply ItemSeq.incidencePaths_renameWires_eq_nil_of_no_preimage
+        · simpa using (firstWire.appendLeft secondLocals).index.isLt
+        · intro inheritedSignature inherited
+          apply Var.appendCases (left := outer) (right := secondLocals)
+            (motive := fun inherited =>
+              (Region.conjoinRightWire outer firstLocals secondLocals
+                inherited).index.val ≠ firstWire.index.val)
+          · intro outerSignature outerWire
+            have outerBound := outerWire.index.isLt
+            have mappedIndex :
+                (Region.conjoinRightWire outer firstLocals secondLocals
+                  (outerWire.appendLeft secondLocals)).index.val =
+                    outerWire.index.val := by
+              simp [Region.conjoinRightWire]
+            rw [mappedIndex, firstIndex]
+            omega
+          · intro localSignature localWire
+            have localBound := localIndex.isLt
+            simp [Region.conjoinRightWire, firstIndex]
+            omega
+      rw [← firstIndex]
+      simp only [Region.conjoin, Region.incidencePaths,
+        ItemSeq.incidencePaths_append, ItemSeq.length_renameWires,
+        Nat.zero_add]
+      rw [firstPaths, secondEmpty, List.append_nil]
+
+private theorem Region.rootedTwo_conjoin_secondLocal_iff
+    (first : Region outer)
+    (secondItems : ItemSeq (outer ++ secondLocals))
+    (localIndex : Fin secondLocals.length) :
+    RegionPath.RootedTwo
+        ((first.conjoin (Region.mk secondLocals secondItems)).incidencePaths
+          (outer.length + first.locals.length + localIndex.val)) ↔
+      RegionPath.RootedTwo
+        (secondItems.incidencePaths (outer.length + localIndex.val) 0) := by
+  cases first with
+  | mk firstLocals firstItems =>
+      change RegionPath.RootedTwo
+          (((Region.mk firstLocals firstItems).conjoin
+            (Region.mk secondLocals secondItems)).incidencePaths
+              (outer.length + firstLocals.length + localIndex.val)) ↔
+        RegionPath.RootedTwo
+          (secondItems.incidencePaths (outer.length + localIndex.val) 0)
+      let secondWire := Var.appendRight outer (Var.ofIndex localIndex)
+      let combinedWire := Var.appendRight outer
+        (Var.appendRight firstLocals (Var.ofIndex localIndex))
+      have secondIndex : secondWire.index.val =
+          outer.length + localIndex.val := by simp [secondWire]
+      have combinedIndex : combinedWire.index.val =
+          outer.length + firstLocals.length + localIndex.val := by
+        simp [combinedWire, Nat.add_assoc]
+      have firstEmpty :
+          (firstItems.renameWires
+            (Region.conjoinLeftWire outer firstLocals
+              secondLocals)).incidencePaths combinedWire.index.val 0 = [] := by
+        apply ItemSeq.incidencePaths_renameWires_eq_nil_of_no_preimage
+        · exact combinedWire.index.isLt
+        · intro inheritedSignature inherited
+          rw [Region.conjoinLeftWire_index_val]
+          have inheritedBound := inherited.index.isLt
+          simp only [List.length_append] at inheritedBound
+          rw [combinedIndex]
+          omega
+      have secondPaths :
+          (secondItems.renameWires
+            (Region.conjoinRightWire outer firstLocals
+              secondLocals)).incidencePaths combinedWire.index.val
+                firstItems.length =
+            secondItems.incidencePaths secondWire.index.val
+              firstItems.length := by
+        apply ItemSeq.incidencePaths_renameWires_of_index_iff
+        · exact secondWire.index.isLt
+        · exact combinedWire.index.isLt
+        · intro inheritedSignature inherited
+          apply Var.appendCases (left := outer) (right := secondLocals)
+            (motive := fun inherited =>
+              (Region.conjoinRightWire outer firstLocals secondLocals
+                    inherited).index.val = combinedWire.index.val ↔
+                inherited.index.val = secondWire.index.val)
+          · intro outerSignature outerWire
+            have outerBound := outerWire.index.isLt
+            have mappedIndex :
+                (Region.conjoinRightWire outer firstLocals secondLocals
+                  (outerWire.appendLeft secondLocals)).index.val =
+                    outerWire.index.val := by
+              simp [Region.conjoinRightWire]
+            have sourceIndex :
+                (outerWire.appendLeft secondLocals).index.val =
+                  outerWire.index.val := by simp
+            rw [mappedIndex, sourceIndex, combinedIndex, secondIndex]
+            constructor <;> intro equality <;> omega
+          · intro localSignature localWire
+            simp [Region.conjoinRightWire, combinedIndex, secondIndex,
+              Nat.add_assoc]
+      rw [← combinedIndex, ← secondIndex]
+      simp only [Region.conjoin, Region.incidencePaths,
+        ItemSeq.incidencePaths_append, ItemSeq.length_renameWires,
+        Nat.zero_add]
+      rw [firstEmpty, List.nil_append, secondPaths]
+      simpa only [Nat.zero_add] using
+        (ItemSeq.rootedTwo_incidencePaths_add_itemIndex_iff secondItems
+          secondWire.index.val 0 firstItems.length)
+
+/-- Conjunction is canonical exactly when both independently owned regions
+are canonical. -/
+private theorem Region.Canonical.conjoin_iff
+    (first second : Region outer) :
+    (first.conjoin second).Canonical ↔
+      first.Canonical ∧ second.Canonical := by
+  cases first with
+  | mk firstLocals firstItems =>
+      cases second with
+      | mk secondLocals secondItems =>
+          have childrenIff :
+              ((firstItems.renameWires
+                  (Region.conjoinLeftWire outer firstLocals
+                    secondLocals)).append
+                (secondItems.renameWires
+                  (Region.conjoinRightWire outer firstLocals
+                    secondLocals))).ChildrenCanonical ↔
+                firstItems.ChildrenCanonical ∧
+                  secondItems.ChildrenCanonical := by
+            rw [ItemSeq.childrenCanonical_append,
+              ItemSeq.ChildrenCanonical.renameWires_iff,
+              ItemSeq.ChildrenCanonical.renameWires_iff]
+          constructor
+          · intro combinedCanonical
+            have combinedRoots := combinedCanonical.1
+            have componentChildren := childrenIff.mp combinedCanonical.2
+            constructor
+            · constructor
+              · intro localIndex
+                let combinedIndex : Fin
+                    (firstLocals ++ secondLocals).length :=
+                  ⟨localIndex.val, by
+                    simp only [List.length_append]
+                    exact Nat.lt_of_lt_of_le localIndex.isLt
+                      (Nat.le_add_right _ _)⟩
+                have combinedRoot := combinedRoots combinedIndex
+                exact (Region.rootedTwo_conjoin_firstLocal_iff firstItems
+                  (Region.mk secondLocals secondItems) localIndex).mp (by
+                    simpa [combinedIndex] using combinedRoot)
+              · exact componentChildren.1
+            · constructor
+              · intro localIndex
+                let combinedIndex : Fin
+                    (firstLocals ++ secondLocals).length :=
+                  ⟨firstLocals.length + localIndex.val, by
+                    simp only [List.length_append]
+                    omega⟩
+                have combinedRoot := combinedRoots combinedIndex
+                exact (Region.rootedTwo_conjoin_secondLocal_iff
+                  (Region.mk firstLocals firstItems) secondItems
+                    localIndex).mp (by
+                      simpa [combinedIndex, Nat.add_assoc] using combinedRoot)
+              · exact componentChildren.2
+          · rintro ⟨firstCanonical, secondCanonical⟩
+            constructor
+            · intro combinedIndex
+              by_cases inFirst : combinedIndex.val < firstLocals.length
+              · let firstIndex : Fin firstLocals.length :=
+                  ⟨combinedIndex.val, inFirst⟩
+                have firstRoot := firstCanonical.1 firstIndex
+                exact (Region.rootedTwo_conjoin_firstLocal_iff firstItems
+                  (Region.mk secondLocals secondItems) firstIndex).mpr (by
+                    simpa [firstIndex] using firstRoot)
+              · have inSecond :
+                    combinedIndex.val - firstLocals.length <
+                      secondLocals.length := by
+                  have bound := combinedIndex.isLt
+                  simp only [List.length_append] at bound
+                  omega
+                let secondIndex : Fin secondLocals.length :=
+                  ⟨combinedIndex.val - firstLocals.length, inSecond⟩
+                have secondRoot := secondCanonical.1 secondIndex
+                have shifted :=
+                  (Region.rootedTwo_conjoin_secondLocal_iff
+                    (Region.mk firstLocals firstItems) secondItems
+                      secondIndex).mpr (by
+                        simpa [secondIndex] using secondRoot)
+                have indexEq : firstLocals.length + secondIndex.val =
+                    combinedIndex.val := by
+                  simp only [secondIndex]
+                  exact Nat.add_sub_of_le (Nat.le_of_not_gt inFirst)
+                change RegionPath.RootedTwo
+                  (((Region.mk firstLocals firstItems).conjoin
+                    (Region.mk secondLocals secondItems)).incidencePaths
+                      (outer.length + combinedIndex.val))
+                simpa only [Region.locals, indexEq, Nat.add_assoc] using shifted
+            · exact childrenIff.mpr
+                ⟨firstCanonical.2, secondCanonical.2⟩
+
+/-- Conjoining two component transformations preserves their complete
+structural scope invariant. In particular, the source and target leading
+regions may have different item counts and hence shift their tail paths by
+different offsets. -/
+theorem Region.conjoin_preserves_scope
+    (sourceFirst sourceSecond targetFirst targetSecond : Region outer)
+    (firstCanonical : sourceFirst.Canonical → targetFirst.Canonical)
+    (secondCanonical : sourceSecond.Canonical → targetSecond.Canonical)
+    (firstNonempty : ∀ {signature} (wire : Var outer signature),
+      sourceFirst.incidencePaths wire.index.val ≠ [] ↔
+        targetFirst.incidencePaths wire.index.val ≠ [])
+    (secondNonempty : ∀ {signature} (wire : Var outer signature),
+      sourceSecond.incidencePaths wire.index.val ≠ [] ↔
+        targetSecond.incidencePaths wire.index.val ≠ [])
+    (firstRooted : ∀ {signature} (wire : Var outer signature),
+      RegionPath.RootedTwo
+          (sourceFirst.incidencePaths wire.index.val) →
+        RegionPath.RootedTwo
+          (targetFirst.incidencePaths wire.index.val))
+    (secondRooted : ∀ {signature} (wire : Var outer signature),
+      RegionPath.RootedTwo
+          (sourceSecond.incidencePaths wire.index.val) →
+        RegionPath.RootedTwo
+          (targetSecond.incidencePaths wire.index.val)) :
+    ((sourceFirst.conjoin sourceSecond).Canonical →
+        (targetFirst.conjoin targetSecond).Canonical) ∧
+      ∀ {signature} (wire : Var outer signature),
+        ((sourceFirst.conjoin sourceSecond).incidencePaths
+              wire.index.val ≠ [] ↔
+            (targetFirst.conjoin targetSecond).incidencePaths
+              wire.index.val ≠ []) ∧
+          (RegionPath.RootedTwo
+              ((sourceFirst.conjoin sourceSecond).incidencePaths
+                wire.index.val) →
+            RegionPath.RootedTwo
+              ((targetFirst.conjoin targetSecond).incidencePaths
+                wire.index.val)) := by
+  constructor
+  · intro sourceCanonical
+    have sourceComponents :=
+      (Region.Canonical.conjoin_iff sourceFirst sourceSecond).mp
+        sourceCanonical
+    exact (Region.Canonical.conjoin_iff targetFirst targetSecond).mpr
+      ⟨firstCanonical sourceComponents.1,
+        secondCanonical sourceComponents.2⟩
+  · intro signature wire
+    constructor
+    · rw [Region.incidencePaths_conjoin_ne_nil_iff,
+        Region.incidencePaths_conjoin_ne_nil_iff]
+      constructor
+      · rintro (firstOccurs | secondOccurs)
+        · exact Or.inl ((firstNonempty wire).mp firstOccurs)
+        · exact Or.inr ((secondNonempty wire).mp secondOccurs)
+      · rintro (firstOccurs | secondOccurs)
+        · exact Or.inl ((firstNonempty wire).mpr firstOccurs)
+        · exact Or.inr ((secondNonempty wire).mpr secondOccurs)
+    · intro sourceRooted
+      have sourceCases :=
+        (Region.rootedTwo_incidencePaths_conjoin_iff sourceFirst
+          sourceSecond wire).mp sourceRooted
+      apply (Region.rootedTwo_incidencePaths_conjoin_iff targetFirst
+        targetSecond wire).mpr
+      rcases sourceCases with firstIsRooted | secondIsRooted | bothOccur
+      · exact Or.inl (firstRooted wire firstIsRooted)
+      · exact Or.inr (Or.inl (secondRooted wire secondIsRooted))
+      · exact Or.inr (Or.inr ⟨
+          (firstNonempty wire).mp bothOccur.1,
+          (secondNonempty wire).mp bothOccur.2⟩)
+
 /-- Appending a zero-local item region to a canonical region preserves
 canonicality when the appended items have canonical children. -/
 theorem Region.Canonical.conjoinRightItems

@@ -525,17 +525,16 @@ private theorem instantiate_renameWires
     _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems_renameWires]
   rw [bodyEmbedding_natural, actualMap, patternMap]
 
-/-- Every actual port of an instantiation has an equality incidence. -/
-private theorem instantiate_port_incidence_nonempty
+/-- Every actual port of an instantiation has a root-level equality
+incidence. -/
+private theorem instantiate_port_incidence_mem_nil
     (pattern : OpenDiagram arguments)
     (ports : Vars targetWires arguments)
     (position : Fin arguments.length) :
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-      pattern ports).incidencePaths (ports.get position).index.val ≠ [] := by
+    [] ∈ (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      pattern ports).incidencePaths (ports.get position).index.val := by
   rw [instantiate_eq_presentation]
   simp only [Region.incidencePaths, items, ItemSeq.incidencePaths_append]
-  intro empty
-  have equalityEmpty := (List.append_eq_nil_iff.mp empty).2
   have selected := equalityItems_left_mem_nil
     (ports.map fun wire => actualEmbedding pattern targetWires wire)
     (pattern.boundaryWire.map
@@ -549,7 +548,17 @@ private theorem instantiate_port_incidence_nonempty
     simp [actualEmbedding, equalityEmbedding, WireRenaming.comp,
       Region.conjoinRightWire, Region.adjoinMaterialWire, locals]
   rw [selectedIndex] at selected
-  exact (List.ne_nil_of_mem selected) (by simpa using equalityEmpty)
+  exact List.mem_append_right _ (by
+    simpa only [Nat.zero_add] using selected)
+
+/-- Every actual port of an instantiation has an equality incidence. -/
+private theorem instantiate_port_incidence_nonempty
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments)
+    (position : Fin arguments.length) :
+    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      pattern ports).incidencePaths (ports.get position).index.val ≠ [] :=
+  List.ne_nil_of_mem (instantiate_port_incidence_mem_nil pattern ports position)
 
 private theorem Vars.countIndex_map_zero_of_lower
     (variables : Vars source signatures)
@@ -985,6 +994,498 @@ theorem equatesIdentityBoundary
       exposedExternalTwoEnded
   simpa only [Equates, exposureOccurrence, exposedEq, normalized] using
     equivalent
+
+private theorem Vars.exists_get_index_of_countIndex_pos
+    (variables : Vars context signatures) (wireIndex : Nat)
+    (positive : 0 < variables.countIndex wireIndex) :
+    ∃ position : Fin signatures.length,
+      (variables.get position).index.val = wireIndex := by
+  induction variables with
+  | nil => simp [Vars.countIndex] at positive
+  | @cons signature rest head tail induction =>
+      by_cases headEq : head.index.val = wireIndex
+      · exact ⟨0, headEq⟩
+      · have tailPositive : 0 < tail.countIndex wireIndex := by
+          simpa [Vars.countIndex, headEq] using positive
+        obtain ⟨position, positionEq⟩ := induction tailPositive
+        exact ⟨position.succ, by
+          simpa only [Vars.get] using positionEq⟩
+
+private theorem instantiate_incidence_mem_nil_of_nonempty
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments)
+    (wire : Var targetWires signature)
+    (nonempty :
+      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        pattern ports).incidencePaths wire.index.val ≠ []) :
+    [] ∈ (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      pattern ports).incidencePaths wire.index.val := by
+  have positive := (instantiate_incidence_nonempty_iff pattern ports wire).mp
+    nonempty
+  obtain ⟨position, positionEq⟩ :=
+    Vars.exists_get_index_of_countIndex_pos ports wire.index.val positive
+  have rootIncidence := instantiate_port_incidence_mem_nil pattern ports position
+  rw [positionEq] at rootIncidence
+  exact rootIncidence
+
+private theorem instantiate_rootedTwo_iff
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments)
+    (wire : Var targetWires signature) :
+    RegionPath.RootedTwo
+        ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          pattern ports).incidencePaths wire.index.val) ↔
+      2 ≤ ports.countIndex wire.index.val := by
+  constructor
+  · intro rooted
+    have lengthBound := rooted.1
+    rw [instantiate_incidencePaths_length] at lengthBound
+    exact lengthBound
+  · intro countBound
+    have nonempty :
+        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          pattern ports).incidencePaths wire.index.val ≠ [] :=
+      (instantiate_incidence_nonempty_iff pattern ports wire).mpr (by omega)
+    constructor
+    · rw [instantiate_incidencePaths_length]
+      exact countBound
+    · exact RegionPath.deepestCommonAncestor_eq_nil_of_mem_nil _
+        (instantiate_incidence_mem_nil_of_nonempty pattern ports wire nonempty)
+
+private theorem Region.incidencePaths_adjoinAt_nil
+    (material : Region (outer ++ hostLocals))
+    (wire : Var (outer ++ hostLocals) signature) :
+    (Region.adjoinAt hostLocals .nil material).incidencePaths
+        wire.index.val =
+      material.incidencePaths wire.index.val := by
+  cases material with
+  | mk addedLocals addedItems =>
+      let materialWire := wire.appendLeft addedLocals
+      have renamed := ItemSeq.incidencePaths_renameWires_adjoinMaterial
+        (outer := outer) (hostLocals := hostLocals)
+        (addedLocals := addedLocals) addedItems materialWire 0
+      simpa [Region.adjoinAt, Region.incidencePaths, materialWire] using renamed
+
+private theorem Region.singleton_cut_canonical_iff
+    (body : Region wires) :
+    (Region.singleton (.cut body)).Canonical ↔ body.Canonical := by
+  let appendNil : WireRenaming wires (wires ++ []) :=
+    ⟨fun wire => wire.appendLeft []⟩
+  change (Region.ofItems (.cons (.cut body) .nil)).Canonical ↔
+    body.Canonical
+  simp only [Region.ofItems, Region.Canonical, ItemSeq.ChildrenCanonical,
+    ItemSeq.renameWires, Item.renameWires, Item.ChildrenCanonical, and_true]
+  constructor
+  · rintro ⟨_, childCanonical⟩
+    exact (Region.Canonical.renameWires_iff body appendNil).mp childCanonical
+  · intro childCanonical
+    constructor
+    · intro localIndex
+      exact Fin.elim0 localIndex
+    · exact (Region.Canonical.renameWires_iff body appendNil).mpr
+        childCanonical
+
+private structure ScopePreservation
+    (source target : Region wires) : Prop where
+  canonical : source.Canonical → target.Canonical
+  incidenceNonempty : ∀ {signature} (wire : Var wires signature),
+    source.incidencePaths wire.index.val ≠ [] ↔
+      target.incidencePaths wire.index.val ≠ []
+  rootedTwo : ∀ {signature} (wire : Var wires signature),
+    RegionPath.RootedTwo (source.incidencePaths wire.index.val) →
+      RegionPath.RootedTwo (target.incidencePaths wire.index.val)
+
+mutual
+  private def normalizedRegion
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Region sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : RegionSites operation data evidence) :
+      { normalized : Region common //
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          (identityBoundary pattern) frame.sourceKeep frame.selected source
+            normalized } :=
+    match sites with
+    | .mk childSites =>
+        let childOutput := normalizedItems pattern _ childSites
+        ⟨Region.adjoinAt _ .nil childOutput.1,
+          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+            childOutput.2⟩
+  termination_by structural sites
+
+  private def normalizedItems
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : ItemSeq sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemsSites operation data evidence) :
+      { normalized : Region common //
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          (identityBoundary pattern) frame.sourceKeep frame.selected source
+            normalized } :=
+    match sites with
+    | .nil _ =>
+        ⟨Region.blank common,
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil⟩
+    | .cons itemSites tailSites =>
+        let itemOutput := normalizedItem pattern _ itemSites
+        let tailOutput := normalizedItems pattern _ tailSites
+        ⟨itemOutput.1.conjoin tailOutput.1,
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+            itemOutput.2 tailOutput.2⟩
+  termination_by structural sites
+
+  private def normalizedItem
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Item sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemSites operation data evidence) :
+      { normalized : Region common //
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          (identityBoundary pattern) frame.sourceKeep frame.selected source
+            normalized } :=
+    match sites with
+    | .atom head ports =>
+        ⟨Region.singleton (.atom head ports),
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+            head ports⟩
+    | .selectedAtom ports _ =>
+        ⟨_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (identityBoundary pattern) ports,
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+            ports⟩
+    | .identity signature arity ports =>
+        ⟨Region.singleton (.identity signature arity ports),
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+            signature arity ports⟩
+    | .cut childSites =>
+        let childOutput := normalizedRegion pattern _ childSites
+        ⟨Region.singleton (.cut childOutput.1),
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+            childOutput.2⟩
+  termination_by structural sites
+end
+
+private theorem Region.incidencePaths_singleton_cut
+    (body : Region wires) (wire : Var wires signature) :
+    (Region.singleton (.cut body)).incidencePaths wire.index.val =
+      (body.incidencePaths wire.index.val).map (List.cons 0) := by
+  let appendNil : WireRenaming wires (wires ++ []) :=
+    ⟨fun inherited => inherited.appendLeft []⟩
+  have renamed := ItemSeq.incidencePaths_renameWires_preservesIndex
+    (.cons (.cut body) .nil) appendNil (by simp)
+    (by intro inheritedSignature inherited; simp [appendNil]) wire 0
+  simpa [Region.singleton, Region.ofItems, Region.incidencePaths,
+    ItemSeq.incidencePaths, Item.incidencePaths, appendNil] using renamed
+
+private theorem Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil
+    (material : Region (outer ++ hostLocals))
+    (canonical : (Region.adjoinAt hostLocals .nil material).Canonical)
+    (localIndex : Fin hostLocals.length) :
+    RegionPath.RootedTwo
+      (material.incidencePaths (outer.length + localIndex.val)) := by
+  cases material with
+  | mk addedLocals addedItems =>
+      let localWire := Var.appendRight outer (Var.ofIndex localIndex)
+      let combinedIndex : Fin (hostLocals ++ addedLocals).length :=
+        ⟨localIndex.val, by
+          simp only [List.length_append]
+          exact Nat.lt_of_lt_of_le localIndex.isLt
+            (Nat.le_add_right _ _)⟩
+      have sourceRoot := canonical.1 combinedIndex
+      have paths := Region.incidencePaths_adjoinAt_nil
+        (Region.mk addedLocals addedItems) localWire
+      rw [show localWire.index.val = outer.length + localIndex.val by
+        simp [localWire]] at paths
+      rw [← paths]
+      simpa [Region.adjoinAt, Region.Canonical, localWire, combinedIndex] using
+        sourceRoot
+
+mutual
+  private theorem normalizedRegion_scope
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Region sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : RegionSites operation data evidence) :
+      ScopePreservation result (normalizedRegion pattern evidence sites).1 :=
+    match sites with
+    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
+        childSites => by
+        let childOutput := normalizedItems pattern childEvidence childSites
+        let childPreservation :=
+          normalizedItems_scope pattern childEvidence childSites
+        change ScopePreservation
+          (Region.adjoinAt locals .nil childResult)
+          (Region.adjoinAt locals .nil childOutput.1)
+        constructor
+        · intro sourceCanonical
+          have sourceChildCanonical : childResult.Canonical :=
+            Region.Canonical.material_of_adjoinAt locals .nil childResult
+              sourceCanonical
+          have targetChildCanonical : childOutput.1.Canonical :=
+            childPreservation.canonical sourceChildCanonical
+          apply Region.Canonical.adjoinAt_of_material_roots locals .nil
+            childOutput.1 True.intro targetChildCanonical
+          intro localIndex
+          let localWire := Var.appendRight common (Var.ofIndex localIndex)
+          have sourceRoot : RegionPath.RootedTwo
+              (childResult.incidencePaths localWire.index.val) := by
+            simpa [localWire] using
+              Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil
+                childResult sourceCanonical localIndex
+          have targetRoot := childPreservation.rootedTwo localWire sourceRoot
+          simpa [localWire] using targetRoot
+        · intro signature wire
+          let childWire := wire.appendLeft locals
+          have sourcePaths := Region.incidencePaths_adjoinAt_nil childResult
+            childWire
+          have targetPaths := Region.incidencePaths_adjoinAt_nil childOutput.1
+            childWire
+          have childIndex : childWire.index.val = wire.index.val := by
+            simp [childWire]
+          rw [childIndex] at sourcePaths targetPaths
+          rw [sourcePaths, targetPaths]
+          simpa only [childWire, Var.index_appendLeft] using
+            childPreservation.incidenceNonempty childWire
+        · intro signature wire sourceRoot
+          let childWire := wire.appendLeft locals
+          have sourcePaths := Region.incidencePaths_adjoinAt_nil childResult
+            childWire
+          have targetPaths := Region.incidencePaths_adjoinAt_nil childOutput.1
+            childWire
+          have childIndex : childWire.index.val = wire.index.val := by
+            simp [childWire]
+          rw [childIndex] at sourcePaths targetPaths
+          rw [sourcePaths] at sourceRoot
+          rw [targetPaths]
+          simpa only [childWire, Var.index_appendLeft] using
+            childPreservation.rootedTwo childWire (by
+              simpa only [childWire, Var.index_appendLeft] using sourceRoot)
+  termination_by structural sites
+
+  private theorem normalizedItems_scope
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : ItemSeq sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemsSites operation data evidence) :
+      ScopePreservation result (normalizedItems pattern evidence sites).1 :=
+    match sites with
+    | .nil _ => by
+        change ScopePreservation (Region.blank common) (Region.blank common)
+        exact {
+          canonical := fun canonical => canonical
+          incidenceNonempty := fun _ => Iff.rfl
+          rootedTwo := fun _ rooted => rooted
+        }
+    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
+        itemEvidence tailEvidence itemSites tailSites => by
+        let itemOutput := normalizedItem pattern itemEvidence itemSites
+        let tailOutput := normalizedItems pattern tailEvidence tailSites
+        let itemPreservation := normalizedItem_scope pattern itemEvidence
+          itemSites
+        let tailPreservation := normalizedItems_scope pattern tailEvidence
+          tailSites
+        change ScopePreservation (itemResult.conjoin tailResult)
+          (itemOutput.1.conjoin tailOutput.1)
+        have combined := Region.conjoin_preserves_scope itemResult tailResult
+          itemOutput.1 tailOutput.1 itemPreservation.canonical
+            tailPreservation.canonical itemPreservation.incidenceNonempty
+              tailPreservation.incidenceNonempty itemPreservation.rootedTwo
+                tailPreservation.rootedTwo
+        exact {
+          canonical := combined.1
+          incidenceNonempty := fun wire => (combined.2 wire).1
+          rootedTwo := fun wire => (combined.2 wire).2
+        }
+  termination_by structural sites
+
+  private theorem normalizedItem_scope
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Item sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemSites operation data evidence) :
+      ScopePreservation result (normalizedItem pattern evidence sites).1 :=
+    match sites with
+    | .atom head ports => by
+        change ScopePreservation (Region.singleton (.atom head ports))
+          (Region.singleton (.atom head ports))
+        exact {
+          canonical := fun canonical => canonical
+          incidenceNonempty := fun _ => Iff.rfl
+          rootedTwo := fun _ rooted => rooted
+        }
+    | .selectedAtom ports _ => by
+        change ScopePreservation
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            pattern ports)
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (identityBoundary pattern) ports)
+        constructor
+        · intro _
+          exact
+            _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+              (identityBoundary pattern) ports
+        · intro signature wire
+          rw [instantiate_incidence_nonempty_iff,
+            instantiate_incidence_nonempty_iff]
+        · intro signature wire sourceRoot
+          rw [instantiate_rootedTwo_iff] at sourceRoot ⊢
+          exact sourceRoot
+    | .identity signature arity ports => by
+        change ScopePreservation
+          (Region.singleton (.identity signature arity ports))
+          (Region.singleton (.identity signature arity ports))
+        exact {
+          canonical := fun canonical => canonical
+          incidenceNonempty := fun _ => Iff.rfl
+          rootedTwo := fun _ rooted => rooted
+        }
+    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
+        childSites => by
+        let childOutput := normalizedRegion pattern childEvidence childSites
+        let childPreservation := normalizedRegion_scope pattern childEvidence
+          childSites
+        change ScopePreservation (Region.singleton (.cut childResult))
+          (Region.singleton (.cut childOutput.1))
+        constructor
+        · intro sourceCanonical
+          apply (Region.singleton_cut_canonical_iff childOutput.1).mpr
+          exact childPreservation.canonical
+            ((Region.singleton_cut_canonical_iff childResult).mp
+              sourceCanonical)
+        · intro signature wire
+          rw [Region.incidencePaths_singleton_cut,
+            Region.incidencePaths_singleton_cut]
+          constructor
+          · intro sourceNonempty
+            have childSourceNonempty :
+                childResult.incidencePaths wire.index.val ≠ [] := by
+              intro sourceEmpty
+              exact sourceNonempty
+                ((List.map_eq_nil_iff).mpr sourceEmpty)
+            have childTargetNonempty :=
+              (childPreservation.incidenceNonempty wire).mp
+                childSourceNonempty
+            intro targetEmpty
+            exact childTargetNonempty
+              ((List.map_eq_nil_iff).mp targetEmpty)
+          · intro targetNonempty
+            have childTargetNonempty :
+                childOutput.1.incidencePaths wire.index.val ≠ [] := by
+              intro targetEmpty
+              exact targetNonempty
+                ((List.map_eq_nil_iff).mpr targetEmpty)
+            have childSourceNonempty :=
+              (childPreservation.incidenceNonempty wire).mpr
+                childTargetNonempty
+            intro sourceEmpty
+            exact childSourceNonempty
+              ((List.map_eq_nil_iff).mp sourceEmpty)
+        · intro signature wire sourceRoot
+          have sameEmpty :
+              childResult.incidencePaths wire.index.val = [] ↔
+                childOutput.1.incidencePaths wire.index.val = [] := by
+            constructor
+            · intro sourceEmpty
+              by_cases targetEmpty :
+                  childOutput.1.incidencePaths wire.index.val = []
+              · exact targetEmpty
+              · exact False.elim
+                  (((childPreservation.incidenceNonempty wire).mpr
+                    targetEmpty) sourceEmpty)
+            · intro targetEmpty
+              by_cases sourceEmpty :
+                  childResult.incidencePaths wire.index.val = []
+              · exact sourceEmpty
+              · exact False.elim
+                  (((childPreservation.incidenceNonempty wire).mp
+                    sourceEmpty) targetEmpty)
+          rw [Region.incidencePaths_singleton_cut] at sourceRoot ⊢
+          have replaced := RegionPath.rootedTwo_replace []
+            (childResult.incidencePaths wire.index.val)
+            (childOutput.1.incidencePaths wire.index.val) [] 0 sameEmpty
+          simpa only [List.nil_append, List.append_nil] using
+            replaced.mp (by simpa using sourceRoot)
+  termination_by structural sites
+end
+
+/-- Normalize every selected application in one exact authoritative item
+sequence and preserve the canonical, externally two-ended scope of its actual
+occurrence. The normalized endpoint and its instantiation evidence are
+generated solely from the supplied evidence-indexed sites. -/
+theorem normalizeItemsScope
+    {arguments common sourceWires targetWires : List Sig}
+    (pattern : OpenDiagram arguments)
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments common sourceWires targetWires}
+    {data : operation.Data frame}
+    {source : ItemSeq sourceWires} {result : Region common}
+    (evidence :
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        pattern frame.sourceKeep frame.selected source result)
+    (sites : ItemsSites operation data evidence)
+    {boundary : List Sig} {host : OpenDiagram boundary}
+    (occurrence : Occurrence result host) :
+    ∃ normalized : Region common,
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          (identityBoundary pattern) frame.sourceKeep frame.selected source
+            normalized ∧
+        (occurrence.context.fill normalized).Canonical ∧
+        OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
+          (occurrence.context.fill normalized) := by
+  let output := normalizedItems pattern evidence sites
+  let preservation := normalizedItems_scope pattern evidence sites
+  have resultCanonical : result.Canonical :=
+    occurrence.context.holeCanonical result occurrence.sourceCanonical
+  have normalizedCanonical : output.1.Canonical :=
+    preservation.canonical resultCanonical
+  have replacement := occurrence.context.replaceCanonical result output.1
+    occurrence.sourceCanonical normalizedCanonical
+      preservation.incidenceNonempty
+  let sourceEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill result) occurrence.sourceCanonical
+      occurrence.sourceExternalTwoEnded
+  have normalizedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill output.1) :=
+    sourceEndpoint.externalTwoEnded_of_nonempty_iff
+      (occurrence.context.fill output.1) replacement.2
+  exact ⟨output.1, output.2, replacement.1, normalizedExternalTwoEnded⟩
 
 end EqualityNormalization
 
