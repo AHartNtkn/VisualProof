@@ -14,7 +14,7 @@ namespace Compiler
 application. Boundary and equality compilation prepare the authoritative
 instantiation endpoint to the exact all-sites transform endpoint; this theorem
 owns the mandatory primitive at the comprehension binder's home occurrence. -/
-theorem itemsFormal
+private theorem itemsFormal
     {outer localBefore localAfter before after : List Sig}
     {pattern : OpenDiagram
       (before ++ .rel (before ++ after) :: after)}
@@ -131,7 +131,7 @@ theorem itemsFormal
 Boundary and equality compilation prepare the authoritative instantiation
 endpoint to the exact all-sites transform endpoint; this theorem owns the
 mandatory primitive at the comprehension binder's home occurrence. -/
-theorem itemsIdentity
+private theorem itemsIdentity
     {outer localBefore localAfter : List Sig}
     {signature : Sig} {arity : Nat}
     {pattern : OpenDiagram (List.replicate arity signature)}
@@ -5224,7 +5224,7 @@ structure FormalPhase
         output.endpoint)
 
 /-- The singleton-atom branch fixes the final phase to FormalApplication. -/
-theorem FormalPhase.compile
+private theorem FormalPhase.compile
     {patternWires atomArguments : List Sig}
     {head : Var patternWires (.rel atomArguments)}
     {ports : Vars patternWires atomArguments}
@@ -5303,7 +5303,7 @@ structure IdentityPhase
         output.endpoint)
 
 /-- The singleton-identity branch fixes the final phase to IdentityLeaf. -/
-theorem IdentityPhase.compile
+private theorem IdentityPhase.compile
     {patternWires : List Sig}
     {signature : Sig} {arity : Nat}
     {ports : Fin arity → Var patternWires signature}
@@ -6428,7 +6428,7 @@ end
 
 mutual
   /-- Interpret one exact region plan. -/
-  def regionResult
+  private def regionResult
       {wires : List Sig} {body : Region wires} {goal : Goal}
       (plan : RegionPlan body goal) : goal.Result :=
     match plan with
@@ -6437,7 +6437,7 @@ mutual
 
   /-- Interpret the fixed equality-normalization boundary around the child's
   mandatory structural core. -/
-  def boundaryResult
+  private def boundaryResult
       {arguments : List Sig} {pattern : OpenDiagram arguments} {goal : Goal}
       (plan : BoundaryPlan pattern goal) : goal.Result :=
     match plan with
@@ -6445,7 +6445,7 @@ mutual
         target.compile (regionResult structural)
 
   /-- Interpret arity phases through their authoritative all-sites folds. -/
-  def arityResult
+  private def arityResult
       {wires : List Sig} {body : Region wires} {goal : Goal}
       (plan : ArityPlan body goal) : goal.Result :=
     match plan with
@@ -6466,7 +6466,7 @@ mutual
 
   /-- Interpret item sequences, deriving ParallelShape only after the exact
   all-sites edit is returned. -/
-  def itemsResult
+  private def itemsResult
       {wires : List Sig} {bodyItems : ItemSeq wires} {goal : Goal}
       (plan : ItemsPlan bodyItems goal) : goal.Result :=
     match plan with
@@ -6488,7 +6488,7 @@ mutual
 
   /-- Interpret items, deriving CutShape only after the exact all-sites edit
   is returned. -/
-  def itemResult
+  private def itemResult
       {wires : List Sig} {bodyItem : Item wires} {goal : Goal}
       (plan : ItemPlan bodyItem goal) : goal.Result :=
     match plan with
