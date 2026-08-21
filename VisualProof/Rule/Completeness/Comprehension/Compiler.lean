@@ -4906,29 +4906,36 @@ end
 sequence and connect the actual occurrence bidirectionally to the generated
 identity-boundary instantiation. -/
 theorem normalizeItemsEquates
-    {arguments common sourceWires targetWires : List Sig}
+    {arguments outer hostLocals sourceWires targetWires : List Sig}
     (pattern : OpenDiagram arguments)
     {operation : Transform.Operation arguments}
-    {frame : Transform.Frame arguments common sourceWires targetWires}
+    {frame : Transform.Frame arguments (outer ++ hostLocals) sourceWires
+      targetWires}
     {data : operation.Data frame}
-    {source : ItemSeq sourceWires} {result : Region common}
+    {source : ItemSeq sourceWires}
+    {result : Region (outer ++ hostLocals)}
     (evidence :
       _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected source result)
     (sites : ItemsSites operation data evidence)
     {boundary : List Sig} {host : OpenDiagram boundary}
-    (occurrence : Occurrence result host) :
-    ∃ normalized : Region common,
+    (occurrence : Occurrence
+      (Region.adjoinAt hostLocals .nil result) host) :
+    ∃ normalized : Region (outer ++ hostLocals),
       _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           (identityBoundary pattern) frame.sourceKeep frame.selected source
             normalized ∧
-        ∃ targetCanonical : (occurrence.context.fill normalized).Canonical,
+        ∃ targetCanonical :
+            (occurrence.context.fill
+              (Region.adjoinAt hostLocals .nil normalized)).Canonical,
           ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
               occurrence.interface.boundaryWire
-              (occurrence.context.fill normalized),
+              (occurrence.context.fill
+                (Region.adjoinAt hostLocals .nil normalized)),
             let reconstructed := occurrence.interface.withBody
-              (occurrence.context.fill normalized) targetCanonical
-                targetExternalTwoEnded
+              (occurrence.context.fill
+                (Region.adjoinAt hostLocals .nil normalized))
+              targetCanonical targetExternalTwoEnded
             let target := if itemsHaveSelection sites = false then host
               else reconstructed
             OpenDiagram.Isomorphic target reconstructed ∧
@@ -4939,19 +4946,23 @@ theorem normalizeItemsEquates
   · have outputEq : output.1 = result := by
       simpa only [output] using
         normalizedItems_eq_of_noSelection pattern evidence sites noSelection
-    have targetCanonical : (occurrence.context.fill output.1).Canonical := by
+    have targetCanonical :
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals .nil output.1)).Canonical := by
       rw [outputEq]
       exact occurrence.sourceCanonical
     have targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
         occurrence.interface.boundaryWire
-        (occurrence.context.fill output.1) := by
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals .nil output.1)) := by
       intro signature wire
       rw [outputEq]
       exact occurrence.sourceExternalTwoEnded wire
     have targetIsomorphic : OpenDiagram.Isomorphic host
         (occurrence.interface.withBody
-          (occurrence.context.fill output.1) targetCanonical
-            targetExternalTwoEnded) := by
+          (occurrence.context.fill
+            (Region.adjoinAt hostLocals .nil output.1))
+          targetCanonical targetExternalTwoEnded) := by
       exact ⟨by simpa only [outputEq] using occurrence.host_iso⟩
     refine ⟨output.1, output.2, targetCanonical,
       targetExternalTwoEnded, ?_⟩
@@ -4960,85 +4971,61 @@ theorem normalizeItemsEquates
     exact ⟨targetIsomorphic,
       Relation.ReflTransGen.refl, Relation.ReflTransGen.refl⟩
   · exact (by
-  let preservation := normalizedItems_scope pattern evidence sites
-  have resultCanonical : result.Canonical :=
-    occurrence.context.holeCanonical result occurrence.sourceCanonical
-  have normalizedCanonical : output.1.Canonical :=
-    preservation.canonical resultCanonical
-  have replacement := occurrence.context.replaceCanonical result output.1
-    occurrence.sourceCanonical normalizedCanonical
-      preservation.incidenceNonempty
+  let sourceRegion := Region.adjoinAt hostLocals .nil result
+  let targetRegion := Region.adjoinAt hostLocals .nil output.1
+  let materialScope := normalizedItems_scope pattern evidence sites
+  let regionScope := adjoinAt_preserves_scope hostLocals
+    (.nil : ItemSeq (outer ++ hostLocals)) result output.1 materialScope
+  have sourceLocalCanonical : sourceRegion.Canonical := by
+    exact occurrence.context.holeCanonical _ occurrence.sourceCanonical
+  have targetLocalCanonical : targetRegion.Canonical :=
+    regionScope.canonical sourceLocalCanonical
+  have replacement := occurrence.context.replaceCanonical sourceRegion
+    targetRegion occurrence.sourceCanonical targetLocalCanonical
+      regionScope.incidenceNonempty
   let sourceEndpoint := occurrence.interface.withBody
-    (occurrence.context.fill result) occurrence.sourceCanonical
+    (occurrence.context.fill sourceRegion) occurrence.sourceCanonical
       occurrence.sourceExternalTwoEnded
   have targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
       occurrence.interface.boundaryWire
-      (occurrence.context.fill output.1) :=
+      (occurrence.context.fill targetRegion) :=
     sourceEndpoint.externalTwoEnded_of_nonempty_iff
-      (occurrence.context.fill output.1) replacement.2
-  have targetCanonical : (occurrence.context.fill output.1).Canonical :=
+      (occurrence.context.fill targetRegion) replacement.2
+  have targetCanonical : (occurrence.context.fill targetRegion).Canonical :=
     replacement.1
-  let appendNil : WireRenaming common (common ++ []) :=
-    ⟨fun wire => wire.appendLeft []⟩
-  let sourceAfter := Region.adjoinAt []
-    (.nil : ItemSeq (common ++ [])) (result.renameWires appendNil)
-  have sourceEq : sourceAfter = result := by
-    simpa only [sourceAfter, appendNil] using
-      adjoinAt_nil_renameWires_appendNil result
-  have sourceAfterCanonical : sourceAfter.Canonical := by
-    rw [sourceEq]
-    exact resultCanonical
-  have sourceNonempty : ∀ {signature} (wire : Var common signature),
-      result.incidencePaths wire.index.val ≠ [] ↔
-        sourceAfter.incidencePaths wire.index.val ≠ [] := by
-    intro signature wire
-    rw [sourceEq]
-  let presentedOccurrence : Occurrence sourceAfter host :=
-    presentationOccurrence occurrence sourceAfterCanonical sourceNonempty
-      (by
-        simpa only [sourceAfter, appendNil] using
-          (adjoinAtNilRenameIso result).symm)
-  let targetAfter := Region.adjoinAt []
-    (.nil : ItemSeq (common ++ [])) (output.1.renameWires appendNil)
-  have targetEq : targetAfter = output.1 := by
-    simpa only [targetAfter, appendNil] using
-      adjoinAt_nil_renameWires_appendNil output.1
-  have foldedTargetCanonical :
-      (presentedOccurrence.context.fill targetAfter).Canonical := by
-    rw [targetEq]
-    exact targetCanonical
-  have foldedTargetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      presentedOccurrence.interface.boundaryWire
-      (presentedOccurrence.context.fill targetAfter) := by
-    intro signature wire
-    rw [targetEq]
-    exact targetExternalTwoEnded wire
   have hasSelection : itemsHaveSelection sites = true := by
     cases selected : itemsHaveSelection sites with
     | false => exact False.elim (noSelection selected)
     | true => rfl
-  have folded := normalizedItemsStrict (outer := common) pattern evidence sites
-    hasSelection [] appendNil (.nil : ItemSeq (common ++ []))
-      presentedOccurrence
-      foldedTargetCanonical foldedTargetExternalTwoEnded
-  have finalBodyIso : RegionIso (WireEquiv.refl common) targetAfter
-      output.1 := by
-    simpa only [targetAfter, appendNil] using
-      adjoinAtNilRenameIso output.1
-  have finalIso : OpenDiagramIso
-      (presentedOccurrence.interface.withBody
-        (presentedOccurrence.context.fill targetAfter)
-        foldedTargetCanonical foldedTargetExternalTwoEnded)
-      (occurrence.interface.withBody
-        (occurrence.context.fill output.1) targetCanonical
-          targetExternalTwoEnded) :=
-    OpenDiagram.withBody_iso foldedTargetCanonical targetCanonical
-      foldedTargetExternalTwoEnded targetExternalTwoEnded
-      (DiagramContext.fillIso occurrence.context finalBodyIso)
-  have exactStrict : StrictEquates occurrence output.1 targetCanonical
-      targetExternalTwoEnded :=
-    ⟨transGen_iso (OpenDiagramIso.refl host) folded.1 finalIso,
-      transGen_iso finalIso folded.2 (OpenDiagramIso.refl host)⟩
+  let identity : WireRenaming (outer ++ hostLocals)
+      (outer ++ hostLocals) := WireRenaming.id
+  let presentedOccurrence : Occurrence
+      (Region.adjoinAt hostLocals .nil (result.renameWires identity)) host := {
+    interface := occurrence.interface
+    context := occurrence.context
+    sourceCanonical := by
+      simpa only [identity, Region.renameWires_id] using occurrence.sourceCanonical
+    sourceExternalTwoEnded := by
+      intro signature wire
+      simpa only [identity, Region.renameWires_id] using
+        occurrence.sourceExternalTwoEnded wire
+    host_iso := by
+      simpa only [identity, Region.renameWires_id] using occurrence.host_iso
+  }
+  have folded := normalizedItemsStrict (outer := outer) pattern evidence sites
+    hasSelection hostLocals identity (.nil : ItemSeq (outer ++ hostLocals))
+      presentedOccurrence (by
+        simpa only [presentedOccurrence, targetRegion, identity,
+          Region.renameWires_id] using
+          targetCanonical) (by
+        intro signature wire
+        simpa only [presentedOccurrence, targetRegion, identity,
+          Region.renameWires_id] using
+          targetExternalTwoEnded wire)
+  have exactStrict : StrictEquates occurrence targetRegion targetCanonical
+      targetExternalTwoEnded := by
+    simpa only [presentedOccurrence, targetRegion, identity,
+      Region.renameWires_id] using folded
   have equivalent := exactStrict.toEquates
   refine ⟨output.1, output.2, targetCanonical,
     targetExternalTwoEnded, ?_⟩
@@ -5047,6 +5034,110 @@ theorem normalizeItemsEquates
   exact ⟨OpenDiagram.Isomorphic.refl _, equivalent.1, equivalent.2⟩)
 
 end EqualityNormalization
+
+/-- A proof-irrelevant traversal operation used only to recover the exact
+selected-site layout from authoritative instantiation evidence. Its unit datum
+cannot select a transform endpoint. -/
+private def normalizationOperation (arguments : List Sig) :
+    Transform.Operation arguments where
+  Data := fun _ => PUnit
+  appendData := fun _ _ _ => PUnit.unit
+  SiteData := fun _ _ _ => PUnit
+  site := fun {_ _ targetWires} _ _ _ _ => Region.blank targetWires
+  pin := fun {_ _ targetWires} _ _ => Region.blank targetWires
+
+/-- The fixed traversal frame retains the exact source-side instantiation
+indices and uses the identity target context only as an inert site annotation
+index. -/
+private def normalizationFrame (outer before after arguments : List Sig) :
+    Transform.Frame arguments (outer ++ (before ++ after))
+      (outer ++ (before ++ .rel arguments :: after))
+      (outer ++ (before ++ after)) where
+  sourceKeep := _root_.VisualProof.Rule.Comprehension.retain outer before after
+    arguments
+  targetKeep := WireRenaming.id
+  selected := _root_.VisualProof.Rule.Comprehension.selected outer before after
+    arguments
+
+mutual
+  /-- Unit site annotations exist for every exact authoritative region
+  result. The existential stays in `Prop`, so no Instantiation proof is
+  eliminated into caller-selectable data. -/
+  private theorem normalizationRegionSites_nonempty
+      {arguments common sourceWires targetWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {source : Region sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          pattern frame.sourceKeep frame.selected source result) :
+      Nonempty (RegionSites (normalizationOperation arguments) PUnit.unit
+        evidence) := by
+    cases evidence with
+    | mk itemsEvidence =>
+        obtain ⟨sites⟩ := normalizationItemsSites_nonempty
+          (frame := frame.append _) itemsEvidence
+        exact ⟨.mk sites⟩
+  termination_by sizeOf source
+
+  /-- Unit site annotations exist for every exact authoritative item-sequence
+  result. -/
+  private theorem normalizationItemsSites_nonempty
+      {arguments common sourceWires targetWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {source : ItemSeq sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          pattern frame.sourceKeep frame.selected source result) :
+      Nonempty (ItemsSites (normalizationOperation arguments) PUnit.unit
+        evidence) := by
+    cases evidence with
+    | nil => exact ⟨.nil _⟩
+    | cons itemEvidence tailEvidence =>
+        obtain ⟨itemSites⟩ := normalizationItemSites_nonempty itemEvidence
+        obtain ⟨tailSites⟩ := normalizationItemsSites_nonempty tailEvidence
+        exact ⟨.cons itemSites tailSites⟩
+  termination_by sizeOf source
+
+  /-- Unit site annotations exist for every exact authoritative item result. -/
+  private theorem normalizationItemSites_nonempty
+      {arguments common sourceWires targetWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {source : Item sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          pattern frame.sourceKeep frame.selected source result) :
+      Nonempty (ItemSites (normalizationOperation arguments) PUnit.unit
+        evidence) := by
+    cases evidence with
+    | atom head ports =>
+        exact ⟨ItemSites.atom (pattern := pattern) (frame := frame) head ports⟩
+    | selectedAtom ports =>
+        exact ⟨ItemSites.selectedAtom (pattern := pattern) (frame := frame)
+          ports PUnit.unit⟩
+    | identity signature arity ports =>
+        exact ⟨ItemSites.identity (pattern := pattern) (frame := frame)
+          signature arity ports⟩
+    | cut childEvidence =>
+        obtain ⟨sites⟩ := normalizationRegionSites_nonempty childEvidence
+        exact ⟨.cut sites⟩
+  termination_by sizeOf source
+end
+
+/-- A fixed unit-data site traversal selected internally from exact
+Instantiation evidence. -/
+private noncomputable def normalizationSites
+    {arguments common sourceWires targetWires : List Sig}
+    {pattern : OpenDiagram arguments}
+    {frame : Transform.Frame arguments common sourceWires targetWires}
+    {source : ItemSeq sourceWires} {result : Region common}
+    (evidence :
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        pattern frame.sourceKeep frame.selected source result) :
+    ItemsSites (normalizationOperation arguments) PUnit.unit evidence :=
+  Classical.choice (normalizationItemsSites_nonempty evidence)
 
 /-- Exact singleton-atom decomposition at an existing pattern item. The
 boundary/equality phases may choose the formal position only by proving that
@@ -5399,6 +5490,316 @@ private theorem telescopeTrans
   cases polarity with
   | positive => exact ⟨head.1, head.2.trans tail.2⟩
   | negative => exact ⟨head.1, tail.2.trans head.2⟩
+
+/-- Exact outer-boundary inputs for one comprehension application. The
+authoritative instantiation evidence fixes the retained locals, source syntax,
+and original instantiated endpoint. -/
+structure NormalizationTarget (pattern : OpenDiagram arguments) where
+  outer : List Sig
+  before : List Sig
+  after : List Sig
+  source : ItemSeq
+    (outer ++ (before ++ .rel arguments :: after))
+  result : Region (outer ++ (before ++ after))
+  evidence :
+    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      (normalizationFrame outer before after arguments).sourceKeep
+      (normalizationFrame outer before after arguments).selected source result
+  request : Telescope.Request
+    (Region.adjoinAt (before ++ after) .nil result)
+    (.mk (before ++ .rel arguments :: after) source)
+
+namespace NormalizationTarget
+
+variable {arguments : List Sig} {pattern : OpenDiagram arguments}
+
+abbrev goal (target : NormalizationTarget pattern) : Goal :=
+  Goal.ofRequest target.request
+
+private noncomputable def sites (target : NormalizationTarget pattern) :
+    ItemsSites (normalizationOperation arguments) PUnit.unit target.evidence :=
+  normalizationSites target.evidence
+
+private noncomputable def originalEndpoint
+    (target : NormalizationTarget pattern) :
+    OpenDiagram target.request.boundary :=
+  target.request.occurrence.interface.withBody
+    (target.request.occurrence.context.fill
+      (Region.adjoinAt (target.before ++ target.after) .nil target.result))
+    target.request.instantiatedCanonical
+    target.request.instantiatedExternalTwoEnded
+
+private noncomputable def normalizationOccurrence
+    (target : NormalizationTarget pattern) :
+    Occurrence
+      (Region.adjoinAt (target.before ++ target.after) .nil target.result)
+      target.originalEndpoint :=
+  exactOccurrence target.request.occurrence.interface
+    target.request.occurrence.context
+    (Region.adjoinAt (target.before ++ target.after) .nil target.result)
+    target.request.instantiatedCanonical
+    target.request.instantiatedExternalTwoEnded
+
+/-- Compiler-owned output of the fixed normalization theorem. The relational
+target is conditional only so the no-selection case remains literally
+reflexive; `isomorphism` fixes its presentation relative to the reconstructed
+normalized endpoint. -/
+private structure Output (target : NormalizationTarget pattern) where
+  normalized : Region (target.outer ++ (target.before ++ target.after))
+  evidence :
+    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      (EqualityNormalization.identityBoundary pattern)
+      (normalizationFrame target.outer target.before target.after
+        arguments).sourceKeep
+      (normalizationFrame target.outer target.before target.after
+        arguments).selected target.source normalized
+  canonical :
+    (target.request.occurrence.context.fill
+      (Region.adjoinAt (target.before ++ target.after) .nil normalized)).Canonical
+  externalTwoEnded : OpenDiagram.ExternalTwoEnded
+    target.request.occurrence.interface.boundaryWire
+    (target.request.occurrence.context.fill
+      (Region.adjoinAt (target.before ++ target.after) .nil normalized))
+  isomorphism : OpenDiagramIso
+    (if EqualityNormalization.itemsHaveSelection target.sites = false then
+      target.originalEndpoint
+    else
+      target.request.occurrence.interface.withBody
+        (target.request.occurrence.context.fill
+          (Region.adjoinAt (target.before ++ target.after) .nil normalized))
+        canonical externalTwoEnded)
+    (target.request.occurrence.interface.withBody
+      (target.request.occurrence.context.fill
+        (Region.adjoinAt (target.before ++ target.after) .nil normalized))
+      canonical externalTwoEnded)
+  forward : Relation.ReflTransGen Step target.originalEndpoint
+    (if EqualityNormalization.itemsHaveSelection target.sites = false then
+      target.originalEndpoint
+    else
+      target.request.occurrence.interface.withBody
+        (target.request.occurrence.context.fill
+          (Region.adjoinAt (target.before ++ target.after) .nil normalized))
+        canonical externalTwoEnded)
+  reverse : Relation.ReflTransGen Step
+    (if EqualityNormalization.itemsHaveSelection target.sites = false then
+      target.originalEndpoint
+    else
+      target.request.occurrence.interface.withBody
+        (target.request.occurrence.context.fill
+          (Region.adjoinAt (target.before ++ target.after) .nil normalized))
+        canonical externalTwoEnded)
+    target.originalEndpoint
+
+private theorem output_nonempty (target : NormalizationTarget pattern) :
+    Nonempty target.Output := by
+  obtain ⟨normalized, evidence, canonical, externalTwoEnded,
+      isomorphic, forward, reverse⟩ :=
+    EqualityNormalization.normalizeItemsEquates pattern target.evidence
+      target.sites target.normalizationOccurrence
+  obtain ⟨isomorphism⟩ := isomorphic
+  exact ⟨{
+    normalized := normalized
+    evidence := evidence
+    canonical := canonical
+    externalTwoEnded := externalTwoEnded
+    isomorphism := isomorphism
+    forward := forward
+    reverse := reverse
+  }⟩
+
+private noncomputable def output (target : NormalizationTarget pattern) :
+    target.Output :=
+  Classical.choice target.output_nonempty
+
+noncomputable def normalized (target : NormalizationTarget pattern) :
+    Region (target.outer ++ (target.before ++ target.after)) :=
+  target.output.normalized
+
+theorem normalizedEvidence (target : NormalizationTarget pattern) :
+    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      (EqualityNormalization.identityBoundary pattern)
+      (normalizationFrame target.outer target.before target.after
+        arguments).sourceKeep
+      (normalizationFrame target.outer target.before target.after
+        arguments).selected target.source target.normalized :=
+  target.output.evidence
+
+private noncomputable def normalizedInstantiated
+    (target : NormalizationTarget pattern) :
+    Region target.outer :=
+  Region.adjoinAt (target.before ++ target.after) .nil
+    target.normalized
+
+private noncomputable def normalizedEndpoint
+    (target : NormalizationTarget pattern) :
+    OpenDiagram target.request.boundary :=
+  target.request.occurrence.interface.withBody
+    (target.request.occurrence.context.fill target.normalizedInstantiated)
+    target.output.canonical target.output.externalTwoEnded
+
+private theorem polaritySourceCanonicalAt
+    {outer holeWires : List Sig}
+    (polarity : Polarity)
+    (context : DiagramContext outer holeWires)
+    (before after : Region holeWires)
+    (beforeCanonical : (context.fill before).Canonical)
+    (afterCanonical : (context.fill after).Canonical) :
+    (context.fill (polaritySource polarity before after)).Canonical := by
+  cases polarity
+  · exact beforeCanonical
+  · exact afterCanonical
+
+private theorem polaritySourceExternalTwoEndedAt
+    {boundary holeWires : List Sig}
+    (polarity : Polarity)
+    (interface : OpenDiagram boundary)
+    (context : DiagramContext interface.external holeWires)
+    (before after : Region holeWires)
+    (beforeExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill before))
+    (afterExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill after)) :
+    OpenDiagram.ExternalTwoEnded interface.boundaryWire
+      (context.fill (polaritySource polarity before after)) := by
+  cases polarity
+  · exact beforeExternalTwoEnded
+  · exact afterExternalTwoEnded
+
+private theorem normalizedSourceCanonical
+    (target : NormalizationTarget pattern) :
+    (target.request.occurrence.context.fill
+      (polaritySource target.request.polarity target.normalizedInstantiated
+        target.request.endpoint)).Canonical := by
+  exact polaritySourceCanonicalAt target.request.polarity
+    target.request.occurrence.context target.normalizedInstantiated
+    target.request.endpoint target.output.canonical
+    target.request.endpointCanonical
+
+private theorem normalizedSourceExternalTwoEnded
+    (target : NormalizationTarget pattern) :
+    OpenDiagram.ExternalTwoEnded
+      target.request.occurrence.interface.boundaryWire
+      (target.request.occurrence.context.fill
+        (polaritySource target.request.polarity target.normalizedInstantiated
+          target.request.endpoint)) := by
+  exact polaritySourceExternalTwoEndedAt target.request.polarity
+    target.request.occurrence.interface target.request.occurrence.context
+    target.normalizedInstantiated target.request.endpoint
+    target.output.externalTwoEnded target.request.endpointExternalTwoEnded
+
+/-- The structural child's exact request replaces only the instantiated
+endpoint and its generated validity. Pending syntax, final endpoint, context,
+polarity, and continuation remain the actual parent request. -/
+noncomputable def normalizedRequest (target : NormalizationTarget pattern) :
+    Telescope.Request target.normalizedInstantiated target.goal.pending := {
+  boundary := target.request.boundary
+  source := target.request.occurrence.interface.withBody
+    (target.request.occurrence.context.fill
+      (polaritySource target.request.polarity target.normalizedInstantiated
+        target.request.endpoint))
+    target.normalizedSourceCanonical target.normalizedSourceExternalTwoEnded
+  endpoint := target.request.endpoint
+  polarity := target.request.polarity
+  occurrence := exactOccurrence target.request.occurrence.interface
+    target.request.occurrence.context
+    (polaritySource target.request.polarity target.normalizedInstantiated
+      target.request.endpoint)
+    target.normalizedSourceCanonical target.normalizedSourceExternalTwoEnded
+  instantiatedCanonical := target.output.canonical
+  instantiatedExternalTwoEnded := target.output.externalTwoEnded
+  pendingCanonical := target.request.pendingCanonical
+  pendingExternalTwoEnded := target.request.pendingExternalTwoEnded
+  endpointCanonical := target.request.endpointCanonical
+  endpointExternalTwoEnded := target.request.endpointExternalTwoEnded
+  continuation := target.request.continuation
+}
+
+noncomputable abbrev normalizedGoal (target : NormalizationTarget pattern) : Goal :=
+  Goal.ofRequest target.normalizedRequest
+
+private noncomputable def phaseTarget (target : NormalizationTarget pattern) :
+    OpenDiagram target.request.boundary :=
+  if EqualityNormalization.itemsHaveSelection target.sites = false then
+    target.originalEndpoint
+  else
+    target.normalizedEndpoint
+
+private theorem compile (target : NormalizationTarget pattern)
+    (core : target.normalizedGoal.Result) : target.goal.Result := by
+  cases polarityEq : target.request.polarity with
+  | positive =>
+      have coreSteps : Relation.TransGen Step target.normalizedEndpoint
+          (target.request.occurrence.interface.withBody
+            (target.request.occurrence.context.fill target.request.endpoint)
+            target.request.endpointCanonical
+            target.request.endpointExternalTwoEnded) := by
+        simpa only [normalizedGoal, Goal.Result, Goal.ofRequest,
+          Telescope.Request.Result, Telescope.Compiles, normalizedRequest,
+          polarityEq, polaritySource, polarityTarget, exactOccurrence,
+          normalizedEndpoint] using core
+      have phaseIso : OpenDiagramIso target.phaseTarget
+          target.normalizedEndpoint := by
+        simpa only [phaseTarget, normalizedEndpoint] using
+          target.output.isomorphism
+      have forward : Relation.ReflTransGen Step target.originalEndpoint
+          target.phaseTarget := by
+        simpa only [phaseTarget, normalizedEndpoint] using target.output.forward
+      have exact : Relation.TransGen Step target.originalEndpoint
+          (target.request.occurrence.interface.withBody
+            (target.request.occurrence.context.fill target.request.endpoint)
+            target.request.endpointCanonical
+            target.request.endpointExternalTwoEnded) :=
+        forward.transGen
+          (transGen_iso phaseIso.symm coreSteps (OpenDiagramIso.refl _))
+      have sourceIso : OpenDiagramIso target.originalEndpoint
+          target.request.source := by
+        simpa only [originalEndpoint, polarityEq, polaritySource] using
+          target.request.occurrence.host_iso.symm
+      have presented :=
+        transGen_iso sourceIso exact (OpenDiagramIso.refl _)
+      simpa only [goal, Goal.Result, Goal.ofRequest, Telescope.Request.Result,
+        Telescope.Compiles, polarityEq, polarityTarget] using presented
+  | negative =>
+      have coreSteps : Relation.TransGen Step
+          (target.request.occurrence.interface.withBody
+            (target.request.occurrence.context.fill target.request.endpoint)
+            target.request.endpointCanonical
+            target.request.endpointExternalTwoEnded)
+          target.normalizedEndpoint := by
+        simpa only [normalizedGoal, Goal.Result, Goal.ofRequest,
+          Telescope.Request.Result, Telescope.Compiles, normalizedRequest,
+          polarityEq, polaritySource, polarityTarget, exactOccurrence,
+          normalizedEndpoint] using core
+      have phaseIso : OpenDiagramIso target.phaseTarget
+          target.normalizedEndpoint := by
+        simpa only [phaseTarget, normalizedEndpoint] using
+          target.output.isomorphism
+      have reverse : Relation.ReflTransGen Step target.phaseTarget
+          target.originalEndpoint := by
+        simpa only [phaseTarget, normalizedEndpoint] using target.output.reverse
+      have exact : Relation.TransGen Step
+          (target.request.occurrence.interface.withBody
+            (target.request.occurrence.context.fill target.request.endpoint)
+            target.request.endpointCanonical
+            target.request.endpointExternalTwoEnded)
+          target.originalEndpoint :=
+        (transGen_iso (OpenDiagramIso.refl _) coreSteps phaseIso.symm)
+          |>.reflTransGen reverse
+      have sourceIso : OpenDiagramIso
+          (target.request.occurrence.interface.withBody
+            (target.request.occurrence.context.fill target.request.endpoint)
+            target.request.endpointCanonical
+            target.request.endpointExternalTwoEnded)
+          target.request.source := by
+        simpa only [polarityEq, polaritySource] using
+          target.request.occurrence.host_iso.symm
+      have presented :=
+        transGen_iso sourceIso exact (OpenDiagramIso.refl _)
+      simpa only [goal, Goal.Result, Goal.ofRequest, Telescope.Request.Result,
+        Telescope.Compiles, polarityEq, polarityTarget, originalEndpoint] using
+          presented
+
+end NormalizationTarget
 
 /-- Evidence for one primitive at a fixed local-rule family. It contains the
 exact staged and raw endpoints, validity, presentation isomorphisms, and
@@ -5899,302 +6300,47 @@ private noncomputable def discharge (target : ArityTarget body shape)
 
 end ArityTarget
 
-/-- Exact authoritative ArgumentPermutation inputs for one boundary order. -/
-structure PermutationTarget
-    {patternWires sourceArguments : List Sig}
-    (body : Region patternWires)
-    (shape : PatternShape body sourceArguments) where
-  targetArguments : List Sig
-  permutation : ArgumentPermutation.Permutation sourceArguments
-    targetArguments
-  outer : List Sig
-  before : List Sig
-  after : List Sig
-  source : ItemSeq
-    (outer ++ (before ++ .rel sourceArguments :: after))
-  result : Region (outer ++ (before ++ after))
-  authority : ItemsAuthority shape.pattern
-    (ArgumentPermutation.operation sourceArguments targetArguments permutation)
-    (ArgumentPermutation.rootFrame outer before after sourceArguments
-      targetArguments)
-    (ArgumentPermutation.targetHead outer before after targetArguments)
-    source result (.mk (before ++ .rel sourceArguments :: after) source)
-
-namespace PermutationTarget
-
-variable {patternWires sourceArguments : List Sig}
-variable {body : Region patternWires}
-variable {shape : PatternShape body sourceArguments}
-
-abbrev goal (target : PermutationTarget body shape) : Goal :=
-  target.authority.goal
-abbrev Output (target : PermutationTarget body shape) : Type :=
-  ItemsAuthority.Output target.authority
-def staged (target : PermutationTarget body shape)
-    (output : target.Output) : Region target.outer :=
-  target.authority.staged output
-
-private def description (target : PermutationTarget body shape)
-    (output : target.Output) :
-    ArgumentPermutation.Permutes.Description target.outer := {
-  sourceArguments := sourceArguments
-  targetArguments := target.targetArguments
-  before := target.before
-  after := target.after
-  permutation := target.permutation
-  items := target.source
-  itemsEdit := output.edit
-}
-
-private theorem staged_eq_target (target : PermutationTarget body shape)
-    (output : target.Output) :
-    target.staged output = (target.description output).target := by
-  change Region.adjoinAt
-    (target.before ++ .rel target.targetArguments :: target.after)
-      .nil output.endpoint =
-    Region.adjoinAt
-      (target.before ++ .rel target.targetArguments :: target.after)
-      .nil output.edit.run
-  rw [output.run_eq]
-
-private noncomputable def discharge
-    (target : PermutationTarget body shape)
-    (output : target.Output)
-    (result : (Goal.preparation target.goal (target.staged output)
-      (target.authority.stagedCanonical output)
-      (target.authority.stagedExternalTwoEnded output)).Result) :
-    target.authority.request.Discharge (target.staged output) := by
-  let description := target.description output
-  exact dischargeAtAuthoritativeEdit
-    (goal := target.goal)
-    (staged := target.staged output)
-    (rawPrepared := description.target)
-    (rawPending := description.source)
-    (fun step => Step.argumentPermutation step)
-    (target.authority.stagedCanonical output)
-    (target.authority.stagedExternalTwoEnded output)
-    (Goal.preparationResult result) (target.staged_eq_target output)
-    (by exact target.authority.request.pendingCanonical)
-    (by exact target.authority.request.pendingExternalTwoEnded)
-    (RegionIso.refl _) (Or.inr (.permute (.mk description)))
-
-end PermutationTarget
-
-/-- Exact authoritative ArgumentDuplicate inputs for one repeated boundary
-position. -/
-structure DuplicateTarget
-    {patternWires before after : List Sig}
-    {signature : Sig}
-    (body : Region patternWires)
-    (shape : PatternShape body (before ++ signature :: after)) where
-  outer : List Sig
-  localBefore : List Sig
-  localAfter : List Sig
-  source : ItemSeq (outer ++ (localBefore ++
-    .rel (before ++ signature :: after) :: localAfter))
-  result : Region (outer ++ (localBefore ++ localAfter))
-  authority : ItemsAuthority shape.pattern
-    (Argument.Duplicate.operation before after signature)
-    (Argument.Duplicate.rootFrame outer localBefore localAfter before after
-      signature)
-    (Argument.Duplicate.targetHead outer localBefore localAfter before after
-      signature)
-    source result (.mk (localBefore ++
-      .rel (before ++ signature :: after) :: localAfter) source)
-
-namespace DuplicateTarget
-
-variable {patternWires before after : List Sig} {signature : Sig}
-variable {body : Region patternWires}
-variable {shape : PatternShape body (before ++ signature :: after)}
-
-abbrev goal (target : DuplicateTarget body shape) : Goal :=
-  target.authority.goal
-abbrev Output (target : DuplicateTarget body shape) : Type :=
-  ItemsAuthority.Output target.authority
-def staged (target : DuplicateTarget body shape) (output : target.Output) :
-    Region target.outer := target.authority.staged output
-
-private def description (target : DuplicateTarget body shape)
-    (output : target.Output) :
-    Argument.Duplicate.Duplicates.Description target.outer := {
-  before := before
-  after := after
-  localBefore := target.localBefore
-  localAfter := target.localAfter
-  signature := signature
-  items := target.source
-  itemsEdit := output.edit
-}
-
-private theorem staged_eq_target (target : DuplicateTarget body shape)
-    (output : target.Output) :
-    target.staged output = (target.description output).target := by
-  change Region.adjoinAt (target.localBefore ++
-    .rel (before ++ signature :: signature :: after) :: target.localAfter)
-      .nil output.endpoint =
-    Region.adjoinAt (target.localBefore ++
-      .rel (before ++ signature :: signature :: after) :: target.localAfter)
-      .nil output.edit.run
-  rw [output.run_eq]
-
-private noncomputable def discharge (target : DuplicateTarget body shape)
-    (output : target.Output)
-    (result : (Goal.preparation target.goal (target.staged output)
-      (target.authority.stagedCanonical output)
-      (target.authority.stagedExternalTwoEnded output)).Result) :
-    target.authority.request.Discharge (target.staged output) := by
-  let description := target.description output
-  exact dischargeAtAuthoritativeEdit
-    (goal := target.goal)
-    (staged := target.staged output)
-    (rawPrepared := description.target)
-    (rawPending := description.source)
-    (fun step => Step.argumentDuplicate step)
-    (target.authority.stagedCanonical output)
-    (target.authority.stagedExternalTwoEnded output)
-    (Goal.preparationResult result) (target.staged_eq_target output)
-    (by exact target.authority.request.pendingCanonical)
-    (by exact target.authority.request.pendingExternalTwoEnded)
-    (RegionIso.refl _) (Or.inr (.duplicate (.mk description)))
-
-end DuplicateTarget
-
-/-- Exact authoritative ArgumentProjection inputs for one omitted boundary
-position. The compiler fixes the directed local phase to extension. -/
-structure ProjectionTarget
-    {patternWires before after : List Sig}
-    {signature : Sig}
-    (body : Region patternWires)
-    (shape : PatternShape body (before ++ signature :: after)) where
-  outer : List Sig
-  localBefore : List Sig
-  localAfter : List Sig
-  source : ItemSeq (outer ++ (localBefore ++
-    .rel (before ++ signature :: after) :: localAfter))
-  result : Region (outer ++ (localBefore ++ localAfter))
-  authority : ItemsAuthority shape.pattern
-    (Argument.Projection.operation before after signature)
-    (Argument.Projection.rootFrame outer localBefore localAfter before after
-      signature)
-    (Argument.Projection.targetHead outer localBefore localAfter before after)
-    source result (.mk (localBefore ++
-      .rel (before ++ signature :: after) :: localAfter) source)
-
-namespace ProjectionTarget
-
-variable {patternWires before after : List Sig} {signature : Sig}
-variable {body : Region patternWires}
-variable {shape : PatternShape body (before ++ signature :: after)}
-
-abbrev goal (target : ProjectionTarget body shape) : Goal :=
-  target.authority.goal
-abbrev Output (target : ProjectionTarget body shape) : Type :=
-  ItemsAuthority.Output target.authority
-def staged (target : ProjectionTarget body shape) (output : target.Output) :
-    Region target.outer := target.authority.staged output
-
-private def dropsDescription (target : ProjectionTarget body shape)
-    (output : target.Output) : Argument.Projection.Drops.Description
-      target.outer := {
-  before := before
-  after := after
-  localBefore := target.localBefore
-  localAfter := target.localAfter
-  signature := signature
-  items := target.source
-  itemsEdit := output.edit
-}
-
-private def description (target : ProjectionTarget body shape)
-    (output : target.Output) : Argument.Projection.Local.Description
-      target.outer :=
-  .extend (target.dropsDescription output)
-
-private theorem staged_eq_source (target : ProjectionTarget body shape)
-    (output : target.Output) :
-    target.staged output = (target.description output).source := by
-  change Region.adjoinAt
-    (target.localBefore ++ .rel (before ++ after) :: target.localAfter)
-      .nil output.endpoint =
-    Region.adjoinAt
-      (target.localBefore ++ .rel (before ++ after) :: target.localAfter)
-      .nil output.edit.run
-  rw [output.run_eq]
-
-private noncomputable def discharge (target : ProjectionTarget body shape)
-    (output : target.Output)
-    (result : (Goal.preparation target.goal (target.staged output)
-      (target.authority.stagedCanonical output)
-      (target.authority.stagedExternalTwoEnded output)).Result) :
-    target.authority.request.Discharge (target.staged output) := by
-  let description := target.description output
-  exact dischargeAtAuthoritativeEdit
-    (goal := target.goal)
-    (staged := target.staged output)
-    (rawPrepared := description.source)
-    (rawPending := description.target)
-    (fun step => Step.argumentProjection step)
-    (target.authority.stagedCanonical output)
-    (target.authority.stagedExternalTwoEnded output)
-    (Goal.preparationResult result) (target.staged_eq_source output)
-    (by exact target.authority.request.pendingCanonical)
-    (by exact target.authority.request.pendingExternalTwoEnded)
-    (RegionIso.refl _) (.mk description)
-
-end ProjectionTarget
-
 mutual
-  /-- Type-valued compiler evidence indexed by one existing region. -/
+  /-- The sole outer-boundary plan normalizes one exact arbitrary pattern to
+  its generated identity-boundary evidence before entering the structural
+  compiler. -/
+  inductive BoundaryPlan :
+      {arguments : List Sig} → OpenDiagram arguments → Goal → Type 1
+    | normalize
+        {arguments : List Sig} {pattern : OpenDiagram arguments}
+        (target : NormalizationTarget pattern)
+        (child : NormalizedPlan target target.normalizedEvidence) :
+        BoundaryPlan pattern target.goal
+
+  /-- The normalized child is indexed by the compiler-generated exact
+  `ItemsResult` as well as its generated goal and identity-boundary syntax. -/
+  inductive NormalizedPlan :
+      {arguments : List Sig} → {pattern : OpenDiagram arguments} →
+      (target : NormalizationTarget pattern) →
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        (EqualityNormalization.identityBoundary pattern)
+        (normalizationFrame target.outer target.before target.after
+          arguments).sourceKeep
+        (normalizationFrame target.outer target.before target.after
+          arguments).selected target.source target.normalized → Type 1
+    | mk
+        {arguments : List Sig} {pattern : OpenDiagram arguments}
+        {target : NormalizationTarget pattern}
+        (structural : RegionPlan
+          (EqualityNormalization.identityBoundary pattern).body
+          target.normalizedGoal) :
+        NormalizedPlan target target.normalizedEvidence
+
+  /-- Type-valued structural compiler evidence indexed by one exact existing
+  region. Identity-boundary normalization is owned only by `BoundaryPlan`. -/
   inductive RegionPlan :
       {wires : List Sig} → Region wires → Goal → Type 1
     | mk
         {outer locals : List Sig}
         {items : ItemSeq (outer ++ locals)}
         {goal : Goal}
-        (boundary : BoundaryPlan (.mk locals items) goal) :
+        (arity : ArityPlan (.mk locals items) goal) :
         RegionPlan (.mk locals items) goal
-
-  /-- Boundary normalization retains the exact existing region syntax and
-  recurses only at the endpoint returned by the authoritative edit fold. -/
-  inductive BoundaryPlan :
-      {wires : List Sig} → Region wires → Goal → Type 1
-    | arity
-        {wires : List Sig} {body : Region wires} {goal : Goal}
-        (plan : ArityPlan body goal) : BoundaryPlan body goal
-    | permutation
-        {wires sourceArguments : List Sig}
-        {body : Region wires}
-        {shape : PatternShape body sourceArguments}
-        (target : PermutationTarget body shape)
-        (child : ∀ output : target.Output,
-          BoundaryPlan body (Goal.preparation target.goal
-            (target.staged output)
-            (target.authority.stagedCanonical output)
-            (target.authority.stagedExternalTwoEnded output))) :
-        BoundaryPlan body target.goal
-    | duplicate
-        {wires before after : List Sig} {signature : Sig}
-        {body : Region wires}
-        {shape : PatternShape body (before ++ signature :: after)}
-        (target : DuplicateTarget body shape)
-        (child : ∀ output : target.Output,
-          BoundaryPlan body (Goal.preparation target.goal
-            (target.staged output)
-            (target.authority.stagedCanonical output)
-            (target.authority.stagedExternalTwoEnded output))) :
-        BoundaryPlan body target.goal
-    | projection
-        {wires before after : List Sig} {signature : Sig}
-        {body : Region wires}
-        {shape : PatternShape body (before ++ signature :: after)}
-        (target : ProjectionTarget body shape)
-        (child : ∀ output : target.Output,
-          BoundaryPlan body (Goal.preparation target.goal
-            (target.staged output)
-            (target.authority.stagedCanonical output)
-            (target.authority.stagedExternalTwoEnded output))) :
-        BoundaryPlan body target.goal
 
   /-- Pattern-local arity compilation ends at the exact existing region and
   recurses only at the authoritative shifted endpoint. -/
@@ -6286,52 +6432,17 @@ mutual
       {wires : List Sig} {body : Region wires} {goal : Goal}
       (plan : RegionPlan body goal) : goal.Result :=
     match plan with
-    | .mk boundary => boundaryResult boundary
+    | .mk arity => arityResult arity
   termination_by structural plan
 
-  /-- Interpret boundary phases through their authoritative all-sites folds. -/
+  /-- Interpret the fixed equality-normalization boundary around the child's
+  mandatory structural core. -/
   def boundaryResult
-      {wires : List Sig} {body : Region wires} {goal : Goal}
-      (plan : BoundaryPlan body goal) : goal.Result :=
+      {arguments : List Sig} {pattern : OpenDiagram arguments} {goal : Goal}
+      (plan : BoundaryPlan pattern goal) : goal.Result :=
     match plan with
-    | .arity arity => arityResult arity
-    | .permutation target child =>
-        Compiler.items
-          (operation := ArgumentPermutation.operation _ _ target.permutation)
-          (frame := ArgumentPermutation.rootFrame target.outer target.before
-            target.after _ target.targetArguments)
-          (ArgumentPermutation.targetHead target.outer target.before
-            target.after target.targetArguments)
-          target.authority.evidence
-          target.authority.sites target.authority.request {
-            close := fun (output : target.Output) =>
-              target.discharge output (boundaryResult (child output))
-          }
-    | .duplicate target child =>
-        Compiler.items
-          (operation := Argument.Duplicate.operation _ _ _)
-          (frame := Argument.Duplicate.rootFrame target.outer
-            target.localBefore target.localAfter _ _ _)
-          (Argument.Duplicate.targetHead target.outer target.localBefore
-            target.localAfter _ _ _)
-          target.authority.evidence target.authority.sites
-          target.authority.request {
-            close := fun (output : target.Output) =>
-              target.discharge output (boundaryResult (child output))
-          }
-    | .projection target child =>
-        Compiler.items
-          (operation := Argument.Projection.operation _ _ _)
-          (frame := Argument.Projection.rootFrame target.outer
-            target.localBefore target.localAfter _ _ _)
-          (Argument.Projection.targetHead target.outer target.localBefore
-            target.localAfter _ _)
-          target.authority.evidence target.authority.sites
-          target.authority.request {
-            close := fun (output : target.Output) =>
-              target.discharge output (boundaryResult (child output))
-          }
-  termination_by structural plan
+    | .normalize target (.mk structural) =>
+        target.compile (regionResult structural)
 
   /-- Interpret arity phases through their authoritative all-sites folds. -/
   def arityResult
@@ -6401,8 +6512,8 @@ end
 syntax-indexed evidence plan. -/
 theorem compile
     (pattern : OpenDiagram arguments)
-    (plan : RegionPlan pattern.body goal) : goal.Result := by
-  exact regionResult plan
+    (plan : BoundaryPlan pattern goal) : goal.Result := by
+  exact boundaryResult plan
 
 end PatternCompiler
 
