@@ -1012,6 +1012,28 @@ theorem itemsNil
         exact .blank stagedIso spawn
     }
 
+/-- Exact caller data for the established blank-pattern compiler branch. The
+phase stores only the authoritative request and nil instantiation evidence;
+its compiler below remains the sole conversion to the strict result. -/
+structure NilPhase where
+  outer : List Sig
+  before : List Sig
+  after : List Sig
+  request : Telescope.Request
+    (Region.adjoinAt (before ++ after) .nil
+      (Region.blank (outer ++ (before ++ after))))
+    (.mk (before ++ .rel [] :: after) .nil)
+  evidence :
+    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      blankPattern
+      (Ends.rootFrame outer before after []).sourceKeep
+      (Ends.rootFrame outer before after []).selected
+      .nil (Region.blank (outer ++ (before ++ after)))
+
+/-- The blank phase is fixed to the real `itemsNil`/Ends branch. -/
+theorem NilPhase.compile (phase : NilPhase) : phase.request.Result := by
+  exact itemsNil phase.request phase.evidence
+
 end Compiler
 
 end VisualProof.Rule.Completeness.Comprehension
