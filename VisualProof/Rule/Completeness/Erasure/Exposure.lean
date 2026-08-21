@@ -190,132 +190,6 @@ def supportPattern
       List.length_pos_iff.mpr (supportBody_incidence_nonempty material wire)
     omega
 
-private theorem supportInstantiation_canonical
-    (material : Region materialWires) (canonical : material.Canonical)
-    (ports : Vars targetWires materialWires) :
-    (Comprehension.Instantiation.instantiate
-      (supportPattern material canonical) ports).Canonical := by
-  let embed : WireRenaming materialWires (targetWires ++ materialWires) :=
-    ⟨fun wire => Var.appendRight targetWires wire⟩
-  let body := (supportBody material).renameWires embed
-  let left := ports.map (fun wire => wire.appendLeft materialWires)
-  let right := (identityBoundary materialWires).map
-    (fun wire => Var.appendRight targetWires wire)
-  let equalityItems :=
-    Comprehension.Instantiation.equalityItems left right
-  have bodyCanonical : body.Canonical :=
-    (Region.Canonical.renameWires_iff (supportBody material) embed).mpr
-      (supportBody_canonical material canonical)
-  have equalityChildren : equalityItems.ChildrenCanonical :=
-    Comprehension.Instantiation.equalityItems_childrenCanonical left right
-  have joinedCanonical :
-      (body.conjoin (Region.ofItems equalityItems)).Canonical :=
-    Region.Canonical.conjoinRightItems body equalityItems bodyCanonical
-      equalityChildren
-  unfold Comprehension.Instantiation.instantiate
-  rw [Comprehension.Instantiation.Equalities_eq_ofItems]
-  change (Region.adjoinAt materialWires .nil
-    (body.conjoin (Region.ofItems equalityItems))).Canonical
-  apply Region.Canonical.adjoinAt_of_material_roots materialWires .nil
-    (body.conjoin (Region.ofItems equalityItems)) True.intro joinedCanonical
-  intro externalIndex
-  let external := (identityBoundary materialWires).get externalIndex
-  let embedded := Var.appendRight targetWires external
-  have externalIndexEq : external.index = externalIndex :=
-    identityBoundary_get_index externalIndex
-  have embeddedIndex : embedded.index.val =
-      targetWires.length + externalIndex.val := by
-    simp [embedded, external, externalIndexEq]
-  cases material with
-  | mk materialLocals materialItems =>
-      let firstItems := body.items.renameWires
-        (Region.conjoinLeftWire (targetWires ++ materialWires)
-          body.locals [])
-      let appendNil : WireRenaming (targetWires ++ materialWires)
-          ((targetWires ++ materialWires) ++ []) :=
-        ⟨fun wire => wire.appendLeft []⟩
-      let rightItems := (equalityItems.renameWires appendNil).renameWires
-        (Region.conjoinRightWire (targetWires ++ materialWires)
-          body.locals [])
-      rw [← embeddedIndex]
-      change RegionPath.RootedTwo
-        ((firstItems.append rightItems).incidencePaths
-          embedded.index.val 0)
-      rw [ItemSeq.incidencePaths_append]
-      simp only [Nat.zero_add]
-      have bodyPathsEq : body.incidencePaths embedded.index.val =
-          (supportBody (Region.mk materialLocals materialItems)).incidencePaths
-            external.index.val := by
-        simp only [body]
-        apply ItemSeq.incidencePaths_renameWires_of_index_iff
-        · have bound := external.index.isLt
-          simp only [List.length_append, Region.locals]
-          omega
-        · have bound := embedded.index.isLt
-          simp only [List.length_append, Region.locals]
-          omega
-        · intro signature wire
-          apply Var.appendCases (left := materialWires)
-            (right := materialLocals)
-            (motive := fun wire =>
-              ((embed.appendRight materialLocals) wire).index.val =
-                    embedded.index.val ↔
-                wire.index.val = external.index.val)
-          · intro inheritedSignature inherited
-            simp only [WireRenaming.appendRight, Var.appendMap_left,
-              Var.index_appendLeft, embed, Var.index_appendRight]
-            omega
-          · intro localSignature localWire
-            have externalBound := external.index.isLt
-            have localBound := localWire.index.isLt
-            simp only [WireRenaming.appendRight, Var.appendMap_right,
-              Var.index_appendRight]
-            omega
-      have firstPathsEq :
-          firstItems.incidencePaths embedded.index.val 0 =
-            body.incidencePaths embedded.index.val := by
-        have renamed := ItemSeq.incidencePaths_renameWires_adjoinHost
-          (addedLocals := []) body.items
-          (embedded.appendLeft body.locals) 0
-        simpa [firstItems, Region.adjoinHostWire,
-          Region.incidencePaths] using renamed
-      have firstNonempty :
-          firstItems.incidencePaths embedded.index.val 0 ≠ [] := by
-        rw [firstPathsEq, bodyPathsEq]
-        exact supportBody_incidence_nonempty
-          (Region.mk materialLocals materialItems) external
-      have rightGetIndex : (right.get externalIndex).index.val =
-          embedded.index.val := by
-        simp [right, Vars.get_map, embedded, external, externalIndexEq]
-      have baseRightMem :=
-        Comprehension.Instantiation.equalityItems_right_mem_nil
-          left right externalIndex firstItems.length
-      rw [rightGetIndex] at baseRightMem
-      have rightPathsEq :
-          rightItems.incidencePaths embedded.index.val firstItems.length =
-            equalityItems.incidencePaths embedded.index.val
-              firstItems.length := by
-        simp only [rightItems, ItemSeq.renameWires_comp]
-        apply ItemSeq.incidencePaths_renameWires_of_index_iff
-        · exact embedded.index.isLt
-        · simpa [body, Region.locals] using
-            (embedded.appendLeft body.locals).index.isLt
-        · intro signature wire
-          simp [WireRenaming.comp, appendNil, Region.conjoinRightWire, body,
-            Region.locals]
-      have rightMem : [] ∈
-          rightItems.incidencePaths embedded.index.val firstItems.length := by
-        rw [rightPathsEq]
-        exact baseRightMem
-      constructor
-      · simp only [List.length_append]
-        have firstPositive := List.length_pos_iff.mpr firstNonempty
-        have rightPositive := List.length_pos_iff.mpr
-          (List.ne_nil_of_mem rightMem)
-        omega
-      · apply RegionPath.deepestCommonAncestor_eq_nil_of_mem_nil
-        exact List.mem_append_right _ rightMem
-
 private theorem retainWire_index
     (wire : Var (outer ++ locals) wireSignature) :
     (Identification.retainWire outer locals signature count wire).index.val =
@@ -3418,7 +3292,7 @@ theorem equatesEmptyHost
 /-- Erasure material is bidirectionally equivalent to one exact
 comprehension-instantiation block. Every generated step is Vacuity or
 Identification, so the exposure remains symmetric beneath arbitrary cuts. -/
-theorem equates
+private theorem equates
     {boundary outer : List Sig}
     (description : Rule.Erasure.Description outer)
     {source : OpenDiagram boundary}
@@ -3446,7 +3320,8 @@ theorem equates
       (Comprehension.Instantiation.instantiate
         (supportPattern description.material materialCanonical)
         (applicationPorts description)).Canonical :=
-    supportInstantiation_canonical description.material materialCanonical
+    Comprehension.Instantiation.instantiate_canonical
+      (supportPattern description.material materialCanonical)
       (applicationPorts description)
   have exposedLocalCanonical :
       (exposedRegion description materialCanonical).Canonical := by

@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Algebra
+import VisualProof.Diagram.Scope.Rename
 import VisualProof.Rule.Relation
 
 namespace VisualProof.Rule
@@ -163,6 +163,217 @@ def instantiate (pattern : OpenDiagram arguments)
         (ports.map fun wire => wire.appendLeft pattern.external)
         (pattern.boundaryWire.map
           fun wire => Var.appendRight targetWires wire)))
+
+private theorem Vars.get_map
+    (variables : Vars source signatures)
+    (rename : ∀ {signature}, Var source signature → Var target signature)
+    (position : Fin signatures.length) :
+    (variables.map rename).get position = rename (variables.get position) := by
+  induction variables with
+  | nil => exact Fin.elim0 position
+  | cons head tail induction =>
+      exact Fin.cases rfl (fun rest => induction rest) position
+
+private theorem Vars.countIndex_appendLeft_zero
+    (variables : Vars source signatures) (added : List Sig)
+    (index : Nat) (beyond : source.length ≤ index) :
+    (variables.map fun wire => wire.appendLeft added).countIndex index = 0 := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      have different : head.index.val ≠ index := by
+        have bound := head.index.isLt
+        omega
+      simp only [Vars.map, Vars.countIndex, Var.index_appendLeft]
+      rw [if_neg different, induction]
+
+private theorem Vars.countIndex_appendRight
+    (variables : Vars source signatures) (addedBefore : List Sig)
+    (index : Nat) :
+    (variables.map fun wire => Var.appendRight addedBefore wire).countIndex
+        (addedBefore.length + index) =
+      variables.countIndex index := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [Vars.map, Vars.countIndex, Var.index_appendRight]
+      split <;> rename_i equality
+      · have sourceEquality : head.index.val = index := by omega
+        simp [sourceEquality, induction]
+      · have sourceDifferent : head.index.val ≠ index := by
+          intro sourceEquality
+          exact equality (by omega)
+        simp [sourceDifferent, induction]
+
+theorem equalityItems_incidencePaths_length
+    (left right : Vars wires signatures)
+    (wireIndex itemIndex : Nat) :
+    ((_root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems
+      left right).incidencePaths wireIndex itemIndex).length =
+      left.countIndex wireIndex + right.countIndex wireIndex := by
+  induction left generalizing itemIndex with
+  | nil => cases right; rfl
+  | cons leftHead leftTail induction =>
+      cases right with
+      | cons rightHead rightTail =>
+          simp only [
+            _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems,
+            ItemSeq.incidencePaths, Item.incidencePaths,
+            _root_.VisualProof.Rule.Comprehension.Instantiation.equalityPorts,
+            Vars.countIndex, List.length_append, List.length_replicate]
+          rw [induction rightTail]
+          by_cases leftEqual : leftHead.index.val = wireIndex <;>
+            by_cases rightEqual : rightHead.index.val = wireIndex <;>
+            simp [List.ofFn_succ, List.ofFn_zero, leftEqual, rightEqual] <;>
+            omega
+
+/-- Instantiation is canonical for every valid open pattern and every actual
+port vector. The bound pattern externals are rooted by the exact equality
+block together with the pattern's external-two-ended invariant. -/
+theorem instantiate_canonical
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments) :
+    (instantiate
+      pattern ports).Canonical := by
+  let embed : WireRenaming pattern.external
+      (targetWires ++ pattern.external) :=
+    ⟨fun wire => Var.appendRight targetWires wire⟩
+  let body := pattern.body.renameWires embed
+  let left := ports.map (fun wire => wire.appendLeft pattern.external)
+  let right := pattern.boundaryWire.map
+    (fun wire => Var.appendRight targetWires wire)
+  let equalityItems :=
+    equalityItems left right
+  have bodyCanonical : body.Canonical :=
+    (Region.Canonical.renameWires_iff pattern.body embed).mpr
+      pattern.canonical
+  have equalityChildren : equalityItems.ChildrenCanonical :=
+    equalityItems_childrenCanonical
+      left right
+  have joinedCanonical :
+      (body.conjoin (Region.ofItems equalityItems)).Canonical :=
+    Region.Canonical.conjoinRightItems body equalityItems bodyCanonical
+      equalityChildren
+  unfold instantiate
+  rw [Equalities_eq_ofItems]
+  change (Region.adjoinAt pattern.external .nil
+    (body.conjoin (Region.ofItems equalityItems))).Canonical
+  apply Region.Canonical.adjoinAt_of_material_roots pattern.external .nil
+    (body.conjoin (Region.ofItems equalityItems)) True.intro joinedCanonical
+  intro externalIndex
+  let external := Var.ofIndex externalIndex
+  let embedded := Var.appendRight targetWires external
+  have embeddedIndex : embedded.index.val =
+      targetWires.length + externalIndex.val := by
+    simp [embedded, external]
+  cases bodyEq : pattern.body with
+  | mk bodyLocals bodyItems =>
+      let firstItems :=
+        (bodyItems.renameWires (embed.appendRight bodyLocals)).renameWires
+        (Region.conjoinLeftWire (targetWires ++ pattern.external)
+          bodyLocals [])
+      let appendNil : WireRenaming (targetWires ++ pattern.external)
+          ((targetWires ++ pattern.external) ++ []) :=
+        ⟨fun wire => wire.appendLeft []⟩
+      let rightItems := (equalityItems.renameWires appendNil).renameWires
+        (Region.conjoinRightWire (targetWires ++ pattern.external)
+          bodyLocals [])
+      rw [← embeddedIndex]
+      simp only [body, bodyEq, Region.renameWires]
+      simp only [Region.conjoin, Region.ofItems, Region.incidencePaths]
+      change RegionPath.RootedTwo
+        ((firstItems.append rightItems).incidencePaths
+          embedded.index.val 0)
+      rw [ItemSeq.incidencePaths_append]
+      simp only [Nat.zero_add]
+      have bodyPathsEq :
+          (bodyItems.renameWires
+            (embed.appendRight bodyLocals)).incidencePaths
+              embedded.index.val 0 =
+            bodyItems.incidencePaths external.index.val 0 := by
+        apply ItemSeq.incidencePaths_renameWires_of_index_iff
+        · have bound := external.index.isLt
+          simp only [List.length_append]
+          omega
+        · have bound := embedded.index.isLt
+          simp only [List.length_append]
+          omega
+        · intro signature wire
+          apply Var.appendCases (left := pattern.external)
+            (right := bodyLocals)
+            (motive := fun wire =>
+              ((embed.appendRight bodyLocals) wire).index.val =
+                    embedded.index.val ↔
+                wire.index.val = external.index.val)
+          · intro inheritedSignature inherited
+            simp only [WireRenaming.appendRight, Var.appendMap_left,
+              Var.index_appendLeft, embed, Var.index_appendRight,
+              embedded, external]
+            omega
+          · intro localSignature localWire
+            have externalBound := external.index.isLt
+            have localBound := localWire.index.isLt
+            simp only [WireRenaming.appendRight, Var.appendMap_right,
+              Var.index_appendRight]
+            omega
+      have firstPathsEq :
+          firstItems.incidencePaths embedded.index.val 0 =
+            (bodyItems.renameWires
+              (embed.appendRight bodyLocals)).incidencePaths
+                embedded.index.val 0 := by
+        have renamed := ItemSeq.incidencePaths_renameWires_adjoinHost
+          (addedLocals := [])
+          (bodyItems.renameWires (embed.appendRight bodyLocals))
+          (embedded.appendLeft bodyLocals) 0
+        simpa [firstItems, Region.adjoinHostWire] using renamed
+      obtain ⟨boundaryPosition, boundaryMaps⟩ :=
+        pattern.boundarySurjective externalIndex
+      have rightGetIndex : (right.get boundaryPosition).index.val =
+          embedded.index.val := by
+        simp [right, Vars.get_map, embedded, external, boundaryMaps]
+      have baseRightMem :=
+        equalityItems_right_mem_nil
+          left right boundaryPosition firstItems.length
+      rw [rightGetIndex] at baseRightMem
+      have rightPathsEq :
+          rightItems.incidencePaths embedded.index.val firstItems.length =
+            equalityItems.incidencePaths embedded.index.val
+              firstItems.length := by
+        simp only [rightItems, ItemSeq.renameWires_comp]
+        apply ItemSeq.incidencePaths_renameWires_of_index_iff
+        · exact embedded.index.isLt
+        · simpa [body, Region.locals] using
+            (embedded.appendLeft bodyLocals).index.isLt
+        · intro signature wire
+          simp [WireRenaming.comp, appendNil, Region.conjoinRightWire]
+      have rightMem : [] ∈
+          rightItems.incidencePaths embedded.index.val firstItems.length := by
+        rw [rightPathsEq]
+        exact baseRightMem
+      constructor
+      · simp only [List.length_append]
+        rw [firstPathsEq, bodyPathsEq, rightPathsEq,
+          equalityItems_incidencePaths_length]
+        have leftZero : left.countIndex embedded.index.val = 0 := by
+          simp only [left, embeddedIndex]
+          exact Vars.countIndex_appendLeft_zero ports pattern.external
+            (targetWires.length + externalIndex.val) (by omega)
+        have rightCount : right.countIndex embedded.index.val =
+            pattern.boundaryWire.countIndex external.index.val := by
+          simp only [right, embeddedIndex, external]
+          simpa [external] using
+            Vars.countIndex_appendRight pattern.boundaryWire targetWires
+              externalIndex.val
+        rw [leftZero, rightCount]
+        have twoEnded :
+            2 ≤ pattern.boundaryWire.countIndex external.index.val +
+              (bodyItems.incidencePaths external.index.val 0).length := by
+          have valid := pattern.externalTwoEnded external
+          rw [bodyEq] at valid
+          simpa only [Region.incidencePaths] using valid
+        omega
+      · apply RegionPath.deepestCommonAncestor_eq_nil_of_mem_nil
+        exact List.mem_append_right _ rightMem
 
 mutual
   /-- Recursive instantiation under cuts. The selected relation remains an
