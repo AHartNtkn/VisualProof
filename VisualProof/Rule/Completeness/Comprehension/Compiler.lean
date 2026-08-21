@@ -441,7 +441,7 @@ def Goal.Result (goal : Goal) : Prop :=
   goal.request.Result
 
 /-- The exact goal stored by the established blank phase. -/
-def nilGoal (phase : Compiler.NilPhase) : Goal :=
+def nilGoal {wires : List Sig} (phase : Compiler.NilPhase wires) : Goal :=
   .ofRequest phase.request
 
 /-- The exact goal stored by a singleton formal phase. -/
@@ -591,8 +591,8 @@ mutual
   /-- Type-valued compiler evidence indexed by an existing item sequence. -/
   inductive ItemsPlan :
       {wires : List Sig} → ItemSeq wires → Goal → Type
-    | nil (phase : Compiler.NilPhase) :
-        ItemsPlan (.nil : ItemSeq []) (nilGoal phase)
+    | nil {wires : List Sig} (phase : Compiler.NilPhase wires) :
+        ItemsPlan (.nil : ItemSeq wires) (nilGoal phase)
     | cons
         {wires : List Sig}
         {head : Item wires} {tail : ItemSeq wires}

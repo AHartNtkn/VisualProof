@@ -1012,10 +1012,11 @@ theorem itemsNil
         exact .blank stagedIso spawn
     }
 
-/-- Exact caller data for the established blank-pattern compiler branch. The
-phase stores only the authoritative request and nil instantiation evidence;
-its compiler below remains the sole conversion to the strict result. -/
-structure NilPhase where
+/-- Exact caller data for an empty item-sequence node in any existing syntax
+wire context. The phase stores only the authoritative blank request and nil
+instantiation evidence; its compiler below remains the sole conversion to the
+strict result. -/
+structure NilPhase (wires : List Sig) where
   outer : List Sig
   before : List Sig
   after : List Sig
@@ -1030,8 +1031,10 @@ structure NilPhase where
       (Ends.rootFrame outer before after []).selected
       .nil (Region.blank (outer ++ (before ++ after)))
 
-/-- The blank phase is fixed to the real `itemsNil`/Ends branch. -/
-theorem NilPhase.compile (phase : NilPhase) : phase.request.Result := by
+/-- Every syntax-indexed blank phase is fixed to the real `itemsNil`/Ends
+branch. -/
+theorem NilPhase.compile {wires : List Sig}
+    (phase : NilPhase wires) : phase.request.Result := by
   exact itemsNil phase.request phase.evidence
 
 end Compiler
