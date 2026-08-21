@@ -8,15 +8,24 @@ namespace Region
 
 def blank (outer : List Sig) : Region outer := .mk [] .nil
 
+@[simp] theorem locals_blank (outer : List Sig) :
+    (blank outer).locals = [] := rfl
+
 /-- One item sequence as an independently conjoinable zero-local region. -/
 def ofItems (items : ItemSeq outer) : Region outer :=
   let appendNil : WireRenaming outer (outer ++ []) :=
     ⟨fun wire => wire.appendLeft []⟩
   .mk [] (items.renameWires appendNil)
 
+@[simp] theorem locals_ofItems (items : ItemSeq outer) :
+    (ofItems items).locals = [] := rfl
+
 /-- One item as an independently conjoinable zero-local region. -/
 def singleton (item : Item outer) : Region outer :=
   ofItems (ItemSeq.cons item ItemSeq.nil)
+
+@[simp] theorem locals_singleton (item : Item outer) :
+    (singleton item).locals = [] := rfl
 
 /-- Embed the first conjunct's wires into the combined local context. -/
 def conjoinLeftWire (outer firstLocals secondLocals : List Sig) :
@@ -25,6 +34,19 @@ def conjoinLeftWire (outer firstLocals secondLocals : List Sig) :
   ⟨Var.appendMap
     (fun wire => wire.appendLeft (firstLocals ++ secondLocals))
     (fun wire => Var.appendRight outer (wire.appendLeft secondLocals))⟩
+
+@[simp] theorem conjoinLeftWire_index_val
+    (wire : Var (outer ++ firstLocals) signature) :
+    (conjoinLeftWire outer firstLocals secondLocals wire).index.val =
+      wire.index.val := by
+  apply Var.appendCases (left := outer) (right := firstLocals)
+    (motive := fun wire =>
+      (conjoinLeftWire outer firstLocals secondLocals wire).index.val =
+        wire.index.val)
+  · intro inheritedSignature inherited
+    simp [conjoinLeftWire]
+  · intro localSignature localWire
+    simp [conjoinLeftWire]
 
 /-- Embed the second conjunct's wires into the combined local context. -/
 def conjoinRightWire (outer firstLocals secondLocals : List Sig) :
@@ -44,11 +66,43 @@ def conjoin : Region outer → Region outer → Region outer
           (secondItems.renameWires
             (conjoinRightWire outer firstLocals secondLocals)))
 
+@[simp] theorem locals_conjoin (first second : Region outer) :
+    (conjoin first second).locals = first.locals ++ second.locals := by
+  cases first
+  cases second
+  rfl
+
+theorem ofItems_conjoin (first second : ItemSeq outer) :
+    (ofItems first).conjoin (ofItems second) =
+      ofItems (first.append second) := by
+  let appendNil : WireRenaming outer (outer ++ []) :=
+    ⟨fun wire => wire.appendLeft []⟩
+  have leftMap : WireRenaming.comp
+      (conjoinLeftWire outer [] []) appendNil = appendNil := by
+    apply WireRenaming.ext
+    intro signature wire
+    simp [WireRenaming.comp, conjoinLeftWire, appendNil]
+  have rightMap : WireRenaming.comp
+      (conjoinRightWire outer [] []) appendNil = appendNil := by
+    apply WireRenaming.ext
+    intro signature wire
+    simp [WireRenaming.comp, conjoinRightWire, appendNil]
+  simp only [ofItems, conjoin, ItemSeq.renameWires_append,
+    ItemSeq.renameWires_comp]
+  rw [leftMap, rightMap]
+  rfl
+
 /-- Embed existing host wires when adjoining new locals after them. -/
 def adjoinHostWire (outer hostLocals addedLocals : List Sig) :
     WireRenaming (outer ++ hostLocals)
       (outer ++ (hostLocals ++ addedLocals)) :=
   conjoinLeftWire outer hostLocals addedLocals
+
+@[simp] theorem adjoinHostWire_index_val
+    (wire : Var (outer ++ hostLocals) signature) :
+    (adjoinHostWire outer hostLocals addedLocals wire).index.val =
+      wire.index.val :=
+  conjoinLeftWire_index_val wire
 
 /-- Reassociate the material's inherited host context and new locals. -/
 def adjoinMaterialWire (outer hostLocals addedLocals : List Sig) :
@@ -59,6 +113,29 @@ def adjoinMaterialWire (outer hostLocals addedLocals : List Sig) :
       (fun wire => wire.appendLeft (hostLocals ++ addedLocals))
       (fun wire => Var.appendRight outer (wire.appendLeft addedLocals)))
     (fun wire => Var.appendRight outer (Var.appendRight hostLocals wire))⟩
+
+@[simp] theorem adjoinMaterialWire_index_val
+    (wire : Var ((outer ++ hostLocals) ++ addedLocals) signature) :
+    (adjoinMaterialWire outer hostLocals addedLocals wire).index.val =
+      wire.index.val := by
+  apply Var.appendCases (left := outer ++ hostLocals)
+    (right := addedLocals)
+    (motive := fun wire =>
+      (adjoinMaterialWire outer hostLocals addedLocals wire).index.val =
+        wire.index.val)
+  · intro inheritedSignature inherited
+    apply Var.appendCases (left := outer) (right := hostLocals)
+      (motive := fun inherited =>
+        (adjoinMaterialWire outer hostLocals addedLocals
+          (inherited.appendLeft addedLocals)).index.val =
+            (inherited.appendLeft addedLocals).index.val)
+    · intro outerSignature outerWire
+      simp [adjoinMaterialWire]
+    · intro hostSignature hostWire
+      simp [adjoinMaterialWire]
+  · intro localSignature localWire
+    simp [adjoinMaterialWire]
+    omega
 
 /-- Adjoin material after a region's existing items and local wires. -/
 def adjoinAt (hostLocals : List Sig)
@@ -71,6 +148,14 @@ def adjoinAt (hostLocals : List Sig)
             (adjoinHostWire outer hostLocals addedLocals)).append
           (addedItems.renameWires
             (adjoinMaterialWire outer hostLocals addedLocals)))
+
+@[simp] theorem locals_adjoinAt (hostLocals : List Sig)
+    (hostItems : ItemSeq (outer ++ hostLocals))
+    (material : Region (outer ++ hostLocals)) :
+    (adjoinAt hostLocals hostItems material).locals =
+      hostLocals ++ material.locals := by
+  cases material
+  rfl
 
 /-- Capture-avoiding insertion of recursively typed material. -/
 def spliceAt (hostLocals : List Sig)
@@ -106,25 +191,6 @@ def ItemSeq.focusAt : (items : ItemSeq wires) →
           simp only [ItemSeq.append]
           rw [nested.rebuild]
       }) index
-
-@[simp] theorem ItemSeq.length_append
-    (first second : ItemSeq wires) :
-    (first.append second).length = first.length + second.length :=
-  ItemSeq.rec
-    (motive_1 := fun _ _ => True)
-    (motive_2 := fun _ _ => True)
-    (motive_3 := fun _ first => ∀ second,
-      (first.append second).length = first.length + second.length)
-    (fun _ _ _ => True.intro)
-    (fun _ _ => True.intro)
-    (fun _ _ _ => True.intro)
-    (fun _ _ => True.intro)
-    (fun second => by simp [ItemSeq.append, ItemSeq.length])
-    (fun _ _ _ induction second => by
-      simp only [ItemSeq.append, ItemSeq.length]
-      rw [induction second]
-      omega)
-    first second
 
 theorem ItemSeq.focusAt_item_eq_get
     (items : ItemSeq wires) (index : Fin items.length) :

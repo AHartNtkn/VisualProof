@@ -35,12 +35,107 @@ def equalityPorts (left right : Var wires signature) :
     Fin 2 → Var wires signature :=
   Fin.cases left (fun _ => right)
 
+def equalityItems : {signatures : List Sig} →
+    Vars wires signatures → Vars wires signatures → ItemSeq wires
+  | [], .nil, .nil => .nil
+  | _ :: _, .cons left leftTail, .cons right rightTail =>
+      .cons (.identity _ 2 (equalityPorts left right))
+        (equalityItems leftTail rightTail)
+
+theorem equalityItems_childrenCanonical
+    (left right : Vars wires signatures) :
+    (equalityItems left right).ChildrenCanonical := by
+  induction left with
+  | nil => cases right; trivial
+  | cons leftHead leftTail induction =>
+      cases right with
+      | cons rightHead rightTail =>
+          exact ⟨True.intro, induction rightTail⟩
+
+/-- The equality associated with any right-hand boundary position contributes
+an incidence rooted at the current region. -/
+theorem equalityItems_right_mem_nil
+    (left right : Vars wires signatures)
+    (position : Fin signatures.length) (itemIndex : Nat) :
+    [] ∈ (equalityItems left right).incidencePaths
+      (right.get position).index.val itemIndex := by
+  induction left generalizing itemIndex with
+  | nil => cases right; exact Fin.elim0 position
+  | cons leftHead leftTail induction =>
+      cases right with
+      | cons rightHead rightTail =>
+          revert itemIndex
+          refine Fin.cases (fun itemIndex => ?_)
+            (fun rest itemIndex => ?_) position
+          · change [] ∈
+              (equalityItems (.cons leftHead leftTail)
+                (.cons rightHead rightTail)).incidencePaths
+                  rightHead.index.val itemIndex
+            simp only [equalityItems, ItemSeq.incidencePaths,
+              Item.incidencePaths, equalityPorts, List.mem_append,
+              List.mem_replicate]
+            apply Or.inl
+            constructor
+            · intro countZero
+              have absent := List.count_eq_zero.mp countZero
+              exact absent (by simp)
+            · trivial
+          · simp only [equalityItems, ItemSeq.incidencePaths,
+              List.mem_append]
+            exact Or.inr (induction rightTail rest (itemIndex + 1))
+
+@[simp] theorem equalityItems_renameWires
+    (left right : Vars source signatures)
+    (rename : WireRenaming source target) :
+    (equalityItems left right).renameWires rename =
+      equalityItems (left.map fun wire => rename wire)
+        (right.map fun wire => rename wire) := by
+  induction left with
+  | nil => cases right; rfl
+  | cons leftHead leftTail induction =>
+      cases right with
+      | cons rightHead rightTail =>
+          simp only [equalityItems, ItemSeq.renameWires, Item.renameWires,
+            Vars.map]
+          have portsEq :
+              (fun index => rename (equalityPorts leftHead rightHead index)) =
+                equalityPorts (rename leftHead) (rename rightHead) := by
+            funext index
+            exact Fin.cases rfl (fun _ => rfl) index
+          rw [portsEq, induction rightTail]
+
 def Equalities : {signatures : List Sig} →
     Vars wires signatures → Vars wires signatures → Region wires
   | [], .nil, .nil => Region.blank wires
   | _ :: _, .cons left leftTail, .cons right rightTail =>
       (Region.singleton (.identity _ 2 (equalityPorts left right))).conjoin
         (Equalities leftTail rightTail)
+
+@[simp] theorem Equalities_locals
+    (left right : Vars wires signatures) :
+    (Equalities left right).locals = [] := by
+  induction left with
+  | nil => cases right; rfl
+  | cons leftHead leftTail induction =>
+      cases right with
+      | cons rightHead rightTail =>
+          simp [Equalities, induction]
+
+theorem Equalities_eq_ofItems
+    (left right : Vars wires signatures) :
+    Equalities left right = Region.ofItems (equalityItems left right) := by
+  induction left with
+  | nil => cases right; rfl
+  | cons leftHead leftTail induction =>
+      cases right with
+      | cons rightHead rightTail =>
+          simp only [Equalities, equalityItems]
+          rw [induction]
+          change (Region.ofItems (.cons
+            (.identity _ 2 (equalityPorts leftHead rightHead)) .nil)).conjoin
+              (Region.ofItems (equalityItems leftTail rightTail)) = _
+          rw [Region.ofItems_conjoin]
+          rfl
 
 /-- Instantiate an open pattern by binding its external wires locally and
 equating its ordered boundary to the actual application ports. -/
@@ -53,6 +148,12 @@ def instantiate (pattern : OpenDiagram arguments)
         (ports.map fun wire => wire.appendLeft pattern.external)
         (pattern.boundaryWire.map
           fun wire => Var.appendRight targetWires wire)))
+
+@[simp] theorem instantiate_locals (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments) :
+    (instantiate pattern ports).locals =
+      pattern.external ++ pattern.body.locals := by
+  simp [instantiate]
 
 mutual
   /-- Recursive instantiation under cuts. The selected relation remains an

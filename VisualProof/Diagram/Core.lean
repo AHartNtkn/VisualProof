@@ -66,6 +66,25 @@ def append : ItemSeq wires → ItemSeq wires → ItemSeq wires
   | .cons item tail, second, third =>
       congrArg (ItemSeq.cons item) (append_assoc tail second third)
 
+@[simp] theorem length_append
+    (first second : ItemSeq wires) :
+    (first.append second).length = first.length + second.length :=
+  ItemSeq.rec
+    (motive_1 := fun _ _ => True)
+    (motive_2 := fun _ _ => True)
+    (motive_3 := fun _ first => ∀ second,
+      (first.append second).length = first.length + second.length)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun second => by simp [ItemSeq.append, ItemSeq.length])
+    (fun _ _ _ induction second => by
+      simp only [ItemSeq.append, ItemSeq.length]
+      rw [induction second]
+      omega)
+    first second
+
 end ItemSeq
 
 end VisualProof.Diagram

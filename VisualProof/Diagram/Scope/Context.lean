@@ -209,6 +209,76 @@ theorem replaceCanonical
           (trailing.incidencePaths wire.index.val (leading.length + 1))
           leading.length (by simpa [childWire] using childSameEmpty)
 
+/-- Replacing a hole by a canonical structural extension preserves the
+canonical enclosing context. The returned sublist witness records that every
+outer incidence from the original filling is still present. -/
+theorem extendCanonical
+    (context : DiagramContext outer holeWires)
+    (before after : Region holeWires)
+    (sourceCanonical : (context.fill before).Canonical)
+    (afterCanonical : after.Canonical)
+    (holeSublist : ∀ {signature} (wire : Var holeWires signature),
+      (before.incidencePaths wire.index.val).Sublist
+        (after.incidencePaths wire.index.val)) :
+    (context.fill after).Canonical ∧
+      ∀ {signature} (wire : Var outer signature),
+        ((context.fill before).incidencePaths wire.index.val).Sublist
+          ((context.fill after).incidencePaths wire.index.val) := by
+  induction context with
+  | hole => exact ⟨afterCanonical, holeSublist⟩
+  | @cut currentOuter currentHole locals leading trailing child induction =>
+      have sourceChildren := sourceCanonical.2
+      have leadingAndRest :=
+        (ItemSeq.childrenCanonical_append leading
+          (.cons (.cut (child.fill before)) trailing)).mp sourceChildren
+      have sourceChildCanonical : (child.fill before).Canonical :=
+        leadingAndRest.2.1
+      have childResult := induction before after sourceChildCanonical
+        afterCanonical holeSublist
+      have childCanonical : (child.fill after).Canonical := childResult.1
+      constructor
+      · constructor
+        · intro localIndex
+          let localWire := Var.appendRight currentOuter
+            (Var.ofIndex localIndex)
+          have sourceRoot := sourceCanonical.1 localIndex
+          rw [ItemSeq.incidencePaths_frame] at sourceRoot
+          have childSublist := childResult.2 localWire
+          have frameSublist :=
+            ((List.Sublist.refl
+              (leading.incidencePaths localWire.index.val 0)).append
+              (childSublist.map (List.cons leading.length))).append
+                (List.Sublist.refl
+                  (trailing.incidencePaths localWire.index.val
+                    (leading.length + 1)))
+          have indexEq : localWire.index.val =
+              currentOuter.length + localIndex.val := by
+            simp [localWire]
+          rw [← indexEq]
+          apply RegionPath.RootedTwo.of_sublist
+            (by
+              simpa only [DiagramContext.fill, Region.incidencePaths,
+                ItemSeq.incidencePaths_frame, Nat.zero_add,
+                List.append_assoc] using
+                frameSublist)
+          simpa [indexEq, List.append_assoc] using sourceRoot
+        · apply (ItemSeq.childrenCanonical_append leading
+            (.cons (.cut (child.fill after)) trailing)).mpr
+          exact ⟨leadingAndRest.1,
+            ⟨childCanonical, leadingAndRest.2.2⟩⟩
+      · intro signature wire
+        have childSublist := childResult.2 (wire.appendLeft locals)
+        have frameSublist :=
+          ((List.Sublist.refl
+            (leading.incidencePaths wire.index.val 0)).append
+            (childSublist.map (List.cons leading.length))).append
+              (List.Sublist.refl
+                (trailing.incidencePaths wire.index.val
+                  (leading.length + 1)))
+        simpa only [DiagramContext.fill, Region.incidencePaths,
+          ItemSeq.incidencePaths_frame, Nat.zero_add,
+          Var.index_appendLeft] using frameSublist
+
 end DiagramContext
 
 end VisualProof.Diagram

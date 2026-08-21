@@ -48,6 +48,16 @@ def refl (context : List Sig) : WireEquiv context context where
   left_inv := fun _ => rfl
   right_inv := fun _ => rfl
 
+def ofEq (equality : source = target) : WireEquiv source target := by
+  subst target
+  exact refl source
+
+@[simp] theorem ofEq_index_val (equality : source = target)
+    (wire : Var source signature) :
+    (ofEq equality wire).index.val = wire.index.val := by
+  subst target
+  rfl
+
 def symm (equivalence : WireEquiv source target) : WireEquiv target source where
   toRenaming := equivalence.invRenaming
   invRenaming := equivalence.toRenaming
@@ -66,6 +76,18 @@ def trans (first : WireEquiv source middle)
     intro signature wire
     simp only [WireRenaming.comp]
     rw [first.right_inv, second.right_inv]
+
+@[simp] theorem trans_refl (equivalence : WireEquiv source target) :
+    equivalence.trans (refl target) = equivalence := by
+  apply WireEquiv.ext
+  intro signature wire
+  rfl
+
+@[simp] theorem refl_trans (equivalence : WireEquiv source target) :
+    (refl source).trans equivalence = equivalence := by
+  apply WireEquiv.ext
+  intro signature wire
+  rfl
 
 private def appendRenaming
     (left : WireRenaming sourceLeft targetLeft)
@@ -101,6 +123,106 @@ def append (left : WireEquiv sourceLeft targetLeft)
     · intro signature localWire
       simp [appendRenaming, right.right_inv]
 
+/-- Exchange two adjacent typed wire blocks. -/
+def swap (left right : List Sig) :
+    WireEquiv (left ++ right) (right ++ left) where
+  toRenaming := ⟨Var.appendMap
+      (fun inherited => Var.appendRight right inherited)
+      (fun localWire => localWire.appendLeft left)⟩
+  invRenaming := ⟨Var.appendMap
+      (fun inherited => Var.appendRight left inherited)
+      (fun localWire => localWire.appendLeft right)⟩
+  left_inv := by
+    intro signature wire
+    apply Var.appendCases (left := left) (right := right)
+      (motive := fun wire =>
+        Var.appendMap
+          (fun inherited => Var.appendRight left inherited)
+          (fun localWire => localWire.appendLeft right)
+          (Var.appendMap
+            (fun inherited => Var.appendRight right inherited)
+            (fun localWire => localWire.appendLeft left) wire) = wire)
+    · intro inheritedSignature inherited
+      simp
+    · intro localSignature localWire
+      simp
+  right_inv := by
+    intro signature wire
+    apply Var.appendCases (left := right) (right := left)
+      (motive := fun wire =>
+        Var.appendMap
+          (fun inherited => Var.appendRight right inherited)
+          (fun localWire => localWire.appendLeft left)
+          (Var.appendMap
+            (fun inherited => Var.appendRight left inherited)
+            (fun localWire => localWire.appendLeft right) wire) = wire)
+    · intro inheritedSignature inherited
+      simp
+    · intro localSignature localWire
+      simp
+
+/-- Move a final typed block between a prefix and middle block. -/
+def rotate (leading middle suffix : List Sig) :
+    WireEquiv ((leading ++ middle) ++ suffix)
+      (leading ++ (suffix ++ middle)) :=
+  (ofEq (List.append_assoc leading middle suffix)).trans
+    ((refl leading).append (swap middle suffix))
+
+@[simp] theorem rotate_apply_leading
+    (wire : Var leading signature) :
+    rotate leading middle suffix
+        ((wire.appendLeft middle).appendLeft suffix) =
+      wire.appendLeft (suffix ++ middle) := by
+  have reassociated :
+      ofEq (List.append_assoc leading middle suffix)
+          ((wire.appendLeft middle).appendLeft suffix) =
+        wire.appendLeft (middle ++ suffix) := by
+    apply Var.eq_of_index_eq
+    apply Fin.ext
+    simp
+  change ((refl leading).append (swap middle suffix))
+    (ofEq (List.append_assoc leading middle suffix)
+      ((wire.appendLeft middle).appendLeft suffix)) = _
+  rw [reassociated]
+  simp [append, appendRenaming, swap, refl, WireRenaming.id]
+
+@[simp] theorem rotate_apply_middle
+    (wire : Var middle signature) :
+    rotate leading middle suffix
+        ((Var.appendRight leading wire).appendLeft suffix) =
+      Var.appendRight leading (Var.appendRight suffix wire) := by
+  have reassociated :
+      ofEq (List.append_assoc leading middle suffix)
+          ((Var.appendRight leading wire).appendLeft suffix) =
+        Var.appendRight leading (wire.appendLeft suffix) := by
+    apply Var.eq_of_index_eq
+    apply Fin.ext
+    simp
+  change ((refl leading).append (swap middle suffix))
+    (ofEq (List.append_assoc leading middle suffix)
+      ((Var.appendRight leading wire).appendLeft suffix)) = _
+  rw [reassociated]
+  simp [append, appendRenaming, swap, refl, WireRenaming.id]
+
+@[simp] theorem rotate_apply_suffix
+    (wire : Var suffix signature) :
+    rotate leading middle suffix
+        (Var.appendRight (leading ++ middle) wire) =
+      Var.appendRight leading (wire.appendLeft middle) := by
+  have reassociated :
+      ofEq (List.append_assoc leading middle suffix)
+          (Var.appendRight (leading ++ middle) wire) =
+        Var.appendRight leading (Var.appendRight middle wire) := by
+    apply Var.eq_of_index_eq
+    apply Fin.ext
+    simp
+    omega
+  change ((refl leading).append (swap middle suffix))
+    (ofEq (List.append_assoc leading middle suffix)
+      (Var.appendRight (leading ++ middle) wire)) = _
+  rw [reassociated]
+  simp [append, appendRenaming, swap, refl, WireRenaming.id]
+
 @[simp] theorem append_apply_left
     (left : WireEquiv sourceLeft targetLeft)
     (right : WireEquiv sourceRight targetRight)
@@ -131,6 +253,9 @@ def append (left : WireEquiv sourceLeft targetLeft)
     (wire : Var target signature) :
     equivalence (equivalence.symm wire) = wire :=
   equivalence.right_inv wire
+
+@[simp] theorem symm_refl (context : List Sig) :
+    (WireEquiv.refl context).symm = WireEquiv.refl context := rfl
 
 end WireEquiv
 
@@ -240,6 +365,14 @@ def ItemSeqIso.castAmbient
   subst second
   exact iso
 
+def RegionIso.castAmbient
+    {source : Region sourceWires} {target : Region targetWires}
+    {first second : WireEquiv sourceWires targetWires}
+    (equality : first = second) (iso : RegionIso first source target) :
+    RegionIso second source target := by
+  subst second
+  exact iso
+
 private abbrev RegionIsoReflMotive
     (wires : List Sig) (region : Region wires) :=
   RegionIso (WireEquiv.refl wires) region region
@@ -306,6 +439,500 @@ noncomputable def ItemSeqIso.refl (items : ItemSeq wires) :
     subst targetIndex
     exact ItemSeq.rec regionIsoReflMk itemIsoReflAtom itemIsoReflIdentity
       itemIsoReflCut itemsIsoReflNil itemsIsoReflCons items sourceIndex
+
+/-- Extend an item-sequence isomorphism by one corresponding leading item. -/
+noncomputable def ItemSeqIso.cons
+    {sourceHead : Item sourceWires} {targetHead : Item targetWires}
+    {sourceTail : ItemSeq sourceWires} {targetTail : ItemSeq targetWires}
+    {ambient : WireEquiv sourceWires targetWires}
+    (head : ItemIso ambient sourceHead targetHead)
+    (tail : ItemSeqIso ambient sourceTail targetTail) :
+    ItemSeqIso ambient (.cons sourceHead sourceTail)
+      (.cons targetHead targetTail) := by
+  cases tail with
+  | permute positions items =>
+      refine .permute (FiniteEquiv.finSucc positions) (fun sourceIndex => ?_)
+      change Fin (sourceTail.length + 1) at sourceIndex
+      refine Fin.cases
+        (fun targetIndex equality => ?_)
+        (fun sourceRest targetIndex equality => ?_) sourceIndex
+      · change Fin (targetTail.length + 1) at targetIndex
+        have targetZero : targetIndex.val = 0 := by
+          have values := congrArg Fin.val equality
+          simp [FiniteEquiv.finSucc] at values
+          exact values.symm
+        subst targetIndex
+        exact head
+      · change Fin (targetTail.length + 1) at targetIndex
+        revert equality
+        refine Fin.cases (fun equality => ?_)
+          (fun targetRest equality => ?_) targetIndex
+        · have values := congrArg Fin.val equality
+          simp [FiniteEquiv.finSucc] at values
+        · apply items sourceRest targetRest
+          apply Fin.ext
+          have values := congrArg Fin.val equality
+          simp [FiniteEquiv.finSucc] at values
+          exact values
+
+private theorem Vars.map_commutes
+    (variables : Vars wires signatures)
+    (sourceRename : WireRenaming wires sourceTarget)
+    (targetRename : WireRenaming wires targetTarget)
+    (ambient : WireEquiv sourceTarget targetTarget)
+    (commutes : ∀ {signature} (wire : Var wires signature),
+      ambient (sourceRename wire) = targetRename wire) :
+    (variables.map fun wire => ambient (sourceRename wire)) =
+      variables.map fun wire => targetRename wire := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [Vars.map]
+      calc
+        Vars.cons (ambient (sourceRename head))
+            (tail.map fun wire => ambient (sourceRename wire)) =
+            Vars.cons (targetRename head)
+              (tail.map fun wire => ambient (sourceRename wire)) :=
+          congrArg (fun mapped => Vars.cons mapped
+            (tail.map fun wire => ambient (sourceRename wire)))
+            (commutes head)
+        _ = Vars.cons (targetRename head)
+              (tail.map fun wire => targetRename wire) :=
+          congrArg (Vars.cons (targetRename head)) induction
+
+mutual
+  /-- Isomorphic wire renamings of one region yield isomorphic renamed
+  presentations. -/
+  noncomputable def RegionIso.renameWires
+      (region : Region wires)
+      (sourceRename : WireRenaming wires sourceTarget)
+      (targetRename : WireRenaming wires targetTarget)
+      (ambient : WireEquiv sourceTarget targetTarget)
+      (commutes : ∀ {signature} (wire : Var wires signature),
+        ambient (sourceRename wire) = targetRename wire) :
+      RegionIso ambient (region.renameWires sourceRename)
+        (region.renameWires targetRename) :=
+    match region with
+    | .mk locals items =>
+        let localEquiv := WireEquiv.refl locals
+        let appendCommutes : ∀ {signature}
+            (wire : Var (wires ++ locals) signature),
+            (ambient.append localEquiv)
+                (sourceRename.appendRight locals wire) =
+              targetRename.appendRight locals wire := by
+          intro signature wire
+          apply Var.appendCases
+            (motive := fun wire =>
+              (ambient.append localEquiv)
+                  (sourceRename.appendRight locals wire) =
+                targetRename.appendRight locals wire)
+          · intro inheritedSignature inherited
+            simp [WireRenaming.appendRight, commutes]
+          · intro localSignature localWire
+            simp [WireRenaming.appendRight, localEquiv, WireEquiv.refl,
+              WireRenaming.id]
+        .mk localEquiv
+          (ItemSeqIso.renameWires items
+            (sourceRename.appendRight locals)
+            (targetRename.appendRight locals)
+            (ambient.append localEquiv) appendCommutes)
+
+  /-- Isomorphic wire renamings of one item yield isomorphic renamed
+  presentations. -/
+  noncomputable def ItemIso.renameWires
+      (item : Item wires)
+      (sourceRename : WireRenaming wires sourceTarget)
+      (targetRename : WireRenaming wires targetTarget)
+      (ambient : WireEquiv sourceTarget targetTarget)
+      (commutes : ∀ {signature} (wire : Var wires signature),
+        ambient (sourceRename wire) = targetRename wire) :
+      ItemIso ambient (item.renameWires sourceRename)
+        (item.renameWires targetRename) :=
+    match item with
+    | .atom head ports =>
+        .atom (commutes head)
+          (by
+            calc
+              (ports.map fun wire => sourceRename wire).map
+                    (fun wire => ambient wire) =
+                  ports.map (fun wire => ambient (sourceRename wire)) :=
+                vars_map_comp ports sourceRename ambient.toRenaming
+              _ = ports.map fun wire => targetRename wire :=
+                Vars.map_commutes ports sourceRename targetRename ambient
+                  commutes)
+    | .identity signature arity ports =>
+        .identity (FiniteEquiv.refl _) (fun index => commutes (ports index))
+    | .cut body =>
+        .cut (RegionIso.renameWires body sourceRename targetRename
+          ambient commutes)
+
+  /-- Isomorphic wire renamings of one item sequence yield isomorphic renamed
+  presentations. -/
+  noncomputable def ItemSeqIso.renameWires
+      (items : ItemSeq wires)
+      (sourceRename : WireRenaming wires sourceTarget)
+      (targetRename : WireRenaming wires targetTarget)
+      (ambient : WireEquiv sourceTarget targetTarget)
+      (commutes : ∀ {signature} (wire : Var wires signature),
+        ambient (sourceRename wire) = targetRename wire) :
+      ItemSeqIso ambient (items.renameWires sourceRename)
+        (items.renameWires targetRename) :=
+    match items with
+    | .nil => .permute (FiniteEquiv.refl _) fun index => Fin.elim0 index
+    | .cons head tail =>
+        ItemSeqIso.cons
+          (ItemIso.renameWires head sourceRename targetRename ambient commutes)
+          (ItemSeqIso.renameWires tail sourceRename targetRename ambient commutes)
+end
+
+private def ItemSeq.appendSingletonPositions
+    (items : ItemSeq wires) (item : Item wires) :
+    FiniteEquiv (Fin (items.append (.cons item .nil)).length)
+      (Fin (ItemSeq.cons item items).length) where
+  toFun position :=
+    if beforeLast : position.val < items.length then
+      ⟨position.val + 1, by simp only [ItemSeq.length]; omega⟩
+    else
+      ⟨0, by simp [ItemSeq.length]⟩
+  invFun position :=
+    if first : position.val = 0 then
+      ⟨items.length, by simp [ItemSeq.length]⟩
+    else
+      ⟨position.val - 1, by
+        have bound := position.isLt
+        simp only [ItemSeq.length] at bound
+        simp only [ItemSeq.length_append, ItemSeq.length, Nat.add_zero]
+        omega⟩
+  left_inv := by
+    intro position
+    apply Fin.ext
+    dsimp
+    have sourceLength :
+        (items.append (.cons item .nil)).length = items.length + 1 := by
+      simp [ItemSeq.length]
+    have targetLength :
+        (ItemSeq.cons item items).length = items.length + 1 := rfl
+    have bound : position.val < items.length + 1 := by
+      simpa only [ItemSeq.length_append, ItemSeq.length, Nat.add_zero]
+        using position.isLt
+    split <;> split <;>
+      simp_all only [Fin.val_mk, ItemSeq.length_append, ItemSeq.length,
+        Nat.add_zero] <;> omega
+  right_inv := by
+    intro position
+    refine Fin.cases ?_ (fun rest => ?_) position
+    · apply Fin.ext
+      simp only [Fin.val_zero]
+      dsimp
+      split <;> rename_i beforeLast
+      · omega
+      · rfl
+    · apply Fin.ext
+      dsimp
+      split <;> rename_i beforeLast <;> simp only [Fin.val_mk]
+      all_goals have bound := rest.isLt; omega
+
+private theorem ItemSeq.get_append_left
+    (items suffix : ItemSeq wires) (position : Fin items.length) :
+    (items.append suffix).get
+      ⟨position.val, by rw [ItemSeq.length_append]; omega⟩ =
+        items.get position :=
+  ItemSeq.rec
+    (motive_1 := fun _ _ => True)
+    (motive_2 := fun _ _ => True)
+    (motive_3 := fun _ items => ∀ (suffix : ItemSeq _)
+      (position : Fin items.length),
+      (items.append suffix).get
+        ⟨position.val, by rw [ItemSeq.length_append]; omega⟩ =
+          items.get position)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun _ position => Fin.elim0 position)
+    (fun _ _ _ induction suffix position =>
+      Fin.cases rfl (induction suffix) position)
+    items suffix position
+
+private theorem ItemSeq.get_append_right
+    (initial items : ItemSeq wires) (position : Fin items.length) :
+    (initial.append items).get
+      ⟨initial.length + position.val, by
+        rw [ItemSeq.length_append]
+        omega⟩ = items.get position :=
+  ItemSeq.rec
+    (motive_1 := fun _ _ => True)
+    (motive_2 := fun _ _ => True)
+    (motive_3 := fun _ initial => ∀ (items : ItemSeq _)
+      (position : Fin items.length),
+      (initial.append items).get
+        ⟨initial.length + position.val, by
+          rw [ItemSeq.length_append]
+          omega⟩ = items.get position)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun items position => by
+      have indexEq :
+          (⟨ItemSeq.nil.length + position.val, by
+            rw [ItemSeq.length_append]
+            omega⟩ : Fin (ItemSeq.nil.append items).length) = position :=
+        Fin.ext (by simp [ItemSeq.length])
+      rw [indexEq]
+      rfl)
+    (fun head tail _ induction items position => by
+      let inner : Fin (tail.append items).length :=
+        ⟨tail.length + position.val, by
+            rw [ItemSeq.length_append]
+            omega⟩
+      have indexEq :
+          (⟨(ItemSeq.cons head tail).length + position.val, by
+            rw [ItemSeq.length_append]
+            omega⟩ : Fin ((ItemSeq.cons head tail).append items).length) =
+            inner.succ := by
+        apply Fin.ext
+        simp only [ItemSeq.length, Fin.val_succ, inner]
+        omega
+      rw [indexEq]
+      exact induction items position)
+    initial items position
+
+/-- Append independently isomorphic item-sequence blocks. -/
+noncomputable def ItemSeqIso.append
+    {sourceFirst sourceSecond : ItemSeq sourceWires}
+    {targetFirst targetSecond : ItemSeq targetWires}
+    {ambient : WireEquiv sourceWires targetWires}
+    (first : ItemSeqIso ambient sourceFirst targetFirst)
+    (second : ItemSeqIso ambient sourceSecond targetSecond) :
+    ItemSeqIso ambient (sourceFirst.append sourceSecond)
+      (targetFirst.append targetSecond) := by
+  cases first with
+  | permute firstPositions firstItems =>
+      cases second with
+      | permute secondPositions secondItems =>
+          let sourceLengthEq := ItemSeq.length_append sourceFirst sourceSecond
+          let targetLengthEq := ItemSeq.length_append targetFirst targetSecond
+          let positions :=
+            (FiniteEquiv.finCast sourceLengthEq).trans
+              ((FiniteEquiv.finAppend firstPositions secondPositions).trans
+                (FiniteEquiv.finCast targetLengthEq.symm))
+          refine .permute positions (fun sourceIndex targetIndex equality => ?_)
+          subst targetIndex
+          let sumPosition : Fin (sourceFirst.length + sourceSecond.length) :=
+            Fin.cast sourceLengthEq sourceIndex
+          apply Fin.addCases (i := sumPosition)
+            (motive := fun sumPosition =>
+              Fin.cast sourceLengthEq sourceIndex = sumPosition →
+                ItemIso ambient
+                  ((sourceFirst.append sourceSecond).get sourceIndex)
+                  ((targetFirst.append targetSecond).get
+                    (positions sourceIndex)))
+          · intro sourcePosition sumEq
+            let targetPosition := firstPositions sourcePosition
+            have sourceValue : sourceIndex.val = sourcePosition.val := by
+              have values := congrArg Fin.val sumEq
+              simpa [sumPosition] using values
+            have targetValue : (positions sourceIndex).val =
+                targetPosition.val := by
+              simp [positions, sourceLengthEq, targetLengthEq, sumPosition,
+                FiniteEquiv.trans, FiniteEquiv.finCast,
+                FiniteEquiv.finAppend, sumEq, targetPosition]
+            have sourceEq : sourceIndex =
+                ⟨sourcePosition.val, by
+                  rw [ItemSeq.length_append]
+                  omega⟩ := Fin.ext sourceValue
+            have targetEq : positions sourceIndex =
+                ⟨targetPosition.val, by
+                  rw [ItemSeq.length_append]
+                  omega⟩ := Fin.ext targetValue
+            have sourceGet :
+                (sourceFirst.append sourceSecond).get sourceIndex =
+                  sourceFirst.get sourcePosition := by
+              rw [sourceEq]
+              exact ItemSeq.get_append_left _ _ sourcePosition
+            have targetGet :
+                (targetFirst.append targetSecond).get
+                    (positions sourceIndex) =
+                  targetFirst.get targetPosition := by
+              rw [targetEq]
+              exact ItemSeq.get_append_left _ _ targetPosition
+            rw [sourceGet, targetGet]
+            exact firstItems sourcePosition targetPosition rfl
+          · intro sourcePosition sumEq
+            let targetPosition := secondPositions sourcePosition
+            have sourceValue : sourceIndex.val =
+                sourceFirst.length + sourcePosition.val := by
+              have values := congrArg Fin.val sumEq
+              simpa [sumPosition] using values
+            have targetValue : (positions sourceIndex).val =
+                targetFirst.length + targetPosition.val := by
+              simp [positions, sourceLengthEq, targetLengthEq, sumPosition,
+                FiniteEquiv.trans, FiniteEquiv.finCast,
+                FiniteEquiv.finAppend, sumEq, targetPosition]
+            have sourceEq : sourceIndex =
+                ⟨sourceFirst.length + sourcePosition.val, by
+                  rw [ItemSeq.length_append]
+                  omega⟩ := Fin.ext sourceValue
+            have targetEq : positions sourceIndex =
+                ⟨targetFirst.length + targetPosition.val, by
+                  rw [ItemSeq.length_append]
+                  omega⟩ := Fin.ext targetValue
+            have sourceGet :
+                (sourceFirst.append sourceSecond).get sourceIndex =
+                  sourceSecond.get sourcePosition := by
+              rw [sourceEq]
+              exact ItemSeq.get_append_right _ _ sourcePosition
+            have targetGet :
+                (targetFirst.append targetSecond).get
+                    (positions sourceIndex) =
+                  targetSecond.get targetPosition := by
+              rw [targetEq]
+              exact ItemSeq.get_append_right _ _ targetPosition
+            rw [sourceGet, targetGet]
+            exact secondItems sourcePosition targetPosition rfl
+          · rfl
+
+/-- Exchange two adjacent item-sequence blocks. -/
+noncomputable def ItemSeqIso.swapAppend
+    (left right : ItemSeq wires) :
+    ItemSeqIso (WireEquiv.refl wires)
+      (left.append right) (right.append left) := by
+  let sourceLengthEq := ItemSeq.length_append left right
+  let targetLengthEq := ItemSeq.length_append right left
+  let positions :=
+    (FiniteEquiv.finCast sourceLengthEq).trans
+      ((FiniteEquiv.finSwap left.length right.length).trans
+        (FiniteEquiv.finCast targetLengthEq.symm))
+  refine .permute positions (fun sourceIndex targetIndex equality => ?_)
+  subst targetIndex
+  let sumPosition : Fin (left.length + right.length) :=
+    Fin.cast sourceLengthEq sourceIndex
+  apply Fin.addCases (i := sumPosition)
+    (motive := fun sumPosition =>
+      Fin.cast sourceLengthEq sourceIndex = sumPosition →
+        ItemIso (WireEquiv.refl wires)
+          ((left.append right).get sourceIndex)
+          ((right.append left).get (positions sourceIndex)))
+  · intro position sumEq
+    have sourceValue : sourceIndex.val = position.val := by
+      have values := congrArg Fin.val sumEq
+      simpa [sumPosition] using values
+    have targetValue : (positions sourceIndex).val =
+        right.length + position.val := by
+      simp [positions, sourceLengthEq, targetLengthEq, sumPosition,
+        FiniteEquiv.trans, FiniteEquiv.finCast, FiniteEquiv.finSwap,
+        sumEq]
+    have sourceEq : sourceIndex =
+        ⟨position.val, by rw [ItemSeq.length_append]; omega⟩ :=
+      Fin.ext sourceValue
+    have targetEq : positions sourceIndex =
+        ⟨right.length + position.val, by
+          rw [ItemSeq.length_append]
+          omega⟩ := Fin.ext targetValue
+    have sourceGet : (left.append right).get sourceIndex =
+        left.get position := by
+      rw [sourceEq]
+      exact ItemSeq.get_append_left _ _ position
+    have targetGet : (right.append left).get (positions sourceIndex) =
+        left.get position := by
+      rw [targetEq]
+      exact ItemSeq.get_append_right _ _ position
+    rw [sourceGet, targetGet]
+    exact ItemIso.refl (left.get position)
+  · intro position sumEq
+    have sourceValue : sourceIndex.val = left.length + position.val := by
+      have values := congrArg Fin.val sumEq
+      simpa [sumPosition] using values
+    have targetValue : (positions sourceIndex).val = position.val := by
+      simp [positions, sourceLengthEq, targetLengthEq, sumPosition,
+        FiniteEquiv.trans, FiniteEquiv.finCast, FiniteEquiv.finSwap,
+        sumEq]
+    have sourceEq : sourceIndex =
+        ⟨left.length + position.val, by
+          rw [ItemSeq.length_append]
+          omega⟩ := Fin.ext sourceValue
+    have targetEq : positions sourceIndex =
+        ⟨position.val, by rw [ItemSeq.length_append]; omega⟩ :=
+      Fin.ext targetValue
+    have sourceGet : (left.append right).get sourceIndex =
+        right.get position := by
+      rw [sourceEq]
+      exact ItemSeq.get_append_right _ _ position
+    have targetGet : (right.append left).get (positions sourceIndex) =
+        right.get position := by
+      rw [targetEq]
+      exact ItemSeq.get_append_left _ _ position
+    rw [sourceGet, targetGet]
+    exact ItemIso.refl (right.get position)
+  · rfl
+
+private theorem ItemSeq.get_append_singleton_last
+    (items : ItemSeq wires) (item : Item wires) :
+    (items.append (.cons item .nil)).get
+      ⟨items.length, by rw [ItemSeq.length_append]; simp [ItemSeq.length]⟩ =
+        item :=
+  ItemSeq.rec
+    (motive_1 := fun _ _ => True)
+    (motive_2 := fun _ _ => True)
+    (motive_3 := fun _ items => ∀ item,
+      (items.append (.cons item .nil)).get
+        ⟨items.length, by
+          rw [ItemSeq.length_append]
+          simp [ItemSeq.length]⟩ = item)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun _ => rfl)
+    (fun _ _ _ induction item => induction item)
+    items item
+
+/-- Item permutation witnessing that appending one item and placing it first
+are the same presentation. -/
+noncomputable def ItemSeqIso.appendSingletonFront
+    (items : ItemSeq wires) (item : Item wires) :
+    ItemSeqIso (WireEquiv.refl wires)
+      (items.append (.cons item .nil)) (.cons item items) := by
+  let positions := ItemSeq.appendSingletonPositions items item
+  refine .permute positions (fun sourceIndex targetIndex equal => ?_)
+  subst targetIndex
+  by_cases beforeLast : sourceIndex.val < items.length
+  · let original : Fin items.length := ⟨sourceIndex.val, beforeLast⟩
+    have sourceEq : sourceIndex =
+        (⟨original.val, by
+          simp only [ItemSeq.length_append, ItemSeq.length, Nat.add_zero]
+          omega⟩ :
+          Fin (items.append (.cons item .nil)).length) := Fin.ext rfl
+    rw [sourceEq]
+    simp only [positions, ItemSeq.appendSingletonPositions, original.isLt,
+      dite_true, ItemSeq.get]
+    rw [ItemSeq.get_append_left]
+    exact ItemIso.refl (items.get original)
+  · have last : sourceIndex.val = items.length := by
+      have bound := sourceIndex.isLt
+      simp only [ItemSeq.length_append, ItemSeq.length] at bound
+      omega
+    have sourceEq : sourceIndex =
+        (⟨items.length, by
+          simp [ItemSeq.length]⟩ :
+          Fin (items.append (.cons item .nil)).length) := Fin.ext last
+    rw [sourceEq]
+    simp only [positions, ItemSeq.appendSingletonPositions, Nat.lt_irrefl, dite_false,
+      ItemSeq.get]
+    rw [ItemSeq.get_append_singleton_last]
+    exact ItemIso.refl item
+
+/-- Region presentation isomorphism moving one appended item to the front. -/
+noncomputable def RegionIso.appendSingletonFront
+    (locals : List Sig) (items : ItemSeq (outer ++ locals))
+    (item : Item (outer ++ locals)) :
+    RegionIso (WireEquiv.refl outer)
+      (.mk locals (items.append (.cons item .nil)))
+      (.mk locals (.cons item items)) :=
+  .mk (WireEquiv.refl locals)
+    ((ItemSeqIso.appendSingletonFront items item).castAmbient
+      (WireEquiv.append_refl outer locals).symm)
 
 theorem Vars.map_equiv_left_inv
     (equivalence : WireEquiv source target)

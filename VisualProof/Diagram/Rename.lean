@@ -25,6 +25,32 @@ mutual
         .cons (head.renameWires rename) (tail.renameWires rename)
 end
 
+@[simp] theorem Region.locals_renameWires
+    (region : Region source) (rename : WireRenaming source target) :
+    (region.renameWires rename).locals = region.locals := by
+  cases region
+  rfl
+
+@[simp] theorem ItemSeq.renameWires_append
+    (first second : ItemSeq source) (rename : WireRenaming source target) :
+    (first.append second).renameWires rename =
+      (first.renameWires rename).append (second.renameWires rename) :=
+  ItemSeq.rec
+    (motive_1 := fun _ _ => True)
+    (motive_2 := fun _ _ => True)
+    (motive_3 := fun _ first => ∀ second target
+      (rename : WireRenaming _ target),
+      (first.append second).renameWires rename =
+        (first.renameWires rename).append (second.renameWires rename))
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun _ _ _ => True.intro)
+    (fun _ _ => True.intro)
+    (fun _ _ _ => rfl)
+    (fun _ _ _ induction second target rename =>
+      congrArg (ItemSeq.cons _) (induction second target rename))
+    first second target rename
+
 @[simp] theorem vars_map_id (variables : Vars context signatures) :
     variables.map (fun wire => wire) = variables := by
   induction variables with

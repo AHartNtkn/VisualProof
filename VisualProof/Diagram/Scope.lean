@@ -35,6 +35,13 @@ mutual
           tail.incidencePaths wireIndex (itemIndex + 1)
 end
 
+theorem Region.incidencePaths_eq_items
+    (region : Region outer) (wireIndex : Nat) :
+    region.incidencePaths wireIndex =
+      region.items.incidencePaths wireIndex 0 := by
+  cases region
+  rfl
+
 namespace RegionPath
 
 def StartsWith (index : Nat) (path : RegionPath) : Prop :=
@@ -64,6 +71,11 @@ def deepestCommonAncestor : List RegionPath → RegionPath
 current region. -/
 def RootedTwo (paths : List RegionPath) : Prop :=
   2 ≤ paths.length ∧ deepestCommonAncestor paths = []
+
+/-- Shift only the outermost item index of a region path. -/
+def shiftHead (offset : Nat) : RegionPath → RegionPath
+  | [] => []
+  | index :: tail => (offset + index) :: tail
 
 instance (paths : List RegionPath) : Decidable (RootedTwo paths) := by
   unfold RootedTwo
@@ -181,6 +193,118 @@ theorem rooted_iff_not_commonHead (paths : List RegionPath) :
     · exact False.elim (noCommon
         ((deepestCommonAncestor_ne_nil_iff_commonHead paths nonempty).mp
           dcaEq))
+
+private theorem startsWith_shiftHead_iff
+    (offset index : Nat) (path : RegionPath) :
+    StartsWith (offset + index) (shiftHead offset path) ↔
+      StartsWith index path := by
+  cases path with
+  | nil => simp [StartsWith, shiftHead]
+  | cons head tail =>
+      constructor
+      · rintro ⟨shiftedTail, equality⟩
+        injection equality with headEq
+        have indexEq : head = index := by omega
+        subst head
+        exact ⟨tail, rfl⟩
+      · rintro ⟨sourceTail, equality⟩
+        injection equality with headEq tailEq
+        subst head
+        subst tail
+        exact ⟨sourceTail, rfl⟩
+
+private theorem commonHead_map_shiftHead_iff
+    (offset : Nat) (paths : List RegionPath) (nonempty : paths ≠ []) :
+    CommonHead (paths.map (shiftHead offset)) ↔ CommonHead paths := by
+  constructor
+  · rintro ⟨targetIndex, allTarget⟩
+    obtain ⟨first, firstMember⟩ := List.exists_mem_of_ne_nil paths nonempty
+    have shiftedMember : shiftHead offset first ∈
+        paths.map (shiftHead offset) := List.mem_map.mpr ⟨first, firstMember, rfl⟩
+    obtain ⟨targetTail, targetEq⟩ := allTarget _ shiftedMember
+    cases first with
+    | nil => simp [shiftHead] at targetEq
+    | cons firstIndex firstTail =>
+        simp only [shiftHead] at targetEq
+        injection targetEq with targetIndexEq
+        subst targetIndex
+        refine ⟨firstIndex, ?_⟩
+        intro path member
+        have shiftedPathMember : shiftHead offset path ∈
+            paths.map (shiftHead offset) :=
+          List.mem_map.mpr ⟨path, member, rfl⟩
+        have shiftedStarts := allTarget _ shiftedPathMember
+        exact (startsWith_shiftHead_iff offset firstIndex path).mp
+          shiftedStarts
+  · rintro ⟨sourceIndex, allSource⟩
+    refine ⟨offset + sourceIndex, ?_⟩
+    intro shiftedPath member
+    obtain ⟨path, pathMember, rfl⟩ := List.mem_map.mp member
+    exact (startsWith_shiftHead_iff offset sourceIndex path).mpr
+      (allSource path pathMember)
+
+/-- Shifting every outermost item index preserves rooted two-endedness. -/
+theorem RootedTwo.map_shiftHead_iff
+    (offset : Nat) (paths : List RegionPath) :
+    RootedTwo (paths.map (shiftHead offset)) ↔ RootedTwo paths := by
+  by_cases empty : paths = []
+  · simp [empty, RootedTwo]
+  · have mappedNonempty : paths.map (shiftHead offset) ≠ [] := by
+      intro mappedEmpty
+      exact empty ((List.map_eq_nil_iff).mp mappedEmpty)
+    have dcaEq :
+        deepestCommonAncestor (paths.map (shiftHead offset)) = [] ↔
+          deepestCommonAncestor paths = [] := by
+      constructor
+      · intro mappedDca
+        by_cases sourceDca : deepestCommonAncestor paths = []
+        · exact sourceDca
+        · have sourceCommon :=
+            (deepestCommonAncestor_ne_nil_iff_commonHead paths empty).mp
+              sourceDca
+          have mappedCommon :=
+            (commonHead_map_shiftHead_iff offset paths empty).mpr sourceCommon
+          exact False.elim
+            ((deepestCommonAncestor_ne_nil_iff_commonHead
+              (paths.map (shiftHead offset)) mappedNonempty).mpr mappedCommon
+                mappedDca)
+      · intro sourceDca
+        by_cases mappedDca :
+            deepestCommonAncestor (paths.map (shiftHead offset)) = []
+        · exact mappedDca
+        · have mappedCommon :=
+            (deepestCommonAncestor_ne_nil_iff_commonHead
+              (paths.map (shiftHead offset)) mappedNonempty).mp mappedDca
+          have sourceCommon :=
+            (commonHead_map_shiftHead_iff offset paths empty).mp mappedCommon
+          exact False.elim
+            ((deepestCommonAncestor_ne_nil_iff_commonHead paths empty).mpr
+              sourceCommon sourceDca)
+    change
+      (2 ≤ (paths.map (shiftHead offset)).length ∧
+        deepestCommonAncestor (paths.map (shiftHead offset)) = []) ↔
+      (2 ≤ paths.length ∧ deepestCommonAncestor paths = [])
+    simp only [List.length_map]
+    exact and_congr Iff.rfl dcaEq
+
+/-- A rooted subcollection remains rooted after adding more incidences. -/
+theorem RootedTwo.of_sublist {source target : List RegionPath}
+    (sublist : source.Sublist target) (rooted : RootedTwo source) :
+    RootedTwo target := by
+  have sourceRoot := (rooted_iff_not_commonHead source).mp
+    ⟨rooted.nonempty, rooted.2⟩
+  have targetNonempty : target ≠ [] := by
+    obtain ⟨path, member⟩ := List.exists_mem_of_ne_nil source rooted.nonempty
+    intro empty
+    have := sublist.mem member
+    simp [empty] at this
+  have targetNoCommon : ¬CommonHead target := by
+    rintro ⟨index, allTarget⟩
+    exact sourceRoot.2
+      ⟨index, fun path member => allTarget path (sublist.mem member)⟩
+  exact ⟨Nat.le_trans rooted.1 sublist.length_le,
+    ((rooted_iff_not_commonHead target).mpr
+      ⟨targetNonempty, targetNoCommon⟩).2⟩
 
 private theorem commonHead_replaceForward
     (before source target after : List RegionPath) (index : Nat)
@@ -411,6 +535,72 @@ theorem ItemSeq.incidencePaths_append
       congr 2
       simp [Nat.add_assoc, Nat.add_comm])
     first second wireIndex itemIndex
+
+/-- Incidences of a leading item sequence occur in every extension. -/
+theorem ItemSeq.incidencePaths_append_left_sublist
+    (first second : ItemSeq wires) (wireIndex itemIndex : Nat) :
+    (first.incidencePaths wireIndex itemIndex).Sublist
+      ((first.append second).incidencePaths wireIndex itemIndex) := by
+  rw [ItemSeq.incidencePaths_append]
+  exact List.sublist_append_left _ _
+
+/-- Incidences of a trailing item sequence occur in every extension. -/
+theorem ItemSeq.incidencePaths_append_right_sublist
+    (first second : ItemSeq wires) (wireIndex itemIndex : Nat) :
+    (second.incidencePaths wireIndex (itemIndex + first.length)).Sublist
+      ((first.append second).incidencePaths wireIndex itemIndex) := by
+  rw [ItemSeq.incidencePaths_append]
+  exact List.sublist_append_right _ _
+
+/-- Changing the starting item index shifts only the outermost component of
+every resulting incidence path. -/
+theorem ItemSeq.incidencePaths_add_itemIndex
+    (items : ItemSeq wires) (wireIndex itemIndex offset : Nat) :
+    items.incidencePaths wireIndex (itemIndex + offset) =
+      (items.incidencePaths wireIndex itemIndex).map
+        (RegionPath.shiftHead offset) := by
+  let regionMotive : ∀ context, Region context → Prop := fun _ _ => True
+  let itemMotive := fun (context : List Sig) (item : Item context) =>
+    ∀ wireIndex itemIndex offset,
+      item.incidencePaths wireIndex (itemIndex + offset) =
+        (item.incidencePaths wireIndex itemIndex).map
+          (RegionPath.shiftHead offset)
+  let itemsMotive := fun (context : List Sig) (items : ItemSeq context) =>
+    ∀ wireIndex itemIndex offset,
+      items.incidencePaths wireIndex (itemIndex + offset) =
+        (items.incidencePaths wireIndex itemIndex).map
+          (RegionPath.shiftHead offset)
+  exact ItemSeq.rec (motive_1 := regionMotive) (motive_2 := itemMotive)
+    (motive_3 := itemsMotive)
+    (fun _ _ _ => True.intro)
+    (by
+      intro _ _ _ _ wireIndex itemIndex offset
+      simp [Item.incidencePaths, RegionPath.shiftHead])
+    (by
+      intro _ _ _ _ wireIndex itemIndex offset
+      simp [Item.incidencePaths, RegionPath.shiftHead])
+    (by
+      intro _ body _ wireIndex itemIndex offset
+      simp [Item.incidencePaths, RegionPath.shiftHead, List.map_map,
+        Function.comp_def, Nat.add_comm])
+    (by intro _ wireIndex itemIndex offset; rfl)
+    (by
+      intro _ head tail headIH tailIH wireIndex itemIndex offset
+      simp only [ItemSeq.incidencePaths, List.map_append]
+      rw [headIH wireIndex itemIndex offset]
+      have shiftedIndex : itemIndex + offset + 1 =
+          (itemIndex + 1) + offset := by omega
+      rw [shiftedIndex, tailIH wireIndex (itemIndex + 1) offset])
+    items wireIndex itemIndex offset
+
+theorem ItemSeq.rootedTwo_incidencePaths_add_itemIndex_iff
+    (items : ItemSeq wires) (wireIndex itemIndex offset : Nat) :
+    RegionPath.RootedTwo
+        (items.incidencePaths wireIndex (itemIndex + offset)) ↔
+      RegionPath.RootedTwo
+        (items.incidencePaths wireIndex itemIndex) := by
+  rw [ItemSeq.incidencePaths_add_itemIndex]
+  exact RegionPath.RootedTwo.map_shiftHead_iff _ _
 
 theorem ItemSeq.incidencePaths_frame
     (before after : ItemSeq wires) (body : Region wires)

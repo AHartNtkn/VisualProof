@@ -40,6 +40,96 @@ def trans (first : FiniteEquiv alpha beta) (second : FiniteEquiv beta gamma) :
     intro z
     simp only [Function.comp_apply, first.right_inv, second.right_inv]
 
+def finCast (equality : source = target) :
+    FiniteEquiv (Fin source) (Fin target) where
+  toFun := Fin.cast equality
+  invFun := Fin.cast equality.symm
+  left_inv := by
+    subst target
+    intro position
+    rfl
+  right_inv := by
+    subst target
+    intro position
+    rfl
+
+def finSucc (equivalence : FiniteEquiv (Fin source) (Fin target)) :
+    FiniteEquiv (Fin (source + 1)) (Fin (target + 1)) where
+  toFun position := Fin.cases 0 (fun rest => (equivalence rest).succ) position
+  invFun position :=
+    Fin.cases 0 (fun rest => (equivalence.symm rest).succ) position
+  left_inv := by
+    intro position
+    refine Fin.cases rfl (fun rest => ?_) position
+    change (equivalence.symm (equivalence rest)).succ = rest.succ
+    exact congrArg Fin.succ (equivalence.left_inv rest)
+  right_inv := by
+    intro position
+    refine Fin.cases rfl (fun rest => ?_) position
+    change (equivalence (equivalence.symm rest)).succ = rest.succ
+    exact congrArg Fin.succ (equivalence.right_inv rest)
+
+def finAppend
+    (left : FiniteEquiv (Fin sourceLeft) (Fin targetLeft))
+    (right : FiniteEquiv (Fin sourceRight) (Fin targetRight)) :
+    FiniteEquiv (Fin (sourceLeft + sourceRight))
+      (Fin (targetLeft + targetRight)) :=
+  let forward := Fin.addCases
+    (fun position => Fin.castAdd targetRight (left position))
+    (fun position => Fin.natAdd targetLeft (right position))
+  let inverse := Fin.addCases
+    (fun position => Fin.castAdd sourceRight (left.symm position))
+    (fun position => Fin.natAdd sourceLeft (right.symm position))
+  {
+    toFun := forward
+    invFun := inverse
+    left_inv := by
+      intro position
+      refine Fin.addCases (motive := fun position =>
+        inverse (forward position) = position) ?_ ?_ position
+      · intro leftPosition
+        simp [forward, inverse, left.left_inv]
+      · intro rightPosition
+        simp [forward, inverse, right.left_inv]
+    right_inv := by
+      intro position
+      refine Fin.addCases (motive := fun position =>
+        forward (inverse position) = position) ?_ ?_ position
+      · intro leftPosition
+        simp [forward, inverse, left.right_inv]
+      · intro rightPosition
+        simp [forward, inverse, right.right_inv]
+  }
+
+def finSwap (left right : Nat) :
+    FiniteEquiv (Fin (left + right)) (Fin (right + left)) :=
+  let forward := Fin.addCases
+    (fun position => Fin.natAdd right position)
+    (fun position => Fin.castAdd left position)
+  let inverse := Fin.addCases
+    (fun position => Fin.natAdd left position)
+    (fun position => Fin.castAdd right position)
+  {
+    toFun := forward
+    invFun := inverse
+    left_inv := by
+      intro position
+      refine Fin.addCases (motive := fun position =>
+        inverse (forward position) = position) ?_ ?_ position
+      · intro leftPosition
+        simp [forward, inverse]
+      · intro rightPosition
+        simp [forward, inverse]
+    right_inv := by
+      intro position
+      refine Fin.addCases (motive := fun position =>
+        forward (inverse position) = position) ?_ ?_ position
+      · intro rightPosition
+        simp [forward, inverse]
+      · intro leftPosition
+        simp [forward, inverse]
+  }
+
 @[simp] theorem trans_apply (first : FiniteEquiv alpha beta)
     (second : FiniteEquiv beta gamma) (x : alpha) :
     first.trans second x = second (first x) := rfl

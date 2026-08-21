@@ -70,7 +70,13 @@ def present (locals : List Sig)
   .mk locals (items.append
     (.cons (.identity signature 1 (fun _ => wire)) .nil))
 
-private theorem canonical (locals : List Sig)
+/-- The same unary pin presentation with the pin placed first. -/
+def front (locals : List Sig)
+    (items : ItemSeq (outer ++ locals))
+    (signature : Sig) (wire : Var (outer ++ locals) signature) : Region outer :=
+  .mk locals (.cons (.identity signature 1 (fun _ => wire)) items)
+
+theorem canonical (locals : List Sig)
     (items : ItemSeq (outer ++ locals))
     (signature : Sig) (wire : Var (outer ++ locals) signature)
     (sourceCanonical : (plain locals items).Canonical) :
@@ -91,6 +97,82 @@ private theorem canonical (locals : List Sig)
   · rw [ItemSeq.childrenCanonical_append]
     exact ⟨children, by simp [ItemSeq.ChildrenCanonical,
       Item.ChildrenCanonical]⟩
+
+theorem frontCanonical (locals : List Sig)
+    (items : ItemSeq (outer ++ locals))
+    (signature : Sig) (wire : Var (outer ++ locals) signature)
+    (sourceCanonical : (present locals items signature wire).Canonical) :
+    (front locals items signature wire).Canonical := by
+  simp only [present, front, Region.Canonical] at sourceCanonical ⊢
+  constructor
+  · intro localIndex
+    have sourceRoot := sourceCanonical.1 localIndex
+    by_cases selected : wire.index.val = outer.length + localIndex.val
+    · have sourcePaths :
+          (items.append
+            (.cons (.identity signature 1 (fun _ => wire)) .nil)).incidencePaths
+              (outer.length + localIndex.val) 0 =
+            items.incidencePaths (outer.length + localIndex.val) 0 ++ [[]] := by
+        simp [ItemSeq.incidencePaths_append, ItemSeq.incidencePaths,
+          Item.incidencePaths, selected]
+      rw [sourcePaths] at sourceRoot
+      have targetPaths :
+          (.cons (.identity signature 1 (fun _ => wire)) items :
+            ItemSeq (outer ++ locals)).incidencePaths
+              (outer.length + localIndex.val) 0 =
+            [] :: items.incidencePaths (outer.length + localIndex.val) 1 := by
+        simp [ItemSeq.incidencePaths, Item.incidencePaths, selected]
+      rw [targetPaths]
+      have oldLength :
+          (items.incidencePaths (outer.length + localIndex.val) 1).length =
+            (items.incidencePaths
+              (outer.length + localIndex.val) 0).length := by
+        have shifted := ItemSeq.incidencePaths_add_itemIndex items
+          (outer.length + localIndex.val) 0 1
+        simpa only [Nat.zero_add, List.length_map] using congrArg List.length shifted
+      constructor
+      · simp only [List.length_cons]
+        have sourceLength := sourceRoot.1
+        simp only [List.length_append, List.length_singleton] at sourceLength
+        omega
+      · exact RegionPath.deepestCommonAncestor_cons_nil _
+    · have oldRoot : RegionPath.RootedTwo
+          (items.incidencePaths (outer.length + localIndex.val) 0) := by
+        simpa [ItemSeq.incidencePaths_append, ItemSeq.incidencePaths,
+          Item.incidencePaths, selected] using sourceRoot
+      have shiftedRoot :=
+        (ItemSeq.rootedTwo_incidencePaths_add_itemIndex_iff
+          items (outer.length + localIndex.val) 0 1).mpr oldRoot
+      simpa [ItemSeq.incidencePaths, Item.incidencePaths, selected] using
+        shiftedRoot
+  · have children := sourceCanonical.2
+    have itemChildren :
+        (Item.identity signature 1 (fun _ => wire)).ChildrenCanonical :=
+      True.intro
+    have oldChildren :=
+      (ItemSeq.childrenCanonical_append _ _).mp children |>.1
+    exact ⟨itemChildren, oldChildren⟩
+
+theorem present_front_incidence_nonempty_iff
+    (locals : List Sig) (items : ItemSeq (outer ++ locals))
+    (signature : Sig) (selected : Var (outer ++ locals) signature)
+    (wireIndex : Nat) :
+    (present locals items signature selected).incidencePaths wireIndex ≠ [] ↔
+      (front locals items signature selected).incidencePaths wireIndex ≠ [] := by
+  simp only [present, front, Region.incidencePaths,
+    ItemSeq.incidencePaths_append, ItemSeq.incidencePaths,
+    List.append_nil, Nat.zero_add]
+  have shiftedEmpty := ItemSeq.incidencePaths_eq_nil_iff_itemIndex
+    items wireIndex 0 1
+  constructor <;> intro nonempty empty
+  · apply nonempty
+    apply List.append_eq_nil_iff.mpr
+    exact ⟨shiftedEmpty.mpr (List.append_eq_nil_iff.mp empty).2,
+      (List.append_eq_nil_iff.mp empty).1⟩
+  · apply nonempty
+    apply List.append_eq_nil_iff.mpr
+    exact ⟨(List.append_eq_nil_iff.mp empty).2,
+      shiftedEmpty.mp (List.append_eq_nil_iff.mp empty).1⟩
 
 private theorem rootedTwo_of_sublist {source target : List RegionPath}
     (sublist : source.Sublist target) (rooted : RegionPath.RootedTwo source) :
@@ -930,6 +1012,23 @@ theorem Pin.introduceValidity
     Pin.fillExternalTwoEnded occurrence.interface.boundaryWire
       occurrence.context locals items signature wire
       occurrence.sourceExternalTwoEnded⟩
+
+theorem Pin.frontValidity
+    {holeWires : List Sig}
+    {items : ItemSeq (holeWires ++ locals)}
+    {signature : Sig} {wire : Var (holeWires ++ locals) signature}
+    (occurrence : Occurrence (Pin.present locals items signature wire) source) :
+    (occurrence.context.fill
+        (Pin.front locals items signature wire)).Canonical ∧
+      OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
+        (occurrence.context.fill
+          (Pin.front locals items signature wire)) := by
+  apply replacementValidity occurrence
+  · exact Pin.frontCanonical locals items signature wire
+      (occurrence.context.holeCanonical _ occurrence.sourceCanonical)
+  · intro wireSignature selected
+    exact Pin.present_front_incidence_nonempty_iff locals items signature wire
+      selected.index.val
 
 theorem Pin.eliminateValidity
     {holeWires : List Sig} {items : ItemSeq (holeWires ++ locals)}
