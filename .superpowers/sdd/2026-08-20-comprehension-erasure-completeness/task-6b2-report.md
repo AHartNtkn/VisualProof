@@ -420,3 +420,167 @@ modules remain warning-free under focused elaboration.
 - No BoundaryPlan or compiler integration code is in scope.
 
 No correctness concern or validation blocker remains.
+
+## Fix round 2: literal reflexivity for unchanged normalization
+
+Date: 2026-08-21
+
+**GREEN.** This section supersedes Fix Round 1's public-result and
+unchanged-branch descriptions.
+
+### Mathematical claim and owning contract
+
+For the normalized item sequence, the public owner returns its
+identity-boundary `ItemsResult`, internally established endpoint validity, a
+target diagram representing the normalized reconstruction up to
+`OpenDiagram.Isomorphic`, and symmetric reflexive-transitive `Step`
+reachability between the actual occurrence host and that target. When no site
+is selected, the target is the exact occurrence host and both reachability
+witnesses are literal reflexivity.
+
+```lean
+theorem normalizeItemsEquates
+    {arguments common sourceWires targetWires : List Sig}
+    (pattern : OpenDiagram arguments)
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments common sourceWires targetWires}
+    {data : operation.Data frame}
+    {source : ItemSeq sourceWires} {result : Region common}
+    (evidence :
+      Instantiation.ItemsResult pattern frame.sourceKeep frame.selected
+        source result)
+    (sites : ItemsSites operation data evidence)
+    {boundary : List Sig} {host : OpenDiagram boundary}
+    (occurrence : Occurrence result host) :
+    ∃ normalized : Region common,
+      Instantiation.ItemsResult
+          (identityBoundary pattern) frame.sourceKeep frame.selected source
+            normalized ∧
+        ∃ targetCanonical : (occurrence.context.fill normalized).Canonical,
+          ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+              occurrence.interface.boundaryWire
+              (occurrence.context.fill normalized),
+            let reconstructed := occurrence.interface.withBody
+              (occurrence.context.fill normalized) targetCanonical
+                targetExternalTwoEnded
+            let target := if itemsHaveSelection sites = false then host
+              else reconstructed
+            OpenDiagram.Isomorphic target reconstructed ∧
+              Relation.ReflTransGen Step host target ∧
+                Relation.ReflTransGen Step target host
+```
+
+The normalized reconstruction is still present in the result index and its
+validity is still computed by the owner. The conditional relational target is
+the narrow boundary required by an arbitrary occurrence:
+`occurrence.host_iso` supplies isomorphism, not definitional equality, between
+the actual `host` and the reconstructed source endpoint. The result fixes the
+selected target to that reconstruction rather than leaving it existentially
+unconstrained.
+
+### Exact unchanged dispatch
+
+Only `let output := normalizedItems pattern evidence sites` precedes the
+`itemsHaveSelection` split. In the false branch,
+`normalizedItems_eq_of_noSelection` proves `output.1 = result`; the returned
+target is exactly `host`, and the relational fields are constructed as:
+
+```lean
+refine ⟨output.1, output.2, targetCanonical,
+  targetExternalTwoEnded, ?_⟩
+dsimp only
+rw [if_pos noSelection]
+exact ⟨targetIsomorphic,
+  Relation.ReflTransGen.refl, Relation.ReflTransGen.refl⟩
+```
+
+That branch contains no `Step` constructor, presentation occurrence,
+support-pin generation, normalization worker, `StrictEquates`, bridge, or
+transitive composition. Selected branches retain the accepted reconstructed
+target and isomorphism transport.
+
+### Theorem-driven RED / GREEN
+
+With the final revised statement elaborating and only its owning proof
+admitted, RED was:
+
+```text
+$ lake env lean VisualProof/Rule/Completeness/Comprehension/Compiler.lean
+VisualProof/Rule/Completeness/Comprehension/Compiler.lean:4908:8: warning: declaration uses `sorry`
+```
+
+Exit status `0`. Restoring the kernel-checked proof produced focused GREEN
+with no output:
+
+```text
+$ lake env lean VisualProof/Rule/Completeness/Reachability.lean
+$ lake env lean VisualProof/Rule/Completeness/Erasure/Exposure.lean
+$ lake env lean VisualProof/Rule/Completeness/Comprehension/Compiler.lean
+```
+
+All three exited `0`.
+
+### Exact branch and surface validation
+
+The exact unchanged branch was printed and audited directly:
+
+```text
+$ sed -n '4938,4961p' \
+    VisualProof/Rule/Completeness/Comprehension/Compiler.lean
+$ sed -n '4938,4961p' \
+    VisualProof/Rule/Completeness/Comprehension/Compiler.lean | \
+    rg -n 'Relation\.ReflTransGen\.refl'
+24:      Relation.ReflTransGen.refl, Relation.ReflTransGen.refl⟩
+$ sed -n '4938,4961p' \
+    VisualProof/Rule/Completeness/Comprehension/Compiler.lean | \
+    rg -n '\bStep\b|presentationOccurrence|contextPins|adjoinPins|normalizedItemsStrict|normalizedItemsSupportedStrict|StrictEquates|toEquates|transGen_iso|sourceEndpoint|preservation'
+```
+
+The first two commands exited `0`; the phase scan exited `1` with no match.
+A consumer scan found only the owning declaration, so the target-index change
+does not alter another production caller.
+
+Proof-hole, forbidden-construction, public-helper, and Exposure-surface audits:
+
+```text
+$ rg -n '\b(sorry|admit)\b|^\s*axiom\b' VisualProof
+$ git diff --unified=0 f4dfb727 -- \
+    VisualProof/Rule/Completeness/Reachability.lean \
+    VisualProof/Rule/Completeness/Erasure/Exposure.lean \
+    VisualProof/Rule/Completeness/Comprehension/Compiler.lean | \
+    rg '^\+.*\b(cast|Eq\.rec|occurrenceCongr|Argument\.Projection|WireSever|xor|Xor)\b'
+$ rg -n '^(theorem|def|structure) (StrictEquates|contextPins|contextPins_incidence_nonempty|pinnedHostCanonical|adjoinPinsEquatesNonempty|pinnedHost_incidence_nonempty|Occurrence\.nest)' \
+    VisualProof/Rule/Completeness/Comprehension/Compiler.lean \
+    VisualProof/Rule/Completeness/Erasure/Exposure.lean \
+    VisualProof/Rule/Completeness/Reachability.lean
+$ rg -n 'Exposure\.(derives|equatesEmptyHost)' VisualProof
+```
+
+All four exited `1` with no matches. The Task 2 Exposure owner audit still
+finds the erased-target canonicality premise, returned material validity, and
+the single symmetric `Equates` result.
+
+Diff hygiene and authoritative build:
+
+```text
+$ git diff --check
+$ lake build
+```
+
+Both exited `0`; the build completed all 77 jobs. Output was limited to the
+established replayed unused-simp warnings in `Diagram/Isomorphism.lean` and
+`Diagram/Scope/Rename.lean`; focused touched modules remain warning-free.
+
+### Fix-round self-review and concerns
+
+- The public unchanged result itself contains literal reflexive closures at
+  the exact occurrence host; no no-op cycle is embedded in either direction.
+- No caller supplies equality authority, endpoint validity, target layout, or
+  reachability evidence.
+- Endpoint representation is carried by the narrow public result rather than
+  a general transport algebra.
+- Selected relational processing and the single shared Exposure owner are
+  unchanged.
+- BoundaryPlan and compiler integration remain out of scope.
+
+No correctness concern or validation blocker remains.

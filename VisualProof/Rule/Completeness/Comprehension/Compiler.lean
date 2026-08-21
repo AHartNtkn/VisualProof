@@ -4926,9 +4926,40 @@ theorem normalizeItemsEquates
           ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
               occurrence.interface.boundaryWire
               (occurrence.context.fill normalized),
-            Equates occurrence normalized targetCanonical
-              targetExternalTwoEnded := by
+            let reconstructed := occurrence.interface.withBody
+              (occurrence.context.fill normalized) targetCanonical
+                targetExternalTwoEnded
+            let target := if itemsHaveSelection sites = false then host
+              else reconstructed
+            OpenDiagram.Isomorphic target reconstructed ∧
+              Relation.ReflTransGen Step host target ∧
+                Relation.ReflTransGen Step target host := by
   let output := normalizedItems pattern evidence sites
+  by_cases noSelection : itemsHaveSelection sites = false
+  · have outputEq : output.1 = result := by
+      simpa only [output] using
+        normalizedItems_eq_of_noSelection pattern evidence sites noSelection
+    have targetCanonical : (occurrence.context.fill output.1).Canonical := by
+      rw [outputEq]
+      exact occurrence.sourceCanonical
+    have targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+        occurrence.interface.boundaryWire
+        (occurrence.context.fill output.1) := by
+      intro signature wire
+      rw [outputEq]
+      exact occurrence.sourceExternalTwoEnded wire
+    have targetIsomorphic : OpenDiagram.Isomorphic host
+        (occurrence.interface.withBody
+          (occurrence.context.fill output.1) targetCanonical
+            targetExternalTwoEnded) := by
+      exact ⟨by simpa only [outputEq] using occurrence.host_iso⟩
+    refine ⟨output.1, output.2, targetCanonical,
+      targetExternalTwoEnded, ?_⟩
+    dsimp only
+    rw [if_pos noSelection]
+    exact ⟨targetIsomorphic,
+      Relation.ReflTransGen.refl, Relation.ReflTransGen.refl⟩
+  · exact (by
   let preservation := normalizedItems_scope pattern evidence sites
   have resultCanonical : result.Canonical :=
     occurrence.context.holeCanonical result occurrence.sourceCanonical
@@ -4947,23 +4978,6 @@ theorem normalizeItemsEquates
       (occurrence.context.fill output.1) replacement.2
   have targetCanonical : (occurrence.context.fill output.1).Canonical :=
     replacement.1
-  by_cases noSelection : itemsHaveSelection sites = false
-  · have outputEq : output.1 = result := by
-      simpa only [output] using
-        normalizedItems_eq_of_noSelection pattern evidence sites noSelection
-    let exactResultOccurrence : Occurrence result sourceEndpoint :=
-      exactOccurrence occurrence.interface occurrence.context result
-        occurrence.sourceCanonical occurrence.sourceExternalTwoEnded
-    have unchanged : Equates exactResultOccurrence result
-        occurrence.sourceCanonical occurrence.sourceExternalTwoEnded := by
-      exact ⟨.refl, .refl⟩
-    have bridge := (StrictEquates.refl occurrence).toEquates
-    have combined := Equates.trans bridge unchanged
-    refine ⟨output.1, output.2, targetCanonical,
-      targetExternalTwoEnded, ?_⟩
-    simpa only [outputEq, exactResultOccurrence, exactOccurrence,
-      sourceEndpoint] using combined
-  · exact (by
   let appendNil : WireRenaming common (common ++ []) :=
     ⟨fun wire => wire.appendLeft []⟩
   let sourceAfter := Region.adjoinAt []
@@ -5025,8 +5039,12 @@ theorem normalizeItemsEquates
       targetExternalTwoEnded :=
     ⟨transGen_iso (OpenDiagramIso.refl host) folded.1 finalIso,
       transGen_iso finalIso folded.2 (OpenDiagramIso.refl host)⟩
-  exact ⟨output.1, output.2, targetCanonical, targetExternalTwoEnded,
-    exactStrict.toEquates⟩)
+  have equivalent := exactStrict.toEquates
+  refine ⟨output.1, output.2, targetCanonical,
+    targetExternalTwoEnded, ?_⟩
+  dsimp only
+  rw [if_neg noSelection]
+  exact ⟨OpenDiagram.Isomorphic.refl _, equivalent.1, equivalent.2⟩)
 
 end EqualityNormalization
 
