@@ -1,4 +1,5 @@
 import VisualProof.Rule.Completeness.Comprehension.Telescope
+import VisualProof.Rule.Completeness.Erasure.Exposure
 
 namespace VisualProof.Rule.Completeness.Comprehension
 
@@ -7,6 +8,7 @@ open Theory
 open WirePrimitive
 
 namespace Compiler
+
 
 /-- Compile one complete selected-application layer through formal
 application. Boundary and equality compilation prepare the authoritative
@@ -243,6 +245,950 @@ theorem itemsIdentity
   }
 
 namespace PatternCompiler
+
+namespace EqualityNormalization
+
+def formalPorts (arguments : List Sig) : Vars arguments arguments :=
+  Erasure.Exposure.identityBoundary arguments
+
+private theorem Vars.get_map
+    (variables : Vars source signatures)
+    (rename : ∀ {signature}, Var source signature → Var target signature)
+    (position : Fin signatures.length) :
+    (variables.map rename).get position = rename (variables.get position) := by
+  induction variables with
+  | nil => exact Fin.elim0 position
+  | cons head tail induction =>
+      exact Fin.cases rfl (fun rest => induction rest) position
+
+private theorem formalPorts_get_index (position : Fin arguments.length) :
+    ((formalPorts arguments).get position).index = position := by
+  exact Erasure.Exposure.identityBoundary_get_index position
+
+private theorem formalPorts_surjective (wire : Fin arguments.length) :
+    ∃ position : Fin arguments.length,
+      ((formalPorts arguments).get position).index = wire :=
+  ⟨wire, formalPorts_get_index wire⟩
+
+private theorem Vars.countIndex_appendLeft_zero
+    (variables : Vars source signatures) (added : List Sig)
+    (index : Nat) (beyond : source.length ≤ index) :
+    (variables.map fun wire => wire.appendLeft added).countIndex index = 0 := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      have different : head.index.val ≠ index := by
+        have bound := head.index.isLt
+        omega
+      simp only [Vars.map, Vars.countIndex, Var.index_appendLeft]
+      rw [if_neg different, induction]
+
+private theorem Vars.countIndex_appendRight
+    (variables : Vars source signatures) (addedBefore : List Sig)
+    (index : Nat) :
+    (variables.map fun wire => Var.appendRight addedBefore wire).countIndex
+        (addedBefore.length + index) =
+      variables.countIndex index := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [Vars.map, Vars.countIndex, Var.index_appendRight]
+      split <;> rename_i equality
+      · have sourceEquality : head.index.val = index := by omega
+        simp [sourceEquality, induction]
+      · have sourceDifferent : head.index.val ≠ index := by
+          intro sourceEquality
+          exact equality (by omega)
+        simp [sourceDifferent, induction]
+
+private theorem equalityItems_incidencePaths_length
+    (left right : Vars wires signatures)
+    (wireIndex itemIndex : Nat) :
+    ((_root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems
+      left right).incidencePaths wireIndex itemIndex).length =
+      left.countIndex wireIndex + right.countIndex wireIndex := by
+  induction left generalizing itemIndex with
+  | nil => cases right; rfl
+  | cons leftHead leftTail induction =>
+      cases right with
+      | cons rightHead rightTail =>
+          simp only [
+            _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems,
+            ItemSeq.incidencePaths, Item.incidencePaths,
+            _root_.VisualProof.Rule.Comprehension.Instantiation.equalityPorts,
+            Vars.countIndex, List.length_append, List.length_replicate]
+          rw [induction rightTail]
+          by_cases leftEqual : leftHead.index.val = wireIndex <;>
+            by_cases rightEqual : rightHead.index.val = wireIndex <;>
+            simp [List.ofFn_succ, List.ofFn_zero, leftEqual, rightEqual] <;>
+            omega
+
+private theorem equalityItems_left_mem_nil
+    (left right : Vars wires signatures)
+    (position : Fin signatures.length) (itemIndex : Nat) :
+    [] ∈ (_root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems
+      left right).incidencePaths (left.get position).index.val itemIndex := by
+  induction left generalizing itemIndex with
+  | nil => cases right; exact Fin.elim0 position
+  | cons leftHead leftTail induction =>
+      cases right with
+      | cons rightHead rightTail =>
+          revert itemIndex
+          refine Fin.cases (fun itemIndex => ?_)
+            (fun rest itemIndex => ?_) position
+          · change [] ∈
+              (_root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems
+                (.cons leftHead leftTail)
+                (.cons rightHead rightTail)).incidencePaths
+                  leftHead.index.val itemIndex
+            simp only [
+              _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems,
+              ItemSeq.incidencePaths, Item.incidencePaths,
+              _root_.VisualProof.Rule.Comprehension.Instantiation.equalityPorts,
+              List.mem_append, List.mem_replicate]
+            apply Or.inl
+            constructor
+            · intro countZero
+              have absent := List.count_eq_zero.mp countZero
+              exact absent (by simp)
+            · trivial
+          · simp only [
+              _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems,
+              ItemSeq.incidencePaths, List.mem_append]
+            exact Or.inr (induction rightTail rest (itemIndex + 1))
+
+/-- Exact local list produced by the defining instantiation operations. -/
+private def locals (pattern : OpenDiagram arguments) : List Sig :=
+  pattern.external ++ (pattern.body.locals ++ [])
+
+private def bodyEmbedding (pattern : OpenDiagram arguments)
+    (targetWires : List Sig) :
+    WireRenaming (pattern.external ++ pattern.body.locals)
+      (targetWires ++ locals pattern) :=
+  WireRenaming.comp
+    (Region.adjoinMaterialWire targetWires pattern.external
+      (pattern.body.locals ++ []))
+    (WireRenaming.comp
+      (Region.conjoinLeftWire (targetWires ++ pattern.external)
+        pattern.body.locals [])
+      ((⟨fun wire => Var.appendRight targetWires wire⟩ :
+        WireRenaming pattern.external
+          (targetWires ++ pattern.external)).appendRight pattern.body.locals))
+
+private def equalityEmbedding (pattern : OpenDiagram arguments)
+    (targetWires : List Sig) :
+    WireRenaming ((targetWires ++ pattern.external) ++ [])
+      (targetWires ++ locals pattern) :=
+  WireRenaming.comp
+    (Region.adjoinMaterialWire targetWires pattern.external
+      (pattern.body.locals ++ []))
+    (Region.conjoinRightWire (targetWires ++ pattern.external)
+      pattern.body.locals [])
+
+private def actualEmbedding (pattern : OpenDiagram arguments)
+    (targetWires : List Sig) :
+    WireRenaming targetWires (targetWires ++ locals pattern) :=
+  ⟨fun wire => equalityEmbedding pattern targetWires
+    ((wire.appendLeft pattern.external).appendLeft [])⟩
+
+private def patternEmbedding (pattern : OpenDiagram arguments)
+    (targetWires : List Sig) :
+    WireRenaming pattern.external (targetWires ++ locals pattern) :=
+  ⟨fun wire => equalityEmbedding pattern targetWires
+    ((Var.appendRight targetWires wire).appendLeft [])⟩
+
+private def items (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments) :
+    ItemSeq (targetWires ++ locals pattern) :=
+  (pattern.body.items.renameWires (bodyEmbedding pattern targetWires)).append
+    (_root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems
+      (ports.map fun wire => actualEmbedding pattern targetWires wire)
+      (pattern.boundaryWire.map
+        fun wire => patternEmbedding pattern targetWires wire))
+
+private theorem bodyEmbedding_natural
+    (pattern : OpenDiagram arguments)
+    (rename : WireRenaming sourceWires targetWires) :
+    WireRenaming.comp (rename.appendRight (locals pattern))
+      (bodyEmbedding pattern sourceWires) =
+      bodyEmbedding pattern targetWires := by
+  apply WireRenaming.ext
+  intro signature wire
+  apply Var.appendCases (left := pattern.external)
+    (right := pattern.body.locals)
+    (motive := fun wire =>
+      WireRenaming.comp (rename.appendRight (locals pattern))
+          (bodyEmbedding pattern sourceWires) wire =
+        bodyEmbedding pattern targetWires wire)
+  · intro externalSignature external
+    simp [bodyEmbedding, locals, WireRenaming.comp,
+      WireRenaming.appendRight, Region.adjoinMaterialWire,
+      Region.conjoinLeftWire]
+  · intro localSignature localWire
+    simp [bodyEmbedding, locals, WireRenaming.comp,
+      WireRenaming.appendRight, Region.adjoinMaterialWire,
+      Region.conjoinLeftWire]
+
+private theorem actualEmbedding_natural
+    (pattern : OpenDiagram arguments)
+    (rename : WireRenaming sourceWires targetWires) :
+    WireRenaming.comp (rename.appendRight (locals pattern))
+      (actualEmbedding pattern sourceWires) =
+      WireRenaming.comp (actualEmbedding pattern targetWires) rename := by
+  apply WireRenaming.ext
+  intro signature wire
+  simp [actualEmbedding, equalityEmbedding, locals, WireRenaming.comp,
+    WireRenaming.appendRight, Region.adjoinMaterialWire,
+    Region.conjoinRightWire]
+
+private theorem patternEmbedding_natural
+    (pattern : OpenDiagram arguments)
+    (rename : WireRenaming sourceWires targetWires) :
+    WireRenaming.comp (rename.appendRight (locals pattern))
+      (patternEmbedding pattern sourceWires) =
+      patternEmbedding pattern targetWires := by
+  apply WireRenaming.ext
+  intro signature wire
+  simp [patternEmbedding, equalityEmbedding, locals, WireRenaming.comp,
+    WireRenaming.appendRight, Region.adjoinMaterialWire,
+    Region.conjoinRightWire]
+
+@[simp] private theorem actualEmbedding_index_val
+    (pattern : OpenDiagram arguments)
+    (wire : Var targetWires signature) :
+    (actualEmbedding pattern targetWires wire).index.val = wire.index.val := by
+  simp [actualEmbedding, equalityEmbedding, locals, WireRenaming.comp,
+    Region.adjoinMaterialWire, Region.conjoinRightWire]
+
+private theorem bodyEmbedding_index_lower
+    (pattern : OpenDiagram arguments)
+    (wire : Var (pattern.external ++ pattern.body.locals) signature) :
+    targetWires.length ≤
+      (bodyEmbedding pattern targetWires wire).index.val := by
+  apply Var.appendCases (left := pattern.external)
+    (right := pattern.body.locals)
+    (motive := fun wire => targetWires.length ≤
+      (bodyEmbedding pattern targetWires wire).index.val)
+  · intro externalSignature external
+    simp [bodyEmbedding, locals, WireRenaming.comp,
+      WireRenaming.appendRight, Region.adjoinMaterialWire,
+      Region.conjoinLeftWire]
+  · intro localSignature localWire
+    simp [bodyEmbedding, locals, WireRenaming.comp,
+      WireRenaming.appendRight, Region.adjoinMaterialWire,
+      Region.conjoinLeftWire]
+
+private theorem patternEmbedding_index_lower
+    (pattern : OpenDiagram arguments)
+    (wire : Var pattern.external signature) :
+    targetWires.length ≤
+      (patternEmbedding pattern targetWires wire).index.val := by
+  simp [patternEmbedding, equalityEmbedding, locals, WireRenaming.comp,
+    Region.adjoinMaterialWire, Region.conjoinRightWire]
+
+private theorem Vars.map_comp4
+    (variables : Vars first signatures)
+    (firstMap : ∀ {signature}, Var first signature → Var second signature)
+    (secondMap : ∀ {signature}, Var second signature → Var third signature)
+    (thirdMap : ∀ {signature}, Var third signature → Var fourth signature)
+    (fourthMap : ∀ {signature}, Var fourth signature → Var fifth signature) :
+    (((variables.map fun wire => firstMap wire).map
+      fun wire => secondMap wire).map fun wire => thirdMap wire).map
+        (fun wire => fourthMap wire) =
+      variables.map fun wire =>
+        fourthMap (thirdMap (secondMap (firstMap wire))) := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      exact congrArg (Vars.cons
+        (fourthMap (thirdMap (secondMap (firstMap head))))) induction
+
+private theorem instantiate_eq_presentation
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments) :
+    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      pattern ports = .mk (locals pattern) (items pattern ports) := by
+  cases pattern with
+  | mk external boundaryWire boundarySurjective body canonical
+      externalTwoEnded =>
+    cases body with
+    | mk bodyLocals bodyItems =>
+      simp only [
+        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate,
+        _root_.VisualProof.Rule.Comprehension.Instantiation.Equalities_eq_ofItems,
+        items, bodyEmbedding, actualEmbedding, patternEmbedding,
+        equalityEmbedding, locals,
+        Region.locals, Region.items, Region.renameWires, Region.conjoin,
+        Region.adjoinAt, Region.ofItems, ItemSeq.renameWires_append,
+        ItemSeq.renameWires_comp,
+        _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems_renameWires]
+      simp only [ItemSeq.renameWires, ItemSeq.nil_append,
+        Vars.map_comp4, WireRenaming.comp]
+
+private theorem instantiate_renameWires
+    (pattern : OpenDiagram arguments)
+    (ports : Vars sourceWires arguments)
+    (rename : WireRenaming sourceWires targetWires) :
+    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      pattern ports).renameWires rename =
+      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate pattern
+        (ports.map fun wire => rename wire) := by
+  have actualMap :
+      (ports.map fun wire => actualEmbedding pattern sourceWires wire).map
+          (fun wire => rename.appendRight (locals pattern) wire) =
+        (ports.map fun wire => rename wire).map
+          (fun wire => actualEmbedding pattern targetWires wire) := by
+    calc
+      _ = ports.map (fun wire =>
+          rename.appendRight (locals pattern)
+            (actualEmbedding pattern sourceWires wire)) :=
+        Diagram.vars_map_comp ports (actualEmbedding pattern sourceWires)
+          (rename.appendRight (locals pattern))
+      _ = ports.map (fun wire =>
+          actualEmbedding pattern targetWires (rename wire)) := by
+        simpa only [WireRenaming.comp] using congrArg
+          (fun map : WireRenaming sourceWires
+              (targetWires ++ locals pattern) =>
+            ports.map fun wire => map wire)
+          (actualEmbedding_natural pattern rename)
+      _ = _ := (Diagram.vars_map_comp ports rename
+        (actualEmbedding pattern targetWires)).symm
+  have patternMap :
+      (pattern.boundaryWire.map
+          fun wire => patternEmbedding pattern sourceWires wire).map
+            (fun wire => rename.appendRight (locals pattern) wire) =
+        pattern.boundaryWire.map
+          (fun wire => patternEmbedding pattern targetWires wire) := by
+    calc
+      _ = pattern.boundaryWire.map (fun wire =>
+          rename.appendRight (locals pattern)
+            (patternEmbedding pattern sourceWires wire)) :=
+        Diagram.vars_map_comp pattern.boundaryWire
+          (patternEmbedding pattern sourceWires)
+          (rename.appendRight (locals pattern))
+      _ = _ := by
+        simpa only [WireRenaming.comp] using congrArg
+          (fun map : WireRenaming pattern.external
+              (targetWires ++ locals pattern) =>
+            pattern.boundaryWire.map fun wire => map wire)
+          (patternEmbedding_natural pattern rename)
+  rw [instantiate_eq_presentation, instantiate_eq_presentation]
+  simp only [Region.renameWires, items, ItemSeq.renameWires_append,
+    ItemSeq.renameWires_comp,
+    _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems_renameWires]
+  rw [bodyEmbedding_natural, actualMap, patternMap]
+
+/-- Instantiation is canonical for every valid open pattern and every actual
+port vector. The bound pattern externals are rooted by the exact equality
+block together with the pattern's external-two-ended invariant. -/
+private theorem instantiate_canonical
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments) :
+    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      pattern ports).Canonical := by
+  let embed : WireRenaming pattern.external
+      (targetWires ++ pattern.external) :=
+    ⟨fun wire => Var.appendRight targetWires wire⟩
+  let body := pattern.body.renameWires embed
+  let left := ports.map (fun wire => wire.appendLeft pattern.external)
+  let right := pattern.boundaryWire.map
+    (fun wire => Var.appendRight targetWires wire)
+  let equalityItems :=
+    _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems left right
+  have bodyCanonical : body.Canonical :=
+    (Region.Canonical.renameWires_iff pattern.body embed).mpr
+      pattern.canonical
+  have equalityChildren : equalityItems.ChildrenCanonical :=
+    _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems_childrenCanonical
+      left right
+  have joinedCanonical :
+      (body.conjoin (Region.ofItems equalityItems)).Canonical :=
+    Region.Canonical.conjoinRightItems body equalityItems bodyCanonical
+      equalityChildren
+  unfold _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+  rw [_root_.VisualProof.Rule.Comprehension.Instantiation.Equalities_eq_ofItems]
+  change (Region.adjoinAt pattern.external .nil
+    (body.conjoin (Region.ofItems equalityItems))).Canonical
+  apply Region.Canonical.adjoinAt_of_material_roots pattern.external .nil
+    (body.conjoin (Region.ofItems equalityItems)) True.intro joinedCanonical
+  intro externalIndex
+  let external := Var.ofIndex externalIndex
+  let embedded := Var.appendRight targetWires external
+  have embeddedIndex : embedded.index.val =
+      targetWires.length + externalIndex.val := by
+    simp [embedded, external]
+  cases bodyEq : pattern.body with
+  | mk bodyLocals bodyItems =>
+      let firstItems :=
+        (bodyItems.renameWires (embed.appendRight bodyLocals)).renameWires
+        (Region.conjoinLeftWire (targetWires ++ pattern.external)
+          bodyLocals [])
+      let appendNil : WireRenaming (targetWires ++ pattern.external)
+          ((targetWires ++ pattern.external) ++ []) :=
+        ⟨fun wire => wire.appendLeft []⟩
+      let rightItems := (equalityItems.renameWires appendNil).renameWires
+        (Region.conjoinRightWire (targetWires ++ pattern.external)
+          bodyLocals [])
+      rw [← embeddedIndex]
+      simp only [body, bodyEq, Region.renameWires]
+      simp only [Region.conjoin, Region.ofItems, Region.incidencePaths]
+      change RegionPath.RootedTwo
+        ((firstItems.append rightItems).incidencePaths
+          embedded.index.val 0)
+      rw [ItemSeq.incidencePaths_append]
+      simp only [Nat.zero_add]
+      have bodyPathsEq :
+          (bodyItems.renameWires
+            (embed.appendRight bodyLocals)).incidencePaths
+              embedded.index.val 0 =
+            bodyItems.incidencePaths external.index.val 0 := by
+        apply ItemSeq.incidencePaths_renameWires_of_index_iff
+        · have bound := external.index.isLt
+          simp only [List.length_append]
+          omega
+        · have bound := embedded.index.isLt
+          simp only [List.length_append]
+          omega
+        · intro signature wire
+          apply Var.appendCases (left := pattern.external)
+            (right := bodyLocals)
+            (motive := fun wire =>
+              ((embed.appendRight bodyLocals) wire).index.val =
+                    embedded.index.val ↔
+                wire.index.val = external.index.val)
+          · intro inheritedSignature inherited
+            simp only [WireRenaming.appendRight, Var.appendMap_left,
+              Var.index_appendLeft, embed, Var.index_appendRight,
+              embedded, external]
+            omega
+          · intro localSignature localWire
+            have externalBound := external.index.isLt
+            have localBound := localWire.index.isLt
+            simp only [WireRenaming.appendRight, Var.appendMap_right,
+              Var.index_appendRight]
+            omega
+      have firstPathsEq :
+          firstItems.incidencePaths embedded.index.val 0 =
+            (bodyItems.renameWires
+              (embed.appendRight bodyLocals)).incidencePaths
+                embedded.index.val 0 := by
+        have renamed := ItemSeq.incidencePaths_renameWires_adjoinHost
+          (addedLocals := [])
+          (bodyItems.renameWires (embed.appendRight bodyLocals))
+          (embedded.appendLeft bodyLocals) 0
+        simpa [firstItems, Region.adjoinHostWire] using renamed
+      obtain ⟨boundaryPosition, boundaryMaps⟩ :=
+        pattern.boundarySurjective externalIndex
+      have rightGetIndex : (right.get boundaryPosition).index.val =
+          embedded.index.val := by
+        simp [right, Vars.get_map, embedded, external, boundaryMaps]
+      have baseRightMem :=
+        _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems_right_mem_nil
+          left right boundaryPosition firstItems.length
+      rw [rightGetIndex] at baseRightMem
+      have rightPathsEq :
+          rightItems.incidencePaths embedded.index.val firstItems.length =
+            equalityItems.incidencePaths embedded.index.val
+              firstItems.length := by
+        simp only [rightItems, ItemSeq.renameWires_comp]
+        apply ItemSeq.incidencePaths_renameWires_of_index_iff
+        · exact embedded.index.isLt
+        · simpa [body, Region.locals] using
+            (embedded.appendLeft bodyLocals).index.isLt
+        · intro signature wire
+          simp [WireRenaming.comp, appendNil, Region.conjoinRightWire]
+      have rightMem : [] ∈
+          rightItems.incidencePaths embedded.index.val firstItems.length := by
+        rw [rightPathsEq]
+        exact baseRightMem
+      constructor
+      · simp only [List.length_append]
+        rw [firstPathsEq, bodyPathsEq, rightPathsEq,
+          equalityItems_incidencePaths_length]
+        have leftZero : left.countIndex embedded.index.val = 0 := by
+          simp only [left, embeddedIndex]
+          exact Vars.countIndex_appendLeft_zero ports pattern.external
+            (targetWires.length + externalIndex.val) (by omega)
+        have rightCount : right.countIndex embedded.index.val =
+            pattern.boundaryWire.countIndex external.index.val := by
+          simp only [right, embeddedIndex, external]
+          simpa [external] using
+            Vars.countIndex_appendRight pattern.boundaryWire targetWires
+              externalIndex.val
+        rw [leftZero, rightCount]
+        have twoEnded :
+            2 ≤ pattern.boundaryWire.countIndex external.index.val +
+              (bodyItems.incidencePaths external.index.val 0).length := by
+          have valid := pattern.externalTwoEnded external
+          rw [bodyEq] at valid
+          simpa only [Region.incidencePaths] using valid
+        omega
+      · apply RegionPath.deepestCommonAncestor_eq_nil_of_mem_nil
+        exact List.mem_append_right _ rightMem
+
+/-- Every actual port of an instantiation has an equality incidence. -/
+private theorem instantiate_port_incidence_nonempty
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments)
+    (position : Fin arguments.length) :
+    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      pattern ports).incidencePaths (ports.get position).index.val ≠ [] := by
+  rw [instantiate_eq_presentation]
+  simp only [Region.incidencePaths, items, ItemSeq.incidencePaths_append]
+  intro empty
+  have equalityEmpty := (List.append_eq_nil_iff.mp empty).2
+  have selected := equalityItems_left_mem_nil
+    (ports.map fun wire => actualEmbedding pattern targetWires wire)
+    (pattern.boundaryWire.map
+      fun wire => patternEmbedding pattern targetWires wire)
+    position (pattern.body.items.renameWires
+      (bodyEmbedding pattern targetWires)).length
+  have selectedIndex :
+      ((ports.map fun wire => actualEmbedding pattern targetWires wire).get
+        position).index.val = (ports.get position).index.val := by
+    rw [Vars.get_map]
+    simp [actualEmbedding, equalityEmbedding, WireRenaming.comp,
+      Region.conjoinRightWire, Region.adjoinMaterialWire, locals]
+  rw [selectedIndex] at selected
+  exact (List.ne_nil_of_mem selected) (by simpa using equalityEmpty)
+
+private theorem Vars.countIndex_map_zero_of_lower
+    (variables : Vars source signatures)
+    (rename : WireRenaming source target)
+    (floor wireIndex : Nat)
+    (lower : ∀ {signature} (wire : Var source signature),
+      floor ≤ (rename wire).index.val)
+    (below : wireIndex < floor) :
+    (variables.map fun wire => rename wire).countIndex wireIndex = 0 := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [Vars.map, Vars.countIndex]
+      have different : (rename head).index.val ≠ wireIndex := by
+        intro equality
+        have := lower head
+        omega
+      simp only [different, if_false, Nat.zero_add]
+      exact induction
+
+private theorem Vars.countIndex_map_actual
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires signatures)
+    (wireIndex : Nat) :
+    (ports.map fun wire => actualEmbedding pattern targetWires wire).countIndex
+        wireIndex = ports.countIndex wireIndex := by
+  induction ports with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [Vars.map, Vars.countIndex, actualEmbedding_index_val,
+        induction]
+
+private theorem instantiate_incidencePaths_length
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments)
+    (wire : Var targetWires signature) :
+    ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      pattern ports).incidencePaths wire.index.val).length =
+      ports.countIndex wire.index.val := by
+  have bodyEmpty :
+      (pattern.body.items.renameWires
+        (bodyEmbedding pattern targetWires)).incidencePaths
+          wire.index.val 0 = [] := by
+    apply ItemSeq.incidencePaths_renameWires_eq_nil_of_no_preimage
+    · have bound := wire.index.isLt
+      simp only [List.length_append]
+      omega
+    · intro bodySignature bodyWire equality
+      have lower := bodyEmbedding_index_lower
+        (targetWires := targetWires) pattern bodyWire
+      have bound := wire.index.isLt
+      omega
+  have rightZero :
+      (pattern.boundaryWire.map
+        fun boundaryWire => patternEmbedding pattern targetWires
+          boundaryWire).countIndex wire.index.val = 0 := by
+    apply Vars.countIndex_map_zero_of_lower pattern.boundaryWire
+      (patternEmbedding pattern targetWires) targetWires.length
+        wire.index.val
+    · exact patternEmbedding_index_lower
+        (targetWires := targetWires) pattern
+    · exact wire.index.isLt
+  rw [instantiate_eq_presentation]
+  simp only [Region.incidencePaths, items, ItemSeq.incidencePaths_append,
+    List.length_append, equalityItems_incidencePaths_length, bodyEmpty,
+    List.length_nil, Nat.zero_add, Vars.countIndex_map_actual, rightZero,
+    Nat.add_zero]
+
+private theorem instantiate_incidence_nonempty_iff
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments)
+    (wire : Var targetWires signature) :
+    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      pattern ports).incidencePaths wire.index.val ≠ [] ↔
+      0 < ports.countIndex wire.index.val := by
+  rw [← List.length_pos_iff, instantiate_incidencePaths_length]
+
+/-- Replace an arbitrary valid pattern boundary by the ordered identity
+boundary over its argument context. Its body is the exact existing-syntax
+instantiation of the original pattern on those formal variables. -/
+def identityBoundary (pattern : OpenDiagram arguments) :
+    OpenDiagram arguments where
+  external := arguments
+  boundaryWire := formalPorts arguments
+  boundarySurjective := formalPorts_surjective
+  body := _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    pattern (formalPorts arguments)
+  canonical := instantiate_canonical pattern (formalPorts arguments)
+  externalTwoEnded := by
+    intro signature wire
+    have boundaryPositive :
+        0 < (formalPorts arguments).countIndex wire.index.val := by
+      obtain ⟨position, maps⟩ := formalPorts_surjective wire.index
+      have positive := (formalPorts arguments).countIndex_get_positive position
+      rw [maps] at positive
+      exact positive
+    have bodyPositive : 0 <
+        ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          pattern (formalPorts arguments)).incidencePaths
+            wire.index.val).length := by
+      have nonempty := instantiate_port_incidence_nonempty pattern
+        (formalPorts arguments) wire.index
+      rw [formalPorts_get_index] at nonempty
+      exact List.length_pos_iff.mpr nonempty
+    omega
+
+private def formalSubstitution : {arguments : List Sig} →
+    Vars targetWires arguments → WireRenaming arguments targetWires
+  | [], .nil => ⟨fun wire => nomatch wire⟩
+  | _ :: _, .cons head tail => ⟨fun wire =>
+      match wire with
+      | .here => head
+      | .there rest => formalSubstitution tail rest⟩
+
+@[simp] private theorem formalSubstitution_here
+    (head : Var targetWires signature)
+    (tail : Vars targetWires arguments) :
+    formalSubstitution (.cons head tail) (.here : Var (signature :: arguments)
+      signature) = head := rfl
+
+@[simp] private theorem formalSubstitution_there
+    (head : Var targetWires signature)
+    (tail : Vars targetWires arguments)
+    (wire : Var arguments wireSignature) :
+    formalSubstitution (.cons head tail) (.there wire) =
+      formalSubstitution tail wire := rfl
+
+private theorem formalPorts_map_substitution
+    (ports : Vars targetWires arguments) :
+    (formalPorts arguments).map
+      (fun wire => formalSubstitution ports wire) = ports := by
+  induction ports with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [formalPorts, Erasure.Exposure.identityBoundary, Vars.map,
+        formalSubstitution_here]
+      congr 1
+      rw [Diagram.vars_map_comp
+        (Erasure.Exposure.identityBoundary _) ⟨fun wire => .there wire⟩
+          (formalSubstitution (.cons head tail))]
+      change (formalPorts _).map
+        (fun wire => formalSubstitution tail wire) = tail
+      exact induction
+
+private theorem formalPorts_eq_exposure :
+    formalPorts arguments = Erasure.Exposure.identityBoundary arguments := by
+  rfl
+
+private theorem supportPins_eq_nil
+    (material : Region materialWires)
+    (variables : Vars materialWires signatures)
+    (supported : ∀ position : Fin signatures.length,
+      material.incidencePaths (variables.get position).index.val ≠ []) :
+    Erasure.Exposure.supportPins material signatures variables = .nil := by
+  induction variables with
+  | nil => rfl
+  | @cons signature rest head tail induction =>
+      have headSupported : material.incidencePaths head.index.val ≠ [] := by
+        simpa only [Vars.get] using supported 0
+      have tailSupported : ∀ position : Fin rest.length,
+          material.incidencePaths (tail.get position).index.val ≠ [] := by
+        intro position
+        simpa only [Vars.get] using supported position.succ
+      simp only [Erasure.Exposure.supportPins, headSupported, ↓reduceIte]
+      exact induction tailSupported
+
+private theorem normalized_supportPins_eq_nil
+    (pattern : OpenDiagram arguments) :
+    Erasure.Exposure.supportPins
+      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        pattern (formalPorts arguments))
+      arguments (Erasure.Exposure.identityBoundary arguments) = .nil := by
+  apply supportPins_eq_nil
+  intro position
+  simpa only [← formalPorts_eq_exposure] using
+    instantiate_port_incidence_nonempty pattern
+      (formalPorts arguments) position
+
+private theorem supportBody_eq_of_supportPins_nil
+    (material : Region materialWires)
+    (empty : Erasure.Exposure.supportPins material materialWires
+      (Erasure.Exposure.identityBoundary materialWires) = .nil) :
+    Erasure.Exposure.supportBody material = material := by
+  unfold Erasure.Exposure.supportBody
+  rw [empty]
+  cases material with
+  | mk locals materialItems =>
+      change Region.mk locals (materialItems.append .nil) =
+        Region.mk locals materialItems
+      rw [ItemSeq.append_nil]
+
+private theorem OpenDiagram.eq_of_data
+    (left right : OpenDiagram boundary)
+    (externalEq : left.external = right.external)
+    (boundaryEq : HEq left.boundaryWire right.boundaryWire)
+    (bodyEq : HEq left.body right.body) : left = right := by
+  cases left with
+  | mk leftExternal leftBoundary leftSurjective leftBody leftCanonical
+      leftTwoEnded =>
+    cases right with
+    | mk rightExternal rightBoundary rightSurjective rightBody rightCanonical
+        rightTwoEnded =>
+      simp only at externalEq boundaryEq bodyEq
+      cases externalEq
+      cases boundaryEq
+      cases bodyEq
+      rfl
+
+private theorem normalized_supportBody_eq
+    (pattern : OpenDiagram arguments) :
+    Erasure.Exposure.supportBody
+      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        pattern (formalPorts arguments)) =
+      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        pattern (formalPorts arguments) := by
+  apply supportBody_eq_of_supportPins_nil
+  exact normalized_supportPins_eq_nil pattern
+
+private theorem supportPattern_eq_identityBoundary
+    (pattern : OpenDiagram arguments)
+    (materialCanonical :
+      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        pattern (formalPorts arguments)).Canonical) :
+    Erasure.Exposure.supportPattern
+        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          pattern (formalPorts arguments)) materialCanonical =
+      identityBoundary pattern := by
+  apply OpenDiagram.eq_of_data
+  · rfl
+  · rfl
+  · exact heq_of_eq (normalized_supportBody_eq pattern)
+
+private theorem spliceAt_nil
+    (material : Region materialWires)
+    (rename : WireRenaming materialWires outer) :
+    Region.spliceAt (outer := outer) [] .nil material
+      ⟨fun wire => (rename wire).appendLeft []⟩ =
+      material.renameWires rename := by
+  cases material with
+  | mk locals materialItems =>
+      have materialMap : WireRenaming.comp
+          (Region.adjoinMaterialWire outer [] locals)
+          ((⟨fun wire => (rename wire).appendLeft []⟩ :
+            WireRenaming materialWires (outer ++ [])).appendRight locals) =
+          rename.appendRight locals := by
+        apply WireRenaming.ext
+        intro signature wire
+        apply Var.appendCases (left := materialWires) (right := locals)
+          (motive := fun wire =>
+            WireRenaming.comp
+              (Region.adjoinMaterialWire outer [] locals)
+              ((⟨fun wire => (rename wire).appendLeft []⟩ :
+                WireRenaming materialWires
+                  (outer ++ [])).appendRight locals) wire =
+                rename.appendRight locals wire)
+        · intro inheritedSignature inherited
+          simp [WireRenaming.comp, WireRenaming.appendRight,
+            Region.adjoinMaterialWire]
+        · intro localSignature localWire
+          simp [WireRenaming.comp, WireRenaming.appendRight,
+            Region.adjoinMaterialWire]
+          rfl
+      simp only [Region.spliceAt, Region.renameWires, Region.adjoinAt,
+        ItemSeq.renameWires, ItemSeq.nil_append, List.nil_append,
+        ItemSeq.renameWires_comp]
+      exact congrArg
+        (fun map => Region.mk locals (materialItems.renameWires map))
+        materialMap
+
+private def exposureDescription
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments) :
+    Rule.Erasure.Description targetWires where
+  materialWires := arguments
+  hostLocals := []
+  hostItems := .nil
+  material := _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    pattern (formalPorts arguments)
+  wireMap := ⟨fun wire => (formalSubstitution ports wire).appendLeft []⟩
+
+private theorem exposureDescription_source
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments) :
+    (exposureDescription pattern ports).source =
+      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        pattern ports := by
+  simp only [Rule.Erasure.Description.source, exposureDescription]
+  rw [spliceAt_nil, instantiate_renameWires,
+    formalPorts_map_substitution]
+
+private theorem exposureDescription_applicationPorts
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments) :
+    Erasure.Exposure.applicationPorts (exposureDescription pattern ports) =
+      ports.map (fun wire => wire.appendLeft []) := by
+  simp only [Erasure.Exposure.applicationPorts, exposureDescription]
+  rw [← formalPorts_eq_exposure]
+  calc
+    (formalPorts arguments).map (fun wire =>
+        (formalSubstitution ports wire).appendLeft []) =
+      ((formalPorts arguments).map
+        (fun wire => formalSubstitution ports wire)).map
+          (fun wire => wire.appendLeft []) := by
+            symm
+            exact Diagram.vars_map_comp (formalPorts arguments)
+              (formalSubstitution ports)
+              ⟨fun wire => wire.appendLeft []⟩
+    _ = _ := congrArg
+      (fun variables => variables.map fun wire => wire.appendLeft [])
+      (formalPorts_map_substitution ports)
+
+private theorem exposureDescription_exposedRegion
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments)
+    (materialCanonical :
+      (exposureDescription pattern ports).material.Canonical) :
+    Erasure.Exposure.exposedRegion (exposureDescription pattern ports)
+        materialCanonical =
+      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (identityBoundary pattern) ports := by
+  simp only [Erasure.Exposure.exposedRegion]
+  change Region.adjoinAt [] .nil
+    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (Erasure.Exposure.supportPattern
+        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          pattern (formalPorts arguments)) materialCanonical)
+      (Erasure.Exposure.applicationPorts
+        (exposureDescription pattern ports))) = _
+  rw [supportPattern_eq_identityBoundary pattern materialCanonical,
+    exposureDescription_applicationPorts]
+  rw [← instantiate_renameWires (identityBoundary pattern) ports
+    (⟨fun wire => wire.appendLeft []⟩ :
+      WireRenaming targetWires (targetWires ++ []))]
+  have spliced := spliceAt_nil
+    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (identityBoundary pattern) ports)
+    (WireRenaming.id : WireRenaming targetWires targetWires)
+  rw [Region.renameWires_id] at spliced
+  simpa only [Region.spliceAt, WireRenaming.id] using spliced
+
+/-- One actual instantiation occurrence is bidirectionally equivalent to the
+same application through the exact ordered identity-boundary normal form. -/
+theorem equatesIdentityBoundary
+    {boundary targetWires arguments : List Sig}
+    (pattern : OpenDiagram arguments)
+    (ports : Vars targetWires arguments)
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence
+      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        pattern ports) source) :
+    ∃ targetCanonical :
+        (occurrence.context.fill
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (identityBoundary pattern) ports)).Canonical,
+      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill
+            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+              (identityBoundary pattern) ports)),
+        Equates occurrence
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (identityBoundary pattern) ports)
+          targetCanonical targetExternalTwoEnded := by
+  let normalized :=
+    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (identityBoundary pattern) ports
+  have normalizedCanonical : normalized.Canonical :=
+    instantiate_canonical (identityBoundary pattern) ports
+  have sameNonempty : ∀ {signature} (wire : Var targetWires signature),
+      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        pattern ports).incidencePaths wire.index.val ≠ [] ↔
+        normalized.incidencePaths wire.index.val ≠ [] := by
+    intro signature wire
+    rw [instantiate_incidence_nonempty_iff,
+      instantiate_incidence_nonempty_iff]
+  have replacement := occurrence.context.replaceCanonical
+    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      pattern ports) normalized occurrence.sourceCanonical
+      normalizedCanonical sameNonempty
+  let targetCanonical := replacement.1
+  let sourceEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill
+      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        pattern ports)) occurrence.sourceCanonical
+      occurrence.sourceExternalTwoEnded
+  have targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill normalized) :=
+    sourceEndpoint.externalTwoEnded_of_nonempty_iff
+      (occurrence.context.fill normalized) replacement.2
+  refine ⟨targetCanonical, targetExternalTwoEnded, ?_⟩
+  let description := exposureDescription pattern ports
+  have sourceEq : description.source =
+      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        pattern ports := by
+    simpa only [description] using exposureDescription_source pattern ports
+  let exposureOccurrence : Occurrence description.source source := {
+    interface := occurrence.interface
+    context := occurrence.context
+    sourceCanonical := by
+      rw [sourceEq]
+      exact occurrence.sourceCanonical
+    sourceExternalTwoEnded := by
+      intro signature wire
+      rw [sourceEq]
+      exact occurrence.sourceExternalTwoEnded wire
+    host_iso := by
+      simpa only [sourceEq] using occurrence.host_iso
+  }
+  have materialCanonical : description.material.Canonical := by
+    simpa only [description, exposureDescription] using
+      instantiate_canonical pattern (formalPorts arguments)
+  have exposedEq :
+      Erasure.Exposure.exposedRegion description materialCanonical =
+        normalized := by
+    simpa only [description, normalized] using
+      exposureDescription_exposedRegion pattern ports materialCanonical
+  have exposedCanonical :
+      (exposureOccurrence.context.fill
+        (Erasure.Exposure.exposedRegion description
+          materialCanonical)).Canonical := by
+    rw [exposedEq]
+    exact targetCanonical
+  have exposedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      exposureOccurrence.interface.boundaryWire
+      (exposureOccurrence.context.fill
+        (Erasure.Exposure.exposedRegion description
+          materialCanonical)) := by
+    intro signature wire
+    rw [exposedEq]
+    exact targetExternalTwoEnded wire
+  have equivalent := Erasure.Exposure.equatesEmptyHost description
+    exposureOccurrence (by rfl) materialCanonical exposedCanonical
+      exposedExternalTwoEnded
+  simpa only [Equates, exposureOccurrence, exposedEq, normalized] using
+    equivalent
+
+end EqualityNormalization
 
 /-- Exact singleton-atom decomposition at an existing pattern item. The
 boundary/equality phases may choose the formal position only by proving that

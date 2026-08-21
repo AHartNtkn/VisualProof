@@ -84,6 +84,24 @@ noncomputable def exactOccurrence
   sourceExternalTwoEnded := sourceExternalTwoEnded
   host_iso := OpenDiagramIso.refl _
 
+/-- Bidirectional optional reachability between the exact endpoints of one
+actual occurrence. Deep equality phases use this instead of forgetting that
+every primitive below the binder home is symmetric. -/
+def Equates
+    {boundary holeWires : List Sig}
+    {before : Region holeWires}
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence before source)
+    (after : Region holeWires)
+    (targetCanonical : (occurrence.context.fill after).Canonical)
+    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill after)) : Prop :=
+  let target := occurrence.interface.withBody
+    (occurrence.context.fill after) targetCanonical targetExternalTwoEnded
+  Relation.ReflTransGen Step source target ∧
+    Relation.ReflTransGen Step target source
+
 /-- An optional internal derivation from one actual occurrence to the exact
 filled target supplied by the caller. The polarity index records the
 occurrence's current polarity rather than recomputing a separate direction. -/

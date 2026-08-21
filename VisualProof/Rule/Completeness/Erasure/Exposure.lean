@@ -1224,17 +1224,28 @@ private theorem pinStep
           (occurrence.context.fill
             (Vacuity.Pin.present locals items signature wire)),
         Step source
-          (occurrence.interface.withBody
-            (occurrence.context.fill
-              (Vacuity.Pin.present locals items signature wire))
-            targetCanonical targetExternalTwoEnded) := by
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (Vacuity.Pin.present locals items signature wire))
+              targetCanonical targetExternalTwoEnded) ∧
+          Step
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (Vacuity.Pin.present locals items signature wire))
+              targetCanonical targetExternalTwoEnded)
+            source := by
   have validity := Vacuity.Pin.introduceValidity occurrence signature wire
-  refine ⟨validity.1, validity.2, Step.vacuity ?_⟩
-  exact ⟨holeWires, Vacuity.Pin.plain locals items,
+  let step : Vacuity source
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (Vacuity.Pin.present locals items signature wire))
+        validity.1 validity.2) := ⟨holeWires, Vacuity.Pin.plain locals items,
     Vacuity.Pin.present locals items signature wire, occurrence,
     validity.1, validity.2, OpenDiagramIso.refl _,
     atPolarity_symmetric_of occurrence.context.polarity
       (.mk (.pin locals items signature wire))⟩
+  exact ⟨validity.1, validity.2,
+    Step.vacuity step, Step.vacuity step.symm⟩
 
 private def advanceAway
     (state : State outer materialWires material)
@@ -2192,9 +2203,14 @@ private theorem oneWire
           occurrence.interface.boundaryWire
           (occurrence.context.fill (state.advance selected).region),
         Relation.ReflTransGen Step source
-          (occurrence.interface.withBody
-            (occurrence.context.fill (state.advance selected).region)
-            filledCanonical filledExternalTwoEnded) := by
+            (occurrence.interface.withBody
+              (occurrence.context.fill (state.advance selected).region)
+              filledCanonical filledExternalTwoEnded) ∧
+          Relation.ReflTransGen Step
+            (occurrence.interface.withBody
+              (occurrence.context.fill (state.advance selected).region)
+              filledCanonical filledExternalTwoEnded)
+            source := by
   change Occurrence
     (Vacuity.Pin.plain state.locals state.items) source at occurrence
   let survivor :=
@@ -2209,10 +2225,16 @@ private theorem oneWire
             (occurrence.context.fill
               (Vacuity.Pin.present state.locals baseItems signature survivor)),
           Relation.ReflTransGen Step source
-            (occurrence.interface.withBody
-              (occurrence.context.fill
-                (Vacuity.Pin.present state.locals baseItems signature survivor))
-              equalityCanonical equalityExternalTwoEnded) := by
+              (occurrence.interface.withBody
+                (occurrence.context.fill
+                  (Vacuity.Pin.present state.locals baseItems signature survivor))
+                equalityCanonical equalityExternalTwoEnded) ∧
+            Relation.ReflTransGen Step
+              (occurrence.interface.withBody
+                (occurrence.context.fill
+                  (Vacuity.Pin.present state.locals baseItems signature survivor))
+                equalityCanonical equalityExternalTwoEnded)
+              source := by
     by_cases unused : material.incidencePaths selected.index.val = []
     · obtain ⟨supportCanonical, supportExternalTwoEnded, supportStep⟩ :=
         pinStep occurrence signature survivor
@@ -2249,15 +2271,25 @@ private theorem oneWire
             (Vacuity.Pin.present state.locals baseItems signature survivor)) := by
         intro wireSignature wire
         simpa [supportOccurrence] using equalityExternalTwoEnded wire
-      have equalityStep' : Step supportEndpoint
+      have equalityStepForward : Step supportEndpoint
           (occurrence.interface.withBody
             (occurrence.context.fill
               (Vacuity.Pin.present state.locals baseItems signature survivor))
             equalityCanonical' equalityExternalTwoEnded') := by
-        simpa [supportOccurrence] using equalityStep
+        simpa [supportOccurrence] using equalityStep.1
+      have equalityStepReverse : Step
+          (occurrence.interface.withBody
+            (occurrence.context.fill
+              (Vacuity.Pin.present state.locals baseItems signature survivor))
+            equalityCanonical' equalityExternalTwoEnded') supportEndpoint := by
+        simpa [supportOccurrence] using equalityStep.2
+      have supportStepForward : Step source supportEndpoint := by
+        simpa [supportEndpoint] using supportStep.1
+      have supportStepReverse : Step supportEndpoint source := by
+        simpa [supportEndpoint] using supportStep.2
       refine ⟨equalityCanonical', equalityExternalTwoEnded', ?_⟩
-      exact .tail (.tail .refl
-        (by simpa [supportEndpoint] using supportStep)) equalityStep'
+      exact ⟨.tail (.tail .refl supportStepForward) equalityStepForward,
+        .tail (.tail .refl equalityStepReverse) supportStepReverse⟩
     · obtain ⟨equalityCanonical, equalityExternalTwoEnded, equalityStep⟩ :=
         pinStep occurrence signature survivor
       have equalityExternalTwoEnded' : OpenDiagram.ExternalTwoEnded
@@ -2270,8 +2302,11 @@ private theorem oneWire
       refine ⟨?_, ?_, ?_⟩
       · simpa [baseItems, sourceSupportSuffix, unused] using equalityCanonical
       · exact equalityExternalTwoEnded'
-      · exact .tail .refl (by
-          simpa [baseItems, sourceSupportSuffix, unused] using equalityStep)
+      · exact ⟨.tail .refl (by
+          simpa [baseItems, sourceSupportSuffix, unused] using equalityStep.1),
+          .tail .refl (by
+            simpa [baseItems, sourceSupportSuffix, unused] using
+              equalityStep.2)⟩
   obtain ⟨equalityCanonical, equalityExternalTwoEnded, equalitySteps⟩ :=
     equality
   let equalityEndpoint := occurrence.interface.withBody
@@ -2339,17 +2374,29 @@ private theorem oneWire
     (exposureData state selected) applicability collapsedOccurrence
     (by simpa only [exposureData_exposedRegion] using targetCanonical)
   dsimp only [collapsedOccurrence] at exposedValidity
-  have identificationStep : Step equalityEndpoint
-      (occurrence.interface.withBody
-        (occurrence.context.fill
-          (exposureData state selected).exposedRegion)
-        exposedValidity.1 exposedValidity.2) := by
-    apply Step.identification
+  let identificationTarget := occurrence.interface.withBody
+    (occurrence.context.fill
+      (exposureData state selected).exposedRegion)
+    exposedValidity.1 exposedValidity.2
+  have identificationRule : Identification equalityEndpoint
+      identificationTarget := by
     exact Or.inl ⟨outer, (exposureData state selected).collapsedRegion,
       (exposureData state selected).exposedRegion, collapsedOccurrence,
       exposedValidity.1, exposedValidity.2, OpenDiagramIso.refl _,
       atPolarity_symmetric_of occurrence.context.polarity
         (.expose (exposureData state selected) applicability)⟩
+  have identificationStep : Step equalityEndpoint
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (exposureData state selected).exposedRegion)
+        exposedValidity.1 exposedValidity.2) := by
+    exact Step.identification identificationRule
+  have identificationReverse : Step
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (exposureData state selected).exposedRegion)
+        exposedValidity.1 exposedValidity.2) equalityEndpoint := by
+    exact Step.identification identificationRule.symm
   have filledExternalTwoEnded : OpenDiagram.ExternalTwoEnded
       occurrence.interface.boundaryWire
       (occurrence.context.fill (state.advance selected).region) := by
@@ -2358,9 +2405,17 @@ private theorem oneWire
   refine ⟨?_, filledExternalTwoEnded, ?_⟩
   · simpa only [exposureData_exposedRegion] using exposedValidity.1
   · have equalityTail : Relation.ReflTransGen Step source equalityEndpoint :=
-      by simpa [equalityEndpoint] using equalitySteps
+      by simpa [equalityEndpoint] using equalitySteps.1
     have exposedTail := Relation.ReflTransGen.tail equalityTail identificationStep
-    simpa only [exposureData_exposedRegion] using exposedTail
+    have reverseTail : Relation.ReflTransGen Step
+        (occurrence.interface.withBody
+          (occurrence.context.fill
+            (exposureData state selected).exposedRegion)
+          exposedValidity.1 exposedValidity.2) source :=
+      (Relation.ReflTransGen.tail .refl identificationReverse).trans (by
+        simpa [equalityEndpoint] using equalitySteps.2)
+    exact ⟨by simpa only [exposureData_exposedRegion] using exposedTail,
+      by simpa only [exposureData_exposedRegion] using reverseTail⟩
 
 private theorem advanceAllDerives
     (state : State outer materialWires material)
@@ -2379,14 +2434,20 @@ private theorem advanceAllDerives
           interface.boundaryWire
           (context.fill (state.advanceAll variables).region),
         Relation.ReflTransGen Step
-          (interface.withBody (context.fill state.region)
-            sourceCanonical sourceExternalTwoEnded)
-          (interface.withBody
-            (context.fill (state.advanceAll variables).region)
-            targetCanonical targetExternalTwoEnded) := by
+            (interface.withBody (context.fill state.region)
+              sourceCanonical sourceExternalTwoEnded)
+            (interface.withBody
+              (context.fill (state.advanceAll variables).region)
+              targetCanonical targetExternalTwoEnded) ∧
+          Relation.ReflTransGen Step
+            (interface.withBody
+              (context.fill (state.advanceAll variables).region)
+              targetCanonical targetExternalTwoEnded)
+            (interface.withBody (context.fill state.region)
+              sourceCanonical sourceExternalTwoEnded) := by
   induction variables generalizing state with
   | nil =>
-      exact ⟨sourceCanonical, sourceExternalTwoEnded, .refl⟩
+      exact ⟨sourceCanonical, sourceExternalTwoEnded, .refl, .refl⟩
   | @cons signature signatures selected tail induction =>
       let source := interface.withBody (context.fill state.region)
         sourceCanonical sourceExternalTwoEnded
@@ -2428,10 +2489,17 @@ private theorem advanceAllDerives
       · intro wireSignature wire
         simpa only [State.advanceAll] using targetExternalTwoEnded wire
       · have firstSteps' : Relation.ReflTransGen Step source nextSource := by
-          simpa only [nextSource] using firstSteps
-        have combined := firstSteps'.trans restSteps
-        simpa only [source, occurrence, exactOccurrence, State.advanceAll]
-          using combined
+          simpa only [nextSource] using firstSteps.1
+        have firstReverse : Relation.ReflTransGen Step nextSource source := by
+          simpa only [nextSource] using firstSteps.2
+        have combined := firstSteps'.trans restSteps.1
+        have reverseCombined := restSteps.2.trans firstReverse
+        exact ⟨by
+            simpa only [source, occurrence, exactOccurrence, State.advanceAll]
+              using combined,
+          by
+            simpa only [source, occurrence, exactOccurrence, State.advanceAll]
+              using reverseCombined⟩
 
 def applicationPorts (description : Rule.Erasure.Description outer) :
     Vars (outer ++ description.hostLocals) description.materialWires :=
@@ -2767,6 +2835,36 @@ private theorem initialState_region
             Region.renameWires, Region.locals, Region.items,
             ItemSeq.renameWires_comp]
 
+private theorem initialState_materialMap_external_index
+    (description : Rule.Erasure.Description outer)
+    (external : Var description.materialWires signature) :
+    ((initialState description).materialMap
+      (external.appendLeft description.material.locals)).index.val =
+        (description.wireMap external).index.val := by
+  let mapped := description.wireMap external
+  change
+    (Region.adjoinMaterialWire outer description.hostLocals
+      description.material.locals
+      ((description.wireMap.appendRight description.material.locals)
+        (external.appendLeft description.material.locals))).index.val =
+      mapped.index.val
+  have inherited :
+      (description.wireMap.appendRight description.material.locals)
+          (external.appendLeft description.material.locals) =
+        mapped.appendLeft description.material.locals := by
+    simp [mapped, WireRenaming.appendRight]
+  rw [inherited]
+  apply Var.appendCases (left := outer) (right := description.hostLocals)
+    (motive := fun mapped =>
+      (Region.adjoinMaterialWire outer description.hostLocals
+        description.material.locals
+        (mapped.appendLeft description.material.locals)).index.val =
+          mapped.index.val)
+  · intro mappedSignature inheritedWire
+    simp [Region.adjoinMaterialWire]
+  · intro mappedSignature localWire
+    simp [Region.adjoinMaterialWire]
+
 private theorem initialState_supports
     (description : Rule.Erasure.Description outer)
     (targetCanonical : description.target.Canonical) :
@@ -2775,32 +2873,8 @@ private theorem initialState_supports
   intro position localIndex targetIndex
   let external := (identityBoundary description.materialWires).get position
   let mapped := description.wireMap external
-  have materialMapIndex :
-      ((initialState description).materialMap
-        (external.appendLeft description.material.locals)).index.val =
-          mapped.index.val := by
-    change
-      (Region.adjoinMaterialWire outer description.hostLocals
-        description.material.locals
-        ((description.wireMap.appendRight description.material.locals)
-          (external.appendLeft description.material.locals))).index.val =
-        mapped.index.val
-    have inherited :
-        (description.wireMap.appendRight description.material.locals)
-            (external.appendLeft description.material.locals) =
-          mapped.appendLeft description.material.locals := by
-      simp [mapped, WireRenaming.appendRight]
-    rw [inherited]
-    apply Var.appendCases (left := outer) (right := description.hostLocals)
-      (motive := fun mapped =>
-        (Region.adjoinMaterialWire outer description.hostLocals
-          description.material.locals
-          (mapped.appendLeft description.material.locals)).index.val =
-            mapped.index.val)
-    · intro mappedSignature inheritedWire
-      simp [Region.adjoinMaterialWire]
-    · intro mappedSignature localWire
-      simp [Region.adjoinMaterialWire]
+  have materialMapIndex :=
+    initialState_materialMap_external_index description external
   have mappedTarget : mapped.index.val = outer.length + localIndex.val :=
     materialMapIndex.symm.trans targetIndex
   have hostBound : localIndex.val < description.hostLocals.length := by
@@ -3141,70 +3215,23 @@ private noncomputable def endpointRegionIso
             RegionIso.castAmbient (by rfl) composed
           simpa [description, state, variables, finalState] using composed'
 
-/-- Erasure material can be exposed as one exact comprehension-instantiation
-block without assuming that its external-to-host wire map is injective. -/
-theorem derives
+private theorem equatesCore
     {boundary outer : List Sig}
     (description : Rule.Erasure.Description outer)
     {source : OpenDiagram boundary}
     (occurrence : Occurrence description.source source)
-    (erasedCanonical :
-      (occurrence.context.fill description.target).Canonical)
-    (erasedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire
-      (occurrence.context.fill description.target)) :
-    ∃ materialCanonical : description.material.Canonical,
-      ∃ exposedCanonical :
-          (occurrence.context.fill
-            (exposedRegion description materialCanonical)).Canonical,
-        ∃ exposedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-            occurrence.interface.boundaryWire
-            (occurrence.context.fill
-              (exposedRegion description materialCanonical)),
-          Relation.ReflTransGen Step source
-            (occurrence.interface.withBody
-              (occurrence.context.fill
-                (exposedRegion description materialCanonical))
-              exposedCanonical exposedExternalTwoEnded) := by
-  let materialCanonical := materialCanonical_of_source description occurrence
-  refine ⟨materialCanonical, ?_⟩
-  have targetCanonical : description.target.Canonical := by
-    exact occurrence.context.holeCanonical description.target erasedCanonical
-  have instantiatedCanonical :
-      (Comprehension.Instantiation.instantiate
-        (supportPattern description.material materialCanonical)
-        (applicationPorts description)).Canonical :=
-    supportInstantiation_canonical description.material materialCanonical
-      (applicationPorts description)
-  have exposedLocalCanonical :
-      (exposedRegion description materialCanonical).Canonical := by
-    simpa only [exposedRegion] using
-      Region.Canonical.adjoinAt description.hostLocals description.hostItems
-        (Comprehension.Instantiation.instantiate
-          (supportPattern description.material materialCanonical)
-          (applicationPorts description))
-        targetCanonical instantiatedCanonical
-  have extension := occurrence.context.extendCanonical description.target
-    (exposedRegion description materialCanonical) erasedCanonical
-    exposedLocalCanonical (by
-      intro signature wire
-      simpa only [Rule.Erasure.Description.target, exposedRegion] using
-        Region.incidencePaths_adjoinAt_host_sublist
-          description.hostLocals description.hostItems
-          (Comprehension.Instantiation.instantiate
-            (supportPattern description.material materialCanonical)
-            (applicationPorts description)) wire)
-  let exposedCanonical := extension.1
-  have exposedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+    (materialCanonical : description.material.Canonical)
+    (supported : (initialState description).Supports
+      (identityBoundary description.materialWires))
+    (exposedCanonical :
+      (occurrence.context.fill
+        (exposedRegion description materialCanonical)).Canonical)
+    (exposedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
       occurrence.interface.boundaryWire
       (occurrence.context.fill
-        (exposedRegion description materialCanonical)) := by
-    intro signature wire
-    have sourceFloor := erasedExternalTwoEnded wire
-    have pathSublist := extension.2 wire
-    exact Nat.le_trans sourceFloor
-      (Nat.add_le_add_left pathSublist.length_le _)
-  refine ⟨exposedCanonical, exposedExternalTwoEnded, ?_⟩
+        (exposedRegion description materialCanonical))) :
+    Equates occurrence (exposedRegion description materialCanonical)
+      exposedCanonical exposedExternalTwoEnded := by
   let state := initialState description
   let variables := identityBoundary description.materialWires
   have stateRegionEq : state.region = description.source := by
@@ -3233,9 +3260,8 @@ theorem derives
   have stateCanonical : state.region.Canonical :=
     initialOccurrence.context.holeCanonical state.region
       initialOccurrence.sourceCanonical
-  have supported : state.Supports variables := by
-    simpa only [state, variables] using
-      initialState_supports description targetCanonical
+  have supported' : state.Supports variables := by
+    simpa only [state, variables] using supported
   have regionEta :
       Vacuity.Point.plain state.region.locals state.region.items =
         state.region := by
@@ -3268,16 +3294,25 @@ theorem derives
     exact (Relation.TransGen.single
       (Step.vacuity pointIntroduction)).tail
       (Step.vacuity exactIntroduction.symm)
+  have bridgeReverse : Relation.TransGen Step initialExact source := by
+    exact (Relation.TransGen.single
+      (Step.vacuity exactIntroduction)).tail
+      (Step.vacuity pointIntroduction.symm)
   obtain ⟨foldCanonical, foldExternalTwoEnded, rawFoldSteps⟩ :=
     advanceAllDerives state variables identityBoundary_indexInjective
-      supported stateCanonical initialOccurrence.interface
+      supported' stateCanonical initialOccurrence.interface
       initialOccurrence.context initialOccurrence.sourceCanonical
       initialOccurrence.sourceExternalTwoEnded
   have foldSteps : Relation.ReflTransGen Step initialExact
       (initialOccurrence.interface.withBody
         (initialOccurrence.context.fill (state.advanceAll variables).region)
         foldCanonical foldExternalTwoEnded) := by
-    simpa only [initialExact] using rawFoldSteps
+    simpa only [initialExact] using rawFoldSteps.1
+  have foldReverse : Relation.ReflTransGen Step
+      (initialOccurrence.interface.withBody
+        (initialOccurrence.context.fill (state.advanceAll variables).region)
+        foldCanonical foldExternalTwoEnded) initialExact := by
+    simpa only [initialExact] using rawFoldSteps.2
   have exactExposedCanonical :
       (initialOccurrence.context.fill
         (exposedRegion description materialCanonical)).Canonical := by
@@ -3320,13 +3355,160 @@ theorem derives
     have transported := transGen_iso (OpenDiagramIso.refl source)
       foldCore endpointIso
     simpa only [initialOccurrence] using transported
-  have transToRefl : ∀ {first last : OpenDiagram boundary},
+  have reverseCore : Relation.TransGen Step
+      (initialOccurrence.interface.withBody
+        (initialOccurrence.context.fill
+          (exposedRegion description materialCanonical))
+        exactExposedCanonical exactExposedExternalTwoEnded)
+      source := by
+    have fromFold : Relation.TransGen Step
+        (initialOccurrence.interface.withBody
+          (initialOccurrence.context.fill (state.advanceAll variables).region)
+          foldCanonical foldExternalTwoEnded) source :=
+      foldReverse.transGen bridgeReverse
+    exact transGen_iso endpointIso fromFold (OpenDiagramIso.refl source)
+  have reverseExposedCore : Relation.TransGen Step
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (exposedRegion description materialCanonical))
+        exposedCanonical exposedExternalTwoEnded) source := by
+    simpa only [initialOccurrence] using reverseCore
+  have optional : ∀ {first last : OpenDiagram boundary},
       Relation.TransGen Step first last →
         Relation.ReflTransGen Step first last := by
     intro first last steps
     induction steps with
     | single step => exact .tail .refl step
     | tail steps step induction => exact .tail induction step
-  exact transToRefl exposedCore
+  exact ⟨optional exposedCore, optional reverseExposedCore⟩
+
+/-- When material externals map directly to the enclosing region, exposure
+needs no erased-host canonicality premise: no selected material external can
+be one of the host locals guarded by `State.Supports`. The caller supplies
+only the validity of the exact exposed endpoint. -/
+theorem equatesEmptyHost
+    {boundary outer : List Sig}
+    (description : Rule.Erasure.Description outer)
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence description.source source)
+    (emptyHost : description.hostLocals = [])
+    (materialCanonical : description.material.Canonical)
+    (exposedCanonical :
+      (occurrence.context.fill
+        (exposedRegion description materialCanonical)).Canonical)
+    (exposedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill
+        (exposedRegion description materialCanonical))) :
+    Equates occurrence (exposedRegion description materialCanonical)
+      exposedCanonical exposedExternalTwoEnded := by
+  have supported : (initialState description).Supports
+      (identityBoundary description.materialWires) := by
+    intro position localIndex targetIndex
+    let external := (identityBoundary description.materialWires).get position
+    have materialMapIndex :=
+      initialState_materialMap_external_index description external
+    have mappedBound := (description.wireMap external).index.isLt
+    rw [materialMapIndex] at targetIndex
+    simp only [emptyHost, List.append_nil] at mappedBound
+    omega
+  exact equatesCore description occurrence materialCanonical supported
+    exposedCanonical exposedExternalTwoEnded
+
+/-- Erasure material is bidirectionally equivalent to one exact
+comprehension-instantiation block. Every generated step is Vacuity or
+Identification, so the exposure remains symmetric beneath arbitrary cuts. -/
+theorem equates
+    {boundary outer : List Sig}
+    (description : Rule.Erasure.Description outer)
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence description.source source)
+    (erasedCanonical :
+      (occurrence.context.fill description.target).Canonical)
+    (erasedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill description.target)) :
+    ∃ materialCanonical : description.material.Canonical,
+      ∃ exposedCanonical :
+          (occurrence.context.fill
+            (exposedRegion description materialCanonical)).Canonical,
+        ∃ exposedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+            occurrence.interface.boundaryWire
+            (occurrence.context.fill
+              (exposedRegion description materialCanonical)),
+          Equates occurrence (exposedRegion description materialCanonical)
+            exposedCanonical exposedExternalTwoEnded := by
+  let materialCanonical := materialCanonical_of_source description occurrence
+  refine ⟨materialCanonical, ?_⟩
+  have targetCanonical : description.target.Canonical := by
+    exact occurrence.context.holeCanonical description.target erasedCanonical
+  have instantiatedCanonical :
+      (Comprehension.Instantiation.instantiate
+        (supportPattern description.material materialCanonical)
+        (applicationPorts description)).Canonical :=
+    supportInstantiation_canonical description.material materialCanonical
+      (applicationPorts description)
+  have exposedLocalCanonical :
+      (exposedRegion description materialCanonical).Canonical := by
+    simpa only [exposedRegion] using
+      Region.Canonical.adjoinAt description.hostLocals description.hostItems
+        (Comprehension.Instantiation.instantiate
+          (supportPattern description.material materialCanonical)
+          (applicationPorts description))
+        targetCanonical instantiatedCanonical
+  have extension := occurrence.context.extendCanonical description.target
+    (exposedRegion description materialCanonical) erasedCanonical
+    exposedLocalCanonical (by
+      intro signature wire
+      simpa only [Rule.Erasure.Description.target, exposedRegion] using
+        Region.incidencePaths_adjoinAt_host_sublist
+          description.hostLocals description.hostItems
+          (Comprehension.Instantiation.instantiate
+            (supportPattern description.material materialCanonical)
+            (applicationPorts description)) wire)
+  let exposedCanonical := extension.1
+  have exposedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill
+        (exposedRegion description materialCanonical)) := by
+    intro signature wire
+    have sourceFloor := erasedExternalTwoEnded wire
+    have pathSublist := extension.2 wire
+    exact Nat.le_trans sourceFloor
+      (Nat.add_le_add_left pathSublist.length_le _)
+  have supported := initialState_supports description targetCanonical
+  exact ⟨exposedCanonical, exposedExternalTwoEnded,
+    equatesCore description occurrence materialCanonical supported
+      exposedCanonical exposedExternalTwoEnded⟩
+
+/-- Forward erasure exposure is the first half of the symmetric construction. -/
+theorem derives
+    {boundary outer : List Sig}
+    (description : Rule.Erasure.Description outer)
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence description.source source)
+    (erasedCanonical :
+      (occurrence.context.fill description.target).Canonical)
+    (erasedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill description.target)) :
+    ∃ materialCanonical : description.material.Canonical,
+      ∃ exposedCanonical :
+          (occurrence.context.fill
+            (exposedRegion description materialCanonical)).Canonical,
+        ∃ exposedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+            occurrence.interface.boundaryWire
+            (occurrence.context.fill
+              (exposedRegion description materialCanonical)),
+          Relation.ReflTransGen Step source
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (exposedRegion description materialCanonical))
+              exposedCanonical exposedExternalTwoEnded) := by
+  obtain ⟨materialCanonical, exposedCanonical, exposedExternalTwoEnded,
+    equivalent⟩ := equates description occurrence erasedCanonical
+      erasedExternalTwoEnded
+  exact ⟨materialCanonical, exposedCanonical, exposedExternalTwoEnded,
+    equivalent.1⟩
 
 end VisualProof.Rule.Completeness.Erasure.Exposure
