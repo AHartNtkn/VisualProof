@@ -418,6 +418,32 @@ theorem compile
       exact transGen_iso occurrence.host_iso.symm
         (exactCore.reflTransGen preparation.2) (OpenDiagramIso.refl _)
 
+/-- Exact preparation from the authoritative instantiation endpoint to one
+constructor's raw transform endpoint. Boundary and equality compilation own
+this evidence; the constructor that consumes it still owns its primitive. -/
+structure Request.Preparation
+    {holeWires : List Sig}
+    {instantiated pending : Region holeWires}
+    (request : Request instantiated pending)
+    (rawPrepared : Region holeWires) where
+  prepared : Region holeWires
+  preparedCanonical :
+    (request.occurrence.context.fill prepared).Canonical
+  preparedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+    request.occurrence.interface.boundaryWire
+    (request.occurrence.context.fill prepared)
+  rawPreparedCanonical :
+    (request.occurrence.context.fill rawPrepared).Canonical
+  rawPreparedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+    request.occurrence.interface.boundaryWire
+    (request.occurrence.context.fill rawPrepared)
+  preparedIso : RegionIso (WireEquiv.refl holeWires)
+    prepared rawPrepared
+  telescope : Telescope request.polarity request.occurrence.interface
+    request.occurrence.context instantiated prepared
+    request.instantiatedCanonical request.instantiatedExternalTwoEnded
+    preparedCanonical preparedExternalTwoEnded
+
 /-- Constructor-local evidence for one prepared actual endpoint. This record
 is the sole boundary at which a leaf or compound constructor supplies its
 primitive, endpoint validity, and exact presentation isomorphisms. -/
