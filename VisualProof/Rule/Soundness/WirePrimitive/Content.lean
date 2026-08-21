@@ -393,12 +393,232 @@ theorem Delete.sound {outer : List Sig} {applied empty : Region outer}
     apply equivalence.mpr
     rwa [targetRebuild]
 
+namespace Absorb
+
+private theorem agree_append
+    {arguments common sourceWires targetWires locals : List Sig}
+    {frame : Transform.Frame arguments common sourceWires targetWires}
+    {model : Model} {sourceEnv : Values model sourceWires}
+    {targetEnv : Values model targetWires}
+    (agree : Transform.EnvironmentsAgree frame sourceEnv targetEnv)
+    (localEnv : Values model locals) :
+    Transform.EnvironmentsAgree (frame.append locals)
+      (Values.append sourceEnv localEnv)
+      (Values.append targetEnv localEnv) := by
+  intro signature wire
+  apply Var.appendCases
+    (motive := fun wire =>
+      (sourceEnv.append localEnv).lookup
+          ((frame.append locals).sourceKeep wire) =
+        (targetEnv.append localEnv).lookup
+          ((frame.append locals).targetKeep wire))
+  · intro signature inherited
+    simpa [Transform.Frame.append, WireRenaming.appendRight] using
+      agree inherited
+  · intro signature localWire
+    simp [Transform.Frame.append, WireRenaming.appendRight]
+
+set_option maxHeartbeats 800000 in
+mutual
+  theorem RegionGuard.sound
+      {arguments common sourceWires targetWires : List Sig}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {source : Region sourceWires}
+      (edit : Transform.RegionEdit (operation arguments) frame PUnit.unit source)
+      (polarity : Polarity)
+      (guard : RegionGuard polarity frame edit)
+      (model : Model) (sourceEnv : Values model sourceWires)
+      (targetEnv : Values model targetWires)
+      (agree : Transform.EnvironmentsAgree frame sourceEnv targetEnv) :
+      match polarity with
+      | .positive =>
+          denoteRegion model sourceEnv source →
+            denoteRegion model targetEnv edit.run
+      | .negative =>
+          denoteRegion model targetEnv edit.run →
+            denoteRegion model sourceEnv source := by
+    cases guard with
+    | mk itemsGuard =>
+        simp only [Transform.RegionEdit.run, denoteRegion_mk]
+        rw [Region.denote_adjoinAt]
+        cases polarity with
+        | positive =>
+            rintro ⟨localEnv, itemsDenote⟩
+            exact ⟨localEnv, trivial,
+              ItemsGuard.sound _ .positive itemsGuard model
+                (Values.append sourceEnv localEnv)
+                (Values.append targetEnv localEnv)
+                (agree_append agree localEnv) itemsDenote⟩
+        | negative =>
+            rintro ⟨localEnv, _, resultDenotes⟩
+            exact ⟨localEnv,
+              ItemsGuard.sound _ .negative itemsGuard model
+                (Values.append sourceEnv localEnv)
+                (Values.append targetEnv localEnv)
+                (agree_append agree localEnv) resultDenotes⟩
+
+  theorem ItemsGuard.sound
+      {arguments common sourceWires targetWires : List Sig}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {items : ItemSeq sourceWires}
+      (edit : Transform.ItemsEdit (operation arguments) frame PUnit.unit items)
+      (polarity : Polarity)
+      (guard : ItemsGuard polarity frame edit)
+      (model : Model) (sourceEnv : Values model sourceWires)
+      (targetEnv : Values model targetWires)
+      (agree : Transform.EnvironmentsAgree frame sourceEnv targetEnv) :
+      match polarity with
+      | .positive =>
+          denoteItemSeq model sourceEnv items →
+            denoteRegion model targetEnv edit.run
+      | .negative =>
+          denoteRegion model targetEnv edit.run →
+            denoteItemSeq model sourceEnv items := by
+    cases guard with
+    | nil =>
+        cases polarity <;>
+          simp [Transform.ItemsEdit.run, Transform.denote_blank_iff]
+    | cons itemGuard tailGuard =>
+        simp only [Transform.ItemsEdit.run, denoteItemSeq_cons]
+        rw [Region.denote_conjoin]
+        cases polarity with
+        | positive =>
+            rintro ⟨itemDenotes, tailDenotes⟩
+            exact ⟨
+              ItemGuard.sound _ .positive itemGuard model sourceEnv
+                targetEnv agree itemDenotes,
+              ItemsGuard.sound _ .positive tailGuard model sourceEnv
+                targetEnv agree tailDenotes⟩
+        | negative =>
+            rintro ⟨itemDenotes, tailDenotes⟩
+            exact ⟨
+              ItemGuard.sound _ .negative itemGuard model sourceEnv
+                targetEnv agree itemDenotes,
+              ItemsGuard.sound _ .negative tailGuard model sourceEnv
+                targetEnv agree tailDenotes⟩
+
+  theorem ItemGuard.sound
+      {arguments common sourceWires targetWires : List Sig}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {item : Item sourceWires}
+      (edit : Transform.ItemEdit (operation arguments) frame PUnit.unit item)
+      (polarity : Polarity)
+      (guard : ItemGuard polarity frame edit)
+      (model : Model) (sourceEnv : Values model sourceWires)
+      (targetEnv : Values model targetWires)
+      (agree : Transform.EnvironmentsAgree frame sourceEnv targetEnv) :
+      match polarity with
+      | .positive =>
+          denoteItem model sourceEnv item →
+            denoteRegion model targetEnv edit.run
+      | .negative =>
+          denoteRegion model targetEnv edit.run →
+            denoteItem model sourceEnv item := by
+    cases guard with
+    | atom head ports =>
+        simp only [Transform.ItemEdit.run]
+        rw [Transform.denote_singleton_iff]
+        simp only [denoteItem_atom]
+        rw [agree head, Transform.evaluate_retained_eq ports agree]
+        cases polarity <;> exact id
+    | selectedAtom ports =>
+        simp only [Transform.ItemEdit.run, operation]
+        rw [Transform.denote_blank_iff]
+        intro
+        trivial
+    | selectedPin ports selected =>
+        simp only [Transform.ItemEdit.run, operation]
+        cases polarity with
+        | positive =>
+            rw [Transform.denote_blank_iff]
+            intro
+            trivial
+        | negative =>
+            rw [Transform.denote_blank_iff]
+            intro _
+            simp only [denoteItem_identity]
+            intro left right
+            have positionsEqual : left = right := Subsingleton.elim _ _
+            subst right
+            rfl
+    | identity signature arity ports =>
+        simp only [Transform.ItemEdit.run]
+        rw [Transform.denote_singleton_iff]
+        simp only [denoteItem_identity]
+        cases polarity with
+        | positive =>
+            intro sourceDenotes left right
+            rw [← agree (ports left), ← agree (ports right)]
+            exact sourceDenotes left right
+        | negative =>
+            intro targetDenotes left right
+            rw [agree (ports left), agree (ports right)]
+            exact targetDenotes left right
+    | cut bodyEdit bodyGuard =>
+        simp only [Transform.ItemEdit.run]
+        rw [Transform.denote_singleton_iff]
+        simp only [denoteItem_cut]
+        cases polarity with
+        | positive =>
+            intro sourceDoesNotDenote targetDenotes
+            exact sourceDoesNotDenote
+              (RegionGuard.sound (edit := bodyEdit) (polarity := .negative)
+                bodyGuard model sourceEnv targetEnv agree targetDenotes)
+        | negative =>
+            intro targetDoesNotDenote sourceDenotes
+            exact targetDoesNotDenote
+              (RegionGuard.sound (edit := bodyEdit) (polarity := .positive)
+                bodyGuard model sourceEnv targetEnv agree sourceDenotes)
+end
+
+theorem sound {outer : List Sig} {applied empty : Region outer}
+    (step : Content.Ends.Absorb applied empty) :
+    ∀ (model : Model) (env : Values model outer),
+      denoteRegion model env applied → denoteRegion model env empty := by
+  cases step with
+  | mk description =>
+      rcases description with ⟨deletion, guard⟩
+      rcases deletion with ⟨arguments, before, after, items, itemsEdit⟩
+      intro model env
+      simp only [Description.source, Description.target,
+        Delete.Description.source, Delete.Description.target]
+      simp only [denoteRegion_mk]
+      rw [Region.denote_adjoinAt]
+      rintro ⟨sourceLocal, sourceDenotes⟩
+      let split := Transform.Values.splitSegment before [.rel arguments]
+        after sourceLocal
+      have rebuild := Transform.Values.insertSegment_splitSegment before
+        [.rel arguments] after sourceLocal
+      rcases splitEq : split with ⟨⟨sourceRelation, sourceUnit⟩, commonLocal⟩
+      cases sourceUnit
+      rw [show Transform.Values.splitSegment before [.rel arguments] after
+        sourceLocal = ((sourceRelation, PUnit.unit), commonLocal) from
+          splitEq] at rebuild
+      have sourceRebuild :
+          Transform.Values.insertSegment (additions := [.rel arguments]) before
+              (sourceRelation, PUnit.unit) commonLocal = sourceLocal := by
+        simpa using rebuild
+      let targetLocal := Transform.Values.insertSegment
+        (additions := []) before PUnit.unit commonLocal
+      refine ⟨targetLocal, trivial, ?_⟩
+      apply ItemsGuard.sound itemsEdit .positive guard model
+        (Values.append env (Transform.Values.insertSegment
+          (additions := [.rel arguments]) before
+          (sourceRelation, PUnit.unit) commonLocal))
+        (Values.append env targetLocal)
+        (Transform.EnvironmentsAgree.replace (additions := []) env commonLocal
+          sourceRelation PUnit.unit)
+      rwa [sourceRebuild]
+
+end Absorb
+
 theorem Local.sound {wires : List Sig}
     {before after : Region wires} (step : Local before after) :
     ∀ (model : Model) (env : Values model wires),
       denoteRegion model env before → denoteRegion model env after := by
   cases step with
   | spawn step => exact step.sound
+  | absorb step => exact step.sound
 
 end Ends
 

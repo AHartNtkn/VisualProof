@@ -177,24 +177,41 @@ end ParallelShape
 
 namespace Ends
 
+private inductive Description (wires : List Sig) where
+  | spawn (description : Content.Ends.Delete.Description wires)
+  | absorb (description : Content.Ends.Absorb.Description wires)
+
+private def Description.source : Description wires → Region wires
+  | .spawn description => description.target
+  | .absorb description => description.source
+
+private def Description.target : Description wires → Region wires
+  | .spawn description => description.source
+  | .absorb description => description.target
+
 private def family : Executable.Family where
-  Description := Content.Ends.Delete.Description
-  source := Content.Ends.Delete.Description.target
-  target := Content.Ends.Delete.Description.source
+  Description := Description
+  source := Description.source
+  target := Description.target
 
 private theorem build {wires : List Sig}
-    (description : Content.Ends.Delete.Description wires) :
-    Content.Ends.Local description.target description.source :=
-  .spawn (.mk description)
+    (description : Description wires) :
+    Content.Ends.Local description.source description.target := by
+  cases description with
+  | spawn description => exact .spawn (.mk description)
+  | absorb description => exact .absorb (.mk description)
 
 private theorem view {wires : List Sig} {before after : Region wires}
     (step : Content.Ends.Local before after) :
-    ∃ description : Content.Ends.Delete.Description wires,
-      before = description.target ∧ after = description.source := by
+    ∃ description : Description wires,
+      before = description.source ∧ after = description.target := by
   cases step with
   | spawn step =>
       cases step with
-      | mk description => exact ⟨description, rfl, rfl⟩
+      | mk description => exact ⟨.spawn description, rfl, rfl⟩
+  | absorb step =>
+      cases step with
+      | mk description => exact ⟨.absorb description, rfl, rfl⟩
 
 abbrev ForwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
   Executable.ComputedDirected.Index family source
@@ -205,22 +222,30 @@ abbrev BackwardIndex {boundary : List Sig} (source : OpenDiagram boundary) :=
 def endsSpawn (description : Content.Ends.Delete.Description wires)
     (occurrence : Occurrence description.target source) :
     ForwardIndex source :=
-  .direct description occurrence
+  .direct (.spawn description) occurrence
 
 def endsDelete (description : Content.Ends.Delete.Description wires)
     (occurrence : Occurrence description.source source) :
     ForwardIndex source :=
-  .reverse description occurrence
+  .reverse (.spawn description) occurrence
 
-def backwardEndsDelete (description : Content.Ends.Delete.Description wires)
+def endsAbsorb (description : Content.Ends.Delete.Description wires)
     (occurrence : Occurrence description.source source) :
-    BackwardIndex source :=
-  .reverse description occurrence
+    Option (ForwardIndex source) :=
+  match Content.Ends.Absorb.Description.build description with
+  | some ⟨absorb, deletionEq⟩ => by
+      subst description
+      exact some (.direct (.absorb absorb) occurrence)
+  | none => none
 
-def backwardEndsSpawn (description : Content.Ends.Delete.Description wires)
+def endsInsert (description : Content.Ends.Delete.Description wires)
     (occurrence : Occurrence description.target source) :
-    BackwardIndex source :=
-  .direct description occurrence
+    Option (ForwardIndex source) :=
+  match Content.Ends.Absorb.Description.build description with
+  | some ⟨absorb, deletionEq⟩ => by
+      subst description
+      exact some (.reverse (.absorb absorb) occurrence)
+  | none => none
 
 def runForward (source : OpenDiagram boundary) :
     ForwardIndex source → Option (OpenDiagram boundary) :=

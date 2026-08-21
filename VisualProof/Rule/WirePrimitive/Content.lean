@@ -154,15 +154,154 @@ def Delete.Description.target (description : Delete.Description outer) :
   Region.adjoinAt (description.before ++ description.after) .nil
     description.itemsEdit.run
 
-/-- Exact structural deletion of every application of one local wire. The
-local rule is oriented in the sound spawn direction; contextual polarity
-supplies deletion in negative position. -/
+/-- Exact structural replacement of every application of one local wire by
+truth. Spawn uses every such edit; positive absorption additionally requires
+the cut-parity guard below. -/
 inductive Delete : Region outer → Region outer → Prop
   | mk (description : Delete.Description outer) :
       Delete description.source description.target
 
+namespace Absorb
+
+def flip : Polarity → Polarity
+  | .positive => .negative
+  | .negative => .positive
+
+mutual
+  /-- Evidence that every selected application in a region edit occurs
+  positively. -/
+  inductive RegionGuard :
+      (polarity : Polarity) →
+      {common sourceWires targetWires : List Sig} →
+      (frame : Transform.Frame arguments common sourceWires targetWires) →
+      {source : Region sourceWires} →
+      Transform.RegionEdit (operation arguments) frame PUnit.unit source → Type
+    | mk
+        (itemsGuard : ItemsGuard polarity
+          (Transform.Frame.append frame locals) itemsEdit) :
+        RegionGuard polarity frame (.mk itemsEdit)
+
+  /-- Evidence that every selected application in an item sequence occurs
+  positively. -/
+  inductive ItemsGuard :
+      (polarity : Polarity) →
+      {common sourceWires targetWires : List Sig} →
+      (frame : Transform.Frame arguments common sourceWires targetWires) →
+      {items : ItemSeq sourceWires} →
+      Transform.ItemsEdit (operation arguments) frame PUnit.unit items → Type
+    | nil : ItemsGuard polarity frame .nil
+    | cons
+        (itemGuard : ItemGuard polarity frame itemEdit)
+        (tailGuard : ItemsGuard polarity frame tailEdit) :
+        ItemsGuard polarity frame (.cons itemEdit tailEdit)
+
+  /-- Selected atoms are admitted only at even cut depth. Unary pins denote
+  truth and therefore remain admissible at either parity. -/
+  inductive ItemGuard :
+      (polarity : Polarity) →
+      {common sourceWires targetWires : List Sig} →
+      (frame : Transform.Frame arguments common sourceWires targetWires) →
+      {item : Item sourceWires} →
+      Transform.ItemEdit (operation arguments) frame PUnit.unit item → Type
+    | atom
+        (head : Var common (.rel atomArguments))
+        (ports : Vars common atomArguments) :
+        ItemGuard polarity frame (.atom head ports)
+    | selectedAtom (ports : Vars common arguments) :
+        ItemGuard .positive frame (.selectedAtom ports PUnit.unit)
+    | selectedPin
+        (ports : Fin 1 → Var sourceWires (.rel arguments))
+        (selected : ports 0 = frame.selected) :
+        ItemGuard polarity frame (.selectedPin ports selected)
+    | identity
+        (signature : Sig) (arity : Nat)
+        (ports : Fin arity → Var common signature) :
+        ItemGuard polarity frame (.identity signature arity ports)
+    | cut
+        (bodyEdit : Transform.RegionEdit (operation arguments)
+          frame PUnit.unit body)
+        (bodyGuard : RegionGuard (flip polarity) frame bodyEdit) :
+        ItemGuard polarity frame (.cut bodyEdit)
+end
+
+mutual
+  def RegionGuard.build
+      (polarity : Polarity)
+      {common sourceWires targetWires : List Sig}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {source : Region sourceWires}
+      (edit : Transform.RegionEdit (operation arguments) frame PUnit.unit source) :
+      Option (RegionGuard polarity frame edit) :=
+    match edit with
+    | .mk itemsEdit =>
+        match ItemsGuard.build polarity itemsEdit with
+        | some guard => some (.mk guard)
+        | none => none
+
+  def ItemsGuard.build
+      (polarity : Polarity)
+      {common sourceWires targetWires : List Sig}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {items : ItemSeq sourceWires}
+      (edit : Transform.ItemsEdit (operation arguments) frame PUnit.unit items) :
+      Option (ItemsGuard polarity frame edit) :=
+    match edit with
+    | .nil => some .nil
+    | .cons itemEdit tailEdit =>
+        match ItemGuard.build polarity itemEdit,
+            ItemsGuard.build polarity tailEdit with
+        | some itemGuard, some tailGuard => some (.cons itemGuard tailGuard)
+        | _, _ => none
+
+  def ItemGuard.build
+      (polarity : Polarity)
+      {common sourceWires targetWires : List Sig}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {item : Item sourceWires}
+      (edit : Transform.ItemEdit (operation arguments) frame PUnit.unit item) :
+      Option (ItemGuard polarity frame edit) :=
+    match edit with
+    | .atom head ports => some (.atom head ports)
+    | .selectedAtom ports _ =>
+        match polarity with
+        | .positive => some (.selectedAtom ports)
+        | .negative => none
+    | .selectedPin ports selected => some (.selectedPin ports selected)
+    | .identity signature arity ports => some (.identity signature arity ports)
+    | .cut bodyEdit =>
+        match RegionGuard.build (flip polarity) bodyEdit with
+        | some bodyGuard => some (.cut bodyEdit bodyGuard)
+        | none => none
+end
+
+structure Description (outer : List Sig) where
+  deletion : Delete.Description outer
+  guard : ItemsGuard .positive
+    (rootFrame outer deletion.before deletion.after deletion.arguments)
+    deletion.itemsEdit
+
+def Description.build (deletion : Delete.Description outer) :
+    Option { description : Description outer //
+      description.deletion = deletion } :=
+  match ItemsGuard.build .positive deletion.itemsEdit with
+  | some guard => some ⟨⟨deletion, guard⟩, rfl⟩
+  | none => none
+
+def Description.source (description : Description outer) : Region outer :=
+  description.deletion.source
+
+def Description.target (description : Description outer) : Region outer :=
+  description.deletion.target
+
+end Absorb
+
+inductive Absorb : Region outer → Region outer → Prop
+  | mk (description : Absorb.Description outer) :
+      Absorb description.source description.target
+
 inductive Local : LocalRule
   | spawn (step : Delete applied empty) : Local empty applied
+  | absorb (step : Absorb applied empty) : Local applied empty
 
 end Ends
 
