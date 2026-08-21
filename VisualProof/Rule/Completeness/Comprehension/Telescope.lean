@@ -519,16 +519,6 @@ namespace Compiler
 
 open WirePrimitive
 
-/-- Constructor-specific selected-site evidence for an existing transform
-operation. Its output cannot disappear from the compiler contract: every
-constructed edit is staged at its exact `run` endpoint below. -/
-structure SiteHandler
-    (operation : Transform.Operation arguments) where
-  site : ∀ {common sourceWires targetWires : List Sig}
-    (frame : Transform.Frame arguments common sourceWires targetWires)
-    (data : operation.Data frame) (ports : Vars common arguments),
-    operation.SiteData frame data ports
-
 /-- An existing transform edit together with the exact staged region computed
 by its authoritative `run`; no edit leaves the structural fold unaccounted. -/
 structure ExactEdit
@@ -559,185 +549,333 @@ private theorem itemsEditNilRun
   cases edit
   rfl
 
+/-! These witnesses live in `Type` only to make the demand for
+`Operation.SiteData` explicit and to expose their genuine recursive shape to
+Lean's termination checker. The authoritative `Instantiation` proof is the
+index of every constructor; the witnesses carry no alternate source, result,
+transform, or validity authority. In particular, no proposition is eliminated
+to manufacture Type-valued site data. -/
+
 mutual
-  /-- Build the existing region edit selected by authoritative instantiation
-evidence. Kept private: the public result is the staged compiler below. -/
-  private theorem buildRegionEdit
-      {arguments common sourceWires targetWires : List Sig}
-      {pattern : OpenDiagram arguments}
-      {operation : Transform.Operation arguments}
-      (site : SiteHandler operation)
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      (data : operation.Data frame)
-      {source : Region sourceWires} {result : Region common}
-      (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-        pattern frame.sourceKeep
-        frame.selected source result) :
-      Nonempty (ExactEdit
-        (Transform.RegionEdit operation frame data source)
-        (fun edit => edit.run)) := by
-    cases evidence with
-    | mk itemsResult =>
-        obtain ⟨output⟩ := buildItemsEdit site
-          (operation.appendData frame data _) itemsResult
-        exact ⟨{
-          edit := .mk output.edit
-          endpoint := Region.adjoinAt _ .nil output.endpoint
-          run_eq := by
-            simp only [Transform.RegionEdit.run]
-            rw [output.run_eq]
-        }⟩
+  /-- Demand-driven selected-site evidence for one actual recursive region
+result. It asks for site data only where the authoritative evidence contains a
+selected application. -/
+  inductive RegionSites (operation : Transform.Operation arguments) :
+      {common sourceWires targetWires : List Sig} →
+      {pattern : OpenDiagram arguments} →
+      {frame : Transform.Frame arguments common sourceWires targetWires} →
+      (data : operation.Data frame) →
+      {source : Region sourceWires} → {result : Region common} →
+      _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        pattern frame.sourceKeep frame.selected source result → Type
+    | mk
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        {locals : List Sig}
+        {items : ItemSeq (sourceWires ++ locals)}
+        {result : Region (common ++ locals)}
+        {evidence :
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+            pattern (frame.sourceKeep.appendRight locals)
+            (frame.selected.appendLeft locals) items result}
+        (sites : ItemsSites operation
+          (operation.appendData frame data locals) evidence) :
+        RegionSites operation data
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+            evidence)
 
-  /-- Build the corresponding existing item-sequence edit. -/
-  private theorem buildItemsEdit
-      {arguments common sourceWires targetWires : List Sig}
-      {pattern : OpenDiagram arguments}
-      {operation : Transform.Operation arguments}
-      (site : SiteHandler operation)
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      (data : operation.Data frame)
-      {source : ItemSeq sourceWires} {result : Region common}
-      (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        pattern frame.sourceKeep
-        frame.selected source result) :
-      Nonempty (ExactEdit
-        (Transform.ItemsEdit operation frame data source)
-        (fun edit => edit.run)) := by
-    cases evidence with
-    | nil => exact ⟨ExactEdit.refl .nil⟩
-    | cons itemEvidence tailEvidence =>
-        obtain ⟨itemOutput⟩ := buildItemEdit site data itemEvidence
-        obtain ⟨tailOutput⟩ := buildItemsEdit site data tailEvidence
-        exact ⟨{
-          edit := .cons itemOutput.edit tailOutput.edit
-          endpoint := itemOutput.endpoint.conjoin tailOutput.endpoint
-          run_eq := by
-            simp only [Transform.ItemsEdit.run]
-            rw [itemOutput.run_eq, tailOutput.run_eq]
-        }⟩
+  /-- Demand-driven selected-site evidence for an actual item sequence. -/
+  inductive ItemsSites (operation : Transform.Operation arguments) :
+      {common sourceWires targetWires : List Sig} →
+      {pattern : OpenDiagram arguments} →
+      {frame : Transform.Frame arguments common sourceWires targetWires} →
+      (data : operation.Data frame) →
+      {source : ItemSeq sourceWires} → {result : Region common} →
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        pattern frame.sourceKeep frame.selected source result → Type
+    | nil
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        (evidence :
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+            pattern frame.sourceKeep frame.selected
+            (.nil : ItemSeq sourceWires) (Region.blank common)) :
+        ItemsSites operation data evidence
+    | cons
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        {item : Item sourceWires} {tail : ItemSeq sourceWires}
+        {itemResult tailResult : Region common}
+        {itemEvidence :
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+            pattern frame.sourceKeep frame.selected item itemResult}
+        {tailEvidence :
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+            pattern frame.sourceKeep frame.selected tail tailResult}
+        (itemSites : ItemSites operation data itemEvidence)
+        (tailSites : ItemsSites operation data tailEvidence) :
+        ItemsSites operation data
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+            itemEvidence tailEvidence)
 
-  /-- Build the corresponding existing one-item edit. -/
-  private theorem buildItemEdit
-      {arguments common sourceWires targetWires : List Sig}
-      {pattern : OpenDiagram arguments}
-      {operation : Transform.Operation arguments}
-      (site : SiteHandler operation)
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      (data : operation.Data frame)
-      {source : Item sourceWires} {result : Region common}
-      (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-        pattern frame.sourceKeep
-        frame.selected source result) :
-      Nonempty (ExactEdit
-        (Transform.ItemEdit operation frame data source)
-        (fun edit => edit.run)) := by
-    cases evidence with
-    | atom head ports => exact ⟨ExactEdit.refl (.atom head ports)⟩
-    | selectedAtom ports =>
-        exact ⟨ExactEdit.refl
-          (.selectedAtom ports (site.site frame data ports))⟩
-    | identity signature arity ports =>
-        exact ⟨ExactEdit.refl (.identity signature arity ports)⟩
-    | cut bodyEvidence =>
-        obtain ⟨bodyOutput⟩ := buildRegionEdit site data bodyEvidence
-        exact ⟨{
-          edit := .cut bodyOutput.edit
-          endpoint := Region.singleton (.cut bodyOutput.endpoint)
-          run_eq := by
-            simp only [Transform.ItemEdit.run]
-            rw [bodyOutput.run_eq]
-        }⟩
+  /-- Demand-driven selected-site evidence for one actual item. Nonselected
+atoms and identities need no operation site data. -/
+  inductive ItemSites (operation : Transform.Operation arguments) :
+      {common sourceWires targetWires : List Sig} →
+      {pattern : OpenDiagram arguments} →
+      {frame : Transform.Frame arguments common sourceWires targetWires} →
+      (data : operation.Data frame) →
+      {source : Item sourceWires} → {result : Region common} →
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        pattern frame.sourceKeep frame.selected source result → Type
+    | atom
+        {common sourceWires targetWires atomArguments : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        (head : Var common (.rel atomArguments))
+        (ports : Vars common atomArguments) :
+        ItemSites operation data
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+            head ports)
+    | selectedAtom
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        (ports : Vars common arguments)
+        (siteData : operation.SiteData frame data ports) :
+        ItemSites operation data
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+            ports)
+    | identity
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        (signature : Sig) (arity : Nat)
+        (ports : Fin arity → Var common signature) :
+        ItemSites operation data
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+            signature arity ports)
+    | cut
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        {body : Region sourceWires} {result : Region common}
+        {evidence :
+          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+            pattern frame.sourceKeep frame.selected body result}
+        (sites : RegionSites operation data evidence) :
+        ItemSites operation data
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+            evidence)
 end
 
-/-- The exact constructor-local boundary shared by every compiler entry. The
-authoritative instantiation result is embedded at `resultLocals`; the edit's
-actual `run` endpoint is embedded at `stagedLocals`; and the discharge carries
-the exact endpoint isomorphism plus all validity and telescope data. -/
+/-- Nil evidence never demands selected-site data, for any operation datum.
+In particular this constructor accepts a uniform argument-projection datum
+whose optional attachment is `none`. -/
+def ItemsSites.ofNil
+    {arguments common sourceWires targetWires : List Sig}
+    {pattern : OpenDiagram arguments}
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments common sourceWires targetWires}
+    (data : operation.Data frame)
+    (evidence :
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        pattern frame.sourceKeep frame.selected
+        (.nil : ItemSeq sourceWires) (Region.blank common)) :
+    ItemsSites operation data evidence := by
+  exact .nil evidence
+
+/-- The exact CPS boundary shared by every recursive compiler entry. It keeps
+the authoritative instantiation result connected to the actual request and
+passes an existing edit with its exact staged endpoint to the next constructor
+handler. Result and staged wire contexts may differ. -/
 structure Contract
-    {outer resultLocals stagedLocals : List Sig}
-    {result : Region (outer ++ resultLocals)}
-    {pending : Region outer}
-    (request : Telescope.Request
-      (Region.adjoinAt resultLocals .nil result) pending)
+    {holeWires resultWires targetWires : List Sig}
+    {instantiated pending : Region holeWires}
+    (request : Telescope.Request instantiated pending)
+    (result : Region resultWires)
     (Edit : Type)
-    (run : Edit → Region (outer ++ stagedLocals)) where
-  close : ∀ output : ExactEdit Edit run, request.Discharge
-    (Region.adjoinAt stagedLocals .nil output.endpoint)
+    (run : Edit → Region targetWires) where
+  resultAt : Region resultWires → Region holeWires
+  resultIso : RegionIso (WireEquiv.refl holeWires)
+    instantiated (resultAt result)
+  finish : ExactEdit Edit run → request.Result
 
 mutual
-  /-- Compile recursive region evidence under an exact actual-region
-constructor contract. -/
+  /-- Compile recursive region evidence through an actual request. The region
+branch delegates to the public item-sequence compiler with an exact CPS
+contract, rather than completing an edit-only fold first. -/
   theorem region
-      {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+      {arguments common sourceWires targetWires : List Sig}
       {pattern : OpenDiagram arguments}
       {operation : Transform.Operation arguments}
-      (site : SiteHandler operation)
-      {frame : Transform.Frame arguments (outer ++ resultLocals)
-        sourceWires (outer ++ stagedLocals)}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
       (data : operation.Data frame)
       {source : Region sourceWires}
-      {result : Region (outer ++ resultLocals)}
+      {result : Region common}
       (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-        pattern frame.sourceKeep frame.selected source result) :
-      ∀ {pending : Region outer}
-        (request : Telescope.Request
-          (Region.adjoinAt resultLocals .nil result) pending)
+        pattern frame.sourceKeep frame.selected source result)
+      (sites : RegionSites operation data evidence) :
+      ∀ {holeWires : List Sig}
+        {instantiated pending : Region holeWires}
+        (request : Telescope.Request instantiated pending)
         (_contract : Contract request
+          result
           (Transform.RegionEdit operation frame data source)
           (fun edit => edit.run)),
-        request.Result := by
-    intro pending request contract
-    obtain ⟨output⟩ := buildRegionEdit site data evidence
-    exact (contract.close output).compile
+        request.Result :=
+    fun {holeWires} {instantiated pending} request contract =>
+      match sites with
+      | .mk childSites => by
+        have childCompiled := items
+          (operation.appendData frame data _)
+          _ childSites request {
+            resultAt := fun childResult =>
+              contract.resultAt (Region.adjoinAt _ .nil childResult)
+            resultIso := contract.resultIso
+            finish := fun childOutput =>
+              contract.finish {
+                edit := .mk childOutput.edit
+                endpoint := Region.adjoinAt _ .nil childOutput.endpoint
+                run_eq := by
+                  simp only [Transform.RegionEdit.run]
+                  rw [childOutput.run_eq]
+              }
+          }
+        exact childCompiled
+  termination_by structural sites
 
-  /-- Compile item-sequence evidence under the same exact contract. -/
+  /-- Compile an item sequence through the same actual request. Cons invokes
+both child public compilers through constructor-indexed continuations. -/
   theorem items
-      {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+      {arguments common sourceWires targetWires : List Sig}
       {pattern : OpenDiagram arguments}
       {operation : Transform.Operation arguments}
-      (site : SiteHandler operation)
-      {frame : Transform.Frame arguments (outer ++ resultLocals)
-        sourceWires (outer ++ stagedLocals)}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
       (data : operation.Data frame)
       {source : ItemSeq sourceWires}
-      {result : Region (outer ++ resultLocals)}
+      {result : Region common}
       (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        pattern frame.sourceKeep frame.selected source result) :
-      ∀ {pending : Region outer}
-        (request : Telescope.Request
-          (Region.adjoinAt resultLocals .nil result) pending)
+        pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemsSites operation data evidence) :
+      ∀ {holeWires : List Sig}
+        {instantiated pending : Region holeWires}
+        (request : Telescope.Request instantiated pending)
         (_contract : Contract request
+          result
           (Transform.ItemsEdit operation frame data source)
           (fun edit => edit.run)),
-        request.Result := by
-    intro pending request contract
-    obtain ⟨output⟩ := buildItemsEdit site data evidence
-    exact (contract.close output).compile
+        request.Result :=
+    fun {holeWires} {instantiated pending} request contract =>
+      match sites with
+      | .nil _ => by
+        exact contract.finish (ExactEdit.refl .nil)
+      | .cons itemSites tailSites => by
+        rename_i itemSource tailSource itemResult tailResult itemEvidence
+          tailEvidence
+        have itemCompiled := item data itemEvidence itemSites request {
+          resultAt := fun childResult =>
+            contract.resultAt (childResult.conjoin tailResult)
+          resultIso := contract.resultIso
+          finish := fun itemOutput => by
+            have tailCompiled := items data tailEvidence tailSites request {
+              resultAt := fun childResult =>
+                contract.resultAt (itemResult.conjoin childResult)
+              resultIso := contract.resultIso
+              finish := fun tailOutput =>
+                contract.finish {
+                  edit := .cons itemOutput.edit tailOutput.edit
+                  endpoint := itemOutput.endpoint.conjoin tailOutput.endpoint
+                  run_eq := by
+                    simp only [Transform.ItemsEdit.run]
+                    rw [itemOutput.run_eq, tailOutput.run_eq]
+                }
+            }
+            exact tailCompiled
+        }
+        exact itemCompiled
+  termination_by structural sites
 
-  /-- Compile one item witness under the same exact contract. -/
+  /-- Compile one item through the same actual request. Selected-site data is
+obtained only from the actual `selectedAtom` evidence branch. -/
   theorem item
-      {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+      {arguments common sourceWires targetWires : List Sig}
       {pattern : OpenDiagram arguments}
       {operation : Transform.Operation arguments}
-      (site : SiteHandler operation)
-      {frame : Transform.Frame arguments (outer ++ resultLocals)
-        sourceWires (outer ++ stagedLocals)}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
       (data : operation.Data frame)
       {source : Item sourceWires}
-      {result : Region (outer ++ resultLocals)}
+      {result : Region common}
       (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-        pattern frame.sourceKeep frame.selected source result) :
-      ∀ {pending : Region outer}
-        (request : Telescope.Request
-          (Region.adjoinAt resultLocals .nil result) pending)
+        pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemSites operation data evidence) :
+      ∀ {holeWires : List Sig}
+        {instantiated pending : Region holeWires}
+        (request : Telescope.Request instantiated pending)
         (_contract : Contract request
+          result
           (Transform.ItemEdit operation frame data source)
           (fun edit => edit.run)),
-        request.Result := by
-    intro pending request contract
-    obtain ⟨output⟩ := buildItemEdit site data evidence
-    exact (contract.close output).compile
+        request.Result :=
+    fun {holeWires} {instantiated pending} request contract =>
+      match sites with
+      | .atom head ports => by
+        exact contract.finish (ExactEdit.refl (.atom head ports))
+      | .selectedAtom ports siteData => by
+        exact contract.finish
+          (ExactEdit.refl (.selectedAtom ports siteData))
+      | .identity signature arity ports => by
+        exact contract.finish
+          (ExactEdit.refl (.identity signature arity ports))
+      | .cut childSites => by
+        have childCompiled := region data _ childSites request {
+          resultAt := fun childResult =>
+            contract.resultAt (Region.singleton (.cut childResult))
+          resultIso := contract.resultIso
+          finish := fun childOutput =>
+            contract.finish {
+              edit := .cut childOutput.edit
+              endpoint := Region.singleton (.cut childOutput.endpoint)
+              run_eq := by
+                simp only [Transform.ItemEdit.run]
+                rw [childOutput.run_eq]
+            }
+        }
+        exact childCompiled
+  termination_by structural sites
 end
+
+/-- The generic nil branch accepts every operation state without requesting
+`SiteData`, including binder-changing states whose selected-site data would be
+partial. -/
+theorem itemsNilBranch
+    {arguments common sourceWires targetWires : List Sig}
+    {pattern : OpenDiagram arguments}
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments common sourceWires targetWires}
+    (data : operation.Data frame)
+    (evidence :
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        pattern frame.sourceKeep frame.selected
+        (.nil : ItemSeq sourceWires) (Region.blank common))
+    {holeWires : List Sig}
+    {instantiated pending : Region holeWires}
+    (request : Telescope.Request instantiated pending)
+    (contract : Contract request (Region.blank common)
+      (Transform.ItemsEdit operation frame data .nil)
+      (fun edit => edit.run)) :
+    request.Result := by
+  exact items data evidence (ItemsSites.ofNil data evidence) request contract
 
 private def blankPattern : OpenDiagram [] where
   external := []
@@ -749,9 +887,6 @@ private def blankPattern : OpenDiagram [] where
   externalTwoEnded := by
     intro signature wire
     cases wire
-
-private def blankSite : SiteHandler (Ends.operation []) where
-  site := fun _ _ _ => PUnit.unit
 
 /-- The real empty item-sequence branch connects authoritative instantiation
 evidence to its exact Ends transform and then to the shared strict compiler
@@ -769,8 +904,12 @@ theorem itemsNil
         (Ends.rootFrame outer before after []).selected
         .nil (Region.blank (outer ++ (before ++ after)))) :
     request.Result := by
-  exact items blankSite PUnit.unit evidence request {
-      close := fun output => by
+  exact itemsNilBranch (operation := Ends.operation []) PUnit.unit evidence
+    request {
+      resultAt := fun result =>
+        Region.adjoinAt (before ++ after) .nil result
+      resultIso := RegionIso.refl _
+      finish := fun output => by
         cases output with
         | mk edit staged runEq =>
         have runBlank := itemsEditNilRun edit
@@ -806,7 +945,8 @@ theorem itemsNil
               (Region.blank (outer ++ (before ++ after)))) := by
           rw [stagedActualEq]
           exact RegionIso.refl _
-        exact .blank stagedIso spawn
+        exact (Telescope.Request.Discharge.blank
+          stagedIso spawn).compile
     }
 
 end Compiler
