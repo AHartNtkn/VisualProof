@@ -234,6 +234,41 @@ theorem Compiles.toTelescope
     | tail _ step induction => exact .tail induction step
   exact ⟨polarityEq, optional compiled⟩
 
+/-- The actual-region data shared by every recursive compiler branch. The
+instantiated endpoint is authoritative; constructor-local evidence supplies
+only the next prepared endpoint and primitive. -/
+structure Request
+    {holeWires : List Sig}
+    (instantiated pending : Region holeWires) where
+  boundary : List Sig
+  source : OpenDiagram boundary
+  endpoint : Region holeWires
+  polarity : Polarity
+  occurrence : Occurrence
+    (polaritySource polarity instantiated endpoint) source
+  instantiatedCanonical : (occurrence.context.fill instantiated).Canonical
+  instantiatedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+    occurrence.interface.boundaryWire
+    (occurrence.context.fill instantiated)
+  pendingCanonical : (occurrence.context.fill pending).Canonical
+  pendingExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+    occurrence.interface.boundaryWire (occurrence.context.fill pending)
+  endpointCanonical : (occurrence.context.fill endpoint).Canonical
+  endpointExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+    occurrence.interface.boundaryWire (occurrence.context.fill endpoint)
+  continuation : Telescope polarity occurrence.interface occurrence.context
+    pending endpoint pendingCanonical pendingExternalTwoEnded
+    endpointCanonical endpointExternalTwoEnded
+
+/-- The one strict goal shared by all recursive evidence branches. -/
+def Request.Result
+    {holeWires : List Sig}
+    {instantiated pending : Region holeWires}
+    (request : Request instantiated pending) : Prop :=
+  Compiles request.polarity request.occurrence
+    request.instantiatedCanonical request.instantiatedExternalTwoEnded
+    request.endpointCanonical request.endpointExternalTwoEnded
+
 /-- Extend an actual-region telescope by one mandatory contextual primitive.
 The optional preparation and continuation stay exact; isomorphisms are used
 only at the primitive's concrete endpoints, where `Contextual` can absorb
@@ -383,26 +418,151 @@ theorem compile
       exact transGen_iso occurrence.host_iso.symm
         (exactCore.reflTransGen preparation.2) (OpenDiagramIso.refl _)
 
+/-- Constructor-local evidence for one prepared actual endpoint. This record
+is the sole boundary at which a leaf or compound constructor supplies its
+primitive, endpoint validity, and exact presentation isomorphisms. -/
+structure Request.Branch
+    {holeWires : List Sig}
+    {instantiated pending : Region holeWires}
+    (request : Request instantiated pending)
+    (prepared : Region holeWires) where
+  rawPrepared : Region holeWires
+  rawPending : Region holeWires
+  localRule : LocalRule
+  inject : ∀ {stepBoundary : List Sig}
+    {stepSource stepTarget : OpenDiagram stepBoundary},
+    Contextual localRule stepSource stepTarget → Step stepSource stepTarget
+  preparedCanonical : (request.occurrence.context.fill prepared).Canonical
+  preparedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+    request.occurrence.interface.boundaryWire
+    (request.occurrence.context.fill prepared)
+  rawPreparedCanonical :
+    (request.occurrence.context.fill rawPrepared).Canonical
+  rawPreparedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+    request.occurrence.interface.boundaryWire
+    (request.occurrence.context.fill rawPrepared)
+  rawPendingCanonical :
+    (request.occurrence.context.fill rawPending).Canonical
+  rawPendingExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+    request.occurrence.interface.boundaryWire
+    (request.occurrence.context.fill rawPending)
+  preparedIso : RegionIso (WireEquiv.refl holeWires)
+    prepared rawPrepared
+  pendingIso : RegionIso (WireEquiv.refl holeWires)
+    pending rawPending
+  localStep : localRule rawPrepared rawPending
+  preparation : Telescope request.polarity request.occurrence.interface
+    request.occurrence.context instantiated prepared
+    request.instantiatedCanonical request.instantiatedExternalTwoEnded
+    preparedCanonical preparedExternalTwoEnded
+
+/-- Discharge the shared strict goal from one constructor-local branch. -/
+theorem Request.Branch.compile
+    {holeWires : List Sig}
+    {instantiated pending prepared : Region holeWires}
+    {request : Request instantiated pending}
+    (branch : request.Branch prepared) : request.Result := by
+  exact Telescope.compile branch.localRule branch.inject request.polarity
+    request.occurrence request.instantiatedCanonical
+    request.instantiatedExternalTwoEnded branch.preparedCanonical
+    branch.preparedExternalTwoEnded request.pendingCanonical
+    request.pendingExternalTwoEnded request.endpointCanonical
+    request.endpointExternalTwoEnded branch.rawPreparedCanonical
+    branch.rawPreparedExternalTwoEnded branch.rawPendingCanonical
+    branch.rawPendingExternalTwoEnded branch.preparedIso branch.pendingIso
+    branch.localStep branch.preparation request.continuation
+
+/-- The blank constructor discharges a shared request through the established
+blank theorem. -/
+theorem Request.blank
+    {holeWires : List Sig}
+    {empty applied : Region holeWires}
+    (request : Request empty applied)
+    (spawn : Ends.Delete applied empty) : request.Result := by
+  exact Compiles.blank request.polarity spawn request.occurrence
+    request.instantiatedCanonical request.instantiatedExternalTwoEnded
+    request.pendingCanonical request.pendingExternalTwoEnded
+    request.endpointCanonical request.endpointExternalTwoEnded
+    request.continuation
+
+/-- A constructor closes a shared request either with the established blank
+phase or with one fully specified primitive branch. Both alternatives retain
+the request's actual occurrence, polarity, validity, and final telescope. -/
+inductive Request.Discharge
+    {holeWires : List Sig}
+    {instantiated pending : Region holeWires}
+    (request : Request instantiated pending)
+    (staged : Region holeWires) : Type
+  | blank
+      (stagedIso : RegionIso (WireEquiv.refl holeWires)
+        staged instantiated)
+      (spawn : Ends.Delete pending instantiated) : request.Discharge staged
+  | primitive {prepared : Region holeWires}
+      (branch : request.Branch prepared)
+      (stagedIso : RegionIso (WireEquiv.refl holeWires)
+        staged branch.rawPrepared) : request.Discharge staged
+
+/-- Every constructor discharge produces the strict shared result. -/
+theorem Request.Discharge.compile
+    {holeWires : List Sig}
+    {instantiated pending : Region holeWires}
+    {request : Request instantiated pending}
+    {staged : Region holeWires}
+    (discharge : request.Discharge staged) : request.Result := by
+  cases discharge with
+  | blank _ spawn => exact request.blank spawn
+  | primitive branch _ => exact branch.compile
+
 end Telescope
 
 namespace Compiler
 
 open WirePrimitive
 
-/-- Constructor-specific data for every selected application site. This is
-the only input needed to reuse the existing instantiation evidence as an
-existing `Transform` edit; it introduces no parallel region or edit syntax. -/
-abbrev SiteHandler
-    (operation : Transform.Operation arguments) : Type :=
-  ∀ {common sourceWires targetWires : List Sig}
-    (frame : Transform.Frame arguments common sourceWires targetWires),
-    (data : operation.Data frame) → (ports : Vars common arguments) →
-      operation.SiteData frame data ports
+/-- Constructor-specific selected-site evidence for an existing transform
+operation. Its output cannot disappear from the compiler contract: every
+constructed edit is staged at its exact `run` endpoint below. -/
+structure SiteHandler
+    (operation : Transform.Operation arguments) where
+  site : ∀ {common sourceWires targetWires : List Sig}
+    (frame : Transform.Frame arguments common sourceWires targetWires)
+    (data : operation.Data frame) (ports : Vars common arguments),
+    operation.SiteData frame data ports
+
+/-- An existing transform edit together with the exact staged region computed
+by its authoritative `run`; no edit leaves the structural fold unaccounted. -/
+structure ExactEdit
+    {targetWires : List Sig}
+    (Edit : Type)
+    (run : Edit → Region targetWires) where
+  edit : Edit
+  endpoint : Region targetWires
+  run_eq : run edit = endpoint
+
+private def ExactEdit.refl
+    {targetWires : List Sig}
+    {Edit : Type}
+    {run : Edit → Region targetWires}
+    (edit : Edit) : ExactEdit Edit run where
+  edit := edit
+  endpoint := run edit
+  run_eq := rfl
+
+private theorem itemsEditNilRun
+    {arguments common sourceWires targetWires : List Sig}
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments common sourceWires targetWires}
+    {data : operation.Data frame}
+    (edit : Transform.ItemsEdit operation frame data
+      (.nil : ItemSeq sourceWires)) :
+    edit.run = Region.blank targetWires := by
+  cases edit
+  rfl
 
 mutual
-  /-- Reuse recursive region-instantiation evidence as a transform edit for a
-constructor whose selected sites are supplied by `site`. -/
-  theorem regionTransform
+  /-- Build the existing region edit selected by authoritative instantiation
+evidence. Kept private: the public result is the staged compiler below. -/
+  private theorem buildRegionEdit
       {arguments common sourceWires targetWires : List Sig}
       {pattern : OpenDiagram arguments}
       {operation : Transform.Operation arguments}
@@ -413,16 +573,23 @@ constructor whose selected sites are supplied by `site`. -/
       (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
         pattern frame.sourceKeep
         frame.selected source result) :
-      Nonempty (Transform.RegionEdit operation frame data source) := by
+      Nonempty (ExactEdit
+        (Transform.RegionEdit operation frame data source)
+        (fun edit => edit.run)) := by
     cases evidence with
     | mk itemsResult =>
-        obtain ⟨edit⟩ := itemsTransform site
+        obtain ⟨output⟩ := buildItemsEdit site
           (operation.appendData frame data _) itemsResult
-        exact ⟨Transform.RegionEdit.mk edit⟩
+        exact ⟨{
+          edit := .mk output.edit
+          endpoint := Region.adjoinAt _ .nil output.endpoint
+          run_eq := by
+            simp only [Transform.RegionEdit.run]
+            rw [output.run_eq]
+        }⟩
 
-  /-- Reuse item-sequence instantiation evidence as the corresponding
-constructor transform edit. -/
-  theorem itemsTransform
+  /-- Build the corresponding existing item-sequence edit. -/
+  private theorem buildItemsEdit
       {arguments common sourceWires targetWires : List Sig}
       {pattern : OpenDiagram arguments}
       {operation : Transform.Operation arguments}
@@ -433,17 +600,24 @@ constructor transform edit. -/
       (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep
         frame.selected source result) :
-      Nonempty (Transform.ItemsEdit operation frame data source) := by
+      Nonempty (ExactEdit
+        (Transform.ItemsEdit operation frame data source)
+        (fun edit => edit.run)) := by
     cases evidence with
-    | nil => exact ⟨Transform.ItemsEdit.nil⟩
+    | nil => exact ⟨ExactEdit.refl .nil⟩
     | cons itemEvidence tailEvidence =>
-        obtain ⟨itemEdit⟩ := itemTransform site data itemEvidence
-        obtain ⟨tailEdit⟩ := itemsTransform site data tailEvidence
-        exact ⟨Transform.ItemsEdit.cons itemEdit tailEdit⟩
+        obtain ⟨itemOutput⟩ := buildItemEdit site data itemEvidence
+        obtain ⟨tailOutput⟩ := buildItemsEdit site data tailEvidence
+        exact ⟨{
+          edit := .cons itemOutput.edit tailOutput.edit
+          endpoint := itemOutput.endpoint.conjoin tailOutput.endpoint
+          run_eq := by
+            simp only [Transform.ItemsEdit.run]
+            rw [itemOutput.run_eq, tailOutput.run_eq]
+        }⟩
 
-  /-- Reuse one item-instantiation witness as the corresponding constructor
-transform edit. -/
-  theorem itemTransform
+  /-- Build the corresponding existing one-item edit. -/
+  private theorem buildItemEdit
       {arguments common sourceWires targetWires : List Sig}
       {pattern : OpenDiagram arguments}
       {operation : Transform.Operation arguments}
@@ -454,17 +628,186 @@ transform edit. -/
       (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
         pattern frame.sourceKeep
         frame.selected source result) :
-      Nonempty (Transform.ItemEdit operation frame data source) := by
+      Nonempty (ExactEdit
+        (Transform.ItemEdit operation frame data source)
+        (fun edit => edit.run)) := by
     cases evidence with
-    | atom head ports => exact ⟨Transform.ItemEdit.atom head ports⟩
+    | atom head ports => exact ⟨ExactEdit.refl (.atom head ports)⟩
     | selectedAtom ports =>
-        exact ⟨Transform.ItemEdit.selectedAtom ports (site frame data ports)⟩
+        exact ⟨ExactEdit.refl
+          (.selectedAtom ports (site.site frame data ports))⟩
     | identity signature arity ports =>
-        exact ⟨Transform.ItemEdit.identity signature arity ports⟩
+        exact ⟨ExactEdit.refl (.identity signature arity ports)⟩
     | cut bodyEvidence =>
-        obtain ⟨bodyEdit⟩ := regionTransform site data bodyEvidence
-        exact ⟨Transform.ItemEdit.cut bodyEdit⟩
+        obtain ⟨bodyOutput⟩ := buildRegionEdit site data bodyEvidence
+        exact ⟨{
+          edit := .cut bodyOutput.edit
+          endpoint := Region.singleton (.cut bodyOutput.endpoint)
+          run_eq := by
+            simp only [Transform.ItemEdit.run]
+            rw [bodyOutput.run_eq]
+        }⟩
 end
+
+/-- The exact constructor-local boundary shared by every compiler entry. The
+authoritative instantiation result is embedded at `resultLocals`; the edit's
+actual `run` endpoint is embedded at `stagedLocals`; and the discharge carries
+the exact endpoint isomorphism plus all validity and telescope data. -/
+structure Contract
+    {outer resultLocals stagedLocals : List Sig}
+    {result : Region (outer ++ resultLocals)}
+    {pending : Region outer}
+    (request : Telescope.Request
+      (Region.adjoinAt resultLocals .nil result) pending)
+    (Edit : Type)
+    (run : Edit → Region (outer ++ stagedLocals)) where
+  close : ∀ output : ExactEdit Edit run, request.Discharge
+    (Region.adjoinAt stagedLocals .nil output.endpoint)
+
+mutual
+  /-- Compile recursive region evidence under an exact actual-region
+constructor contract. -/
+  theorem region
+      {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      (site : SiteHandler operation)
+      {frame : Transform.Frame arguments (outer ++ resultLocals)
+        sourceWires (outer ++ stagedLocals)}
+      (data : operation.Data frame)
+      {source : Region sourceWires}
+      {result : Region (outer ++ resultLocals)}
+      (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        pattern frame.sourceKeep frame.selected source result) :
+      ∀ {pending : Region outer}
+        (request : Telescope.Request
+          (Region.adjoinAt resultLocals .nil result) pending)
+        (_contract : Contract request
+          (Transform.RegionEdit operation frame data source)
+          (fun edit => edit.run)),
+        request.Result := by
+    intro pending request contract
+    obtain ⟨output⟩ := buildRegionEdit site data evidence
+    exact (contract.close output).compile
+
+  /-- Compile item-sequence evidence under the same exact contract. -/
+  theorem items
+      {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      (site : SiteHandler operation)
+      {frame : Transform.Frame arguments (outer ++ resultLocals)
+        sourceWires (outer ++ stagedLocals)}
+      (data : operation.Data frame)
+      {source : ItemSeq sourceWires}
+      {result : Region (outer ++ resultLocals)}
+      (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        pattern frame.sourceKeep frame.selected source result) :
+      ∀ {pending : Region outer}
+        (request : Telescope.Request
+          (Region.adjoinAt resultLocals .nil result) pending)
+        (_contract : Contract request
+          (Transform.ItemsEdit operation frame data source)
+          (fun edit => edit.run)),
+        request.Result := by
+    intro pending request contract
+    obtain ⟨output⟩ := buildItemsEdit site data evidence
+    exact (contract.close output).compile
+
+  /-- Compile one item witness under the same exact contract. -/
+  theorem item
+      {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      (site : SiteHandler operation)
+      {frame : Transform.Frame arguments (outer ++ resultLocals)
+        sourceWires (outer ++ stagedLocals)}
+      (data : operation.Data frame)
+      {source : Item sourceWires}
+      {result : Region (outer ++ resultLocals)}
+      (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        pattern frame.sourceKeep frame.selected source result) :
+      ∀ {pending : Region outer}
+        (request : Telescope.Request
+          (Region.adjoinAt resultLocals .nil result) pending)
+        (_contract : Contract request
+          (Transform.ItemEdit operation frame data source)
+          (fun edit => edit.run)),
+        request.Result := by
+    intro pending request contract
+    obtain ⟨output⟩ := buildItemEdit site data evidence
+    exact (contract.close output).compile
+end
+
+private def blankPattern : OpenDiagram [] where
+  external := []
+  boundaryWire := .nil
+  boundarySurjective := fun wire => Fin.elim0 wire
+  body := Region.blank []
+  canonical := by
+    simp [Region.blank, Region.Canonical, ItemSeq.ChildrenCanonical]
+  externalTwoEnded := by
+    intro signature wire
+    cases wire
+
+private def blankSite : SiteHandler (Ends.operation []) where
+  site := fun _ _ _ => PUnit.unit
+
+/-- The real empty item-sequence branch connects authoritative instantiation
+evidence to its exact Ends transform and then to the shared strict compiler
+request. -/
+theorem itemsNil
+    {outer before after : List Sig}
+    (request : Telescope.Request
+      (Region.adjoinAt (before ++ after) .nil
+        (Region.blank (outer ++ (before ++ after))))
+      (.mk (before ++ .rel [] :: after) .nil))
+    (evidence :
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        blankPattern
+        (Ends.rootFrame outer before after []).sourceKeep
+        (Ends.rootFrame outer before after []).selected
+        .nil (Region.blank (outer ++ (before ++ after)))) :
+    request.Result := by
+  exact items blankSite PUnit.unit evidence request {
+      close := fun output => by
+        cases output with
+        | mk edit staged runEq =>
+        have runBlank := itemsEditNilRun edit
+        have stagedEq : staged =
+            Region.blank (outer ++ (before ++ after)) :=
+          runEq.symm.trans runBlank
+        let description : Ends.Delete.Description outer := {
+          arguments := []
+          before := before
+          after := after
+          items := .nil
+          itemsEdit := edit
+        }
+        have spawn : Ends.Delete
+            (.mk (before ++ .rel [] :: after) .nil)
+            (Region.adjoinAt (before ++ after) .nil
+              (Region.blank (outer ++ (before ++ after)))) := by
+          have raw := Ends.Delete.mk description
+          change Ends.Delete
+            (.mk (before ++ .rel [] :: after) .nil)
+            (Region.adjoinAt (before ++ after) .nil edit.run) at raw
+          rw [runBlank] at raw
+          exact raw
+        have stagedActualEq :
+            Region.adjoinAt (before ++ ([] ++ after)) .nil staged =
+              Region.adjoinAt (before ++ after) .nil
+                (Region.blank (outer ++ (before ++ after))) := by
+          simpa only [List.nil_append] using congrArg
+            (Region.adjoinAt (before ++ after) .nil) stagedEq
+        have stagedIso : RegionIso (WireEquiv.refl outer)
+            (Region.adjoinAt (before ++ ([] ++ after)) .nil staged)
+            (Region.adjoinAt (before ++ after) .nil
+              (Region.blank (outer ++ (before ++ after)))) := by
+          rw [stagedActualEq]
+          exact RegionIso.refl _
+        exact .blank stagedIso spawn
+    }
 
 end Compiler
 
