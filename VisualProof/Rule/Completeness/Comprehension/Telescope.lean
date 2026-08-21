@@ -695,27 +695,15 @@ def ItemsSites.ofNil
     ItemsSites operation data evidence := by
   exact .nil evidence
 
-/-- The exact CPS boundary shared by every recursive compiler entry. It keeps
-the authoritative instantiation result connected to the actual request and
-passes an existing edit with its exact staged endpoint to the next constructor
-handler. Result and staged wire contexts may differ. -/
-structure Contract
-    {holeWires resultWires targetWires : List Sig}
-    {instantiated pending : Region holeWires}
-    (request : Telescope.Request instantiated pending)
-    (result : Region resultWires)
-    (Edit : Type)
-    (run : Edit → Region targetWires) where
-  resultAt : Region resultWires → Region holeWires
-  resultIso : RegionIso (WireEquiv.refl holeWires)
-    instantiated (resultAt result)
-  finish : ExactEdit Edit run → request.Result
+/-! `RegionResult`, `ItemsResult`, and `ItemResult` describe the simultaneous
+layout of every selected site for one `Transform` primitive. Their recursive
+shape therefore builds one exact edit; it does not introduce recursive
+calculus steps or duplicate the surrounding telescope request. -/
 
 mutual
-  /-- Compile recursive region evidence through an actual request. The region
-branch delegates to the public item-sequence compiler with an exact CPS
-contract, rather than completing an edit-only fold first. -/
-  theorem region
+  /-- Fold authoritative region evidence and its demand-driven sites into one
+existing transform edit at its exact `run` endpoint. -/
+  def regionEdit
       {arguments common sourceWires targetWires : List Sig}
       {pattern : OpenDiagram arguments}
       {operation : Transform.Operation arguments}
@@ -726,38 +714,24 @@ contract, rather than completing an edit-only fold first. -/
       (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
         pattern frame.sourceKeep frame.selected source result)
       (sites : RegionSites operation data evidence) :
-      ∀ {holeWires : List Sig}
-        {instantiated pending : Region holeWires}
-        (request : Telescope.Request instantiated pending)
-        (_contract : Contract request
-          result
-          (Transform.RegionEdit operation frame data source)
-          (fun edit => edit.run)),
-        request.Result :=
-    fun {holeWires} {instantiated pending} request contract =>
-      match sites with
-      | .mk childSites => by
-        have childCompiled := items
-          (operation.appendData frame data _)
-          _ childSites request {
-            resultAt := fun childResult =>
-              contract.resultAt (Region.adjoinAt _ .nil childResult)
-            resultIso := contract.resultIso
-            finish := fun childOutput =>
-              contract.finish {
-                edit := .mk childOutput.edit
-                endpoint := Region.adjoinAt _ .nil childOutput.endpoint
-                run_eq := by
-                  simp only [Transform.RegionEdit.run]
-                  rw [childOutput.run_eq]
-              }
-          }
-        exact childCompiled
+      ExactEdit
+        (Transform.RegionEdit operation frame data source)
+        (fun edit => edit.run) :=
+    match sites with
+    | .mk childSites =>
+        let childOutput := itemsEdit
+          (operation.appendData frame data _) _ childSites
+        {
+          edit := .mk childOutput.edit
+          endpoint := Region.adjoinAt _ .nil childOutput.endpoint
+          run_eq := by
+            simp only [Transform.RegionEdit.run]
+            rw [childOutput.run_eq]
+        }
   termination_by structural sites
 
-  /-- Compile an item sequence through the same actual request. Cons invokes
-both child public compilers through constructor-indexed continuations. -/
-  theorem items
+  /-- Fold one authoritative item sequence into the same all-sites edit. -/
+  def itemsEdit
       {arguments common sourceWires targetWires : List Sig}
       {pattern : OpenDiagram arguments}
       {operation : Transform.Operation arguments}
@@ -768,47 +742,26 @@ both child public compilers through constructor-indexed continuations. -/
       (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected source result)
       (sites : ItemsSites operation data evidence) :
-      ∀ {holeWires : List Sig}
-        {instantiated pending : Region holeWires}
-        (request : Telescope.Request instantiated pending)
-        (_contract : Contract request
-          result
-          (Transform.ItemsEdit operation frame data source)
-          (fun edit => edit.run)),
-        request.Result :=
-    fun {holeWires} {instantiated pending} request contract =>
-      match sites with
-      | .nil _ => by
-        exact contract.finish (ExactEdit.refl .nil)
-      | .cons itemSites tailSites => by
-        rename_i itemSource tailSource itemResult tailResult itemEvidence
-          tailEvidence
-        have itemCompiled := item data itemEvidence itemSites request {
-          resultAt := fun childResult =>
-            contract.resultAt (childResult.conjoin tailResult)
-          resultIso := contract.resultIso
-          finish := fun itemOutput => by
-            have tailCompiled := items data tailEvidence tailSites request {
-              resultAt := fun childResult =>
-                contract.resultAt (itemResult.conjoin childResult)
-              resultIso := contract.resultIso
-              finish := fun tailOutput =>
-                contract.finish {
-                  edit := .cons itemOutput.edit tailOutput.edit
-                  endpoint := itemOutput.endpoint.conjoin tailOutput.endpoint
-                  run_eq := by
-                    simp only [Transform.ItemsEdit.run]
-                    rw [itemOutput.run_eq, tailOutput.run_eq]
-                }
-            }
-            exact tailCompiled
+      ExactEdit
+        (Transform.ItemsEdit operation frame data source)
+        (fun edit => edit.run) :=
+    match sites with
+    | .nil _ => ExactEdit.refl .nil
+    | .cons itemSites tailSites =>
+        let itemOutput := itemEdit data _ itemSites
+        let tailOutput := itemsEdit data _ tailSites
+        {
+          edit := .cons itemOutput.edit tailOutput.edit
+          endpoint := itemOutput.endpoint.conjoin tailOutput.endpoint
+          run_eq := by
+            simp only [Transform.ItemsEdit.run]
+            rw [itemOutput.run_eq, tailOutput.run_eq]
         }
-        exact itemCompiled
   termination_by structural sites
 
-  /-- Compile one item through the same actual request. Selected-site data is
-obtained only from the actual `selectedAtom` evidence branch. -/
-  theorem item
+  /-- Fold one authoritative item. Only its selected-atom branch consumes
+operation-specific site data. -/
+  def itemEdit
       {arguments common sourceWires targetWires : List Sig}
       {pattern : OpenDiagram arguments}
       {operation : Transform.Operation arguments}
@@ -819,59 +772,147 @@ obtained only from the actual `selectedAtom` evidence branch. -/
       (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
         pattern frame.sourceKeep frame.selected source result)
       (sites : ItemSites operation data evidence) :
-      ∀ {holeWires : List Sig}
-        {instantiated pending : Region holeWires}
-        (request : Telescope.Request instantiated pending)
-        (_contract : Contract request
-          result
-          (Transform.ItemEdit operation frame data source)
-          (fun edit => edit.run)),
-        request.Result :=
-    fun {holeWires} {instantiated pending} request contract =>
-      match sites with
-      | .atom head ports => by
-        exact contract.finish (ExactEdit.refl (.atom head ports))
-      | .selectedAtom ports siteData => by
-        exact contract.finish
-          (ExactEdit.refl (.selectedAtom ports siteData))
-      | .identity signature arity ports => by
-        exact contract.finish
-          (ExactEdit.refl (.identity signature arity ports))
-      | .cut childSites => by
-        have childCompiled := region data _ childSites request {
-          resultAt := fun childResult =>
-            contract.resultAt (Region.singleton (.cut childResult))
-          resultIso := contract.resultIso
-          finish := fun childOutput =>
-            contract.finish {
-              edit := .cut childOutput.edit
-              endpoint := Region.singleton (.cut childOutput.endpoint)
-              run_eq := by
-                simp only [Transform.ItemEdit.run]
-                rw [childOutput.run_eq]
-            }
+      ExactEdit
+        (Transform.ItemEdit operation frame data source)
+        (fun edit => edit.run) :=
+    match sites with
+    | .atom head ports => ExactEdit.refl (.atom head ports)
+    | .selectedAtom ports siteData =>
+        ExactEdit.refl (.selectedAtom ports siteData)
+    | .identity signature arity ports =>
+        ExactEdit.refl (.identity signature arity ports)
+    | .cut childSites =>
+        let childOutput := regionEdit data _ childSites
+        {
+          edit := .cut childOutput.edit
+          endpoint := Region.singleton (.cut childOutput.endpoint)
+          run_eq := by
+            simp only [Transform.ItemEdit.run]
+            rw [childOutput.run_eq]
         }
-        exact childCompiled
   termination_by structural sites
 end
+
+/-- The exact constructor-local boundary shared by every all-sites compiler
+entry. The authoritative instantiation result is embedded at `resultLocals`;
+the edit's exact staged endpoint is embedded at `stagedLocals`; and the only
+way to close the contract is a blank or primitive discharge for that staged
+actual region. Result and staged binder contexts may differ. -/
+structure Contract
+    {outer resultLocals stagedLocals : List Sig}
+    {result : Region (outer ++ resultLocals)}
+    {pending : Region outer}
+    (request : Telescope.Request
+      (Region.adjoinAt resultLocals .nil result) pending)
+    (Edit : Type)
+    (run : Edit → Region (outer ++ stagedLocals)) where
+  close : ∀ output : ExactEdit Edit run, request.Discharge
+    (Region.adjoinAt stagedLocals .nil output.endpoint)
+
+/-- A constrained all-sites contract compiles only through the discharge
+indexed by the exact edit endpoint. Nonblank discharges necessarily use the
+mandatory primitive core in `Telescope.compile`. -/
+theorem Contract.compile
+    {outer resultLocals stagedLocals : List Sig}
+    {result : Region (outer ++ resultLocals)}
+    {pending : Region outer}
+    {request : Telescope.Request
+      (Region.adjoinAt resultLocals .nil result) pending}
+    {Edit : Type}
+    {run : Edit → Region (outer ++ stagedLocals)}
+    (contract : Contract request Edit run)
+    (output : ExactEdit Edit run) : request.Result := by
+  exact (contract.close output).compile
+
+/-- Compile authoritative region evidence as one all-sites transform layer.
+Pattern-constructor recursion supplies the constrained discharge separately. -/
+theorem region
+    {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+    {pattern : OpenDiagram arguments}
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments (outer ++ resultLocals)
+      sourceWires (outer ++ stagedLocals)}
+    (data : operation.Data frame)
+    {source : Region sourceWires}
+    {result : Region (outer ++ resultLocals)}
+    (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+      pattern frame.sourceKeep frame.selected source result)
+    (sites : RegionSites operation data evidence)
+    {pending : Region outer}
+    (request : Telescope.Request
+      (Region.adjoinAt resultLocals .nil result) pending)
+    (contract : Contract request
+      (Transform.RegionEdit operation frame data source)
+      (fun edit => edit.run)) :
+    request.Result := by
+  exact contract.compile (regionEdit data evidence sites)
+
+/-- Compile authoritative item-sequence evidence as one all-sites transform
+layer, without adding calculus recursion at its cons nodes. -/
+theorem items
+    {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+    {pattern : OpenDiagram arguments}
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments (outer ++ resultLocals)
+      sourceWires (outer ++ stagedLocals)}
+    (data : operation.Data frame)
+    {source : ItemSeq sourceWires}
+    {result : Region (outer ++ resultLocals)}
+    (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      pattern frame.sourceKeep frame.selected source result)
+    (sites : ItemsSites operation data evidence)
+    {pending : Region outer}
+    (request : Telescope.Request
+      (Region.adjoinAt resultLocals .nil result) pending)
+    (contract : Contract request
+      (Transform.ItemsEdit operation frame data source)
+      (fun edit => edit.run)) :
+    request.Result := by
+  exact contract.compile (itemsEdit data evidence sites)
+
+/-- Compile authoritative item evidence as one all-sites transform layer.
+Only selected-atom witnesses can demand operation site data. -/
+theorem item
+    {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+    {pattern : OpenDiagram arguments}
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments (outer ++ resultLocals)
+      sourceWires (outer ++ stagedLocals)}
+    (data : operation.Data frame)
+    {source : Item sourceWires}
+    {result : Region (outer ++ resultLocals)}
+    (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+      pattern frame.sourceKeep frame.selected source result)
+    (sites : ItemSites operation data evidence)
+    {pending : Region outer}
+    (request : Telescope.Request
+      (Region.adjoinAt resultLocals .nil result) pending)
+    (contract : Contract request
+      (Transform.ItemEdit operation frame data source)
+      (fun edit => edit.run)) :
+    request.Result := by
+  exact contract.compile (itemEdit data evidence sites)
 
 /-- The generic nil branch accepts every operation state without requesting
 `SiteData`, including binder-changing states whose selected-site data would be
 partial. -/
 theorem itemsNilBranch
-    {arguments common sourceWires targetWires : List Sig}
+    {arguments outer resultLocals stagedLocals sourceWires : List Sig}
     {pattern : OpenDiagram arguments}
     {operation : Transform.Operation arguments}
-    {frame : Transform.Frame arguments common sourceWires targetWires}
+    {frame : Transform.Frame arguments (outer ++ resultLocals)
+      sourceWires (outer ++ stagedLocals)}
     (data : operation.Data frame)
     (evidence :
       _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected
-        (.nil : ItemSeq sourceWires) (Region.blank common))
-    {holeWires : List Sig}
-    {instantiated pending : Region holeWires}
-    (request : Telescope.Request instantiated pending)
-    (contract : Contract request (Region.blank common)
+        (.nil : ItemSeq sourceWires)
+        (Region.blank (outer ++ resultLocals)))
+    {pending : Region outer}
+    (request : Telescope.Request
+      (Region.adjoinAt resultLocals .nil
+        (Region.blank (outer ++ resultLocals))) pending)
+    (contract : Contract request
       (Transform.ItemsEdit operation frame data .nil)
       (fun edit => edit.run)) :
     request.Result := by
@@ -906,10 +947,7 @@ theorem itemsNil
     request.Result := by
   exact itemsNilBranch (operation := Ends.operation []) PUnit.unit evidence
     request {
-      resultAt := fun result =>
-        Region.adjoinAt (before ++ after) .nil result
-      resultIso := RegionIso.refl _
-      finish := fun output => by
+      close := fun output => by
         cases output with
         | mk edit staged runEq =>
         have runBlank := itemsEditNilRun edit
@@ -945,8 +983,7 @@ theorem itemsNil
               (Region.blank (outer ++ (before ++ after)))) := by
           rw [stagedActualEq]
           exact RegionIso.refl _
-        exact (Telescope.Request.Discharge.blank
-          stagedIso spawn).compile
+        exact .blank stagedIso spawn
     }
 
 end Compiler
