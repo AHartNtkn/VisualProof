@@ -82,6 +82,155 @@ def replace (outer before after targetInserted : List Sig)
   targetKeep := keep outer before targetInserted after
   selected := insertedHead outer before after (.rel arguments)
 
+/-- Removing the selected binder preserves every retained wire literally on
+the target side. -/
+@[simp] theorem replace_nil_targetKeep
+    (outer before after arguments : List Sig)
+    (wire : Var (outer ++ (before ++ after)) signature) :
+    (replace outer before after [] arguments).targetKeep wire = wire := by
+  apply Var.eq_of_index_eq
+  apply Fin.ext
+  change ((replace outer before after [] arguments).targetKeep wire).index.val =
+    wire.index.val
+  apply Var.appendCases (left := outer) (right := before ++ after)
+    (motive := fun wire =>
+      ((replace outer before after [] arguments).targetKeep wire).index.val =
+        wire.index.val)
+  · intro inheritedSignature inherited
+    simp [replace, keep]
+  · intro localSignature localWire
+    apply Var.appendCases (left := before) (right := after)
+      (motive := fun localWire =>
+        ((replace outer before after [] arguments).targetKeep
+          (Var.appendRight outer localWire)).index.val =
+            (Var.appendRight outer localWire).index.val)
+    · intro beforeSignature beforeWire
+      simp [replace, keep, localKeep]
+    · intro afterSignature afterWire
+      simp [replace, keep, localKeep, Var.index_appendRight]
+      change (Var.appendRight [] afterWire).index.val = afterWire.index.val
+      rw [Var.index_appendRight]
+      simp
+
+/-- The retained source image never contains the binder selected for
+replacement. -/
+theorem replace_sourceKeep_ne_selected
+    (outer before after arguments : List Sig)
+    (wire : Var (outer ++ (before ++ after)) (.rel arguments)) :
+    (replace outer before after targetInserted arguments).sourceKeep wire ≠
+      (replace outer before after targetInserted arguments).selected := by
+  intro equality
+  have indices := congrArg (fun selected => selected.index.val) equality
+  revert indices
+  apply Var.appendCases (left := outer) (right := before ++ after)
+    (motive := fun wire =>
+      ((replace outer before after targetInserted arguments).sourceKeep
+          wire).index.val =
+          (replace outer before after targetInserted arguments).selected.index.val →
+        False)
+  · intro inheritedSignature inherited indices
+    simp [replace, keep, insertedHead, Var.index,
+      Var.index_appendRight] at indices
+    omega
+  · intro localSignature localWire indices
+    revert indices
+    apply Var.appendCases (left := before) (right := after)
+      (motive := fun localWire =>
+        ((replace outer before after targetInserted arguments).sourceKeep
+              (Var.appendRight outer localWire)).index.val =
+            (replace outer before after targetInserted
+              arguments).selected.index.val →
+          False)
+    · intro beforeSignature beforeWire indices
+      simp [replace, keep, localKeep, insertedHead, Var.index,
+        Var.index_appendRight] at indices
+      omega
+    · intro afterSignature afterWire indices
+      simp [replace, keep, localKeep, insertedHead, Var.index,
+        Var.index_appendRight] at indices
+      have positive : 0 <
+          (Var.appendRight [.rel arguments] afterWire).index.val := by
+        rw [Var.index_appendRight]
+        simp only [List.length_cons, List.length_nil, Nat.zero_add]
+        omega
+      have indexValues := congrArg Fin.val indices
+      exact (Nat.ne_of_gt positive) (by simpa using indexValues)
+
+/-- Source retention inserts exactly the selected binder position into the
+underlying de Bruijn index. -/
+theorem replace_sourceKeep_index_val
+    (outer before after targetInserted arguments : List Sig)
+    (wire : Var (outer ++ (before ++ after)) signature) :
+    ((replace outer before after targetInserted arguments).sourceKeep
+      wire).index.val =
+      if wire.index.val < outer.length + before.length then
+        wire.index.val
+      else
+        wire.index.val + 1 := by
+  apply Var.appendCases (left := outer) (right := before ++ after)
+    (motive := fun wire =>
+      ((replace outer before after targetInserted arguments).sourceKeep
+        wire).index.val =
+        if wire.index.val < outer.length + before.length then
+          wire.index.val
+        else
+          wire.index.val + 1)
+  · intro inheritedSignature inherited
+    have bound := inherited.index.isLt
+    simp [replace, keep]
+    omega
+  · intro localSignature localWire
+    apply Var.appendCases (left := before) (right := after)
+      (motive := fun localWire =>
+        ((replace outer before after targetInserted arguments).sourceKeep
+          (Var.appendRight outer localWire)).index.val =
+          if (Var.appendRight outer localWire).index.val <
+              outer.length + before.length then
+            (Var.appendRight outer localWire).index.val
+          else
+            (Var.appendRight outer localWire).index.val + 1)
+    · intro beforeSignature beforeWire
+      have bound := beforeWire.index.isLt
+      simp [replace, keep, localKeep, Var.index_appendRight]
+    · intro afterSignature afterWire
+      simp [replace, keep, localKeep, Var.index_appendRight]
+      have insertedIndex :
+          (Var.appendRight [.rel arguments] afterWire).index.val =
+            afterWire.index.val + 1 := by
+        rw [Var.index_appendRight]
+        simp only [List.length_cons, List.length_nil, Nat.zero_add]
+        omega
+      change outer.length +
+          (before.length +
+            (Var.appendRight [.rel arguments] afterWire).index.val) =
+        if before.length + afterWire.index.val < before.length then
+          outer.length + (before.length + afterWire.index.val)
+        else
+          outer.length + (before.length + afterWire.index.val) + 1
+      rw [insertedIndex]
+      rw [if_neg (by omega)]
+      omega
+
+/-- Retaining common wires across a one-binder replacement is injective. -/
+theorem replace_sourceKeep_injective
+    (outer before after targetInserted arguments : List Sig)
+    {signature : Sig} :
+    Function.Injective
+      (fun wire : Var (outer ++ (before ++ after)) signature =>
+        (replace outer before after targetInserted arguments).sourceKeep
+          wire) := by
+  intro first second equality
+  apply Var.eq_of_index_eq
+  apply Fin.ext
+  have indices := congrArg (fun wire => wire.index.val) equality
+  change
+    ((replace outer before after targetInserted arguments).sourceKeep
+      first).index.val =
+      ((replace outer before after targetInserted arguments).sourceKeep
+        second).index.val at indices
+  rw [replace_sourceKeep_index_val, replace_sourceKeep_index_val] at indices
+  split at indices <;> split at indices <;> omega
+
 /-- Recursive descent preserves newly encountered local wires on both sides. -/
 def append (frame : Frame arguments common sourceWires targetWires)
     (locals : List Sig) :
@@ -515,6 +664,179 @@ mutual
           (fun index => frame.targetKeep (ports index)))
     | .cut bodyEdit => Region.singleton (.cut bodyEdit.run)
 end
+
+/-- A uniform edit of one retained atom computes the corresponding retained
+target atom. The disjointness premise rules out reinterpreting the retained
+head as the selected binder at this indexed source. -/
+theorem ItemsEdit.run_singletonAtom
+    {outer before after arguments atomArguments : List Sig}
+    {operation : Operation arguments}
+    {data : operation.Data (Frame.replace outer before after [] arguments)}
+    (argumentsNe : arguments ≠ atomArguments)
+    (head : Var (outer ++ (before ++ after)) (.rel atomArguments))
+    (ports : Vars (outer ++ (before ++ after)) atomArguments)
+    (edit : ItemsEdit operation (Frame.replace outer before after [] arguments)
+      data
+      (.cons
+        (.atom ((Frame.replace outer before after [] arguments).sourceKeep head)
+          (ports.map fun wire =>
+            (Frame.replace outer before after [] arguments).sourceKeep wire))
+        .nil)) :
+    edit.run =
+      (Region.singleton (.atom head ports)).conjoin
+        (Region.blank (outer ++ (before ++ after))) := by
+  generalize sourceEq :
+    (.cons
+      (.atom ((Frame.replace outer before after [] arguments).sourceKeep head)
+        (ports.map fun wire =>
+          (Frame.replace outer before after [] arguments).sourceKeep wire))
+      .nil : ItemSeq
+        (outer ++ (before ++ .rel arguments :: after))) = source at edit
+  cases edit with
+  | nil => cases sourceEq
+  | cons itemEdit tailEdit =>
+      cases tailEdit with
+      | cons tailHead tailTail => cases sourceEq
+      | nil =>
+          cases itemEdit with
+          | atom editHead editPorts =>
+              injection sourceEq with contextEq atomEq tailEq
+              injection atomEq with atomContextEq atomArgumentsEq
+                mappedHeadHeq mappedPortsHeq
+              subst atomArguments
+              have mappedHeadEq :
+                  (Frame.replace outer before after [] arguments).sourceKeep
+                      head =
+                    (Frame.replace outer before after [] arguments).sourceKeep
+                      editHead :=
+                eq_of_heq mappedHeadHeq
+              have mappedPortsEq :
+                  ports.map (fun wire =>
+                      (Frame.replace outer before after [] arguments).sourceKeep
+                        wire) =
+                    editPorts.map (fun wire =>
+                      (Frame.replace outer before after [] arguments).sourceKeep
+                        wire) :=
+                eq_of_heq mappedPortsHeq
+              have retainedVarsInjective :
+                  ∀ {signatures : List Sig}
+                    (left right : Vars (outer ++ (before ++ after)) signatures),
+                    left.map (fun wire =>
+                        (Frame.replace outer before after [] arguments).sourceKeep
+                          wire) =
+                      right.map (fun wire =>
+                        (Frame.replace outer before after [] arguments).sourceKeep
+                          wire) →
+                    left = right := by
+                intro signatures left
+                induction left with
+                | nil =>
+                    intro right equality
+                    cases right
+                    rfl
+                | cons leftHead leftTail induction =>
+                    intro right equality
+                    cases right with
+                    | cons rightHead rightTail =>
+                        simp only [Vars.map] at equality
+                        injection equality with varsContextEq varsRestEq
+                          mappedHeadHeq mappedTailHeq
+                        have originalHeadEq : leftHead = rightHead :=
+                          Frame.replace_sourceKeep_injective
+                            outer before after [] arguments
+                            mappedHeadHeq
+                        subst rightHead
+                        exact congrArg (Vars.cons leftHead)
+                          (induction rightTail mappedTailHeq)
+              have originalHeadEq : head = editHead :=
+                Frame.replace_sourceKeep_injective
+                  outer before after [] arguments mappedHeadEq
+              have originalPortsEq : ports = editPorts :=
+                retainedVarsInjective ports editPorts mappedPortsEq
+              subst editHead
+              subst editPorts
+              simp only [ItemsEdit.run, ItemEdit.run,
+                Frame.replace_nil_targetKeep, vars_map_id, List.nil_append]
+          | selectedAtom editPorts siteData =>
+              injection sourceEq with contextEq atomEq tailEq
+              injection atomEq with atomContextEq atomArgumentsEq
+                mappedHeadHeq mappedPortsHeq
+              exact False.elim (argumentsNe atomArgumentsEq.symm)
+          | selectedPin editPorts selected => cases sourceEq
+          | identity signature arity editPorts => cases sourceEq
+          | cut bodyEdit => cases sourceEq
+
+/-- A uniform edit of one retained identity computes the corresponding
+retained target identity. -/
+theorem ItemsEdit.run_singletonIdentity
+    {outer before after arguments : List Sig}
+    {operation : Operation arguments}
+    {data : operation.Data (Frame.replace outer before after [] arguments)}
+    (signature : Sig) (arity : Nat)
+    (ports : Fin arity → Var (outer ++ (before ++ after)) signature)
+    (edit : ItemsEdit operation (Frame.replace outer before after [] arguments)
+      data
+      (.cons
+        (.identity signature arity fun position =>
+          (Frame.replace outer before after [] arguments).sourceKeep
+            (ports position))
+        .nil)) :
+    edit.run =
+      (Region.singleton (.identity signature arity ports)).conjoin
+        (Region.blank (outer ++ (before ++ after))) := by
+  generalize sourceEq :
+    (.cons
+      (.identity signature arity fun position =>
+        (Frame.replace outer before after [] arguments).sourceKeep
+          (ports position))
+      .nil : ItemSeq
+        (outer ++ (before ++ .rel arguments :: after))) = source at edit
+  cases edit with
+  | nil => cases sourceEq
+  | cons itemEdit tailEdit =>
+      cases tailEdit with
+      | cons tailHead tailTail => cases sourceEq
+      | nil =>
+          cases itemEdit with
+          | atom editHead editPorts => cases sourceEq
+          | selectedAtom editPorts siteData => cases sourceEq
+          | selectedPin editPorts selected =>
+              injection sourceEq with contextEq identityEq tailEq
+              injection identityEq with wiresEq signatureEq arityEq portsHeq
+              subst signature
+              subst arity
+              have mappedPortsEq :
+                  (fun position =>
+                    (Frame.replace outer before after [] arguments).sourceKeep
+                      (ports position)) = editPorts :=
+                eq_of_heq portsHeq
+              have retainedSelected := congrFun mappedPortsEq 0
+              exact False.elim
+                (Frame.replace_sourceKeep_ne_selected
+                  outer before after arguments (ports 0)
+                  (retainedSelected.trans selected))
+          | identity editSignature editArity editPorts =>
+              injection sourceEq with contextEq identityEq tailEq
+              injection identityEq with wiresEq signatureEq arityEq portsHeq
+              subst editSignature
+              subst editArity
+              have mappedPortsEq :
+                  (fun position =>
+                    (Frame.replace outer before after [] arguments).sourceKeep
+                      (ports position)) =
+                    (fun position =>
+                      (Frame.replace outer before after [] arguments).sourceKeep
+                        (editPorts position)) :=
+                eq_of_heq portsHeq
+              have originalPortsEq : ports = editPorts := by
+                funext position
+                apply Frame.replace_sourceKeep_injective
+                  outer before after [] arguments
+                exact congrFun mappedPortsEq position
+              subst editPorts
+              simp only [ItemsEdit.run, ItemEdit.run,
+                Frame.replace_nil_targetKeep, List.nil_append]
+          | cut bodyEdit => cases sourceEq
 
 private theorem EnvironmentsAgree.append
     {arguments common sourceWires targetWires locals : List Sig}
