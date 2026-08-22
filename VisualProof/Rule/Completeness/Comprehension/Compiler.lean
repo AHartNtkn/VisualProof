@@ -6643,12 +6643,6 @@ private theorem singleton_renameWires
         ⟨fun wire => wire.appendLeft []⟩ := by
           rw [Item.renameWires_comp]
 
-private noncomputable def regionIsoOfEq
-    {before after : Region wires} (equality : before = after) :
-    RegionIso (WireEquiv.refl wires) before after := by
-  subst after
-  exact RegionIso.refl before
-
 private theorem canonical_of_eq
     {before after : Region wires} (equality : before = after)
     (canonical : after.Canonical) : before.Canonical := by
@@ -6806,7 +6800,7 @@ private noncomputable def atomExposureSourceIso
       ((Region.singleton (atomSupportItem atomArguments)).renameWires
         (atomExposureDescription shape application).wireMap)
       (Region.singleton selected) := by
-    exact regionIsoOfEq (atomExposureMaterialRename shape application)
+    exact RegionIso.ofEq (atomExposureMaterialRename shape application)
   let adjoined := EqualityNormalization.adjoinAtIso
     (EqualityNormalization.locals shape.pattern)
     (atomSiteHostItems shape application) materialIso
@@ -6918,7 +6912,7 @@ private noncomputable def atomPinnedSourceIso
       ((Region.singleton (atomSupportItem atomArguments)).renameWires
         (atomExposureDescription shape application).wireMap)
       (Region.singleton selected) := by
-    exact regionIsoOfEq (atomExposureMaterialRename shape application)
+    exact RegionIso.ofEq (atomExposureMaterialRename shape application)
   let adjoined := EqualityNormalization.adjoinAtIso locals pinnedHost
     materialIso
   let flattened := adjoinAtSingletonIso locals pinnedHost selected
@@ -7025,7 +7019,7 @@ private theorem atomSiteExposurePinned
     rw [← atomInstantiation_eq shape application]
     exact occurrence.sourceExternalTwoEnded wire
   let baseBodyIso := DiagramContext.fillIso occurrence.context
-    (regionIsoOfEq (atomInstantiation_eq shape application))
+    (RegionIso.ofEq (atomInstantiation_eq shape application))
   let baseEndpointIso : OpenDiagramIso
       (occurrence.interface.withBody
         (occurrence.context.fill
@@ -7464,8 +7458,8 @@ private noncomputable def atomExposureDescriptionWithHost_exposedIso
         (Erasure.Exposure.exposedRegion inner
           (atomSupportCanonical atomArguments)) := by
     rfl
-  exact (regionIsoOfEq combinedEq).trans
-    (associated.trans (regionIsoOfEq nestedEq))
+  exact (RegionIso.ofEq combinedEq).trans
+    (associated.trans (RegionIso.ofEq nestedEq))
 
 private theorem atomExposureHostChildrenWithHost
     {patternWires atomArguments : List Sig}
@@ -7523,25 +7517,6 @@ private theorem pinnedHostCanonicalOfChildren
       ⟨children, EqualityNormalization.allPins_twice_childrenCanonical
         (outer ++ hostLocals) WireRenaming.id⟩
 
-private noncomputable def regionIsoLocalEquiv
-    {sourceOuter targetOuter : List Sig}
-    {before : Region sourceOuter} {after : Region targetOuter}
-    {ambient : WireEquiv sourceOuter targetOuter}
-    (presentation : RegionIso ambient before after) :
-    WireEquiv before.locals after.locals :=
-  match before, after, presentation with
-  | .mk _ _, .mk _ _, .mk locals _ => locals
-
-private noncomputable def regionIsoItems
-    {sourceOuter targetOuter : List Sig}
-    {before : Region sourceOuter} {after : Region targetOuter}
-    {ambient : WireEquiv sourceOuter targetOuter}
-    (presentation : RegionIso ambient before after) :
-    ItemSeqIso (ambient.append (regionIsoLocalEquiv presentation))
-      before.items after.items :=
-  match before, after, presentation with
-  | .mk _ _, .mk _ _, .mk _ items => items
-
 private noncomputable def appendPinsTwiceIso
     {sourceOuter targetOuter pinWires : List Sig}
     {before : Region sourceOuter} {after : Region targetOuter}
@@ -7584,15 +7559,6 @@ private noncomputable def appendPinsTwiceIso
     simpa only [ItemSeq.renameWires_id, renamedPins] using rawPins
   exact .mk localIso
     (ItemSeqIso.append (ItemSeqIso.append itemsIso pinsIso) pinsIso)
-
-private theorem refl_append_left_index_val
-    (right : WireEquiv sourceRight targetRight)
-    (wire : Var left signature) :
-    (((WireEquiv.refl left).append right)
-      (wire.appendLeft sourceRight)).index.val = wire.index.val := by
-  rw [WireEquiv.append_apply_left]
-  rw [WireEquiv.refl_apply]
-  exact Var.index_appendLeft wire targetRight
 
 private def atomOriginalItemsWithHost
     {patternWires atomArguments : List Sig}
@@ -7777,8 +7743,8 @@ private theorem atomSiteExposurePinnedWithHost
       original :=
     atomExposureDescriptionWithHost_source shape hostLocals hostItems
       application
-  let localIso := regionIsoLocalEquiv sourcePresentation
-  let itemsIso := regionIsoItems sourcePresentation
+  let localIso := sourcePresentation.localEquiv
+  let itemsIso := sourcePresentation.itemSeqIso
   exact (by
       let sourceRename := atomExposureHostPinRename shape hostLocals
         hostItems application
@@ -7833,7 +7799,7 @@ private theorem atomSiteExposurePinnedWithHost
         (raw.material.renameWires raw.wireMap)
       let rawToDescription : RegionIso (WireEquiv.refl outer) rawPinned
           description.source := by
-        exact (regionIsoOfEq (rawPinnedEq.trans
+        exact (RegionIso.ofEq (rawPinnedEq.trans
           (atomRawPinnedRegionWithHost_eq shape hostLocals hostItems
             application))).trans (by
               simpa only [description,
@@ -7891,7 +7857,7 @@ private theorem atomSiteExposurePinnedWithHost
                 exact Var.index_appendLeft wire raw.source.locals
           rw [show targetRename pinWire =
             fullAmbient (sourceRename pinWire) by rfl, sourceMapped]
-          exact refl_append_left_index_val localIso wire
+          exact WireEquiv.refl_append_left_index_val localIso wire
         have member := EqualityNormalization.allPins_mem_nil pinWires
           targetRename pinWire 0
         have pinsNonempty : targetPins.incidencePaths wire.index.val 0 ≠ [] := by

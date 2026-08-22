@@ -6,12 +6,6 @@ namespace VisualProof.Rule.WireSever
 open Theory
 open Diagram
 
-private noncomputable def regionIsoOfEq
-    {left right : Region wires} (equality : left = right) :
-    RegionIso (WireEquiv.refl wires) left right := by
-  subst right
-  exact RegionIso.refl left
-
 private def mapBoundary (boundaryWire : Vars source boundary)
     (rename : WireRenaming source target) : Vars target boundary :=
   boundaryWire.map (fun wire => rename wire)
@@ -435,7 +429,7 @@ theorem backward_exact (source target : OpenDiagram boundary) :
               target.boundaryWire.get position
             rw [openStep.boundary position]
             exact openStep.sourceExternal.left_inv _
-          body := (regionIsoOfEq bodyEq).trans openStep.source_body.symm
+          body := (RegionIso.ofEq bodyEq).trans openStep.source_body.symm
         }
 
 end VisualProof.Rule.WireSever

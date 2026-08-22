@@ -229,7 +229,7 @@ def rotate (leading middle suffix : List Sig) :
     (wire : Var sourceLeft signature) :
     left.append right (wire.appendLeft sourceRight) =
       (left wire).appendLeft targetRight := by
-  simp [append, appendRenaming]
+    simp [append, appendRenaming]
 
 @[simp] theorem append_apply_right
     (left : WireEquiv sourceLeft targetLeft)
@@ -241,6 +241,15 @@ def rotate (leading middle suffix : List Sig) :
 
 @[simp] theorem refl_apply (wire : Var context signature) :
     WireEquiv.refl context wire = wire := rfl
+
+theorem refl_append_left_index_val
+    (right : WireEquiv sourceRight targetRight)
+    (wire : Var left signature) :
+    (((WireEquiv.refl left).append right)
+      (wire.appendLeft sourceRight)).index.val = wire.index.val := by
+  rw [WireEquiv.append_apply_left]
+  rw [WireEquiv.refl_apply]
+  exact Var.index_appendLeft wire targetRight
 
 @[simp] theorem symm_apply_apply
     (equivalence : WireEquiv source target)
@@ -424,6 +433,31 @@ noncomputable def RegionIso.refl (region : Region wires) :
     RegionIso (WireEquiv.refl wires) region region :=
   Region.rec regionIsoReflMk itemIsoReflAtom itemIsoReflIdentity
     itemIsoReflCut itemsIsoReflNil itemsIsoReflCons region
+
+noncomputable def RegionIso.ofEq
+    {before after : Region wires} (equality : before = after) :
+    RegionIso (WireEquiv.refl wires) before after := by
+  subst after
+  exact RegionIso.refl before
+
+noncomputable def RegionIso.localEquiv
+    {sourceOuter targetOuter : List Sig}
+    {before : Region sourceOuter} {after : Region targetOuter}
+    {ambient : WireEquiv sourceOuter targetOuter}
+    (presentation : RegionIso ambient before after) :
+    WireEquiv before.locals after.locals :=
+  match before, after, presentation with
+  | .mk _ _, .mk _ _, .mk locals _ => locals
+
+noncomputable def RegionIso.itemSeqIso
+    {sourceOuter targetOuter : List Sig}
+    {before : Region sourceOuter} {after : Region targetOuter}
+    {ambient : WireEquiv sourceOuter targetOuter}
+    (presentation : RegionIso ambient before after) :
+    ItemSeqIso (ambient.append presentation.localEquiv)
+      before.items after.items :=
+  match before, after, presentation with
+  | .mk _ _, .mk _ _, .mk _ items => items
 
 noncomputable def ItemIso.refl (item : Item wires) :
     ItemIso (WireEquiv.refl wires) item item :=
