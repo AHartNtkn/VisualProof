@@ -558,7 +558,7 @@ noncomputable def RegionIso.adjoinAtConjoinLeft
             targetPrefix, targetHost, targetFirst, targetSecond, ambient]
             using combined
 
-private def WireEquiv.appendNil : (context : List Sig) →
+def WireEquiv.appendNil : (context : List Sig) →
     WireEquiv (context ++ []) context
   | [] =>
       { toRenaming := ⟨fun wire => nomatch wire⟩
@@ -788,6 +788,262 @@ noncomputable def RegionIso.adjoinAtOfItems
     ItemSeq.renameWires, ItemSeq.append_nil, ItemSeq.nil_append, appendNil,
     source, target, ItemSeq.renameWires_id,
     ItemSeq.renameWires_comp] using transported
+
+/-- Merge independently adjoined presentations into one partitioned host. -/
+noncomputable def RegionIso.conjoinAdjoinAt
+    (L R : List Sig)
+    (A : Region (common ++ L)) (B : Region (common ++ R)) :
+    RegionIso (WireEquiv.refl common)
+      ((Region.adjoinAt L .nil A).conjoin (Region.adjoinAt R .nil B))
+      (Region.adjoinAt (L ++ R) .nil
+        ((A.renameWires (Region.conjoinLeftWire common L R)).conjoin
+          (B.renameWires (Region.conjoinRightWire common L R)))) := by
+  cases A with
+  | mk ALocals AItems =>
+      cases B with
+      | mk BLocals BItems =>
+          let sourceA := WireRenaming.comp
+            (Region.conjoinLeftWire common (L ++ ALocals) (R ++ BLocals))
+            (Region.adjoinMaterialWire common L ALocals)
+          let sourceB := WireRenaming.comp
+            (Region.conjoinRightWire common (L ++ ALocals) (R ++ BLocals))
+            (Region.adjoinMaterialWire common R BLocals)
+          let targetA := WireRenaming.comp
+            (Region.adjoinMaterialWire common (L ++ R) (ALocals ++ BLocals))
+            (WireRenaming.comp
+              (Region.conjoinLeftWire (common ++ (L ++ R)) ALocals BLocals)
+              ((Region.conjoinLeftWire common L R).appendRight ALocals))
+          let targetB := WireRenaming.comp
+            (Region.adjoinMaterialWire common (L ++ R) (ALocals ++ BLocals))
+            (WireRenaming.comp
+              (Region.conjoinRightWire (common ++ (L ++ R)) ALocals BLocals)
+              ((Region.conjoinRightWire common L R).appendRight BLocals))
+          let sourceAssoc :=
+            (WireEquiv.adjoinMaterialAssoc (L ++ ALocals) R BLocals).symm
+          let rotateMiddle :=
+            (WireEquiv.rotate L ALocals R).append (WireEquiv.refl BLocals)
+          let reassociate :=
+            (WireEquiv.ofEq (List.append_assoc L R ALocals).symm).append
+              (WireEquiv.refl BLocals)
+          let targetAssoc :=
+            WireEquiv.adjoinMaterialAssoc (L ++ R) ALocals BLocals
+          let localsIso :=
+            ((sourceAssoc.trans rotateMiddle).trans reassociate).trans
+              targetAssoc
+          let ambient := (WireEquiv.refl common).append localsIso
+          have localsIsoL : ∀ {signature} (wire : Var L signature),
+              localsIso
+                  ((wire.appendLeft ALocals).appendLeft (R ++ BLocals)) =
+                (wire.appendLeft R).appendLeft (ALocals ++ BLocals) := by
+            intro signature wire
+            change targetAssoc
+                (reassociate
+                  (rotateMiddle
+                    (sourceAssoc
+                      ((wire.appendLeft ALocals).appendLeft
+                        (R ++ BLocals))))) = _
+            have sourceStep : sourceAssoc
+                ((wire.appendLeft ALocals).appendLeft (R ++ BLocals)) =
+                  ((wire.appendLeft ALocals).appendLeft R).appendLeft
+                    BLocals := by
+              simp [sourceAssoc, WireEquiv.adjoinMaterialAssoc,
+                WireEquiv.symm]
+            rw [sourceStep, WireEquiv.append_apply_left,
+              WireEquiv.rotate_apply_leading, WireEquiv.append_apply_left]
+            have reassociated : WireEquiv.ofEq
+                (List.append_assoc L R ALocals).symm
+                  (wire.appendLeft (R ++ ALocals)) =
+                (wire.appendLeft R).appendLeft ALocals := by
+              apply Var.eq_of_index_eq
+              apply Fin.ext
+              rw [WireEquiv.ofEq_index_val]
+              simp
+            rw [reassociated]
+            simp [targetAssoc, WireEquiv.adjoinMaterialAssoc,
+              Region.adjoinMaterialWire]
+          have localsIsoA : ∀ {signature} (wire : Var ALocals signature),
+              localsIso
+                  ((Var.appendRight L wire).appendLeft (R ++ BLocals)) =
+                Var.appendRight (L ++ R) (wire.appendLeft BLocals) := by
+            intro signature wire
+            change targetAssoc
+                (reassociate
+                  (rotateMiddle
+                    (sourceAssoc
+                      ((Var.appendRight L wire).appendLeft
+                        (R ++ BLocals))))) = _
+            have sourceStep : sourceAssoc
+                ((Var.appendRight L wire).appendLeft (R ++ BLocals)) =
+                  ((Var.appendRight L wire).appendLeft R).appendLeft
+                    BLocals := by
+              simp [sourceAssoc, WireEquiv.adjoinMaterialAssoc,
+                WireEquiv.symm]
+            rw [sourceStep, WireEquiv.append_apply_left,
+              WireEquiv.rotate_apply_middle, WireEquiv.append_apply_left]
+            have reassociated : WireEquiv.ofEq
+                (List.append_assoc L R ALocals).symm
+                  (Var.appendRight L (Var.appendRight R wire)) =
+                Var.appendRight (L ++ R) wire := by
+              apply Var.eq_of_index_eq
+              apply Fin.ext
+              rw [WireEquiv.ofEq_index_val]
+              simp
+              omega
+            rw [reassociated]
+            simp [targetAssoc, WireEquiv.adjoinMaterialAssoc,
+              Region.adjoinMaterialWire]
+          have localsIsoR : ∀ {signature} (wire : Var R signature),
+              localsIso
+                  (Var.appendRight (L ++ ALocals) (wire.appendLeft BLocals)) =
+                (Var.appendRight L wire).appendLeft (ALocals ++ BLocals) := by
+            intro signature wire
+            change targetAssoc
+                (reassociate
+                  (rotateMiddle
+                    (sourceAssoc
+                      (Var.appendRight (L ++ ALocals)
+                        (wire.appendLeft BLocals))))) = _
+            have sourceStep : sourceAssoc
+                (Var.appendRight (L ++ ALocals) (wire.appendLeft BLocals)) =
+                  (Var.appendRight (L ++ ALocals) wire).appendLeft BLocals := by
+              simp [sourceAssoc, WireEquiv.adjoinMaterialAssoc,
+                WireEquiv.symm]
+            rw [sourceStep, WireEquiv.append_apply_left,
+              WireEquiv.rotate_apply_suffix, WireEquiv.append_apply_left]
+            have reassociated : WireEquiv.ofEq
+                (List.append_assoc L R ALocals).symm
+                  (Var.appendRight L (wire.appendLeft ALocals)) =
+                (Var.appendRight L wire).appendLeft ALocals := by
+              apply Var.eq_of_index_eq
+              apply Fin.ext
+              rw [WireEquiv.ofEq_index_val]
+              simp
+            rw [reassociated]
+            simp [targetAssoc, WireEquiv.adjoinMaterialAssoc,
+              Region.adjoinMaterialWire]
+          have localsIsoB : ∀ {signature} (wire : Var BLocals signature),
+              localsIso
+                  (Var.appendRight (L ++ ALocals)
+                    (Var.appendRight R wire)) =
+                Var.appendRight (L ++ R) (Var.appendRight ALocals wire) := by
+            intro signature wire
+            change targetAssoc
+                (reassociate
+                  (rotateMiddle
+                    (sourceAssoc
+                      (Var.appendRight (L ++ ALocals)
+                        (Var.appendRight R wire))))) = _
+            have sourceStep : sourceAssoc
+                (Var.appendRight (L ++ ALocals) (Var.appendRight R wire)) =
+                  Var.appendRight ((L ++ ALocals) ++ R) wire := by
+              simp [sourceAssoc, WireEquiv.adjoinMaterialAssoc,
+                WireEquiv.symm]
+            rw [sourceStep, WireEquiv.append_apply_right,
+              WireEquiv.append_apply_right]
+            simp [targetAssoc, WireEquiv.adjoinMaterialAssoc,
+              Region.adjoinMaterialWire]
+          have ACommutes : ∀ {signature}
+              (wire : Var ((common ++ L) ++ ALocals) signature),
+              ambient (sourceA wire) = targetA wire := by
+            intro signature wire
+            apply Var.appendCases (left := common ++ L) (right := ALocals)
+              (motive := fun wire => ambient (sourceA wire) = targetA wire)
+            · intro signature wire
+              apply Var.appendCases (left := common) (right := L)
+                (motive := fun wire => ambient
+                  (sourceA (wire.appendLeft ALocals)) =
+                    targetA (wire.appendLeft ALocals))
+              · intro signature commonWire
+                simp [ambient, localsIso, sourceAssoc, rotateMiddle,
+                  reassociate, targetAssoc, sourceA, targetA,
+                  WireEquiv.adjoinMaterialAssoc, WireEquiv.rotate,
+                  WireEquiv.ofEq, WireEquiv.trans, WireRenaming.comp,
+                  WireRenaming.appendRight, Region.adjoinMaterialWire,
+                  Region.conjoinLeftWire]
+              · intro signature localWire
+                simp [ambient, sourceA, targetA, localsIsoL,
+                  WireRenaming.comp,
+                  WireRenaming.appendRight, Region.adjoinMaterialWire,
+                  Region.conjoinLeftWire]
+            · intro signature localWire
+              simp [ambient, sourceA, targetA, localsIsoA,
+                WireRenaming.comp,
+                WireRenaming.appendRight, Region.adjoinMaterialWire,
+                Region.conjoinLeftWire]
+          have BCommutes : ∀ {signature}
+              (wire : Var ((common ++ R) ++ BLocals) signature),
+              ambient (sourceB wire) = targetB wire := by
+            intro signature wire
+            apply Var.appendCases (left := common ++ R) (right := BLocals)
+              (motive := fun wire => ambient (sourceB wire) = targetB wire)
+            · intro signature wire
+              apply Var.appendCases (left := common) (right := R)
+                (motive := fun wire => ambient
+                  (sourceB (wire.appendLeft BLocals)) =
+                    targetB (wire.appendLeft BLocals))
+              · intro signature commonWire
+                simp [ambient, localsIso, sourceAssoc, rotateMiddle,
+                  reassociate, targetAssoc, sourceB, targetB,
+                  WireEquiv.adjoinMaterialAssoc, WireEquiv.rotate,
+                  WireEquiv.ofEq, WireEquiv.trans, WireRenaming.comp,
+                  WireRenaming.appendRight, Region.adjoinMaterialWire,
+                  Region.conjoinRightWire]
+              · intro signature localWire
+                simp [ambient, sourceB, targetB, localsIsoR,
+                  WireRenaming.comp,
+                  WireRenaming.appendRight, Region.adjoinMaterialWire,
+                  Region.conjoinRightWire]
+            · intro signature localWire
+              simp [ambient, sourceB, targetB, localsIsoB,
+                WireRenaming.comp,
+                WireRenaming.appendRight, Region.adjoinMaterialWire,
+                Region.conjoinRightWire]
+          let AIso := ItemSeqIso.renameWires AItems sourceA targetA ambient
+            ACommutes
+          let BIso := ItemSeqIso.renameWires BItems sourceB targetB ambient
+            BCommutes
+          refine .mk localsIso ?_
+          simpa only [Region.adjoinAt, Region.conjoin, Region.renameWires,
+            Region.locals, Region.items, ItemSeq.nil_append,
+            ItemSeq.renameWires_append, ItemSeq.renameWires_comp,
+            sourceA, sourceB, targetA, targetB, ambient] using
+            ItemSeqIso.append AIso BIso
+
+/-- Adjoining a presentation from an empty appended host preserves it. -/
+noncomputable def RegionIso.adjoinAtNil
+    (material : Region (outer ++ [])) :
+    RegionIso (WireEquiv.refl outer)
+      (material.renameWires (WireEquiv.appendNil outer).toRenaming)
+      (Region.adjoinAt [] .nil material) := by
+  cases material with
+  | mk locals items =>
+      let source := (WireEquiv.appendNil outer).toRenaming.appendRight locals
+      let target := Region.adjoinMaterialWire outer [] locals
+      let ambient := (WireEquiv.refl outer).append (WireEquiv.refl locals)
+      have commutes : ∀ {signature}
+          (wire : Var ((outer ++ []) ++ locals) signature),
+          ambient (source wire) = target wire := by
+        intro signature wire
+        apply Var.appendCases (left := outer ++ []) (right := locals)
+          (motive := fun wire => ambient (source wire) = target wire)
+        · intro signature wire
+          apply Var.appendCases (left := outer) (right := [])
+            (motive := fun wire => ambient
+              (source (wire.appendLeft locals)) =
+                target (wire.appendLeft locals))
+          · intro signature outerWire
+            simp [ambient, source, target, WireRenaming.appendRight,
+              Region.adjoinMaterialWire, WireEquiv.appendNil_apply]
+          · intro signature emptyWire
+            exact nomatch emptyWire
+        · intro signature localWire
+          simp [ambient, source, target, WireRenaming.appendRight,
+            Region.adjoinMaterialWire] <;> rfl
+      let transported := ItemSeqIso.renameWires items source target ambient
+        commutes
+      refine .mk (WireEquiv.refl locals) ?_
+      simpa only [Region.renameWires, Region.adjoinAt, Region.locals,
+        Region.items, ItemSeq.nil_append, source, target] using transported
 
 /-- Conjunction is commutative up to region presentation. -/
 noncomputable def RegionIso.conjoinComm
