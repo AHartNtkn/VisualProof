@@ -71,7 +71,7 @@ def supportBody (material : Region materialWires) : Region materialWires :=
     (material.items.append
       (supportPins material materialWires (identityBoundary materialWires)))
 
-private theorem supportPins_childrenCanonical
+theorem supportPins_childrenCanonical
     (material : Region materialWires)
     (variables : Vars materialWires signatures) :
     (supportPins material signatures variables).ChildrenCanonical := by
@@ -83,7 +83,7 @@ private theorem supportPins_childrenCanonical
       · exact ⟨True.intro, induction⟩
       · exact induction
 
-private theorem supportPins_get_nonempty
+theorem supportPins_get_nonempty
     (material : Region materialWires)
     (variables : Vars materialWires signatures)
     (position : Fin signatures.length) (itemIndex : Nat)
@@ -114,7 +114,7 @@ private theorem supportPins_get_nonempty
           exact induction rest (itemIndex + 1) unused tailEmpty
         · exact induction rest itemIndex unused
 
-private theorem supportBody_canonical
+theorem supportBody_canonical
     (material : Region materialWires)
     (canonical : material.Canonical) :
     (supportBody material).Canonical := by
@@ -1083,43 +1083,6 @@ private def sourceSupportSuffix
       (selected.appendLeft material.locals))) .nil
   else
     .nil
-
-private theorem pinStep
-    {boundary holeWires locals : List Sig}
-    {items : ItemSeq (holeWires ++ locals)}
-    {source : OpenDiagram boundary}
-    (occurrence : Occurrence (Vacuity.Pin.plain locals items) source)
-    (signature : Sig) (wire : Var (holeWires ++ locals) signature) :
-    ∃ targetCanonical :
-        (occurrence.context.fill
-          (Vacuity.Pin.present locals items signature wire)).Canonical,
-      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-          occurrence.interface.boundaryWire
-          (occurrence.context.fill
-            (Vacuity.Pin.present locals items signature wire)),
-        Step source
-            (occurrence.interface.withBody
-              (occurrence.context.fill
-                (Vacuity.Pin.present locals items signature wire))
-              targetCanonical targetExternalTwoEnded) ∧
-          Step
-            (occurrence.interface.withBody
-              (occurrence.context.fill
-                (Vacuity.Pin.present locals items signature wire))
-              targetCanonical targetExternalTwoEnded)
-            source := by
-  have validity := Vacuity.Pin.introduceValidity occurrence signature wire
-  let step : Vacuity source
-      (occurrence.interface.withBody
-        (occurrence.context.fill
-          (Vacuity.Pin.present locals items signature wire))
-        validity.1 validity.2) := ⟨holeWires, Vacuity.Pin.plain locals items,
-    Vacuity.Pin.present locals items signature wire, occurrence,
-    validity.1, validity.2, OpenDiagramIso.refl _,
-    atPolarity_symmetric_of occurrence.context.polarity
-      (.mk (.pin locals items signature wire))⟩
-  exact ⟨validity.1, validity.2,
-    Step.vacuity step, Step.vacuity step.symm⟩
 
 private def advanceAway
     (state : State outer materialWires material)

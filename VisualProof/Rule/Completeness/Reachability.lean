@@ -169,4 +169,42 @@ theorem transGen_contextual
     targetCanonical, targetExternalTwoEnded, OpenDiagramIso.refl _,
     atOccurrence⟩)
 
+/-- Introduce one temporary support pin, retaining both primitive directions. -/
+theorem pinStep
+    {boundary holeWires locals : List Sig}
+    {items : ItemSeq (holeWires ++ locals)}
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence (Vacuity.Pin.plain locals items) source)
+    (signature : Sig) (wire : Var (holeWires ++ locals) signature) :
+    ∃ targetCanonical :
+        (occurrence.context.fill
+          (Vacuity.Pin.present locals items signature wire)).Canonical,
+      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill
+            (Vacuity.Pin.present locals items signature wire)),
+        Step source
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (Vacuity.Pin.present locals items signature wire))
+              targetCanonical targetExternalTwoEnded) ∧
+          Step
+            (occurrence.interface.withBody
+              (occurrence.context.fill
+                (Vacuity.Pin.present locals items signature wire))
+              targetCanonical targetExternalTwoEnded)
+            source := by
+  have validity := Vacuity.Pin.introduceValidity occurrence signature wire
+  let step : Vacuity source
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (Vacuity.Pin.present locals items signature wire))
+        validity.1 validity.2) := ⟨holeWires, Vacuity.Pin.plain locals items,
+    Vacuity.Pin.present locals items signature wire, occurrence,
+    validity.1, validity.2, OpenDiagramIso.refl _,
+    atPolarity_symmetric_of occurrence.context.polarity
+      (.mk (.pin locals items signature wire))⟩
+  exact ⟨validity.1, validity.2,
+    Step.vacuity step, Step.vacuity step.symm⟩
+
 end VisualProof.Rule.Completeness
