@@ -5361,7 +5361,7 @@ constructors are exactly the three argument primitives used by the compiler,
 plus reflexive and transitive composition. -/
 private inductive VarsFactor {context : List Sig} :
     {source target : List Sig} →
-      Vars context source → Vars context target → Prop
+      Vars context source → Vars context target → Type 1
   | refl (variables : Vars context arguments) :
       VarsFactor variables variables
   | permute (permutation : TypedPermutation source target)
@@ -5382,7 +5382,7 @@ private inductive VarsFactor {context : List Sig} :
 namespace VarsFactor
 
 /-- A fixed syntax factor survives every ambient wire substitution. -/
-private theorem natural
+private noncomputable def natural
     {before sourceArguments targetArguments : List Sig}
     {source : Vars before sourceArguments}
     {target : Vars before targetArguments}
@@ -5404,7 +5404,7 @@ private theorem natural
   | trans first second firstIH secondIH => exact firstIH.trans secondIH
 
 /-- Keep one leading argument while applying a factor to the tail. -/
-private theorem keepHead (head : Var context signature)
+private noncomputable def keepHead (head : Var context signature)
     (factor : VarsFactor source target) :
     VarsFactor (.cons head source) (.cons head target) := by
   induction factor with
@@ -5419,7 +5419,7 @@ private theorem keepHead (head : Var context signature)
   | trans first second firstIH secondIH => exact firstIH.trans secondIH
 
 /-- Build a supplied tuple from the empty tuple using extensions only. -/
-private theorem extendFromNil
+private noncomputable def extendFromNil
     (added : Vars context additions) :
     VarsFactor (.nil : Vars context []) added := by
   induction added with
@@ -5430,7 +5430,7 @@ private theorem extendFromNil
 
 /-- Append a supplied tuple using projection extensions only.  This is the
 monotone first phase of boundary normalization. -/
-private theorem extendAppend
+private noncomputable def extendAppend
     (variables : Vars context arguments)
     (added : Vars context additions) :
     VarsFactor variables (Arity.Vars.append variables added) := by
@@ -5440,7 +5440,7 @@ private theorem extendAppend
 
 /-- Remove one extra occurrence from in front of the ordered identity tuple.
 Only permutation and duplicate contraction are used. -/
-private theorem removeIdentityExtra
+private noncomputable def removeIdentityExtra
     (wire : Var context signature) :
     VarsFactor
       (.cons wire (Erasure.Exposure.identityBoundary context))
@@ -5465,7 +5465,7 @@ private theorem removeIdentityExtra
 
 /-- Delete an arbitrary prefix in front of a complete ordered identity tuple.
 The reduction phase contains only permutations and contractions. -/
-private theorem reduceIdentityPrefix
+private noncomputable def reduceIdentityPrefix
     (leading : Vars context arguments) :
     VarsFactor
       (Arity.Vars.append leading
@@ -8482,6 +8482,115 @@ mutual
   termination_by 3 * sizeOf sites + 1
 end
 
+/-! Factor layouts depend on the endpoints of the factor program, not on its
+constructor history.  This transport is explicit now that factor programs
+live in `Type` and their induction structure is proof-relevant. -/
+mutual
+  private theorem factorRegionLayout_factor
+      {baseContext baseArguments currentArguments common sourceWires
+        targetWires : List Sig}
+      {base : Vars baseContext baseArguments}
+      {current : Vars baseContext currentArguments}
+      (first second : VarsFactor base current)
+      {pattern : OpenDiagram baseArguments}
+      {formalSourceWires formalTargetWires : List Sig}
+      {formalFrame : Transform.Frame baseArguments common formalSourceWires
+        formalTargetWires}
+      {operation : Transform.Operation baseArguments}
+      {data : operation.Data formalFrame}
+      {source : Region formalSourceWires} {result : Region common}
+      {evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          pattern formalFrame.sourceKeep formalFrame.selected source result}
+      (sites : RegionSites operation data evidence)
+      {currentFrame : Transform.Frame currentArguments common sourceWires
+        targetWires}
+      {currentSource : Region sourceWires}
+      (layout : FactorRegionLayout base current first evidence sites
+        currentFrame currentSource) :
+      FactorRegionLayout base current second evidence sites currentFrame
+        currentSource :=
+    match sites with
+    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
+        childSites => by
+      unfold FactorRegionLayout at layout ⊢
+      obtain ⟨currentItems, rfl, currentItemsLayout⟩ := layout
+      exact ⟨currentItems, rfl,
+        factorItemsLayout_factor first second childSites currentItemsLayout⟩
+  termination_by 3 * sizeOf sites
+
+  private theorem factorItemsLayout_factor
+      {baseContext baseArguments currentArguments common sourceWires
+        targetWires : List Sig}
+      {base : Vars baseContext baseArguments}
+      {current : Vars baseContext currentArguments}
+      (first second : VarsFactor base current)
+      {pattern : OpenDiagram baseArguments}
+      {formalSourceWires formalTargetWires : List Sig}
+      {formalFrame : Transform.Frame baseArguments common formalSourceWires
+        formalTargetWires}
+      {operation : Transform.Operation baseArguments}
+      {data : operation.Data formalFrame}
+      {source : ItemSeq formalSourceWires} {result : Region common}
+      {evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          pattern formalFrame.sourceKeep formalFrame.selected source result}
+      (sites : ItemsSites operation data evidence)
+      {currentFrame : Transform.Frame currentArguments common sourceWires
+        targetWires}
+      {currentSource : ItemSeq sourceWires}
+      (layout : FactorItemsLayout base current first evidence sites
+        currentFrame currentSource) :
+      FactorItemsLayout base current second evidence sites currentFrame
+        currentSource :=
+    match sites with
+    | .nil _ => by simpa only [FactorItemsLayout] using layout
+    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
+        itemEvidence tailEvidence itemSites tailSites => by
+      unfold FactorItemsLayout at layout ⊢
+      obtain ⟨currentItem, currentTail, rfl, itemLayout, tailLayout⟩ := layout
+      exact ⟨currentItem, currentTail, rfl,
+        factorItemLayout_factor first second itemSites itemLayout,
+        factorItemsLayout_factor first second tailSites tailLayout⟩
+  termination_by 3 * sizeOf sites + 2
+
+  private theorem factorItemLayout_factor
+      {baseContext baseArguments currentArguments common sourceWires
+        targetWires : List Sig}
+      {base : Vars baseContext baseArguments}
+      {current : Vars baseContext currentArguments}
+      (first second : VarsFactor base current)
+      {pattern : OpenDiagram baseArguments}
+      {formalSourceWires formalTargetWires : List Sig}
+      {formalFrame : Transform.Frame baseArguments common formalSourceWires
+        formalTargetWires}
+      {operation : Transform.Operation baseArguments}
+      {data : operation.Data formalFrame}
+      {source : Item formalSourceWires} {result : Region common}
+      {evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          pattern formalFrame.sourceKeep formalFrame.selected source result}
+      (sites : ItemSites operation data evidence)
+      {currentFrame : Transform.Frame currentArguments common sourceWires
+        targetWires}
+      {currentSource : Item sourceWires}
+      (layout : FactorItemLayout base current first evidence sites currentFrame
+        currentSource) :
+      FactorItemLayout base current second evidence sites currentFrame
+        currentSource :=
+    match sites with
+    | .atom _ _ => by simpa only [FactorItemLayout] using layout
+    | .selectedAtom _ _ => by simpa only [FactorItemLayout] using layout
+    | .identity _ _ _ => by simpa only [FactorItemLayout] using layout
+    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
+        childSites => by
+      unfold FactorItemLayout at layout ⊢
+      obtain ⟨currentBody, rfl, bodyLayout⟩ := layout
+      exact ⟨currentBody, rfl,
+        factorRegionLayout_factor first second childSites bodyLayout⟩
+  termination_by 3 * sizeOf sites + 1
+end
+
 /-! Every authoritative source has the reflexive factor layout over its
 identity argument vector.  At a selected site the application itself induces
 the unique positional substitution used by the layout. -/
@@ -9713,7 +9822,10 @@ private theorem varsFactorSourceBridge
   induction factor generalizing baseArguments pattern formalSource result
       operation data with
   | refl variables =>
-      exact ⟨source, by simpa using layout, .refl variables source⟩
+      exact ⟨source,
+        factorItemsLayout_factor prior (.trans prior (.refl variables)) sites
+          layout,
+        .refl variables source⟩
   | @permute sourceArguments targetArguments permutation variables =>
       let primitiveFrame := ArgumentPermutation.rootFrame outer localBefore
         localAfter sourceArguments targetArguments
@@ -9855,7 +9967,11 @@ private theorem varsFactorSourceBridge
         firstIH prior evidence sites layout
       obtain ⟨targetSource, targetLayout, secondBridge⟩ :=
         secondIH (.trans prior first) evidence sites middleLayout
-      exact ⟨targetSource, by simpa only [VarsFactor.trans] using targetLayout,
+      refine ⟨targetSource,
+        factorItemsLayout_factor
+          (VarsFactor.trans (VarsFactor.trans prior first) second)
+          (VarsFactor.trans prior (VarsFactor.trans first second)) sites
+            targetLayout,
         .trans first second source middleSource targetSource firstBridge
           secondBridge⟩
 
@@ -10500,7 +10616,7 @@ mutual
   termination_by 3 * sizeOf sites + 1
 end
 
-private theorem atomSelection_expansion
+private noncomputable def atomSelection_expansion
     (head : Var patternWires (.rel atomArguments))
     (ports : Vars patternWires atomArguments) :
     VarsFactor (atomSelection head ports)
@@ -10509,7 +10625,7 @@ private theorem atomSelection_expansion
   VarsFactor.extendAppend (atomSelection head ports)
     (Erasure.Exposure.identityBoundary patternWires)
 
-private theorem atomSelection_reduction
+private noncomputable def atomSelection_reduction
     (head : Var patternWires (.rel atomArguments))
     (ports : Vars patternWires atomArguments) :
     VarsFactor
