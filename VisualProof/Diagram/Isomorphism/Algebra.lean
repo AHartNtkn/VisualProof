@@ -754,6 +754,41 @@ noncomputable def RegionIso.conjoinBlank
       simpa only [Region.blank, Region.conjoin, ItemSeq.append_nil, source,
         target, ItemSeq.renameWires_id, ItemSeq.renameWires] using transported
 
+/-- Adjoining an item sequence with no material locals retains its presentation. -/
+noncomputable def RegionIso.adjoinAtOfItems
+    (locals : List Sig) (items : ItemSeq (outer ++ locals)) :
+    RegionIso (WireEquiv.refl outer)
+      (Region.adjoinAt locals .nil (Region.ofItems items))
+      (.mk locals items) := by
+  let appendNil : WireRenaming (outer ++ locals)
+      ((outer ++ locals) ++ []) :=
+    ⟨fun wire => wire.appendLeft []⟩
+  let source := WireRenaming.comp
+    (Region.adjoinMaterialWire outer locals []) appendNil
+  let target : WireRenaming (outer ++ locals) (outer ++ locals) :=
+    WireRenaming.id
+  let localsIso := WireEquiv.appendNil locals
+  let ambient := (WireEquiv.refl outer).append localsIso
+  have commutes : ∀ {signature} (wire : Var (outer ++ locals) signature),
+      ambient (source wire) = target wire := by
+    intro signature wire
+    apply Var.appendCases (left := outer) (right := locals)
+      (motive := fun wire => ambient (source wire) = target wire)
+    · intro signature inherited
+      simp [ambient, localsIso, source, target, appendNil,
+        WireRenaming.comp, Region.adjoinMaterialWire] <;> rfl
+    · intro signature localWire
+      simp [ambient, localsIso, source, target, appendNil,
+        WireRenaming.comp, Region.adjoinMaterialWire,
+        WireEquiv.appendNil_apply] <;> rfl
+  let transported := ItemSeqIso.renameWires items source target ambient
+    commutes
+  refine .mk localsIso ?_
+  simpa only [Region.adjoinAt, Region.ofItems, Region.locals, Region.items,
+    ItemSeq.renameWires, ItemSeq.append_nil, ItemSeq.nil_append, appendNil,
+    source, target, ItemSeq.renameWires_id,
+    ItemSeq.renameWires_comp] using transported
+
 /-- Conjunction is commutative up to region presentation. -/
 noncomputable def RegionIso.conjoinComm
     (left right : Region outer) :
