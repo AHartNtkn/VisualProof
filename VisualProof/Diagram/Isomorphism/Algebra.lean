@@ -558,6 +558,202 @@ noncomputable def RegionIso.adjoinAtConjoinLeft
             targetPrefix, targetHost, targetFirst, targetSecond, ambient]
             using combined
 
+private def WireEquiv.appendNil : (context : List Sig) →
+    WireEquiv (context ++ []) context
+  | [] =>
+      { toRenaming := ⟨fun wire => nomatch wire⟩
+        invRenaming := ⟨fun wire => nomatch wire⟩
+        left_inv := by
+          intro signature wire
+          exact nomatch wire
+        right_inv := by
+          intro signature wire
+          exact nomatch wire }
+  | signature :: context =>
+      let tail := WireEquiv.appendNil context
+      { toRenaming := ⟨fun wire =>
+          match wire with
+          | .here => .here
+          | .there wire => .there (tail wire)⟩
+        invRenaming := ⟨fun wire =>
+          match wire with
+          | .here => .here
+          | .there wire => .there (tail.symm wire)⟩
+        left_inv := by
+          intro resultSignature wire
+          cases wire with
+          | here => rfl
+          | there wire =>
+              exact congrArg Var.there (tail.left_inv wire)
+        right_inv := by
+          intro resultSignature wire
+          cases wire with
+          | here => rfl
+          | there wire =>
+              exact congrArg Var.there (tail.right_inv wire) }
+
+private theorem WireEquiv.appendNil_apply
+    (context : List Sig) (wire : Var context signature) :
+    WireEquiv.appendNil context (wire.appendLeft []) = wire := by
+  induction wire with
+  | here => rfl
+  | there wire induction =>
+      exact congrArg Var.there induction
+
+/-- Reassociate three conjunctions while preserving their left-to-right order. -/
+noncomputable def RegionIso.conjoinAssoc
+    (first second third : Region outer) :
+    RegionIso (WireEquiv.refl outer)
+      ((first.conjoin second).conjoin third)
+      (first.conjoin (second.conjoin third)) := by
+  cases first with
+  | mk firstLocals firstItems =>
+      cases second with
+      | mk secondLocals secondItems =>
+          cases third with
+          | mk thirdLocals thirdItems =>
+              let sourceFirst := WireRenaming.comp
+                (Region.conjoinLeftWire outer (firstLocals ++ secondLocals)
+                  thirdLocals)
+                (Region.conjoinLeftWire outer firstLocals secondLocals)
+              let sourceSecond := WireRenaming.comp
+                (Region.conjoinLeftWire outer (firstLocals ++ secondLocals)
+                  thirdLocals)
+                (Region.conjoinRightWire outer firstLocals secondLocals)
+              let sourceThird := Region.conjoinRightWire outer
+                (firstLocals ++ secondLocals) thirdLocals
+              let targetFirst := Region.conjoinLeftWire outer firstLocals
+                (secondLocals ++ thirdLocals)
+              let targetSecond := WireRenaming.comp
+                (Region.conjoinRightWire outer firstLocals
+                  (secondLocals ++ thirdLocals))
+                (Region.conjoinLeftWire outer secondLocals thirdLocals)
+              let targetThird := WireRenaming.comp
+                (Region.conjoinRightWire outer firstLocals
+                  (secondLocals ++ thirdLocals))
+                (Region.conjoinRightWire outer secondLocals thirdLocals)
+              let localsIso := WireEquiv.adjoinMaterialAssoc firstLocals
+                secondLocals thirdLocals
+              let ambient := (WireEquiv.refl outer).append localsIso
+              have firstCommutes : ∀ {signature}
+                  (wire : Var (outer ++ firstLocals) signature),
+                  ambient (sourceFirst wire) = targetFirst wire := by
+                intro signature wire
+                apply Var.appendCases (left := outer) (right := firstLocals)
+                  (motive := fun wire => ambient (sourceFirst wire) =
+                    targetFirst wire)
+                · intro signature inherited
+                  simp [ambient, localsIso, sourceFirst, targetFirst,
+                    WireEquiv.adjoinMaterialAssoc, WireRenaming.comp,
+                    Region.adjoinMaterialWire, Region.conjoinLeftWire]
+                · intro signature localWire
+                  simp [ambient, localsIso, sourceFirst, targetFirst,
+                    WireEquiv.adjoinMaterialAssoc, WireRenaming.comp,
+                    Region.adjoinMaterialWire, Region.conjoinLeftWire]
+              have secondCommutes : ∀ {signature}
+                  (wire : Var (outer ++ secondLocals) signature),
+                  ambient (sourceSecond wire) = targetSecond wire := by
+                intro signature wire
+                apply Var.appendCases (left := outer) (right := secondLocals)
+                  (motive := fun wire => ambient (sourceSecond wire) =
+                    targetSecond wire)
+                · intro signature inherited
+                  simp [ambient, localsIso, sourceSecond, targetSecond,
+                    WireEquiv.adjoinMaterialAssoc, WireRenaming.comp,
+                    Region.adjoinMaterialWire, Region.conjoinLeftWire,
+                    Region.conjoinRightWire]
+                · intro signature localWire
+                  simp [ambient, localsIso, sourceSecond, targetSecond,
+                    WireEquiv.adjoinMaterialAssoc, WireRenaming.comp,
+                    Region.adjoinMaterialWire, Region.conjoinLeftWire,
+                    Region.conjoinRightWire]
+              have thirdCommutes : ∀ {signature}
+                  (wire : Var (outer ++ thirdLocals) signature),
+                  ambient (sourceThird wire) = targetThird wire := by
+                intro signature wire
+                apply Var.appendCases (left := outer) (right := thirdLocals)
+                  (motive := fun wire => ambient (sourceThird wire) =
+                    targetThird wire)
+                · intro signature inherited
+                  simp [ambient, localsIso, sourceThird, targetThird,
+                    WireEquiv.adjoinMaterialAssoc, WireRenaming.comp,
+                    Region.adjoinMaterialWire,
+                    Region.conjoinRightWire]
+                · intro signature localWire
+                  simp [ambient, localsIso, sourceThird, targetThird,
+                    WireEquiv.adjoinMaterialAssoc, WireRenaming.comp,
+                    Region.adjoinMaterialWire,
+                    Region.conjoinRightWire]
+              let firstIso := ItemSeqIso.renameWires firstItems sourceFirst
+                targetFirst ambient firstCommutes
+              let secondIso := ItemSeqIso.renameWires secondItems sourceSecond
+                targetSecond ambient secondCommutes
+              let thirdIso := ItemSeqIso.renameWires thirdItems sourceThird
+                targetThird ambient thirdCommutes
+              refine .mk localsIso ?_
+              simpa only [Region.conjoin, Region.locals, Region.items,
+                ItemSeq.renameWires_append, ItemSeq.renameWires_comp,
+                ItemSeq.append_assoc, sourceFirst, sourceSecond, sourceThird,
+                targetFirst, targetSecond, targetThird, ambient] using
+                ItemSeqIso.append firstIso (ItemSeqIso.append secondIso thirdIso)
+
+/-- A blank left conjunct is a presentation identity. -/
+noncomputable def RegionIso.blankConjoin
+    (region : Region outer) :
+    RegionIso (WireEquiv.refl outer)
+      ((Region.blank outer).conjoin region) region := by
+  cases region with
+  | mk locals items =>
+      let source := Region.conjoinRightWire outer [] locals
+      let target : WireRenaming (outer ++ locals) (outer ++ locals) :=
+        WireRenaming.id
+      let ambient := (WireEquiv.refl outer).append (WireEquiv.refl locals)
+      have commutes : ∀ {signature} (wire : Var (outer ++ locals) signature),
+          ambient (source wire) = target wire := by
+        intro signature wire
+        apply Var.appendCases (left := outer) (right := locals)
+          (motive := fun wire => ambient (source wire) = target wire)
+        · intro signature inherited
+          simp [ambient, source, target, WireRenaming.id,
+            Region.conjoinRightWire]
+        · intro signature localWire
+          simp [ambient, source, target, WireRenaming.id,
+            Region.conjoinRightWire] <;> rfl
+      let transported := ItemSeqIso.renameWires items source target ambient
+        commutes
+      refine .mk (WireEquiv.refl locals) ?_
+      simpa only [Region.blank, Region.conjoin, ItemSeq.nil_append, source,
+        target, ItemSeq.renameWires_id] using transported
+
+/-- A blank right conjunct is a presentation identity. -/
+noncomputable def RegionIso.conjoinBlank
+    (region : Region outer) :
+    RegionIso (WireEquiv.refl outer)
+      (region.conjoin (Region.blank outer)) region := by
+  cases region with
+  | mk locals items =>
+      let source := Region.conjoinLeftWire outer locals []
+      let target : WireRenaming (outer ++ locals) (outer ++ locals) :=
+        WireRenaming.id
+      let localsIso := WireEquiv.appendNil locals
+      let ambient := (WireEquiv.refl outer).append localsIso
+      have commutes : ∀ {signature} (wire : Var (outer ++ locals) signature),
+          ambient (source wire) = target wire := by
+        intro signature wire
+        apply Var.appendCases (left := outer) (right := locals)
+          (motive := fun wire => ambient (source wire) = target wire)
+        · intro signature inherited
+          simp [ambient, localsIso, source, target, WireRenaming.id,
+            Region.conjoinLeftWire]
+        · intro signature localWire
+          simp [ambient, localsIso, source, target, WireRenaming.id,
+            Region.conjoinLeftWire, WireEquiv.appendNil_apply]
+      let transported := ItemSeqIso.renameWires items source target ambient
+        commutes
+      refine .mk localsIso ?_
+      simpa only [Region.blank, Region.conjoin, ItemSeq.append_nil, source,
+        target, ItemSeq.renameWires_id, ItemSeq.renameWires] using transported
+
 /-- Conjunction is commutative up to region presentation. -/
 noncomputable def RegionIso.conjoinComm
     (left right : Region outer) :
