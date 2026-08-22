@@ -4310,6 +4310,99 @@ def FormalShape.pattern
   externalTwoEnded := shape.externalTwoEnded
 }
 
+/-! The sole atom normal form used by the structural compiler. Its context
+contains one distinct head wire followed by one distinct wire per port. -/
+
+private def atomSupportWires (arguments : List Sig) : List Sig :=
+  .rel arguments :: arguments
+
+private def atomSupportHead (arguments : List Sig) :
+    Var (atomSupportWires arguments) (.rel arguments) :=
+  .here
+
+private def atomSupportPorts (arguments : List Sig) :
+    Vars (atomSupportWires arguments) arguments :=
+  (EqualityNormalization.formalPorts arguments).map fun wire => .there wire
+
+private def atomSupportItem (arguments : List Sig) :
+    Item (atomSupportWires arguments) :=
+  .atom (atomSupportHead arguments) (atomSupportPorts arguments)
+
+private theorem Vars.countIndex_map_of_sameIndex
+    (variables : Vars source signatures)
+    (rename : WireRenaming source target)
+    (sameIndex : ∀ {signature} (wire : Var source signature),
+      (rename wire).index.val = wire.index.val)
+    (index : Nat) :
+    (variables.map fun wire => rename wire).countIndex index =
+      variables.countIndex index := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [Vars.map, Vars.countIndex, sameIndex head, induction]
+
+private theorem atomSupportCanonical (arguments : List Sig) :
+    (Region.singleton (atomSupportItem arguments)).Canonical := by
+  change (∀ localIndex : Fin 0, RegionPath.RootedTwo _) ∧
+    (ItemSeq.cons _ ItemSeq.nil).ChildrenCanonical
+  exact ⟨fun localIndex => Fin.elim0 localIndex,
+    ⟨True.intro, True.intro⟩⟩
+
+private theorem atomSupportExternalTwoEnded (arguments : List Sig) :
+    OpenDiagram.ExternalTwoEnded
+      (EqualityNormalization.formalPorts (atomSupportWires arguments))
+      (Region.singleton (atomSupportItem arguments)) := by
+  intro signature wire
+  have boundaryPositive : 0 <
+      (EqualityNormalization.formalPorts
+        (atomSupportWires arguments)).countIndex wire.index.val := by
+    have positive :=
+      (EqualityNormalization.formalPorts (atomSupportWires arguments))
+        |>.countIndex_get_positive wire.index
+    rw [EqualityNormalization.formalPorts_get_index] at positive
+    exact positive
+  have bodyPositive : 0 <
+      ((Region.singleton (atomSupportItem arguments)).incidencePaths
+        wire.index.val).length := by
+    simp only [Region.singleton, Region.ofItems, Region.incidencePaths,
+      ItemSeq.renameWires, Item.renameWires, ItemSeq.incidencePaths,
+      Item.incidencePaths, List.append_nil, List.length_replicate,
+      Var.index_appendLeft, atomSupportItem, atomSupportHead]
+    let appendNil : WireRenaming (atomSupportWires arguments)
+        (atomSupportWires arguments ++ []) :=
+      ⟨fun selected => selected.appendLeft []⟩
+    have portCountEq :
+        ((atomSupportPorts arguments).map
+          (fun selected => appendNil selected)).countIndex wire.index.val =
+        (atomSupportPorts arguments).countIndex wire.index.val :=
+      Vars.countIndex_map_of_sameIndex (atomSupportPorts arguments) appendNil
+        (fun selected => Var.index_appendLeft selected []) wire.index.val
+    rw [show ((atomSupportPorts arguments).map
+        (fun selected => selected.appendLeft [])).countIndex wire.index.val =
+          (atomSupportPorts arguments).countIndex wire.index.val by
+      simpa only [appendNil] using portCountEq]
+    change 0 <
+      (EqualityNormalization.formalPorts
+        (atomSupportWires arguments)).countIndex wire.index.val
+    exact boundaryPositive
+  omega
+
+private def atomFormalShape (arguments : List Sig) :
+    FormalShape (atomSupportHead arguments) (atomSupportPorts arguments) := {
+  before := []
+  after := arguments
+  formal := atomSupportHead arguments
+  retained := atomSupportPorts arguments
+  head_eq := HEq.rfl
+  ports_eq := HEq.rfl
+  boundaryWire := EqualityNormalization.formalPorts
+    (atomSupportWires arguments)
+  boundary_eq := rfl
+  boundarySurjective := EqualityNormalization.formalPorts_surjective
+  canonical := atomSupportCanonical arguments
+  externalTwoEnded := atomSupportExternalTwoEnded arguments
+}
+
 /-- Caller-owned exact all-sites evidence for one singleton formal pattern.
 The final primitive is intentionally absent: `compile` below fixes it to
 `itemsFormal`. -/
@@ -5530,12 +5623,9 @@ mutual
   primitive family. -/
   inductive ItemPlan : {wires : List Sig} → Item wires → Goal → Type 1
     | atom
-        {patternWires atomArguments : List Sig}
-        {head : Var patternWires (.rel atomArguments)}
-        {ports : Vars patternWires atomArguments}
-        (shape : FormalShape head ports)
-        (phase : FormalPhase shape) :
-        ItemPlan (.atom head ports) phase.goal
+        (arguments : List Sig)
+        (phase : FormalPhase (atomFormalShape arguments)) :
+        ItemPlan (atomSupportItem arguments) phase.goal
     | identity
         {patternWires : List Sig}
         {signature : Sig} {arity : Nat}
