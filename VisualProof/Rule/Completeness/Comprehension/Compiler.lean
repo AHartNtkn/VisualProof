@@ -1574,7 +1574,7 @@ private noncomputable def Occurrence.nest
 /-- Bidirectional nonempty reachability between exact occurrence endpoints.
 This stronger internal form permits endpoint presentation transport while
 the public equality phase remains optional when no selected site exists. -/
-private def StrictEquates
+def StrictEquates
     {boundary holeWires : List Sig}
     {before : Region holeWires}
     {source : OpenDiagram boundary}
@@ -2160,7 +2160,7 @@ private theorem ItemSeq.incidencePaths_rotate_nonempty_iff
     · exact Or.inr pinsNonempty
     · exact Or.inl (Or.inr materialNonempty)
 
-private def contextPins (outer hostLocals : List Sig) :
+def contextPins (outer hostLocals : List Sig) :
     ItemSeq (outer ++ hostLocals) :=
   let pins := allPins (outer ++ hostLocals) WireRenaming.id
   pins.append pins
@@ -2178,7 +2178,7 @@ private theorem contextPins_incidence_nonempty
     ItemSeq.incidencePaths_append]
   exact List.append_ne_nil_of_left_ne_nil (List.ne_nil_of_mem member) _
 
-private theorem pinnedHostCanonical
+theorem pinnedHostCanonical
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
     (material : Region (outer ++ hostLocals))
     (sourceCanonical :
@@ -2215,7 +2215,7 @@ private theorem pinnedHostCanonical
 /-- Add the structural double-pin block around arbitrary adjoined material,
 transporting the nonempty Vacuity derivation through the exact item
 permutation that places those pins in the host block. -/
-private theorem adjoinPinsEquatesNonempty
+theorem adjoinPinsEquatesNonempty
     {boundary outer : List Sig}
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
     (material : Region (outer ++ hostLocals))
@@ -2341,7 +2341,7 @@ private theorem adjoinPinsEquatesNonempty
       · exact transGen_iso endpointIso rawReverse
           (OpenDiagramIso.refl source)
 
-private theorem pinnedHost_incidence_nonempty
+theorem pinnedHost_incidence_nonempty
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
     (wire : Var outer signature) :
     (Region.mk hostLocals
@@ -2540,6 +2540,175 @@ private noncomputable def flattenAdjoinOccurrence
   exact presentationOccurrence occurrence targetLocalCanonical sameNonempty
     (RegionIso.adjoinAtConjoinLeft hostLocals hostItems first second)
 
+/-- Add temporary support pins, expose one erasure description, and remove the
+same pins at the exposed endpoint. The description equations are the sole
+presentation bridge between the actual endpoints and the shared exposure
+construction. -/
+theorem pinnedExposureStrict
+    {boundary outer : List Sig}
+    {hostLocals : List Sig}
+    {hostItems : ItemSeq (outer ++ hostLocals)}
+    {before after : Region (outer ++ hostLocals)}
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence
+      (Region.adjoinAt hostLocals hostItems before) source)
+    (targetCanonical :
+      (occurrence.context.fill
+        (Region.adjoinAt hostLocals hostItems after)).Canonical)
+    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill
+        (Region.adjoinAt hostLocals hostItems after)))
+    (nonempty : outer ++ hostLocals ≠ [])
+    (description : Rule.Erasure.Description outer)
+    (sourceEq : description.source =
+      Region.adjoinAt hostLocals
+        (hostItems.append (contextPins outer hostLocals)) before)
+    (targetEq : description.target =
+      Region.mk hostLocals
+        (hostItems.append (contextPins outer hostLocals)))
+    (exposedEq : ∀ materialCanonical : description.material.Canonical,
+      Erasure.Exposure.exposedRegion description materialCanonical =
+        Region.adjoinAt hostLocals
+          (hostItems.append (contextPins outer hostLocals)) after) :
+    StrictEquates occurrence
+      (Region.adjoinAt hostLocals hostItems after)
+      targetCanonical targetExternalTwoEnded := by
+  have sourceLocalCanonical :
+      (Region.adjoinAt hostLocals hostItems before).Canonical :=
+    occurrence.context.holeCanonical _ occurrence.sourceCanonical
+  obtain ⟨pinnedSourceCanonical, pinnedSourceExternalTwoEnded,
+      sourcePins⟩ := adjoinPinsEquatesNonempty hostLocals hostItems
+    before occurrence nonempty
+  let pinnedItems := hostItems.append (contextPins outer hostLocals)
+  let pinnedSource := Region.adjoinAt hostLocals pinnedItems before
+  let pinnedSourceOccurrence : Occurrence pinnedSource
+      (occurrence.interface.withBody
+        (occurrence.context.fill pinnedSource) pinnedSourceCanonical
+          pinnedSourceExternalTwoEnded) :=
+    exactOccurrence occurrence.interface occurrence.context pinnedSource
+      pinnedSourceCanonical pinnedSourceExternalTwoEnded
+  let exposureOccurrence : Occurrence description.source
+      (occurrence.interface.withBody
+        (occurrence.context.fill pinnedSource) pinnedSourceCanonical
+          pinnedSourceExternalTwoEnded) := {
+    interface := pinnedSourceOccurrence.interface
+    context := pinnedSourceOccurrence.context
+    sourceCanonical := by
+      rw [sourceEq]
+      exact pinnedSourceOccurrence.sourceCanonical
+    sourceExternalTwoEnded := by
+      intro signature wire
+      rw [sourceEq]
+      exact pinnedSourceOccurrence.sourceExternalTwoEnded wire
+    host_iso := by
+      simpa only [sourceEq, pinnedItems, pinnedSource] using
+        pinnedSourceOccurrence.host_iso
+  }
+  have erasedLocalCanonical : description.target.Canonical := by
+    rw [targetEq]
+    exact pinnedHostCanonical hostLocals hostItems before
+      sourceLocalCanonical
+  have erasedNonempty : ∀ {signature} (wire : Var outer signature),
+      description.target.incidencePaths wire.index.val ≠ [] := by
+    intro signature wire
+    rw [targetEq]
+    exact pinnedHost_incidence_nonempty hostLocals hostItems wire
+  have pinnedSourceNonempty : ∀ {signature}
+      (wire : Var outer signature),
+      pinnedSource.incidencePaths wire.index.val ≠ [] := by
+    intro signature wire
+    have hostPositive := List.length_pos_iff.mpr
+      (pinnedHost_incidence_nonempty hostLocals hostItems wire)
+    have sublist := Region.incidencePaths_adjoinAt_host_sublist
+      hostLocals pinnedItems before wire
+    simpa only [pinnedSource, pinnedItems] using List.length_pos_iff.mp
+      (Nat.lt_of_lt_of_le hostPositive sublist.length_le)
+  have erasedSameNonempty : ∀ {signature} (wire : Var outer signature),
+      pinnedSource.incidencePaths wire.index.val ≠ [] ↔
+        description.target.incidencePaths wire.index.val ≠ [] := by
+    intro signature wire
+    exact ⟨fun _ => erasedNonempty wire,
+      fun _ => pinnedSourceNonempty wire⟩
+  have erasedReplacement := occurrence.context.replaceCanonical
+    pinnedSource description.target pinnedSourceCanonical
+      erasedLocalCanonical erasedSameNonempty
+  let pinnedSourceEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill pinnedSource) pinnedSourceCanonical
+      pinnedSourceExternalTwoEnded
+  have erasedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill description.target) :=
+    pinnedSourceEndpoint.externalTwoEnded_of_nonempty_iff _
+      erasedReplacement.2
+  obtain ⟨materialCanonical, exposedCanonical,
+      exposedExternalTwoEnded, exposedEquates⟩ :=
+    Erasure.Exposure.equates description exposureOccurrence
+      erasedReplacement.1 erasedExternalTwoEnded
+  let targetOccurrence : Occurrence
+      (Region.adjoinAt hostLocals hostItems after)
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals hostItems after)) targetCanonical
+          targetExternalTwoEnded) :=
+    exactOccurrence occurrence.interface occurrence.context
+      (Region.adjoinAt hostLocals hostItems after)
+      targetCanonical targetExternalTwoEnded
+  obtain ⟨pinnedTargetCanonical, pinnedTargetExternalTwoEnded,
+      targetPins⟩ := adjoinPinsEquatesNonempty hostLocals hostItems
+    after targetOccurrence nonempty
+  have forwardExposure : Relation.ReflTransGen Step
+      pinnedSourceEndpoint
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals pinnedItems after))
+        pinnedTargetCanonical pinnedTargetExternalTwoEnded) := by
+    simpa only [exposureOccurrence, pinnedSourceOccurrence,
+      exactOccurrence, sourceEq, exposedEq materialCanonical,
+      pinnedSourceEndpoint, pinnedItems, pinnedSource] using
+      exposedEquates.1
+  have reverseExposure : Relation.ReflTransGen Step
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals pinnedItems after))
+        pinnedTargetCanonical pinnedTargetExternalTwoEnded)
+      pinnedSourceEndpoint := by
+    simpa only [exposureOccurrence, pinnedSourceOccurrence,
+      exactOccurrence, sourceEq, exposedEq materialCanonical,
+      pinnedSourceEndpoint, pinnedItems, pinnedSource] using
+      exposedEquates.2
+  have forwardPins : Relation.TransGen Step source
+      pinnedSourceEndpoint := by
+    simpa only [pinnedSourceEndpoint, pinnedSource, pinnedItems] using
+      sourcePins.1
+  have reversePins : Relation.TransGen Step pinnedSourceEndpoint source := by
+    simpa only [pinnedSourceEndpoint, pinnedSource, pinnedItems] using
+      sourcePins.2
+  have unpinForward : Relation.TransGen Step
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals pinnedItems after))
+        pinnedTargetCanonical pinnedTargetExternalTwoEnded)
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals hostItems after)) targetCanonical
+          targetExternalTwoEnded) := by
+    simpa only [targetOccurrence, exactOccurrence, pinnedItems] using
+      targetPins.2
+  have unpinReverse : Relation.TransGen Step
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals hostItems after)) targetCanonical
+          targetExternalTwoEnded)
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals pinnedItems after))
+        pinnedTargetCanonical pinnedTargetExternalTwoEnded) := by
+    simpa only [targetOccurrence, exactOccurrence, pinnedItems] using
+      targetPins.1
+  exact ⟨(forwardPins.reflTransGen forwardExposure).trans unpinForward,
+    (unpinReverse.reflTransGen reverseExposure).trans reversePins⟩
+
 private theorem identityBoundaryMaterial_scope
     (pattern : OpenDiagram arguments)
     (ports : Vars wires arguments) :
@@ -2619,153 +2788,33 @@ theorem equatesIdentityBoundary
     sourceEndpoint.externalTwoEnded_of_nonempty_iff _ replacement.2
   refine ⟨targetCanonical, targetExternalTwoEnded, ?_⟩
   by_cases nonempty : outer ++ hostLocals ≠ []
-  · obtain ⟨pinnedSourceCanonical, pinnedSourceExternalTwoEnded,
-        sourcePins⟩ := adjoinPinsEquatesNonempty hostLocals hostItems
-      sourceMaterial (by simpa only [sourceMaterial] using occurrence)
-        nonempty
-    let pinnedItems := hostItems.append (contextPins outer hostLocals)
-    let pinnedSource := Region.adjoinAt hostLocals pinnedItems sourceMaterial
-    let pinnedSourceOccurrence : Occurrence pinnedSource
-        (occurrence.interface.withBody
-          (occurrence.context.fill pinnedSource) pinnedSourceCanonical
-            pinnedSourceExternalTwoEnded) :=
-      exactOccurrence occurrence.interface occurrence.context pinnedSource
-        pinnedSourceCanonical pinnedSourceExternalTwoEnded
+  · let pinnedItems := hostItems.append (contextPins outer hostLocals)
     let description := exposureDescriptionWithHost pattern hostLocals
       pinnedItems ports
-    have sourceEq : description.source = pinnedSource := by
-      simpa only [description, pinnedSource] using
+    have sourceEq : description.source =
+        Region.adjoinAt hostLocals pinnedItems sourceMaterial := by
+      simpa only [description, sourceMaterial] using
         exposureDescriptionWithHost_source pattern hostLocals pinnedItems ports
-    let exposureOccurrence : Occurrence description.source
-        (occurrence.interface.withBody
-          (occurrence.context.fill pinnedSource) pinnedSourceCanonical
-            pinnedSourceExternalTwoEnded) := {
-      interface := pinnedSourceOccurrence.interface
-      context := pinnedSourceOccurrence.context
-      sourceCanonical := by
-        rw [sourceEq]
-        exact pinnedSourceOccurrence.sourceCanonical
-      sourceExternalTwoEnded := by
-        intro signature wire
-        rw [sourceEq]
-        exact pinnedSourceOccurrence.sourceExternalTwoEnded wire
-      host_iso := by
-        simpa only [sourceEq] using pinnedSourceOccurrence.host_iso
-    }
-    have erasedLocalCanonical : description.target.Canonical := by
-      have canonical := pinnedHostCanonical hostLocals hostItems
-        sourceMaterial sourceLocalCanonical
-      simpa only [description, exposureDescriptionWithHost,
-        Rule.Erasure.Description.target, pinnedItems] using canonical
-    have erasedNonempty : ∀ {signature} (wire : Var outer signature),
-        description.target.incidencePaths wire.index.val ≠ [] := by
-      intro signature wire
-      simpa only [description, exposureDescriptionWithHost,
-        Rule.Erasure.Description.target, pinnedItems] using
-        pinnedHost_incidence_nonempty hostLocals hostItems wire
-    have pinnedSourceNonempty : ∀ {signature}
-        (wire : Var outer signature),
-        pinnedSource.incidencePaths wire.index.val ≠ [] := by
-      intro signature wire
-      have hostPositive := List.length_pos_iff.mpr (erasedNonempty wire)
-      have sublist := Region.incidencePaths_adjoinAt_host_sublist
-        hostLocals pinnedItems sourceMaterial wire
-      exact List.length_pos_iff.mp
-        (Nat.lt_of_lt_of_le hostPositive sublist.length_le)
-    have erasedSameNonempty : ∀ {signature} (wire : Var outer signature),
-        pinnedSource.incidencePaths wire.index.val ≠ [] ↔
-          description.target.incidencePaths wire.index.val ≠ [] := by
-      intro signature wire
-      exact ⟨fun _ => erasedNonempty wire,
-        fun _ => pinnedSourceNonempty wire⟩
-    have erasedReplacement := occurrence.context.replaceCanonical
-      pinnedSource description.target pinnedSourceCanonical
-        erasedLocalCanonical erasedSameNonempty
-    let pinnedSourceEndpoint := occurrence.interface.withBody
-      (occurrence.context.fill pinnedSource) pinnedSourceCanonical
-        pinnedSourceExternalTwoEnded
-    have erasedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-        occurrence.interface.boundaryWire
-        (occurrence.context.fill description.target) :=
-      pinnedSourceEndpoint.externalTwoEnded_of_nonempty_iff _
-        erasedReplacement.2
-    obtain ⟨materialCanonical, exposedCanonical,
-        exposedExternalTwoEnded, exposedEquates⟩ :=
-      Erasure.Exposure.equates description exposureOccurrence
-        erasedReplacement.1 erasedExternalTwoEnded
-    have exposedEq :
+    have targetEq : description.target =
+        Region.mk hostLocals pinnedItems := by
+      rfl
+    have exposedEq : ∀ materialCanonical : description.material.Canonical,
         Erasure.Exposure.exposedRegion description materialCanonical =
           Region.adjoinAt hostLocals pinnedItems targetMaterial := by
+      intro materialCanonical
       simpa only [description, targetMaterial] using
         exposureDescriptionWithHost_exposedRegion pattern hostLocals
           pinnedItems ports materialCanonical
-    let targetOccurrence : Occurrence targetRegion
-        (occurrence.interface.withBody
-          (occurrence.context.fill targetRegion) targetCanonical
-            targetExternalTwoEnded) :=
-      exactOccurrence occurrence.interface occurrence.context targetRegion
-        targetCanonical targetExternalTwoEnded
-    obtain ⟨pinnedTargetCanonical, pinnedTargetExternalTwoEnded,
-        targetPins⟩ := adjoinPinsEquatesNonempty hostLocals hostItems
-      targetMaterial (by simpa only [targetRegion, targetMaterial] using
-        targetOccurrence) nonempty
-    have forwardExposure : Relation.ReflTransGen Step
-        pinnedSourceEndpoint
-        (occurrence.interface.withBody
-          (occurrence.context.fill
-            (Region.adjoinAt hostLocals pinnedItems targetMaterial))
-          pinnedTargetCanonical pinnedTargetExternalTwoEnded) := by
-      simpa only [exposureOccurrence, pinnedSourceOccurrence,
-        exactOccurrence, sourceEq, exposedEq, pinnedSourceEndpoint] using
-        exposedEquates.1
-    have reverseExposure : Relation.ReflTransGen Step
-        (occurrence.interface.withBody
-          (occurrence.context.fill
-            (Region.adjoinAt hostLocals pinnedItems targetMaterial))
-          pinnedTargetCanonical pinnedTargetExternalTwoEnded)
-        pinnedSourceEndpoint := by
-      simpa only [exposureOccurrence, pinnedSourceOccurrence,
-        exactOccurrence, sourceEq, exposedEq, pinnedSourceEndpoint] using
-        exposedEquates.2
-    have forwardPins : Relation.TransGen Step source pinnedSourceEndpoint := by
-      simpa only [pinnedSourceEndpoint, pinnedSource, pinnedItems,
-        sourceMaterial] using sourcePins.1
-    have reversePins : Relation.TransGen Step pinnedSourceEndpoint source := by
-      simpa only [pinnedSourceEndpoint, pinnedSource, pinnedItems,
-        sourceMaterial] using sourcePins.2
-    have unpinForward : Relation.TransGen Step
-        (occurrence.interface.withBody
-          (occurrence.context.fill
-            (Region.adjoinAt hostLocals pinnedItems targetMaterial))
-          pinnedTargetCanonical pinnedTargetExternalTwoEnded)
-        (occurrence.interface.withBody
-          (occurrence.context.fill targetRegion) targetCanonical
-            targetExternalTwoEnded) := by
-      simpa only [targetOccurrence, exactOccurrence, targetRegion,
-        pinnedItems, targetMaterial] using targetPins.2
-    have unpinReverse : Relation.TransGen Step
-        (occurrence.interface.withBody
-          (occurrence.context.fill targetRegion) targetCanonical
-            targetExternalTwoEnded)
-        (occurrence.interface.withBody
-          (occurrence.context.fill
-            (Region.adjoinAt hostLocals pinnedItems targetMaterial))
-          pinnedTargetCanonical pinnedTargetExternalTwoEnded) := by
-      simpa only [targetOccurrence, exactOccurrence, targetRegion,
-        pinnedItems, targetMaterial] using targetPins.1
-    refine ⟨?_, ?_⟩
-    · have core := forwardPins.reflTransGen forwardExposure
-      have strictForward := core.trans unpinForward
-      exact (show StrictEquates occurrence targetRegion targetCanonical
-        targetExternalTwoEnded from
-          ⟨strictForward,
-            (unpinReverse.reflTransGen reverseExposure).trans reversePins⟩).toEquates.1
-    · have core := unpinReverse.reflTransGen reverseExposure
-      have strictReverse := core.trans reversePins
-      exact (show StrictEquates occurrence targetRegion targetCanonical
-        targetExternalTwoEnded from
-          ⟨(forwardPins.reflTransGen forwardExposure).trans unpinForward,
-            strictReverse⟩).toEquates.2
+    have strict := pinnedExposureStrict
+      (occurrence := by simpa only [sourceMaterial] using occurrence)
+      (targetCanonical := by
+        simpa only [targetRegion, targetMaterial] using targetCanonical)
+      (targetExternalTwoEnded := by
+        intro signature wire
+        simpa only [targetRegion, targetMaterial] using
+          targetExternalTwoEnded wire)
+      nonempty description sourceEq targetEq exposedEq
+    simpa only [targetRegion, targetMaterial] using strict.toEquates
   · have empty : outer ++ hostLocals = [] :=
       Classical.not_not.mp nonempty
     have outerEmpty : outer = [] := (List.append_eq_nil_iff.mp empty).1
