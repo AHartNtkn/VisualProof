@@ -1,5 +1,6 @@
 import VisualProof.Rule.Completeness.Comprehension.Telescope
 import VisualProof.Rule.Completeness.Erasure.Exposure
+import VisualProof.Diagram.Isomorphism.Algebra
 
 namespace VisualProof.Rule.Completeness.Comprehension
 
@@ -1640,88 +1641,6 @@ private theorem conjoin_eq_adjoinRename
             Region.locals, Region.items, ItemSeq.renameWires_comp,
             Region.adjoinHostWire]
           rw [materialMap]
-
-private theorem renameWires_conjoin
-    (first second : Region sourceWires)
-    (rename : WireRenaming sourceWires targetWires) :
-    (first.conjoin second).renameWires rename =
-      (first.renameWires rename).conjoin (second.renameWires rename) := by
-  cases first with
-  | mk firstLocals firstItems =>
-      cases second with
-      | mk secondLocals secondItems =>
-          have firstMap : WireRenaming.comp
-              (rename.appendRight (firstLocals ++ secondLocals))
-              (Region.conjoinLeftWire sourceWires firstLocals secondLocals) =
-            WireRenaming.comp
-              (Region.conjoinLeftWire targetWires firstLocals secondLocals)
-              (rename.appendRight firstLocals) := by
-            apply WireRenaming.ext
-            intro signature wire
-            apply Var.appendCases (left := sourceWires)
-              (right := firstLocals)
-              (motive := fun wire =>
-                WireRenaming.comp
-                    (rename.appendRight (firstLocals ++ secondLocals))
-                    (Region.conjoinLeftWire sourceWires firstLocals
-                      secondLocals) wire =
-                  WireRenaming.comp
-                    (Region.conjoinLeftWire targetWires firstLocals
-                      secondLocals)
-                    (rename.appendRight firstLocals) wire)
-            · intro inheritedSignature inherited
-              simp [WireRenaming.comp, WireRenaming.appendRight,
-                Region.conjoinLeftWire]
-            · intro localSignature localWire
-              simp [WireRenaming.comp, WireRenaming.appendRight,
-                Region.conjoinLeftWire]
-          have secondMap : WireRenaming.comp
-              (rename.appendRight (firstLocals ++ secondLocals))
-              (Region.conjoinRightWire sourceWires firstLocals secondLocals) =
-            WireRenaming.comp
-              (Region.conjoinRightWire targetWires firstLocals secondLocals)
-              (rename.appendRight secondLocals) := by
-            apply WireRenaming.ext
-            intro signature wire
-            apply Var.appendCases (left := sourceWires)
-              (right := secondLocals)
-              (motive := fun wire =>
-                WireRenaming.comp
-                    (rename.appendRight (firstLocals ++ secondLocals))
-                    (Region.conjoinRightWire sourceWires firstLocals
-                      secondLocals) wire =
-                  WireRenaming.comp
-                    (Region.conjoinRightWire targetWires firstLocals
-                      secondLocals)
-                    (rename.appendRight secondLocals) wire)
-            · intro inheritedSignature inherited
-              simp [WireRenaming.comp, WireRenaming.appendRight,
-                Region.conjoinRightWire]
-            · intro localSignature localWire
-              simp [WireRenaming.comp, WireRenaming.appendRight,
-                Region.conjoinRightWire]
-          simp only [Region.conjoin, Region.renameWires,
-            ItemSeq.renameWires_append, ItemSeq.renameWires_comp]
-          rw [firstMap, secondMap]
-
-private noncomputable def renameWiresConjoinIso
-    (first second : Region sourceWires)
-    (rename : WireRenaming sourceWires targetWires) :
-    RegionIso (WireEquiv.refl targetWires)
-      ((first.conjoin second).renameWires rename)
-      ((first.renameWires rename).conjoin (second.renameWires rename)) := by
-  rw [renameWires_conjoin]
-  exact RegionIso.refl _
-
-private noncomputable def renameWiresCompIso
-    (region : Region sourceWires)
-    (first : WireRenaming sourceWires middleWires)
-    (second : WireRenaming middleWires targetWires) :
-    RegionIso (WireEquiv.refl targetWires)
-      ((region.renameWires first).renameWires second)
-      (region.renameWires (WireRenaming.comp second first)) := by
-  rw [Region.renameWires_comp]
-  exact RegionIso.refl _
 
 private noncomputable def instantiateRenameIso
     (pattern : OpenDiagram arguments)
@@ -4283,7 +4202,7 @@ mutual
             (occurrence.context.holeCanonical _ occurrence.sourceCanonical)
         have sourceMaterialCanonical :
             (itemBefore.conjoin tailBefore).Canonical := by
-          rw [← renameWires_conjoin]
+          rw [← Region.renameWires_conjoin]
           exact sourceBeforeCanonical
         let sourceOccurrence : Occurrence
             (Region.adjoinAt hostLocals hostItems
@@ -4291,7 +4210,7 @@ mutual
           supportedAdjoinOccurrence hostLocals hostItems occurrence hostCanonical
             hostNonempty sourceMaterialCanonical (by
               simpa only [itemBefore, tailBefore] using
-                renameWiresConjoinIso itemResult tailResult rename)
+                RegionIso.renameWiresConjoin itemResult tailResult rename)
         have itemBeforeCanonical :=
           canonical_left_of_conjoin sourceMaterialCanonical
         have tailBeforeCanonical :=
@@ -4322,7 +4241,7 @@ mutual
             (occurrence.context.holeCanonical _ targetCanonical)
         have targetMaterialCanonical :
             (itemAfter.conjoin tailAfter).Canonical := by
-          rw [← renameWires_conjoin]
+          rw [← Region.renameWires_conjoin]
           exact targetBeforeCanonical
         have itemAfterCanonical :=
           canonical_left_of_conjoin targetMaterialCanonical
@@ -4381,7 +4300,7 @@ mutual
             nextHostItems flattened nextHostCanonical nextHostNonempty
             alignedTailCanonical (by
               simpa only [tailBefore, hostWire, nextRename] using
-                renameWiresCompIso tailResult rename hostWire)
+                RegionIso.renameWiresComp tailResult rename hostWire)
         have normalizedTailCanonical : normalizedTail.Canonical :=
           (Region.Canonical.renameWires_iff normalizedTail rename).mp
             tailAfterCanonical
@@ -4408,12 +4327,13 @@ mutual
           exact (adjoinAtIso (hostLocals ++ itemAfter.locals) nextHostItems (by
             simpa only [flatTargetMaterial, tailAfter, normalizedTail,
               nextRename, hostWire] using
-                (renameWiresCompIso normalizedTail rename hostWire).symm)).trans
+                (RegionIso.renameWiresComp normalizedTail rename hostWire).symm)).trans
             ((adjoinAssocIso hostLocals hostItems itemAfter tailAfter).symm.trans
               (adjoinAtIso hostLocals hostItems (by
                 simpa only [itemAfter, tailAfter, normalizedHead,
                   normalizedTail, targetBefore] using
-                  (renameWiresConjoinIso normalizedHead normalizedTail rename).symm)))
+                  (RegionIso.renameWiresConjoin normalizedHead normalizedTail
+                    rename).symm)))
         have finalIso : OpenDiagramIso flatTargetEndpoint
             (sourceOccurrence.interface.withBody
               (sourceOccurrence.context.fill
@@ -4490,7 +4410,7 @@ mutual
               rw [← tailAfterEq]
               simpa only [itemAfter, tailAfter, normalizedHead,
                 normalizedTail, targetBefore] using
-                (renameWiresConjoinIso normalizedHead normalizedTail
+                (RegionIso.renameWiresConjoin normalizedHead normalizedTail
                   rename).symm
             have finalBodyIso : RegionIso (WireEquiv.refl outer) afterItem
                 (Region.adjoinAt hostLocals hostItems targetBefore) := by
@@ -4580,7 +4500,7 @@ mutual
               nextHostItems flattened nextHostCanonical nextHostNonempty
               alignedTailCanonical (by
                 simpa only [tailBefore, hostWire, nextRename] using
-                  renameWiresCompIso tailResult rename hostWire)
+                  RegionIso.renameWiresComp tailResult rename hostWire)
           have normalizedTailCanonical : normalizedTail.Canonical :=
             (Region.Canonical.renameWires_iff normalizedTail rename).mp
               tailAfterCanonical
@@ -4607,14 +4527,15 @@ mutual
               nextHostItems (by
                 simpa only [flatTargetMaterial, tailAfter, normalizedTail,
                   nextRename, hostWire] using
-                    (renameWiresCompIso normalizedTail rename hostWire).symm)).trans
+                    (RegionIso.renameWiresComp normalizedTail rename
+                      hostWire).symm)).trans
               ((adjoinAssocIso hostLocals hostItems itemBefore
                 tailAfter).symm.trans
                 (adjoinAtIso hostLocals hostItems (by
                   rw [← itemAfterEq]
                   simpa only [itemAfter, tailAfter, normalizedHead,
                     normalizedTail, targetBefore] using
-                    (renameWiresConjoinIso normalizedHead normalizedTail
+                    (RegionIso.renameWiresConjoin normalizedHead normalizedTail
                       rename).symm)))
           have finalIso : OpenDiagramIso flatTargetEndpoint
               (sourceOccurrence.interface.withBody
@@ -4736,7 +4657,7 @@ mutual
       supportedAdjoinOccurrence (hostLocals ++ tail.locals) nextHostItems
         flattened nextHostCanonical nextHostNonempty alignedSourceCanonical (by
           simpa only [itemBefore, hostWire, nextRename] using
-            renameWiresCompIso result rename hostWire)
+            RegionIso.renameWiresComp result rename hostWire)
     let normalized := (normalizedItem pattern evidence sites).1
     have normalizedCanonical : normalized.Canonical :=
       (Region.Canonical.renameWires_iff normalized rename).mp
@@ -4762,7 +4683,7 @@ mutual
       exact (adjoinAtIso (hostLocals ++ tail.locals) nextHostItems (by
         simpa only [flatTargetMaterial, itemAfter, normalized, nextRename,
           hostWire] using
-            (renameWiresCompIso normalized rename hostWire).symm)).trans
+            (RegionIso.renameWiresComp normalized rename hostWire).symm)).trans
         ((adjoinAssocIso hostLocals hostItems tail itemAfter).symm.trans
           (adjoinAtIso hostLocals hostItems (conjoinSwapIso tail itemAfter)))
     have presentedTargetCanonical :
@@ -7726,7 +7647,7 @@ private noncomputable def atomExposureDescriptionWithHost_source
   let assoc := EqualityNormalization.adjoinMaterialEquiv outer hostLocals
     inner.hostLocals
   let materialPresentation :=
-    (EqualityNormalization.renameWiresCompIso inner.material inner.wireMap
+    (RegionIso.renameWiresComp inner.material inner.wireMap
       assoc.toRenaming).symm
   let flatPresentation := EqualityNormalization.adjoinAtIso
     (hostLocals ++ inner.hostLocals)
