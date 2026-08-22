@@ -1,5 +1,7 @@
 import VisualProof.Rule.Completeness.Comprehension.Telescope
 import VisualProof.Rule.Completeness.Erasure.Exposure
+import VisualProof.Diagram.Scope.Isomorphism
+import VisualProof.Diagram.Isomorphism.Algebra
 
 namespace VisualProof.Rule.Completeness.Comprehension
 
@@ -904,49 +906,6 @@ private theorem instantiate_rootedTwo_iff
     · exact RegionPath.deepestCommonAncestor_eq_nil_of_mem_nil _
         (instantiate_incidence_mem_nil_of_nonempty pattern ports wire nonempty)
 
-private theorem Region.incidencePaths_adjoinAt_nil
-    (material : Region (outer ++ hostLocals))
-    (wire : Var (outer ++ hostLocals) signature) :
-    (Region.adjoinAt hostLocals .nil material).incidencePaths
-        wire.index.val =
-      material.incidencePaths wire.index.val := by
-  cases material with
-  | mk addedLocals addedItems =>
-      let materialWire := wire.appendLeft addedLocals
-      have renamed := ItemSeq.incidencePaths_renameWires_adjoinMaterial
-        (outer := outer) (hostLocals := hostLocals)
-        (addedLocals := addedLocals) addedItems materialWire 0
-      simpa [Region.adjoinAt, Region.incidencePaths, materialWire] using renamed
-
-private theorem Region.singleton_cut_canonical_iff
-    (body : Region wires) :
-    (Region.singleton (.cut body)).Canonical ↔ body.Canonical := by
-  let appendNil : WireRenaming wires (wires ++ []) :=
-    ⟨fun wire => wire.appendLeft []⟩
-  change (Region.ofItems (.cons (.cut body) .nil)).Canonical ↔
-    body.Canonical
-  simp only [Region.ofItems, Region.Canonical, ItemSeq.ChildrenCanonical,
-    ItemSeq.renameWires, Item.renameWires, Item.ChildrenCanonical, and_true]
-  constructor
-  · rintro ⟨_, childCanonical⟩
-    exact (Region.Canonical.renameWires_iff body appendNil).mp childCanonical
-  · intro childCanonical
-    constructor
-    · intro localIndex
-      exact Fin.elim0 localIndex
-    · exact (Region.Canonical.renameWires_iff body appendNil).mpr
-        childCanonical
-
-private structure ScopePreservation
-    (source target : Region wires) : Prop where
-  canonical : source.Canonical → target.Canonical
-  incidenceNonempty : ∀ {signature} (wire : Var wires signature),
-    source.incidencePaths wire.index.val ≠ [] ↔
-      target.incidencePaths wire.index.val ≠ []
-  rootedTwo : ∀ {signature} (wire : Var wires signature),
-    RegionPath.RootedTwo (source.incidencePaths wire.index.val) →
-      RegionPath.RootedTwo (target.incidencePaths wire.index.val)
-
 mutual
   private def normalizedRegion
       {arguments common sourceWires targetWires : List Sig}
@@ -1176,41 +1135,6 @@ mutual
           childSites (by simpa only [itemHasSelection] using none)]
   termination_by structural sites
 end
-
-private theorem Region.incidencePaths_singleton_cut
-    (body : Region wires) (wire : Var wires signature) :
-    (Region.singleton (.cut body)).incidencePaths wire.index.val =
-      (body.incidencePaths wire.index.val).map (List.cons 0) := by
-  let appendNil : WireRenaming wires (wires ++ []) :=
-    ⟨fun inherited => inherited.appendLeft []⟩
-  have renamed := ItemSeq.incidencePaths_renameWires_preservesIndex
-    (.cons (.cut body) .nil) appendNil (by simp)
-    (by intro inheritedSignature inherited; simp [appendNil]) wire 0
-  simpa [Region.singleton, Region.ofItems, Region.incidencePaths,
-    ItemSeq.incidencePaths, Item.incidencePaths, appendNil] using renamed
-
-private theorem Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil
-    (material : Region (outer ++ hostLocals))
-    (canonical : (Region.adjoinAt hostLocals .nil material).Canonical)
-    (localIndex : Fin hostLocals.length) :
-    RegionPath.RootedTwo
-      (material.incidencePaths (outer.length + localIndex.val)) := by
-  cases material with
-  | mk addedLocals addedItems =>
-      let localWire := Var.appendRight outer (Var.ofIndex localIndex)
-      let combinedIndex : Fin (hostLocals ++ addedLocals).length :=
-        ⟨localIndex.val, by
-          simp only [List.length_append]
-          exact Nat.lt_of_lt_of_le localIndex.isLt
-            (Nat.le_add_right _ _)⟩
-      have sourceRoot := canonical.1 combinedIndex
-      have paths := Region.incidencePaths_adjoinAt_nil
-        (Region.mk addedLocals addedItems) localWire
-      rw [show localWire.index.val = outer.length + localIndex.val by
-        simp [localWire]] at paths
-      rw [← paths]
-      simpa [Region.adjoinAt, Region.Canonical, localWire, combinedIndex] using
-        sourceRoot
 
 mutual
   private theorem normalizedRegion_scope
@@ -1481,89 +1405,6 @@ theorem normalizeItemsScope
       (occurrence.context.fill output.1) replacement.2
   exact ⟨output.1, output.2, replacement.1, normalizedExternalTwoEnded⟩
 
-private noncomputable def conjoinSwapIso
-    (left right : Region outer) :
-    RegionIso (WireEquiv.refl outer) (left.conjoin right)
-      (right.conjoin left) := by
-  cases left with
-  | mk leftLocals leftItems =>
-      cases right with
-      | mk rightLocals rightItems =>
-          let localSwap := WireEquiv.swap leftLocals rightLocals
-          let ambient := (WireEquiv.refl outer).append localSwap
-          let sourceLeft := Region.conjoinLeftWire outer leftLocals rightLocals
-          let sourceRight :=
-            Region.conjoinRightWire outer leftLocals rightLocals
-          let targetLeft :=
-            Region.conjoinRightWire outer rightLocals leftLocals
-          let targetRight :=
-            Region.conjoinLeftWire outer rightLocals leftLocals
-          have leftCommutes : ∀ {signature}
-              (wire : Var (outer ++ leftLocals) signature),
-              ambient (sourceLeft wire) = targetLeft wire := by
-            intro signature wire
-            apply Var.appendCases (left := outer) (right := leftLocals)
-              (motive := fun wire =>
-                ambient (sourceLeft wire) = targetLeft wire)
-            · intro inheritedSignature inherited
-              dsimp only [ambient, sourceLeft, targetLeft]
-              simp only [Region.conjoinLeftWire,
-                Region.conjoinRightWire, Var.appendMap_left]
-              change ((WireEquiv.refl outer).append localSwap)
-                (inherited.appendLeft (leftLocals ++ rightLocals)) =
-                  inherited.appendLeft (rightLocals ++ leftLocals)
-              rw [WireEquiv.append_apply_left]
-              rfl
-            · intro localSignature localWire
-              dsimp only [ambient, sourceLeft, targetLeft]
-              simp only [Region.conjoinLeftWire,
-                Region.conjoinRightWire, Var.appendMap_right]
-              change ((WireEquiv.refl outer).append localSwap)
-                (Var.appendRight outer
-                  (localWire.appendLeft rightLocals)) =
-                    Var.appendRight outer
-                      (Var.appendRight rightLocals localWire)
-              rw [WireEquiv.append_apply_right]
-              dsimp only [localSwap, WireEquiv.swap]
-              rw [Var.appendMap_left]
-          have rightCommutes : ∀ {signature}
-              (wire : Var (outer ++ rightLocals) signature),
-              ambient (sourceRight wire) = targetRight wire := by
-            intro signature wire
-            apply Var.appendCases (left := outer) (right := rightLocals)
-              (motive := fun wire =>
-                ambient (sourceRight wire) = targetRight wire)
-            · intro inheritedSignature inherited
-              dsimp only [ambient, sourceRight, targetRight]
-              simp only [Region.conjoinLeftWire,
-                Region.conjoinRightWire, Var.appendMap_left]
-              change ((WireEquiv.refl outer).append localSwap)
-                (inherited.appendLeft (leftLocals ++ rightLocals)) =
-                  inherited.appendLeft (rightLocals ++ leftLocals)
-              rw [WireEquiv.append_apply_left]
-              rfl
-            · intro localSignature localWire
-              dsimp only [ambient, sourceRight, targetRight]
-              simp only [Region.conjoinLeftWire,
-                Region.conjoinRightWire, Var.appendMap_right]
-              change ((WireEquiv.refl outer).append localSwap)
-                (Var.appendRight outer
-                  (Var.appendRight leftLocals localWire)) =
-                    Var.appendRight outer
-                      (localWire.appendLeft leftLocals)
-              rw [WireEquiv.append_apply_right]
-              dsimp only [localSwap, WireEquiv.swap]
-              rw [Var.appendMap_right]
-          let leftIso := ItemSeqIso.renameWires leftItems sourceLeft
-            targetLeft ambient leftCommutes
-          let rightIso := ItemSeqIso.renameWires rightItems sourceRight
-            targetRight ambient rightCommutes
-          let reordered := (ItemSeqIso.append leftIso rightIso).trans
-            (ItemSeqIso.swapAppend
-              (leftItems.renameWires targetLeft)
-              (rightItems.renameWires targetRight))
-          refine .mk localSwap ?_
-          exact reordered.castAmbient (WireEquiv.trans_refl ambient)
 private def appendHostWire (outer hostLocals : List Sig) :
     WireRenaming outer (outer ++ hostLocals) :=
   ⟨fun wire => wire.appendLeft hostLocals⟩
@@ -1604,88 +1445,6 @@ private theorem conjoin_eq_adjoinRename
             Region.locals, Region.items, ItemSeq.renameWires_comp,
             Region.adjoinHostWire]
           rw [materialMap]
-
-private theorem renameWires_conjoin
-    (first second : Region sourceWires)
-    (rename : WireRenaming sourceWires targetWires) :
-    (first.conjoin second).renameWires rename =
-      (first.renameWires rename).conjoin (second.renameWires rename) := by
-  cases first with
-  | mk firstLocals firstItems =>
-      cases second with
-      | mk secondLocals secondItems =>
-          have firstMap : WireRenaming.comp
-              (rename.appendRight (firstLocals ++ secondLocals))
-              (Region.conjoinLeftWire sourceWires firstLocals secondLocals) =
-            WireRenaming.comp
-              (Region.conjoinLeftWire targetWires firstLocals secondLocals)
-              (rename.appendRight firstLocals) := by
-            apply WireRenaming.ext
-            intro signature wire
-            apply Var.appendCases (left := sourceWires)
-              (right := firstLocals)
-              (motive := fun wire =>
-                WireRenaming.comp
-                    (rename.appendRight (firstLocals ++ secondLocals))
-                    (Region.conjoinLeftWire sourceWires firstLocals
-                      secondLocals) wire =
-                  WireRenaming.comp
-                    (Region.conjoinLeftWire targetWires firstLocals
-                      secondLocals)
-                    (rename.appendRight firstLocals) wire)
-            · intro inheritedSignature inherited
-              simp [WireRenaming.comp, WireRenaming.appendRight,
-                Region.conjoinLeftWire]
-            · intro localSignature localWire
-              simp [WireRenaming.comp, WireRenaming.appendRight,
-                Region.conjoinLeftWire]
-          have secondMap : WireRenaming.comp
-              (rename.appendRight (firstLocals ++ secondLocals))
-              (Region.conjoinRightWire sourceWires firstLocals secondLocals) =
-            WireRenaming.comp
-              (Region.conjoinRightWire targetWires firstLocals secondLocals)
-              (rename.appendRight secondLocals) := by
-            apply WireRenaming.ext
-            intro signature wire
-            apply Var.appendCases (left := sourceWires)
-              (right := secondLocals)
-              (motive := fun wire =>
-                WireRenaming.comp
-                    (rename.appendRight (firstLocals ++ secondLocals))
-                    (Region.conjoinRightWire sourceWires firstLocals
-                      secondLocals) wire =
-                  WireRenaming.comp
-                    (Region.conjoinRightWire targetWires firstLocals
-                      secondLocals)
-                    (rename.appendRight secondLocals) wire)
-            · intro inheritedSignature inherited
-              simp [WireRenaming.comp, WireRenaming.appendRight,
-                Region.conjoinRightWire]
-            · intro localSignature localWire
-              simp [WireRenaming.comp, WireRenaming.appendRight,
-                Region.conjoinRightWire]
-          simp only [Region.conjoin, Region.renameWires,
-            ItemSeq.renameWires_append, ItemSeq.renameWires_comp]
-          rw [firstMap, secondMap]
-
-private noncomputable def renameWiresConjoinIso
-    (first second : Region sourceWires)
-    (rename : WireRenaming sourceWires targetWires) :
-    RegionIso (WireEquiv.refl targetWires)
-      ((first.conjoin second).renameWires rename)
-      ((first.renameWires rename).conjoin (second.renameWires rename)) := by
-  rw [renameWires_conjoin]
-  exact RegionIso.refl _
-
-private noncomputable def renameWiresCompIso
-    (region : Region sourceWires)
-    (first : WireRenaming sourceWires middleWires)
-    (second : WireRenaming middleWires targetWires) :
-    RegionIso (WireEquiv.refl targetWires)
-      ((region.renameWires first).renameWires second)
-      (region.renameWires (WireRenaming.comp second first)) := by
-  rw [Region.renameWires_comp]
-  exact RegionIso.refl _
 
 private noncomputable def instantiateRenameIso
     (pattern : OpenDiagram arguments)
@@ -1993,206 +1752,6 @@ private noncomputable def presentationOccurrence
         occurrence.sourceExternalTwoEnded afterExternalTwoEnded
         (DiagramContext.fillIso occurrence.context presentation))
   }
-
-private def adjoinMaterialEquiv
-    (outer hostLocals addedLocals : List Sig) :
-    WireEquiv ((outer ++ hostLocals) ++ addedLocals)
-      (outer ++ (hostLocals ++ addedLocals)) where
-  toRenaming := Region.adjoinMaterialWire outer hostLocals addedLocals
-  invRenaming := ⟨Var.appendMap
-    (fun wire => (wire.appendLeft hostLocals).appendLeft addedLocals)
-    (fun wire => Var.appendMap
-      (fun hostWire =>
-        (Var.appendRight outer hostWire).appendLeft addedLocals)
-      (fun addedWire => Var.appendRight (outer ++ hostLocals) addedWire)
-      wire)⟩
-  left_inv := by
-    intro signature wire
-    apply Var.appendCases (left := outer ++ hostLocals)
-      (right := addedLocals)
-      (motive := fun wire =>
-        Var.appendMap
-          (fun wire => (wire.appendLeft hostLocals).appendLeft addedLocals)
-          (fun wire => Var.appendMap
-            (fun hostWire =>
-              (Var.appendRight outer hostWire).appendLeft addedLocals)
-            (fun addedWire =>
-              Var.appendRight (outer ++ hostLocals) addedWire)
-            wire)
-          (Region.adjoinMaterialWire outer hostLocals addedLocals wire) =
-            wire)
-    · intro inheritedSignature inherited
-      apply Var.appendCases (left := outer) (right := hostLocals)
-        (motive := fun inherited =>
-          Var.appendMap
-            (fun wire => (wire.appendLeft hostLocals).appendLeft addedLocals)
-            (fun wire => Var.appendMap
-              (fun hostWire =>
-                (Var.appendRight outer hostWire).appendLeft addedLocals)
-              (fun addedWire =>
-                Var.appendRight (outer ++ hostLocals) addedWire)
-              wire)
-            (Region.adjoinMaterialWire outer hostLocals addedLocals
-              (inherited.appendLeft addedLocals)) =
-                inherited.appendLeft addedLocals)
-      · intro outerSignature outerWire
-        simp [Region.adjoinMaterialWire]
-      · intro hostSignature hostWire
-        simp [Region.adjoinMaterialWire]
-    · intro addedSignature addedWire
-      simp [Region.adjoinMaterialWire]
-  right_inv := by
-    intro signature wire
-    apply Var.appendCases (left := outer)
-      (right := hostLocals ++ addedLocals)
-      (motive := fun wire =>
-        Region.adjoinMaterialWire outer hostLocals addedLocals
-          (Var.appendMap
-            (fun wire => (wire.appendLeft hostLocals).appendLeft addedLocals)
-            (fun wire => Var.appendMap
-              (fun hostWire =>
-                (Var.appendRight outer hostWire).appendLeft addedLocals)
-              (fun addedWire =>
-                Var.appendRight (outer ++ hostLocals) addedWire)
-              wire)
-            wire) = wire)
-    · intro outerSignature outerWire
-      simp [Region.adjoinMaterialWire]
-    · intro localSignature localWire
-      apply Var.appendCases (left := hostLocals) (right := addedLocals)
-        (motive := fun localWire =>
-          Region.adjoinMaterialWire outer hostLocals addedLocals
-            (Var.appendMap
-              (fun wire => (wire.appendLeft hostLocals).appendLeft addedLocals)
-              (fun wire => Var.appendMap
-                (fun hostWire =>
-                  (Var.appendRight outer hostWire).appendLeft addedLocals)
-                (fun addedWire =>
-                  Var.appendRight (outer ++ hostLocals) addedWire)
-                wire)
-              (Var.appendRight outer localWire)) =
-                Var.appendRight outer localWire)
-      · intro hostSignature hostWire
-        simp [Region.adjoinMaterialWire]
-      · intro addedSignature addedWire
-        simp [Region.adjoinMaterialWire]
-
-/-- Lift a material presentation through the exact retained-local prefix of
-an instantiation result. This is the binder-preserving presentation used by
-the recursive equality fold under `RegionResult.mk`. -/
-private noncomputable def adjoinAtIso
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    {before after : Region (outer ++ hostLocals)}
-    (material : RegionIso (WireEquiv.refl (outer ++ hostLocals))
-      before after) :
-    RegionIso (WireEquiv.refl outer)
-      (Region.adjoinAt hostLocals hostItems before)
-      (Region.adjoinAt hostLocals hostItems after) := by
-  cases material with
-  | @mk _ _ sourceLocals targetLocals _ sourceItems targetItems
-      localIso itemIso =>
-      let localAmbient := (WireEquiv.refl hostLocals).append localIso
-      let ambient := (WireEquiv.refl outer).append localAmbient
-      let sourceAssoc := adjoinMaterialEquiv outer hostLocals sourceLocals
-      let targetAssoc := adjoinMaterialEquiv outer hostLocals targetLocals
-      have sourceBack : ItemSeqIso sourceAssoc.symm
-          (sourceItems.renameWires
-            (Region.adjoinMaterialWire outer hostLocals sourceLocals))
-          sourceItems := by
-        let raw := ItemSeqIso.renameWires sourceItems
-          (Region.adjoinMaterialWire outer hostLocals sourceLocals)
-          WireRenaming.id sourceAssoc.symm (by
-            intro signature wire
-            exact sourceAssoc.left_inv wire)
-        simpa only [ItemSeq.renameWires_id] using raw
-      have targetForward : ItemSeqIso targetAssoc targetItems
-          (targetItems.renameWires
-            (Region.adjoinMaterialWire outer hostLocals targetLocals)) := by
-        let raw := ItemSeqIso.renameWires targetItems WireRenaming.id
-          (Region.adjoinMaterialWire outer hostLocals targetLocals)
-          targetAssoc (by
-            intro signature wire
-            rfl)
-        simpa only [ItemSeq.renameWires_id] using raw
-      let materialItems := (sourceBack.trans itemIso).trans targetForward
-      have assocCommutes : ∀ {signature}
-          (wire : Var ((outer ++ hostLocals) ++ sourceLocals) signature),
-          targetAssoc
-              (((WireEquiv.refl (outer ++ hostLocals)).append localIso) wire) =
-            ambient (sourceAssoc wire) := by
-        intro signature wire
-        apply Var.appendCases (left := outer ++ hostLocals)
-          (right := sourceLocals)
-          (motive := fun wire =>
-            targetAssoc
-                (((WireEquiv.refl (outer ++ hostLocals)).append localIso)
-                  wire) =
-              ambient (sourceAssoc wire))
-        · intro inheritedSignature inherited
-          apply Var.appendCases (left := outer) (right := hostLocals)
-            (motive := fun inherited =>
-              targetAssoc
-                  (((WireEquiv.refl (outer ++ hostLocals)).append localIso)
-                    (inherited.appendLeft sourceLocals)) =
-                ambient (sourceAssoc
-                  (inherited.appendLeft sourceLocals)))
-          · intro outerSignature outerWire
-            simp [sourceAssoc, targetAssoc, adjoinMaterialEquiv, ambient,
-              localAmbient, Region.adjoinMaterialWire]
-          · intro hostSignature hostWire
-            simp [sourceAssoc, targetAssoc, adjoinMaterialEquiv, ambient,
-              localAmbient, Region.adjoinMaterialWire]
-        · intro localSignature localWire
-          simp [sourceAssoc, targetAssoc, adjoinMaterialEquiv, ambient,
-            localAmbient, Region.adjoinMaterialWire]
-      have materialAmbient :
-          (sourceAssoc.symm.trans
-            ((WireEquiv.refl (outer ++ hostLocals)).append localIso)).trans
-              targetAssoc = ambient := by
-        apply WireEquiv.ext
-        intro signature wire
-        let original := sourceAssoc.symm wire
-        calc
-          ((sourceAssoc.symm.trans
-              ((WireEquiv.refl (outer ++ hostLocals)).append localIso)).trans
-                targetAssoc) wire =
-              targetAssoc
-                (((WireEquiv.refl (outer ++ hostLocals)).append localIso)
-                  original) := rfl
-          _ = ambient (sourceAssoc original) := assocCommutes original
-          _ = ambient wire := congrArg (fun mapped => ambient mapped)
-            (sourceAssoc.right_inv wire)
-      have materialItems' : ItemSeqIso ambient
-          (sourceItems.renameWires
-            (Region.adjoinMaterialWire outer hostLocals sourceLocals))
-          (targetItems.renameWires
-            (Region.adjoinMaterialWire outer hostLocals targetLocals)) :=
-        materialItems.castAmbient materialAmbient
-      have hostIso : ItemSeqIso ambient
-          (hostItems.renameWires
-            (Region.adjoinHostWire outer hostLocals sourceLocals))
-          (hostItems.renameWires
-            (Region.adjoinHostWire outer hostLocals targetLocals)) := by
-        apply ItemSeqIso.renameWires hostItems
-          (Region.adjoinHostWire outer hostLocals sourceLocals)
-          (Region.adjoinHostWire outer hostLocals targetLocals) ambient
-        intro signature wire
-        apply Var.appendCases (left := outer) (right := hostLocals)
-          (motive := fun wire =>
-            ((WireEquiv.refl outer).append
-              ((WireEquiv.refl hostLocals).append localIso))
-                (Region.adjoinHostWire outer hostLocals sourceLocals wire) =
-              Region.adjoinHostWire outer hostLocals targetLocals wire)
-        · intro inheritedSignature inherited
-          apply Var.eq_of_index_eq
-          apply Fin.ext
-          simp [Region.adjoinHostWire, Region.conjoinLeftWire]
-        · intro localSignature localWire
-          apply Var.eq_of_index_eq
-          apply Fin.ext
-          simp [Region.adjoinHostWire, Region.conjoinLeftWire]
-      refine .mk localAmbient ?_
-      simpa only [ambient] using ItemSeqIso.append hostIso materialItems'
 
 private theorem pinStep
     {boundary holeWires locals : List Sig}
@@ -2880,7 +2439,7 @@ private noncomputable def supportedAdjoinOccurrence
         (Nat.lt_of_lt_of_le hostPositive afterSublist.length_le)
     exact ⟨fun _ => afterNonempty, fun _ => beforeNonempty⟩
   exact presentationOccurrence occurrence targetLocalCanonical sameNonempty
-    (adjoinAtIso hostLocals hostItems presentation)
+    (RegionIso.adjoinAt hostLocals hostItems presentation)
 
 private theorem supportedAdjoinValidity
     {boundary outer : List Sig}
@@ -2926,176 +2485,16 @@ private theorem supportedAdjoinValidity
   exact ⟨replacement.1,
     sourceEndpoint.externalTwoEnded_of_nonempty_iff _ replacement.2⟩
 
-private def extendHostItems
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (leading : Region (outer ++ hostLocals)) :
-    ItemSeq (outer ++ (hostLocals ++ leading.locals)) :=
-  (hostItems.renameWires
-    (Region.adjoinHostWire outer hostLocals leading.locals)).append
-  (leading.items.renameWires
-    (Region.adjoinMaterialWire outer hostLocals leading.locals))
-
-/-- Flatten one leading material block into the retained host. The resulting
-region is exactly the host shape consumed by one selected-site exposure. -/
-private noncomputable def adjoinAssocIso
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (first second : Region (outer ++ hostLocals)) :
-    RegionIso (WireEquiv.refl outer)
-      (Region.adjoinAt hostLocals hostItems (first.conjoin second))
-      (Region.adjoinAt (hostLocals ++ first.locals)
-        (extendHostItems hostLocals hostItems first)
-        (second.renameWires
-          (Region.adjoinHostWire outer hostLocals first.locals))) := by
-  cases first with
-  | mk firstLocals firstItems =>
-      cases second with
-      | mk secondLocals secondItems =>
-          let sourceHost := Region.adjoinHostWire outer hostLocals
-            (firstLocals ++ secondLocals)
-          let sourceFirst := WireRenaming.comp
-            (Region.adjoinMaterialWire outer hostLocals
-              (firstLocals ++ secondLocals))
-            (Region.conjoinLeftWire (outer ++ hostLocals) firstLocals
-              secondLocals)
-          let sourceSecond := WireRenaming.comp
-            (Region.adjoinMaterialWire outer hostLocals
-              (firstLocals ++ secondLocals))
-            (Region.conjoinRightWire (outer ++ hostLocals) firstLocals
-              secondLocals)
-          let targetPrefix := Region.adjoinHostWire outer
-            (hostLocals ++ firstLocals) secondLocals
-          let targetHost := WireRenaming.comp targetPrefix
-            (Region.adjoinHostWire outer hostLocals firstLocals)
-          let targetFirst := WireRenaming.comp targetPrefix
-            (Region.adjoinMaterialWire outer hostLocals firstLocals)
-          let targetSecond := WireRenaming.comp
-            (Region.adjoinMaterialWire outer
-              (hostLocals ++ firstLocals) secondLocals)
-            ((Region.adjoinHostWire outer hostLocals firstLocals).appendRight
-              secondLocals)
-          let localsIso := WireEquiv.ofEq
-            (List.append_assoc hostLocals firstLocals secondLocals).symm
-          let ambient := (WireEquiv.refl outer).append localsIso
-          have maps :
-              (∀ {signature} (wire : Var (outer ++ hostLocals) signature),
-                ambient (sourceHost wire) = targetHost wire) ∧
-              (∀ {signature}
-                (wire : Var ((outer ++ hostLocals) ++ firstLocals)
-                  signature),
-                ambient (sourceFirst wire) = targetFirst wire) ∧
-              (∀ {signature}
-                (wire : Var ((outer ++ hostLocals) ++ secondLocals)
-                  signature),
-                ambient (sourceSecond wire) = targetSecond wire) := by
-            constructor
-            · intro signature wire
-              apply Var.appendCases (left := outer) (right := hostLocals)
-                (motive := fun wire =>
-                  ambient (sourceHost wire) = targetHost wire)
-              · intro inheritedSignature inherited
-                apply Var.eq_of_index_eq
-                apply Fin.ext
-                simp [ambient, localsIso, sourceHost, targetHost,
-                  targetPrefix, WireRenaming.comp,
-                  Region.adjoinHostWire, Region.conjoinLeftWire]
-              · intro localSignature localWire
-                apply Var.eq_of_index_eq
-                apply Fin.ext
-                simp [ambient, localsIso, sourceHost, targetHost,
-                  targetPrefix, WireRenaming.comp,
-                  Region.adjoinHostWire, Region.conjoinLeftWire]
-            constructor
-            · intro signature wire
-              apply Var.appendCases (left := outer ++ hostLocals)
-                (right := firstLocals)
-                (motive := fun wire =>
-                  ambient (sourceFirst wire) = targetFirst wire)
-              · intro inheritedSignature inherited
-                apply Var.appendCases (left := outer) (right := hostLocals)
-                  (motive := fun inherited =>
-                    ambient (sourceFirst
-                        (inherited.appendLeft firstLocals)) =
-                      targetFirst (inherited.appendLeft firstLocals))
-                · intro outerSignature outerWire
-                  apply Var.eq_of_index_eq
-                  apply Fin.ext
-                  simp [ambient, localsIso, sourceFirst, targetFirst,
-                    targetPrefix, WireRenaming.comp,
-                    Region.adjoinMaterialWire, Region.adjoinHostWire,
-                    Region.conjoinLeftWire]
-                · intro hostSignature hostWire
-                  apply Var.eq_of_index_eq
-                  apply Fin.ext
-                  simp [ambient, localsIso, sourceFirst, targetFirst,
-                    targetPrefix, WireRenaming.comp,
-                    Region.adjoinMaterialWire, Region.adjoinHostWire,
-                    Region.conjoinLeftWire]
-              · intro localSignature localWire
-                apply Var.eq_of_index_eq
-                apply Fin.ext
-                simp [ambient, localsIso, sourceFirst, targetFirst,
-                  targetPrefix, WireRenaming.comp,
-                  Region.adjoinMaterialWire, Region.adjoinHostWire,
-                  Region.conjoinLeftWire]
-            · intro signature wire
-              apply Var.appendCases (left := outer ++ hostLocals)
-                (right := secondLocals)
-                (motive := fun wire =>
-                  ambient (sourceSecond wire) = targetSecond wire)
-              · intro inheritedSignature inherited
-                apply Var.appendCases (left := outer) (right := hostLocals)
-                  (motive := fun inherited =>
-                    ambient (sourceSecond
-                        (inherited.appendLeft secondLocals)) =
-                      targetSecond (inherited.appendLeft secondLocals))
-                · intro outerSignature outerWire
-                  apply Var.eq_of_index_eq
-                  apply Fin.ext
-                  simp [ambient, localsIso, sourceSecond, targetSecond,
-                    WireRenaming.comp, WireRenaming.appendRight,
-                    Region.adjoinMaterialWire, Region.adjoinHostWire,
-                    Region.conjoinLeftWire, Region.conjoinRightWire]
-                · intro hostSignature hostWire
-                  apply Var.eq_of_index_eq
-                  apply Fin.ext
-                  simp [ambient, localsIso, sourceSecond, targetSecond,
-                    WireRenaming.comp, WireRenaming.appendRight,
-                    Region.adjoinMaterialWire, Region.adjoinHostWire,
-                    Region.conjoinLeftWire, Region.conjoinRightWire]
-              · intro localSignature localWire
-                apply Var.eq_of_index_eq
-                apply Fin.ext
-                simp [ambient, localsIso, sourceSecond, targetSecond,
-                  WireRenaming.comp, WireRenaming.appendRight,
-                  Region.adjoinMaterialWire, Region.adjoinHostWire,
-                  Region.conjoinLeftWire, Region.conjoinRightWire]
-                omega
-          let hostIso := ItemSeqIso.renameWires hostItems sourceHost
-            targetHost ambient maps.1
-          let firstIso := ItemSeqIso.renameWires firstItems sourceFirst
-            targetFirst ambient maps.2.1
-          let secondIso := ItemSeqIso.renameWires secondItems sourceSecond
-            targetSecond ambient maps.2.2
-          let combined := ItemSeqIso.append
-            (ItemSeqIso.append hostIso firstIso) secondIso
-          refine .mk localsIso ?_
-          simpa only [Region.adjoinAt, Region.conjoin, Region.renameWires,
-            Region.locals, Region.items, ItemSeq.renameWires_append,
-            ItemSeq.renameWires_comp, ItemSeq.append_assoc, extendHostItems,
-            sourceHost, sourceFirst, sourceSecond,
-            targetPrefix, targetHost, targetFirst, targetSecond, ambient]
-            using combined
-
 private theorem extendHostCanonical
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
     (leading : Region (outer ++ hostLocals))
     (hostCanonical : (Region.mk hostLocals hostItems).Canonical)
     (leadingCanonical : leading.Canonical) :
     (Region.mk (hostLocals ++ leading.locals)
-      (extendHostItems hostLocals hostItems leading)).Canonical := by
+      (Region.extendHostItems hostLocals hostItems leading)).Canonical := by
   cases leading with
   | mk leadingLocals leadingItems =>
-      simpa only [Region.adjoinAt, extendHostItems, Region.locals,
+      simpa only [Region.adjoinAt, Region.extendHostItems, Region.locals,
         Region.items] using
         Region.Canonical.adjoinAt hostLocals hostItems
           (Region.mk leadingLocals leadingItems) hostCanonical
@@ -3108,7 +2507,7 @@ private theorem extendHost_incidence_nonempty
       (Region.mk hostLocals hostItems).incidencePaths wire.index.val ≠ [])
     {signature} (wire : Var outer signature) :
     (Region.mk (hostLocals ++ leading.locals)
-      (extendHostItems hostLocals hostItems leading)).incidencePaths
+      (Region.extendHostItems hostLocals hostItems leading)).incidencePaths
         wire.index.val ≠ [] := by
   cases leading with
   | mk leadingLocals leadingItems =>
@@ -3116,7 +2515,7 @@ private theorem extendHost_incidence_nonempty
         hostLocals hostItems (Region.mk leadingLocals leadingItems) wire
       have positive := List.length_pos_iff.mpr (hostNonempty wire)
       have targetPositive := Nat.lt_of_lt_of_le positive sublist.length_le
-      simpa only [Region.adjoinAt, extendHostItems, Region.locals,
+      simpa only [Region.adjoinAt, Region.extendHostItems, Region.locals,
         Region.items] using
         (List.length_pos_iff.mp targetPositive)
 
@@ -3134,10 +2533,10 @@ private noncomputable def flattenAdjoinOccurrence
     (secondCanonical : second.Canonical) :
     Occurrence
       (Region.adjoinAt (hostLocals ++ first.locals)
-        (extendHostItems hostLocals hostItems first)
+        (Region.extendHostItems hostLocals hostItems first)
         (second.renameWires
           (Region.adjoinHostWire outer hostLocals first.locals))) source := by
-  let nextHostItems := extendHostItems hostLocals hostItems first
+  let nextHostItems := Region.extendHostItems hostLocals hostItems first
   have nextHostCanonical :
       (Region.mk (hostLocals ++ first.locals) nextHostItems).Canonical :=
     extendHostCanonical hostLocals hostItems first hostCanonical firstCanonical
@@ -3176,72 +2575,7 @@ private noncomputable def flattenAdjoinOccurrence
     exact ⟨fun _ => List.length_pos_iff.mp afterPositive,
       fun _ => List.length_pos_iff.mp beforePositive⟩
   exact presentationOccurrence occurrence targetLocalCanonical sameNonempty
-    (adjoinAssocIso hostLocals hostItems first second)
-
-private theorem renameWires_adjoinAt_nil
-    {common locals outer : List Sig}
-    (child : Region (common ++ locals))
-    (rename : WireRenaming common outer) :
-    (Region.adjoinAt locals .nil child).renameWires rename =
-      Region.adjoinAt locals .nil
-        (child.renameWires (rename.appendRight locals)) := by
-  cases child with
-  | mk childLocals childItems =>
-      simp only [Region.renameWires, Region.adjoinAt, ItemSeq.renameWires,
-        ItemSeq.nil_append]
-      rw [ItemSeq.renameWires_comp, ItemSeq.renameWires_comp]
-      have mapEq :
-          WireRenaming.comp (rename.appendRight (locals ++ childLocals))
-              (Region.adjoinMaterialWire common locals childLocals) =
-            WireRenaming.comp
-              (Region.adjoinMaterialWire outer locals childLocals)
-              ((rename.appendRight locals).appendRight childLocals) := by
-        apply WireRenaming.ext
-        intro signature wire
-        apply Var.appendCases (left := common ++ locals)
-          (right := childLocals)
-          (motive := fun wire =>
-            WireRenaming.comp (rename.appendRight (locals ++ childLocals))
-                (Region.adjoinMaterialWire common locals childLocals) wire =
-              WireRenaming.comp
-                (Region.adjoinMaterialWire outer locals childLocals)
-                ((rename.appendRight locals).appendRight childLocals) wire)
-        · intro inheritedSignature inherited
-          apply Var.appendCases (left := common) (right := locals)
-            (motive := fun inherited =>
-              WireRenaming.comp (rename.appendRight (locals ++ childLocals))
-                  (Region.adjoinMaterialWire common locals childLocals)
-                  (inherited.appendLeft childLocals) =
-                WireRenaming.comp
-                  (Region.adjoinMaterialWire outer locals childLocals)
-                  ((rename.appendRight locals).appendRight childLocals)
-                  (inherited.appendLeft childLocals))
-          · intro inheritedSignature inherited
-            simp [WireRenaming.comp, WireRenaming.appendRight,
-              Region.adjoinMaterialWire]
-          · intro localSignature localWire
-            simp [WireRenaming.comp, WireRenaming.appendRight,
-              Region.adjoinMaterialWire]
-        · intro childSignature childWire
-          simp [WireRenaming.comp, WireRenaming.appendRight,
-            Region.adjoinMaterialWire]
-      rw [mapEq]
-
-private noncomputable def renameWiresAdjoinAtNilIso
-    {common locals outer : List Sig}
-    (child : Region (common ++ locals))
-    (rename : WireRenaming common outer) :
-    RegionIso (WireEquiv.refl outer)
-      ((Region.adjoinAt locals .nil child).renameWires rename)
-      (Region.adjoinAt locals .nil
-        (child.renameWires (rename.appendRight locals))) := by
-  rw [renameWires_adjoinAt_nil]
-  exact RegionIso.refl _
-
-private def hostedMaterial
-    (hostItems : ItemSeq wires)
-    (material : Region wires) : Region wires :=
-  (Region.ofItems hostItems).conjoin material
+    (RegionIso.adjoinAtConjoinLeft hostLocals hostItems first second)
 
 private theorem identityBoundaryMaterial_scope
     (pattern : OpenDiagram arguments)
@@ -3262,158 +2596,6 @@ private theorem identityBoundaryMaterial_scope
   · intro signature wire sourceRoot
     rw [instantiate_rootedTwo_iff] at sourceRoot ⊢
     exact sourceRoot
-
-private theorem hostedMaterial_scope
-    (hostItems : ItemSeq wires)
-    (sourceMaterial targetMaterial : Region wires)
-    (materialScope : ScopePreservation sourceMaterial targetMaterial) :
-    ScopePreservation
-      (hostedMaterial hostItems sourceMaterial)
-      (hostedMaterial hostItems targetMaterial) := by
-  let host := Region.ofItems hostItems
-  have combined := Region.conjoin_preserves_scope
-    host sourceMaterial host targetMaterial
-    (fun canonical => canonical) materialScope.canonical
-    (fun _ => Iff.rfl) materialScope.incidenceNonempty
-    (fun _ rooted => rooted) materialScope.rootedTwo
-  exact {
-    canonical := combined.1
-    incidenceNonempty := fun wire => (combined.2 wire).1
-    rootedTwo := fun wire => (combined.2 wire).2
-  }
-
-private theorem adjoinAt_hostedMaterial
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (material : Region (outer ++ hostLocals)) :
-    Region.adjoinAt hostLocals hostItems material =
-      Region.adjoinAt hostLocals .nil
-        (hostedMaterial hostItems material) := by
-  cases material with
-  | mk materialLocals materialItems =>
-      let appendNil : WireRenaming (outer ++ hostLocals)
-          ((outer ++ hostLocals) ++ []) :=
-        ⟨fun wire => wire.appendLeft []⟩
-      have hostMap : WireRenaming.comp
-          (Region.adjoinMaterialWire outer hostLocals materialLocals)
-          (WireRenaming.comp
-            (Region.conjoinLeftWire (outer ++ hostLocals) [] materialLocals)
-            appendNil) =
-          Region.adjoinHostWire outer hostLocals materialLocals := by
-        apply WireRenaming.ext
-        intro signature wire
-        apply Var.appendCases (left := outer) (right := hostLocals)
-          (motive := fun wire =>
-            WireRenaming.comp
-                (Region.adjoinMaterialWire outer hostLocals materialLocals)
-                (WireRenaming.comp
-                  (Region.conjoinLeftWire (outer ++ hostLocals) []
-                    materialLocals) appendNil) wire =
-              Region.adjoinHostWire outer hostLocals materialLocals wire)
-        · intro inheritedSignature inherited
-          simp [WireRenaming.comp, appendNil, Region.conjoinLeftWire,
-            Region.adjoinMaterialWire, Region.adjoinHostWire]
-        · intro localSignature localWire
-          simp [WireRenaming.comp, appendNil, Region.conjoinLeftWire,
-            Region.adjoinMaterialWire, Region.adjoinHostWire]
-      have materialMap : WireRenaming.comp
-          (Region.adjoinMaterialWire outer hostLocals materialLocals)
-          (Region.conjoinRightWire (outer ++ hostLocals) [] materialLocals) =
-          Region.adjoinMaterialWire outer hostLocals materialLocals := by
-        apply WireRenaming.ext
-        intro signature wire
-        apply Var.appendCases (left := outer ++ hostLocals)
-          (right := materialLocals)
-          (motive := fun wire =>
-            WireRenaming.comp
-                (Region.adjoinMaterialWire outer hostLocals materialLocals)
-                (Region.conjoinRightWire (outer ++ hostLocals) []
-                  materialLocals) wire =
-              Region.adjoinMaterialWire outer hostLocals materialLocals wire)
-        · intro inheritedSignature inherited
-          simp [WireRenaming.comp, Region.conjoinRightWire,
-            Region.adjoinMaterialWire]
-        · intro localSignature localWire
-          apply Var.eq_of_index_eq
-          apply Fin.ext
-          simp [WireRenaming.comp, Region.conjoinRightWire,
-            Region.adjoinMaterialWire]
-          simpa only [List.length_nil, Nat.zero_add] using
-            (Var.index_appendRight ([] : List Sig) localWire)
-      simp only [hostedMaterial, Region.ofItems, Region.conjoin,
-        Region.adjoinAt, ItemSeq.renameWires_append,
-        ItemSeq.renameWires_comp, ItemSeq.renameWires,
-        ItemSeq.nil_append, List.nil_append]
-      rw [hostMap, materialMap]
-
-private theorem adjoinAt_preserves_scope
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (sourceMaterial targetMaterial : Region (outer ++ hostLocals))
-    (materialScope : ScopePreservation sourceMaterial targetMaterial) :
-    ScopePreservation
-      (Region.adjoinAt hostLocals hostItems sourceMaterial)
-      (Region.adjoinAt hostLocals hostItems targetMaterial) := by
-  let sourceHosted := hostedMaterial hostItems sourceMaterial
-  let targetHosted := hostedMaterial hostItems targetMaterial
-  have sourceEq : Region.adjoinAt hostLocals hostItems sourceMaterial =
-      Region.adjoinAt hostLocals .nil sourceHosted := by
-    simpa only [sourceHosted] using
-      adjoinAt_hostedMaterial hostLocals hostItems sourceMaterial
-  have targetEq : Region.adjoinAt hostLocals hostItems targetMaterial =
-      Region.adjoinAt hostLocals .nil targetHosted := by
-    simpa only [targetHosted] using
-      adjoinAt_hostedMaterial hostLocals hostItems targetMaterial
-  have hostedScope : ScopePreservation sourceHosted targetHosted := by
-    exact hostedMaterial_scope hostItems sourceMaterial targetMaterial
-      materialScope
-  constructor
-  · intro sourceCanonical
-    have sourceAdjoinedCanonical :
-        (Region.adjoinAt hostLocals .nil sourceHosted).Canonical := by
-      rw [← sourceEq]
-      exact sourceCanonical
-    have sourceHostedCanonical : sourceHosted.Canonical :=
-      Region.Canonical.material_of_adjoinAt hostLocals .nil sourceHosted
-        sourceAdjoinedCanonical
-    have targetHostedCanonical : targetHosted.Canonical :=
-      hostedScope.canonical sourceHostedCanonical
-    rw [targetEq]
-    apply Region.Canonical.adjoinAt_of_material_roots hostLocals .nil
-      targetHosted True.intro targetHostedCanonical
-    intro localIndex
-    let localWire := Var.appendRight outer (Var.ofIndex localIndex)
-    have sourceRoot : RegionPath.RootedTwo
-        (sourceHosted.incidencePaths localWire.index.val) := by
-      simpa [localWire] using
-        Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil
-          sourceHosted sourceAdjoinedCanonical localIndex
-    have targetRoot := hostedScope.rootedTwo localWire sourceRoot
-    simpa [localWire] using targetRoot
-  · intro signature wire
-    let hostedWire := wire.appendLeft hostLocals
-    have sourcePaths := Region.incidencePaths_adjoinAt_nil sourceHosted
-      hostedWire
-    have targetPaths := Region.incidencePaths_adjoinAt_nil targetHosted
-      hostedWire
-    have wireIndex : hostedWire.index.val = wire.index.val := by
-      simp [hostedWire]
-    rw [wireIndex] at sourcePaths targetPaths
-    rw [sourceEq, targetEq, sourcePaths, targetPaths]
-    simpa only [hostedWire, Var.index_appendLeft] using
-      hostedScope.incidenceNonempty hostedWire
-  · intro signature wire sourceRoot
-    let hostedWire := wire.appendLeft hostLocals
-    have sourcePaths := Region.incidencePaths_adjoinAt_nil sourceHosted
-      hostedWire
-    have targetPaths := Region.incidencePaths_adjoinAt_nil targetHosted
-      hostedWire
-    have wireIndex : hostedWire.index.val = wire.index.val := by
-      simp [hostedWire]
-    rw [wireIndex] at sourcePaths targetPaths
-    rw [sourceEq, sourcePaths] at sourceRoot
-    rw [targetEq, targetPaths]
-    simpa only [hostedWire, Var.index_appendLeft] using
-      hostedScope.rootedTwo hostedWire (by
-        simpa only [hostedWire, Var.index_appendLeft] using sourceRoot)
 
 /-- One selected instantiation in its exact inferred retained host is
 bidirectionally equivalent to the same application through the ordered
@@ -3733,7 +2915,7 @@ mutual
         change Occurrence
           ((Region.adjoinAt locals .nil childResult).renameWires rename) source
           at occurrence
-        have sourceEq := renameWires_adjoinAt_nil childResult rename
+        have sourceEq := Region.renameWires_adjoinAt_nil childResult rename
         have childSourceCanonical :
             (Region.adjoinAt locals childHostItems
               (childResult.renameWires childRename)).Canonical := by
@@ -3753,7 +2935,7 @@ mutual
           presentationOccurrence occurrence childSourceCanonical sourceNonempty
             (by
               simpa only [childHostItems, childRename] using
-                renameWiresAdjoinAtNilIso childResult rename)
+                RegionIso.renameWiresAdjoinAtNil childResult rename)
         let normalizedChild :=
           (normalizedItems pattern childEvidence childSites).1
         let targetBefore :=
@@ -3763,7 +2945,7 @@ mutual
           (normalizedChild.renameWires childRename)
         have targetEq : targetBefore = targetAfter := by
           simpa only [targetBefore, targetAfter, childHostItems, childRename] using
-            renameWires_adjoinAt_nil normalizedChild rename
+            Region.renameWires_adjoinAt_nil normalizedChild rename
         change (occurrence.context.fill targetBefore).Canonical at targetCanonical
         change OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
           (occurrence.context.fill targetBefore) at targetExternalTwoEnded
@@ -3808,7 +2990,7 @@ mutual
         have finalBodyIso : RegionIso (WireEquiv.refl outer) targetAfter
             targetBefore := by
           simpa only [targetAfter, targetBefore, childHostItems, childRename] using
-            (renameWiresAdjoinAtNilIso normalizedChild rename).symm
+            (RegionIso.renameWiresAdjoinAtNil normalizedChild rename).symm
         have finalIso : OpenDiagramIso
             (childOccurrence.interface.withBody
               (childOccurrence.context.fill targetAfter)
@@ -4046,7 +3228,7 @@ mutual
             (occurrence.context.holeCanonical _ occurrence.sourceCanonical)
         have sourceMaterialCanonical :
             (itemBefore.conjoin tailBefore).Canonical := by
-          rw [← renameWires_conjoin]
+          rw [← Region.renameWires_conjoin]
           exact sourceBeforeCanonical
         let sourceOccurrence : Occurrence
             (Region.adjoinAt hostLocals hostItems
@@ -4054,7 +3236,7 @@ mutual
           supportedAdjoinOccurrence hostLocals hostItems occurrence hostCanonical
             hostNonempty sourceMaterialCanonical (by
               simpa only [itemBefore, tailBefore] using
-                renameWiresConjoinIso itemResult tailResult rename)
+                RegionIso.renameWiresConjoin itemResult tailResult rename)
         have itemBeforeCanonical :=
           canonical_left_of_conjoin sourceMaterialCanonical
         have tailBeforeCanonical :=
@@ -4085,7 +3267,7 @@ mutual
             (occurrence.context.holeCanonical _ targetCanonical)
         have targetMaterialCanonical :
             (itemAfter.conjoin tailAfter).Canonical := by
-          rw [← renameWires_conjoin]
+          rw [← Region.renameWires_conjoin]
           exact targetBeforeCanonical
         have itemAfterCanonical :=
           canonical_left_of_conjoin targetMaterialCanonical
@@ -4113,7 +3295,8 @@ mutual
         let flattened := flattenAdjoinOccurrence hostLocals hostItems
           itemAfter tailBefore afterItemOccurrence hostCanonical hostNonempty
           itemAfterCanonical tailBeforeCanonical
-        let nextHostItems := extendHostItems hostLocals hostItems itemAfter
+        let nextHostItems := Region.extendHostItems hostLocals hostItems
+          itemAfter
         let hostWire :=
           Region.adjoinHostWire outer hostLocals itemAfter.locals
         let nextRename := WireRenaming.comp
@@ -4144,7 +3327,7 @@ mutual
             nextHostItems flattened nextHostCanonical nextHostNonempty
             alignedTailCanonical (by
               simpa only [tailBefore, hostWire, nextRename] using
-                renameWiresCompIso tailResult rename hostWire)
+                RegionIso.renameWiresComp tailResult rename hostWire)
         have normalizedTailCanonical : normalizedTail.Canonical :=
           (Region.Canonical.renameWires_iff normalizedTail rename).mp
             tailAfterCanonical
@@ -4168,15 +3351,17 @@ mutual
             tailTargetValidity.2
         have finalBodyIso : RegionIso (WireEquiv.refl outer) flatTarget
             (Region.adjoinAt hostLocals hostItems targetBefore) := by
-          exact (adjoinAtIso (hostLocals ++ itemAfter.locals) nextHostItems (by
+          exact (RegionIso.adjoinAt (hostLocals ++ itemAfter.locals)
+            nextHostItems (by
             simpa only [flatTargetMaterial, tailAfter, normalizedTail,
               nextRename, hostWire] using
-                (renameWiresCompIso normalizedTail rename hostWire).symm)).trans
-            ((adjoinAssocIso hostLocals hostItems itemAfter tailAfter).symm.trans
-              (adjoinAtIso hostLocals hostItems (by
+                (RegionIso.renameWiresComp normalizedTail rename hostWire).symm)).trans
+            ((RegionIso.adjoinAtConjoinLeft hostLocals hostItems itemAfter
+              tailAfter).symm.trans
+              (RegionIso.adjoinAt hostLocals hostItems (by
                 simpa only [itemAfter, tailAfter, normalizedHead,
                   normalizedTail, targetBefore] using
-                  (renameWiresConjoinIso normalizedHead normalizedTail rename).symm)))
+                  (RegionIso.renameWiresConjoin normalizedHead normalizedTail rename).symm)))
         have finalIso : OpenDiagramIso flatTargetEndpoint
             (sourceOccurrence.interface.withBody
               (sourceOccurrence.context.fill
@@ -4253,11 +3438,11 @@ mutual
               rw [← tailAfterEq]
               simpa only [itemAfter, tailAfter, normalizedHead,
                 normalizedTail, targetBefore] using
-                (renameWiresConjoinIso normalizedHead normalizedTail
+                (RegionIso.renameWiresConjoin normalizedHead normalizedTail
                   rename).symm
             have finalBodyIso : RegionIso (WireEquiv.refl outer) afterItem
                 (Region.adjoinAt hostLocals hostItems targetBefore) := by
-              exact adjoinAtIso hostLocals hostItems materialIso
+              exact RegionIso.adjoinAt hostLocals hostItems materialIso
             have finalIso : OpenDiagramIso
                 (sourceOccurrence.interface.withBody
                   (sourceOccurrence.context.fill afterItem)
@@ -4316,7 +3501,8 @@ mutual
           let flattened := flattenAdjoinOccurrence hostLocals hostItems
             itemBefore tailBefore sourceOccurrence hostCanonical hostNonempty
             itemBeforeCanonical tailBeforeCanonical
-          let nextHostItems := extendHostItems hostLocals hostItems itemBefore
+          let nextHostItems := Region.extendHostItems hostLocals hostItems
+            itemBefore
           let hostWire :=
             Region.adjoinHostWire outer hostLocals itemBefore.locals
           let nextRename := WireRenaming.comp hostWire rename
@@ -4343,7 +3529,7 @@ mutual
               nextHostItems flattened nextHostCanonical nextHostNonempty
               alignedTailCanonical (by
                 simpa only [tailBefore, hostWire, nextRename] using
-                  renameWiresCompIso tailResult rename hostWire)
+                  RegionIso.renameWiresComp tailResult rename hostWire)
           have normalizedTailCanonical : normalizedTail.Canonical :=
             (Region.Canonical.renameWires_iff normalizedTail rename).mp
               tailAfterCanonical
@@ -4366,18 +3552,18 @@ mutual
               tailTargetValidity.2
           have finalBodyIso : RegionIso (WireEquiv.refl outer) flatTarget
               (Region.adjoinAt hostLocals hostItems targetBefore) := by
-            exact (adjoinAtIso (hostLocals ++ itemBefore.locals)
+            exact (RegionIso.adjoinAt (hostLocals ++ itemBefore.locals)
               nextHostItems (by
                 simpa only [flatTargetMaterial, tailAfter, normalizedTail,
                   nextRename, hostWire] using
-                    (renameWiresCompIso normalizedTail rename hostWire).symm)).trans
-              ((adjoinAssocIso hostLocals hostItems itemBefore
+                    (RegionIso.renameWiresComp normalizedTail rename hostWire).symm)).trans
+              ((RegionIso.adjoinAtConjoinLeft hostLocals hostItems itemBefore
                 tailAfter).symm.trans
-                (adjoinAtIso hostLocals hostItems (by
+                (RegionIso.adjoinAt hostLocals hostItems (by
                   rw [← itemAfterEq]
                   simpa only [itemAfter, tailAfter, normalizedHead,
                     normalizedTail, targetBefore] using
-                    (renameWiresConjoinIso normalizedHead normalizedTail
+                    (RegionIso.renameWiresConjoin normalizedHead normalizedTail
                       rename).symm)))
           have finalIso : OpenDiagramIso flatTargetEndpoint
               (sourceOccurrence.interface.withBody
@@ -4473,11 +3659,11 @@ mutual
       canonical_conjoin tailCanonical itemBeforeCanonical
     let swapped := supportedAdjoinOccurrence hostLocals hostItems occurrence
       hostCanonical hostNonempty swappedCanonical
-      (conjoinSwapIso itemBefore tail)
+      (RegionIso.conjoinComm itemBefore tail)
     let flattened := flattenAdjoinOccurrence hostLocals hostItems tail
       itemBefore swapped hostCanonical hostNonempty tailCanonical
       itemBeforeCanonical
-    let nextHostItems := extendHostItems hostLocals hostItems tail
+    let nextHostItems := Region.extendHostItems hostLocals hostItems tail
     let hostWire := Region.adjoinHostWire outer hostLocals tail.locals
     let nextRename := WireRenaming.comp
       hostWire rename
@@ -4499,7 +3685,7 @@ mutual
       supportedAdjoinOccurrence (hostLocals ++ tail.locals) nextHostItems
         flattened nextHostCanonical nextHostNonempty alignedSourceCanonical (by
           simpa only [itemBefore, hostWire, nextRename] using
-            renameWiresCompIso result rename hostWire)
+            RegionIso.renameWiresComp result rename hostWire)
     let normalized := (normalizedItem pattern evidence sites).1
     have normalizedCanonical : normalized.Canonical :=
       (Region.Canonical.renameWires_iff normalized rename).mp
@@ -4522,12 +3708,14 @@ mutual
     have finalBodyIso : RegionIso (WireEquiv.refl outer) flatTarget
         (Region.adjoinAt hostLocals hostItems
           (itemAfter.conjoin tail)) := by
-      exact (adjoinAtIso (hostLocals ++ tail.locals) nextHostItems (by
+      exact (RegionIso.adjoinAt (hostLocals ++ tail.locals) nextHostItems (by
         simpa only [flatTargetMaterial, itemAfter, normalized, nextRename,
           hostWire] using
-            (renameWiresCompIso normalized rename hostWire).symm)).trans
-        ((adjoinAssocIso hostLocals hostItems tail itemAfter).symm.trans
-          (adjoinAtIso hostLocals hostItems (conjoinSwapIso tail itemAfter)))
+            (RegionIso.renameWiresComp normalized rename hostWire).symm)).trans
+        ((RegionIso.adjoinAtConjoinLeft hostLocals hostItems tail
+          itemAfter).symm.trans
+          (RegionIso.adjoinAt hostLocals hostItems
+            (RegionIso.conjoinComm tail itemAfter)))
     have presentedTargetCanonical :
         (alignedFlattened.context.fill
           (Region.adjoinAt hostLocals hostItems
@@ -4637,7 +3825,7 @@ mutual
         let presentedOccurrence : Occurrence sourceHostAfter source :=
           presentationOccurrence occurrence sourceAfterCanonical
             sourceNonempty
-            (adjoinAtIso hostLocals hostItems
+            (RegionIso.adjoinAt hostLocals hostItems
               (instantiateRenameIso pattern ports rename))
         let targetBefore := Region.adjoinAt hostLocals hostItems
           ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
@@ -4684,7 +3872,7 @@ mutual
         have strict := strictEquates_of_equates presentedOccurrence equivalent
         have finalBodyIso : RegionIso (WireEquiv.refl outer) targetAfter
             targetBefore :=
-          adjoinAtIso hostLocals hostItems
+          RegionIso.adjoinAt hostLocals hostItems
             (instantiateRenameIso (identityBoundary pattern) ports rename).symm
         have finalIso : OpenDiagramIso
             (presentedOccurrence.interface.withBody
