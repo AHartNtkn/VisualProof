@@ -5418,58 +5418,63 @@ private theorem keepHead (head : Var context signature)
       exact .extend (signature :: position) inserted (.cons head variables)
   | trans first second firstIH secondIH => exact firstIH.trans secondIH
 
-/-- Normalize all occurrences of the leading context wire to one leading
-argument, preserving the remaining selection over the tail context. -/
-private theorem factorHead
-    (selection : Vars (signature :: context) arguments) :
-    ∃ (tailArguments : List Sig) (tail : Vars context tailArguments),
-      VarsFactor selection
-        (.cons .here (tail.map fun wire => .there wire)) := by
-  induction selection with
-  | nil =>
-      exact ⟨[], .nil, .extend [] (.here : Var (signature :: context) signature)
-        .nil⟩
-  | @cons selectedSignature rest selected tail induction =>
-      obtain ⟨tailArguments, normalizedTail, tailFactor⟩ := induction
-      cases selected with
-      | here =>
-          let retained : Vars (signature :: context)
-              (signature :: tailArguments) :=
-            .cons .here (normalizedTail.map fun wire => .there wire)
-          exact ⟨tailArguments, normalizedTail,
-            (tailFactor.keepHead
-              (.here : Var (signature :: context) signature)).trans
-              (.contract [] retained)⟩
-      | there tailSelected =>
-          let swapped := TypedPermutation.swapHead selectedSignature signature
-            tailArguments
-          exact ⟨selectedSignature :: tailArguments,
-            .cons tailSelected normalizedTail,
-            (tailFactor.keepHead (.there tailSelected)).trans
-              (.permute swapped
-                (.cons (.there tailSelected)
-                  (.cons .here
-                    (normalizedTail.map fun wire => .there wire))))⟩
+/-- Build a supplied tuple from the empty tuple using extensions only. -/
+private theorem extendFromNil
+    (added : Vars context additions) :
+    VarsFactor (.nil : Vars context []) added := by
+  induction added with
+  | nil => exact .refl .nil
+  | cons head tail induction =>
+      exact (VarsFactor.extend [] head .nil).trans
+        (induction.keepHead head)
 
-/-- Every syntax selection factors to the ordered identity vector.  The proof
-is structural in the source context and never compares substituted site
-wires. -/
-private theorem factorSelection
-    (selection : Vars patternWires supportArguments) :
-    VarsFactor selection
-      (Erasure.Exposure.identityBoundary patternWires) := by
-  induction patternWires generalizing supportArguments with
-  | nil =>
-      cases selection with
-      | nil => exact .refl .nil
-      | cons head tail => exact nomatch head
-  | cons signature context induction =>
-      obtain ⟨tailArguments, tail, headFactor⟩ := factorHead selection
-      let tailRename : WireRenaming context (signature :: context) :=
-        ⟨fun wire => .there wire⟩
-      have tailFactor := (induction tail).natural tailRename
-      exact headFactor.trans
-        (tailFactor.keepHead (.here : Var (signature :: context) signature))
+/-- Append a supplied tuple using projection extensions only.  This is the
+monotone first phase of boundary normalization. -/
+private theorem extendAppend
+    (variables : Vars context arguments)
+    (added : Vars context additions) :
+    VarsFactor variables (Arity.Vars.append variables added) := by
+  induction variables with
+  | nil => exact extendFromNil added
+  | cons head tail induction => exact induction.keepHead head
+
+/-- Remove one extra occurrence from in front of the ordered identity tuple.
+Only permutation and duplicate contraction are used. -/
+private theorem removeIdentityExtra
+    (wire : Var context signature) :
+    VarsFactor
+      (.cons wire (Erasure.Exposure.identityBoundary context))
+      (Erasure.Exposure.identityBoundary context) := by
+  induction wire with
+  | @here signature tail =>
+      exact .contract []
+        (Erasure.Exposure.identityBoundary (signature :: tail))
+  | @there tail signature head wire induction =>
+      let identityTail := Erasure.Exposure.identityBoundary tail
+      let source : Vars (head :: tail) (signature :: head :: tail) :=
+        .cons (.there wire)
+          (.cons .here (identityTail.map fun retained => .there retained))
+      let swapped := TypedPermutation.swapHead signature head tail
+      let tailRename : WireRenaming tail (head :: tail) :=
+        ⟨fun retained => .there retained⟩
+      have removeTail := (induction.natural tailRename).keepHead
+        (.here : Var (head :: tail) head)
+      exact (VarsFactor.permute swapped source).trans (by
+        simpa only [Erasure.Exposure.identityBoundary, source, tailRename]
+          using removeTail)
+
+/-- Delete an arbitrary prefix in front of a complete ordered identity tuple.
+The reduction phase contains only permutations and contractions. -/
+private theorem reduceIdentityPrefix
+    (leading : Vars context arguments) :
+    VarsFactor
+      (Arity.Vars.append leading
+        (Erasure.Exposure.identityBoundary context))
+      (Erasure.Exposure.identityBoundary context) := by
+  induction leading with
+  | nil => exact .refl _
+  | cons head tail induction =>
+      exact (induction.keepHead head).trans (removeIdentityExtra head)
 
 end VarsFactor
 
@@ -10495,12 +10500,23 @@ mutual
   termination_by 3 * sizeOf sites + 1
 end
 
-private theorem atomSelection_factor
+private theorem atomSelection_expansion
     (head : Var patternWires (.rel atomArguments))
     (ports : Vars patternWires atomArguments) :
     VarsFactor (atomSelection head ports)
+      (Arity.Vars.append (atomSelection head ports)
+        (Erasure.Exposure.identityBoundary patternWires)) :=
+  VarsFactor.extendAppend (atomSelection head ports)
+    (Erasure.Exposure.identityBoundary patternWires)
+
+private theorem atomSelection_reduction
+    (head : Var patternWires (.rel atomArguments))
+    (ports : Vars patternWires atomArguments) :
+    VarsFactor
+      (Arity.Vars.append (atomSelection head ports)
+        (Erasure.Exposure.identityBoundary patternWires))
       (Erasure.Exposure.identityBoundary patternWires) :=
-  VarsFactor.factorSelection (atomSelection head ports)
+  VarsFactor.reduceIdentityPrefix (atomSelection head ports)
 
 /-! The atom compiler owns the entire originating-site assembly seam: it
 first synthesizes a literal Formal presentation from the authoritative site
@@ -10533,10 +10549,18 @@ private theorem atomHeadFactorBridge
                 (EqualityNormalization.EvidenceFold.itemsAt
                   (atomSelectedLeaf shape) evidence sites WireRenaming.id)
                 (Region.adjoinAt retained .nil formalResult)) ∧
-              ∃ targetSource : ItemSeq
-                  (common ++ ([] ++ .rel patternWires :: retained)),
+              ∃ middleSource : ItemSeq
+                  (common ++ ([] ++
+                    .rel (atomSupportWires atomArguments ++ patternWires) ::
+                      retained)),
                 FactorItemsBridge common [] retained
-                  (atomSelection_factor head ports) formalSource targetSource :=
+                    (atomSelection_expansion head ports) formalSource
+                      middleSource ∧
+                ∃ targetSource : ItemSeq
+                  (common ++ ([] ++ .rel patternWires :: retained)),
+                  FactorItemsBridge common [] retained
+                    (atomSelection_reduction head ports) middleSource
+                      targetSource :=
   by
     let initialFrame := factorInitialFrame common
       (atomSupportWires atomArguments)
@@ -10597,10 +10621,16 @@ private theorem atomHeadFactorBridge
         (atomSelection head ports) (.refl (atomSelection head ports))
         formalEvidence formalSites mappedFrame formalSource :=
       mapLayout (atomSelection head ports) rawLayout
-    obtain ⟨targetSource, _targetLayout, bridge⟩ :=
+    obtain ⟨middleSource, middleLayout, expansionBridge⟩ :=
       varsFactorSourceBridge (.refl (atomSelection head ports))
-        (atomSelection_factor head ports) formalEvidence formalSites
+        (atomSelection_expansion head ports) formalEvidence formalSites
         formalLayout
+    obtain ⟨targetSource, _targetLayout, reductionBridge⟩ :=
+      varsFactorSourceBridge
+        (.trans (.refl (atomSelection head ports))
+          (atomSelection_expansion head ports))
+        (atomSelection_reduction head ports) formalEvidence formalSites
+        middleLayout
     have finalPresentation : RegionIso (WireEquiv.refl common)
         (EqualityNormalization.EvidenceFold.itemsAt
           (atomSelectedLeaf shape) evidence sites WireRenaming.id)
@@ -10612,7 +10642,8 @@ private theorem atomHeadFactorBridge
       exact presentation.trans
         (RegionIso.adjoinAt retained .nil normalizedResultIso)
     exact ⟨retained, formalSource, formalResult,
-      ⟨finalPresentation⟩, targetSource, bridge⟩
+      ⟨finalPresentation⟩, middleSource, expansionBridge,
+        targetSource, reductionBridge⟩
 
 end PatternCompiler
 
