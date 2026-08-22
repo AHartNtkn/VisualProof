@@ -134,6 +134,16 @@ def adjoinAt (hostLocals : List Sig)
           (addedItems.renameWires
             (adjoinMaterialWire outer hostLocals addedLocals)))
 
+/-- Extend a retained host with the items of one leading material region. -/
+def extendHostItems
+    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
+    (leading : Region (outer ++ hostLocals)) :
+    ItemSeq (outer ++ (hostLocals ++ leading.locals)) :=
+  (hostItems.renameWires
+    (adjoinHostWire outer hostLocals leading.locals)).append
+  (leading.items.renameWires
+    (adjoinMaterialWire outer hostLocals leading.locals))
+
 /-- Capture-avoiding insertion of recursively typed material. -/
 def spliceAt (hostLocals : List Sig)
     (hostItems : ItemSeq (outer ++ hostLocals))
