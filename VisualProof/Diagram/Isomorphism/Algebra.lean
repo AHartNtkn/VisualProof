@@ -592,9 +592,17 @@ def WireEquiv.appendNil : (context : List Sig) →
           | there wire =>
               exact congrArg Var.there (tail.right_inv wire) }
 
-private theorem WireEquiv.appendNil_apply
+@[simp] theorem WireEquiv.appendNil_apply
     (context : List Sig) (wire : Var context signature) :
     WireEquiv.appendNil context (wire.appendLeft []) = wire := by
+  induction wire with
+  | here => rfl
+  | there wire induction =>
+      exact congrArg Var.there induction
+
+@[simp] theorem WireEquiv.appendNil_symm_apply
+    (context : List Sig) (wire : Var context signature) :
+    (WireEquiv.appendNil context).symm wire = wire.appendLeft [] := by
   induction wire with
   | here => rfl
   | there wire induction =>
