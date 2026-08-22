@@ -7267,14 +7267,6 @@ three mutually recursive theorems below are the nonselected branch of the
 atom-head fold; their result is the original region syntax, not a second
 description of it. -/
 
-private theorem singleton_conjoin_ofItems
-    (item : Item wires) (tail : ItemSeq wires) :
-    (Region.singleton item).conjoin (Region.ofItems tail) =
-      Region.ofItems (.cons item tail) := by
-  rw [show Region.singleton item = Region.ofItems (.cons item .nil) by rfl,
-    Region.ofItems_conjoin]
-  rfl
-
 mutual
   private def retainedRegionPresentation : Region wires → Region wires
     | .mk locals items =>
@@ -7518,7 +7510,7 @@ mutual
           (retainedItemPresentationIso item)
           (retainedItemsPresentationIso tail)
         let presented := RegionIso.ofEq
-          (singleton_conjoin_ofItems item tail)
+          (Region.singleton_conjoin_ofItems item tail)
         exact children.trans presented
   termination_by sizeOf items
 
@@ -7564,7 +7556,7 @@ private noncomputable def atomFormalPrefixResultIso
         (RegionIso.conjoinAssoc (Region.singleton item)
           (Region.ofItems tail) inner).symm
       let prefixIso := RegionIso.conjoinCongr
-        (RegionIso.ofEq (singleton_conjoin_ofItems item tail))
+        (RegionIso.ofEq (Region.singleton_conjoin_ofItems item tail))
         (RegionIso.refl inner)
       exact children.trans (associated.trans prefixIso)
   termination_by sizeOf hostItems
@@ -9137,7 +9129,8 @@ mutual
           frames.current frames.targetHead (.cons currentItem currentTail) :=
         .cons itemEdit tailEdit
       let presentation := (RegionIso.conjoinCongr itemIso tailIso).trans
-        (RegionIso.ofEq (singleton_conjoin_ofItems nextItem nextTail))
+        (RegionIso.ofEq
+          (Region.singleton_conjoin_ofItems nextItem nextTail))
       exact ⟨.cons nextItem nextTail,
         ⟨nextItem, nextTail, rfl, nextItemLayout, nextTailLayout⟩,
         edit, ⟨by
@@ -9384,7 +9377,8 @@ mutual
           frames.edit frames.targetHead (.cons nextItem nextTail) :=
         .cons itemEdit tailEdit
       let presentation := (RegionIso.conjoinCongr itemIso tailIso).trans
-        (RegionIso.ofEq (singleton_conjoin_ofItems currentItem currentTail))
+        (RegionIso.ofEq
+          (Region.singleton_conjoin_ofItems currentItem currentTail))
       exact ⟨.cons nextItem nextTail,
         ⟨nextItem, nextTail, rfl, nextItemLayout, nextTailLayout⟩,
         edit, ⟨by
@@ -9636,7 +9630,8 @@ mutual
           frames.edit frames.targetHead (.cons nextItem nextTail) :=
         .cons itemEdit tailEdit
       let presentation := (RegionIso.conjoinCongr itemIso tailIso).trans
-        (RegionIso.ofEq (singleton_conjoin_ofItems currentItem currentTail))
+        (RegionIso.ofEq
+          (Region.singleton_conjoin_ofItems currentItem currentTail))
       exact ⟨.cons nextItem nextTail,
         ⟨nextItem, nextTail, rfl, nextItemLayout, nextTailLayout⟩,
         edit, ⟨by

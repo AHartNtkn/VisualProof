@@ -77,6 +77,16 @@ theorem ofItems_conjoin (first second : ItemSeq outer) :
   rw [leftMap, rightMap]
   rfl
 
+/-- Conjoining a singleton item with an item sequence is the corresponding
+item-sequence presentation. -/
+theorem singleton_conjoin_ofItems
+    (item : Item outer) (tail : ItemSeq outer) :
+    (singleton item).conjoin (ofItems tail) =
+      ofItems (.cons item tail) := by
+  rw [show singleton item = ofItems (.cons item .nil) by rfl,
+    ofItems_conjoin]
+  rfl
+
 /-- Embed existing host wires when adjoining new locals after them. -/
 def adjoinHostWire (outer hostLocals addedLocals : List Sig) :
     WireRenaming (outer ++ hostLocals)
