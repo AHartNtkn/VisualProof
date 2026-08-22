@@ -1,7 +1,5 @@
 import VisualProof.Rule.Completeness.Comprehension.Telescope
 import VisualProof.Rule.Completeness.Erasure.Exposure
-import VisualProof.Diagram.Isomorphism.Algebra
-import VisualProof.Diagram.Scope.Isomorphism
 
 namespace VisualProof.Rule.Completeness.Comprehension
 
@@ -730,7 +728,7 @@ private theorem normalized_supportPins_eq_nil
       (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern (formalPorts arguments))
       arguments (Erasure.Exposure.identityBoundary arguments) = .nil := by
-  apply EqualityNormalization.supportPins_eq_nil
+  apply supportPins_eq_nil
   intro position
   simpa only [← formalPorts_eq_exposure] using
     instantiate_port_incidence_nonempty pattern
@@ -789,43 +787,6 @@ private theorem supportPattern_eq_identityBoundary
   · rfl
   · rfl
   · exact heq_of_eq (normalized_supportBody_eq pattern)
-
-private theorem spliceAt_nil
-    (material : Region materialWires)
-    (rename : WireRenaming materialWires outer) :
-    Region.spliceAt (outer := outer) [] .nil material
-      ⟨fun wire => (rename wire).appendLeft []⟩ =
-      material.renameWires rename := by
-  cases material with
-  | mk locals materialItems =>
-      have materialMap : WireRenaming.comp
-          (Region.adjoinMaterialWire outer [] locals)
-          ((⟨fun wire => (rename wire).appendLeft []⟩ :
-            WireRenaming materialWires (outer ++ [])).appendRight locals) =
-          rename.appendRight locals := by
-        apply WireRenaming.ext
-        intro signature wire
-        apply Var.appendCases (left := materialWires) (right := locals)
-          (motive := fun wire =>
-            WireRenaming.comp
-              (Region.adjoinMaterialWire outer [] locals)
-              ((⟨fun wire => (rename wire).appendLeft []⟩ :
-                WireRenaming materialWires
-                  (outer ++ [])).appendRight locals) wire =
-                rename.appendRight locals wire)
-        · intro inheritedSignature inherited
-          simp [WireRenaming.comp, WireRenaming.appendRight,
-            Region.adjoinMaterialWire]
-        · intro localSignature localWire
-          simp [WireRenaming.comp, WireRenaming.appendRight,
-            Region.adjoinMaterialWire]
-          rfl
-      simp only [Region.spliceAt, Region.renameWires, Region.adjoinAt,
-        ItemSeq.renameWires, ItemSeq.nil_append, List.nil_append,
-        ItemSeq.renameWires_comp]
-      exact congrArg
-        (fun map => Region.mk locals (materialItems.renameWires map))
-        materialMap
 
 private def exposureDescriptionWithHost
     (pattern : OpenDiagram arguments)
@@ -943,12 +904,144 @@ private theorem instantiate_rootedTwo_iff
     · exact RegionPath.deepestCommonAncestor_eq_nil_of_mem_nil _
         (instantiate_incidence_mem_nil_of_nonempty pattern ports wire nonempty)
 
+private theorem Region.incidencePaths_adjoinAt_nil
+    (material : Region (outer ++ hostLocals))
+    (wire : Var (outer ++ hostLocals) signature) :
+    (Region.adjoinAt hostLocals .nil material).incidencePaths
+        wire.index.val =
+      material.incidencePaths wire.index.val := by
+  cases material with
+  | mk addedLocals addedItems =>
+      let materialWire := wire.appendLeft addedLocals
+      have renamed := ItemSeq.incidencePaths_renameWires_adjoinMaterial
+        (outer := outer) (hostLocals := hostLocals)
+        (addedLocals := addedLocals) addedItems materialWire 0
+      simpa [Region.adjoinAt, Region.incidencePaths, materialWire] using renamed
+
+private theorem Region.singleton_cut_canonical_iff
+    (body : Region wires) :
+    (Region.singleton (.cut body)).Canonical ↔ body.Canonical := by
+  let appendNil : WireRenaming wires (wires ++ []) :=
+    ⟨fun wire => wire.appendLeft []⟩
+  change (Region.ofItems (.cons (.cut body) .nil)).Canonical ↔
+    body.Canonical
+  simp only [Region.ofItems, Region.Canonical, ItemSeq.ChildrenCanonical,
+    ItemSeq.renameWires, Item.renameWires, Item.ChildrenCanonical, and_true]
+  constructor
+  · rintro ⟨_, childCanonical⟩
+    exact (Region.Canonical.renameWires_iff body appendNil).mp childCanonical
+  · intro childCanonical
+    constructor
+    · intro localIndex
+      exact Fin.elim0 localIndex
+    · exact (Region.Canonical.renameWires_iff body appendNil).mpr
+        childCanonical
+
+private structure ScopePreservation
+    (source target : Region wires) : Prop where
+  canonical : source.Canonical → target.Canonical
+  incidenceNonempty : ∀ {signature} (wire : Var wires signature),
+    source.incidencePaths wire.index.val ≠ [] ↔
+      target.incidencePaths wire.index.val ≠ []
+  rootedTwo : ∀ {signature} (wire : Var wires signature),
+    RegionPath.RootedTwo (source.incidencePaths wire.index.val) →
+      RegionPath.RootedTwo (target.incidencePaths wire.index.val)
+
+mutual
+  private def normalizedRegion
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Region sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : RegionSites operation data evidence) :
+      { normalized : Region common //
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          (identityBoundary pattern) frame.sourceKeep frame.selected source
+            normalized } :=
+    match sites with
+    | .mk childSites =>
+        let childOutput := normalizedItems pattern _ childSites
+        ⟨Region.adjoinAt _ .nil childOutput.1,
+          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+            childOutput.2⟩
+  termination_by structural sites
+
+  private def normalizedItems
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : ItemSeq sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemsSites operation data evidence) :
+      { normalized : Region common //
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          (identityBoundary pattern) frame.sourceKeep frame.selected source
+            normalized } :=
+    match sites with
+    | .nil _ =>
+        ⟨Region.blank common,
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil⟩
+    | .cons itemSites tailSites =>
+        let itemOutput := normalizedItem pattern _ itemSites
+        let tailOutput := normalizedItems pattern _ tailSites
+        ⟨itemOutput.1.conjoin tailOutput.1,
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+            itemOutput.2 tailOutput.2⟩
+  termination_by structural sites
+
+  private def normalizedItem
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Item sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemSites operation data evidence) :
+      { normalized : Region common //
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          (identityBoundary pattern) frame.sourceKeep frame.selected source
+            normalized } :=
+    match sites with
+    | .atom head ports =>
+        ⟨Region.singleton (.atom head ports),
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+            head ports⟩
+    | .selectedAtom ports _ =>
+        ⟨_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (identityBoundary pattern) ports,
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+            ports⟩
+    | .identity signature arity ports =>
+        ⟨Region.singleton (.identity signature arity ports),
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+            signature arity ports⟩
+    | .cut childSites =>
+        let childOutput := normalizedRegion pattern _ childSites
+        ⟨Region.singleton (.cut childOutput.1),
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+            childOutput.2⟩
+  termination_by structural sites
+end
+
 mutual
   /-- Whether the exact site annotation contains any selected application. -/
   private def regionHasSelection
-      {common sourceWires targetWires : List Sig}
-      {operation : Transform.Operation patternWires}
-      {frame : Transform.Frame patternWires common sourceWires targetWires}
+      {arguments common sourceWires targetWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
       {source : Region sourceWires} {result : Region common}
       {evidence :
@@ -957,7 +1050,7 @@ mutual
       (sites : RegionSites operation data evidence) : Bool :=
     match sites with
     | .mk childSites => itemsHaveSelection childSites
-  termination_by 3 * sizeOf sites
+  termination_by structural sites
 
   private def itemsHaveSelection
       {arguments common sourceWires targetWires : List Sig}
@@ -974,7 +1067,7 @@ mutual
     | .nil _ => false
     | .cons itemSites tailSites =>
         itemHasSelection itemSites || itemsHaveSelection tailSites
-  termination_by 3 * sizeOf sites + 2
+  termination_by structural sites
 
   private def itemHasSelection
       {arguments common sourceWires targetWires : List Sig}
@@ -992,9 +1085,485 @@ mutual
     | .selectedAtom _ _ => true
     | .identity _ _ _ => false
     | .cut childSites => regionHasSelection childSites
-  termination_by 3 * sizeOf sites + 1
+  termination_by structural sites
 end
 
+mutual
+  private theorem normalizedRegion_eq_of_noSelection
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Region sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : RegionSites operation data evidence)
+      (none : regionHasSelection sites = false) :
+      (normalizedRegion pattern evidence sites).1 = result :=
+    match sites with
+    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
+        childSites => by
+        change Region.adjoinAt locals .nil
+            (normalizedItems pattern childEvidence childSites).1 =
+          Region.adjoinAt locals .nil childResult
+        rw [normalizedItems_eq_of_noSelection pattern childEvidence
+          childSites (by simpa only [regionHasSelection] using none)]
+  termination_by structural sites
+
+  private theorem normalizedItems_eq_of_noSelection
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : ItemSeq sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemsSites operation data evidence)
+      (none : itemsHaveSelection sites = false) :
+      (normalizedItems pattern evidence sites).1 = result :=
+    match sites with
+    | .nil _ => rfl
+    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
+        itemEvidence tailEvidence itemSites tailSites => by
+        have itemNone : itemHasSelection itemSites = false := by
+          cases selected : itemHasSelection itemSites with
+          | false => rfl
+          | true => simp_all only [itemsHaveSelection, Bool.true_or,
+              Bool.true_eq_false]
+        have tailNone : itemsHaveSelection tailSites = false := by
+          cases selected : itemsHaveSelection tailSites with
+          | false => rfl
+          | true => simp_all only [itemsHaveSelection, Bool.or_true,
+              Bool.true_eq_false]
+        change
+          (normalizedItem pattern itemEvidence itemSites).1.conjoin
+              (normalizedItems pattern tailEvidence tailSites).1 =
+            itemResult.conjoin tailResult
+        rw [normalizedItem_eq_of_noSelection pattern itemEvidence itemSites
+          itemNone]
+        rw [normalizedItems_eq_of_noSelection pattern tailEvidence tailSites
+          tailNone]
+  termination_by structural sites
+
+  private theorem normalizedItem_eq_of_noSelection
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Item sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemSites operation data evidence)
+      (none : itemHasSelection sites = false) :
+      (normalizedItem pattern evidence sites).1 = result :=
+    match sites with
+    | .atom _ _ => rfl
+    | .selectedAtom _ _ => by
+        simp only [itemHasSelection, Bool.true_eq_false] at none
+    | .identity _ _ _ => rfl
+    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
+        childSites => by
+        change Region.singleton
+            (.cut (normalizedRegion pattern childEvidence childSites).1) =
+          Region.singleton (.cut childResult)
+        rw [normalizedRegion_eq_of_noSelection pattern childEvidence
+          childSites (by simpa only [itemHasSelection] using none)]
+  termination_by structural sites
+end
+
+private theorem Region.incidencePaths_singleton_cut
+    (body : Region wires) (wire : Var wires signature) :
+    (Region.singleton (.cut body)).incidencePaths wire.index.val =
+      (body.incidencePaths wire.index.val).map (List.cons 0) := by
+  let appendNil : WireRenaming wires (wires ++ []) :=
+    ⟨fun inherited => inherited.appendLeft []⟩
+  have renamed := ItemSeq.incidencePaths_renameWires_preservesIndex
+    (.cons (.cut body) .nil) appendNil (by simp)
+    (by intro inheritedSignature inherited; simp [appendNil]) wire 0
+  simpa [Region.singleton, Region.ofItems, Region.incidencePaths,
+    ItemSeq.incidencePaths, Item.incidencePaths, appendNil] using renamed
+
+private theorem Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil
+    (material : Region (outer ++ hostLocals))
+    (canonical : (Region.adjoinAt hostLocals .nil material).Canonical)
+    (localIndex : Fin hostLocals.length) :
+    RegionPath.RootedTwo
+      (material.incidencePaths (outer.length + localIndex.val)) := by
+  cases material with
+  | mk addedLocals addedItems =>
+      let localWire := Var.appendRight outer (Var.ofIndex localIndex)
+      let combinedIndex : Fin (hostLocals ++ addedLocals).length :=
+        ⟨localIndex.val, by
+          simp only [List.length_append]
+          exact Nat.lt_of_lt_of_le localIndex.isLt
+            (Nat.le_add_right _ _)⟩
+      have sourceRoot := canonical.1 combinedIndex
+      have paths := Region.incidencePaths_adjoinAt_nil
+        (Region.mk addedLocals addedItems) localWire
+      rw [show localWire.index.val = outer.length + localIndex.val by
+        simp [localWire]] at paths
+      rw [← paths]
+      simpa [Region.adjoinAt, Region.Canonical, localWire, combinedIndex] using
+        sourceRoot
+
+mutual
+  private theorem normalizedRegion_scope
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Region sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : RegionSites operation data evidence) :
+      ScopePreservation result (normalizedRegion pattern evidence sites).1 :=
+    match sites with
+    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
+        childSites => by
+        let childOutput := normalizedItems pattern childEvidence childSites
+        let childPreservation :=
+          normalizedItems_scope pattern childEvidence childSites
+        change ScopePreservation
+          (Region.adjoinAt locals .nil childResult)
+          (Region.adjoinAt locals .nil childOutput.1)
+        constructor
+        · intro sourceCanonical
+          have sourceChildCanonical : childResult.Canonical :=
+            Region.Canonical.material_of_adjoinAt locals .nil childResult
+              sourceCanonical
+          have targetChildCanonical : childOutput.1.Canonical :=
+            childPreservation.canonical sourceChildCanonical
+          apply Region.Canonical.adjoinAt_of_material_roots locals .nil
+            childOutput.1 True.intro targetChildCanonical
+          intro localIndex
+          let localWire := Var.appendRight common (Var.ofIndex localIndex)
+          have sourceRoot : RegionPath.RootedTwo
+              (childResult.incidencePaths localWire.index.val) := by
+            simpa [localWire] using
+              Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil
+                childResult sourceCanonical localIndex
+          have targetRoot := childPreservation.rootedTwo localWire sourceRoot
+          simpa [localWire] using targetRoot
+        · intro signature wire
+          let childWire := wire.appendLeft locals
+          have sourcePaths := Region.incidencePaths_adjoinAt_nil childResult
+            childWire
+          have targetPaths := Region.incidencePaths_adjoinAt_nil childOutput.1
+            childWire
+          have childIndex : childWire.index.val = wire.index.val := by
+            simp [childWire]
+          rw [childIndex] at sourcePaths targetPaths
+          rw [sourcePaths, targetPaths]
+          simpa only [childWire, Var.index_appendLeft] using
+            childPreservation.incidenceNonempty childWire
+        · intro signature wire sourceRoot
+          let childWire := wire.appendLeft locals
+          have sourcePaths := Region.incidencePaths_adjoinAt_nil childResult
+            childWire
+          have targetPaths := Region.incidencePaths_adjoinAt_nil childOutput.1
+            childWire
+          have childIndex : childWire.index.val = wire.index.val := by
+            simp [childWire]
+          rw [childIndex] at sourcePaths targetPaths
+          rw [sourcePaths] at sourceRoot
+          rw [targetPaths]
+          simpa only [childWire, Var.index_appendLeft] using
+            childPreservation.rootedTwo childWire (by
+              simpa only [childWire, Var.index_appendLeft] using sourceRoot)
+  termination_by structural sites
+
+  private theorem normalizedItems_scope
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : ItemSeq sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemsSites operation data evidence) :
+      ScopePreservation result (normalizedItems pattern evidence sites).1 :=
+    match sites with
+    | .nil _ => by
+        change ScopePreservation (Region.blank common) (Region.blank common)
+        exact {
+          canonical := fun canonical => canonical
+          incidenceNonempty := fun _ => Iff.rfl
+          rootedTwo := fun _ rooted => rooted
+        }
+    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
+        itemEvidence tailEvidence itemSites tailSites => by
+        let itemOutput := normalizedItem pattern itemEvidence itemSites
+        let tailOutput := normalizedItems pattern tailEvidence tailSites
+        let itemPreservation := normalizedItem_scope pattern itemEvidence
+          itemSites
+        let tailPreservation := normalizedItems_scope pattern tailEvidence
+          tailSites
+        change ScopePreservation (itemResult.conjoin tailResult)
+          (itemOutput.1.conjoin tailOutput.1)
+        have combined := Region.conjoin_preserves_scope itemResult tailResult
+          itemOutput.1 tailOutput.1 itemPreservation.canonical
+            tailPreservation.canonical itemPreservation.incidenceNonempty
+              tailPreservation.incidenceNonempty itemPreservation.rootedTwo
+                tailPreservation.rootedTwo
+        exact {
+          canonical := combined.1
+          incidenceNonempty := fun wire => (combined.2 wire).1
+          rootedTwo := fun wire => (combined.2 wire).2
+        }
+  termination_by structural sites
+
+  private theorem normalizedItem_scope
+      {arguments common sourceWires targetWires : List Sig}
+      (pattern : OpenDiagram arguments)
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      {data : operation.Data frame}
+      {source : Item sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemSites operation data evidence) :
+      ScopePreservation result (normalizedItem pattern evidence sites).1 :=
+    match sites with
+    | .atom head ports => by
+        change ScopePreservation (Region.singleton (.atom head ports))
+          (Region.singleton (.atom head ports))
+        exact {
+          canonical := fun canonical => canonical
+          incidenceNonempty := fun _ => Iff.rfl
+          rootedTwo := fun _ rooted => rooted
+        }
+    | .selectedAtom ports _ => by
+        change ScopePreservation
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            pattern ports)
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (identityBoundary pattern) ports)
+        constructor
+        · intro _
+          exact
+            _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+              (identityBoundary pattern) ports
+        · intro signature wire
+          rw [instantiate_incidence_nonempty_iff,
+            instantiate_incidence_nonempty_iff]
+        · intro signature wire sourceRoot
+          rw [instantiate_rootedTwo_iff] at sourceRoot ⊢
+          exact sourceRoot
+    | .identity signature arity ports => by
+        change ScopePreservation
+          (Region.singleton (.identity signature arity ports))
+          (Region.singleton (.identity signature arity ports))
+        exact {
+          canonical := fun canonical => canonical
+          incidenceNonempty := fun _ => Iff.rfl
+          rootedTwo := fun _ rooted => rooted
+        }
+    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
+        childSites => by
+        let childOutput := normalizedRegion pattern childEvidence childSites
+        let childPreservation := normalizedRegion_scope pattern childEvidence
+          childSites
+        change ScopePreservation (Region.singleton (.cut childResult))
+          (Region.singleton (.cut childOutput.1))
+        constructor
+        · intro sourceCanonical
+          apply (Region.singleton_cut_canonical_iff childOutput.1).mpr
+          exact childPreservation.canonical
+            ((Region.singleton_cut_canonical_iff childResult).mp
+              sourceCanonical)
+        · intro signature wire
+          rw [Region.incidencePaths_singleton_cut,
+            Region.incidencePaths_singleton_cut]
+          constructor
+          · intro sourceNonempty
+            have childSourceNonempty :
+                childResult.incidencePaths wire.index.val ≠ [] := by
+              intro sourceEmpty
+              exact sourceNonempty
+                ((List.map_eq_nil_iff).mpr sourceEmpty)
+            have childTargetNonempty :=
+              (childPreservation.incidenceNonempty wire).mp
+                childSourceNonempty
+            intro targetEmpty
+            exact childTargetNonempty
+              ((List.map_eq_nil_iff).mp targetEmpty)
+          · intro targetNonempty
+            have childTargetNonempty :
+                childOutput.1.incidencePaths wire.index.val ≠ [] := by
+              intro targetEmpty
+              exact targetNonempty
+                ((List.map_eq_nil_iff).mpr targetEmpty)
+            have childSourceNonempty :=
+              (childPreservation.incidenceNonempty wire).mpr
+                childTargetNonempty
+            intro sourceEmpty
+            exact childSourceNonempty
+              ((List.map_eq_nil_iff).mp sourceEmpty)
+        · intro signature wire sourceRoot
+          have sameEmpty :
+              childResult.incidencePaths wire.index.val = [] ↔
+                childOutput.1.incidencePaths wire.index.val = [] := by
+            constructor
+            · intro sourceEmpty
+              by_cases targetEmpty :
+                  childOutput.1.incidencePaths wire.index.val = []
+              · exact targetEmpty
+              · exact False.elim
+                  (((childPreservation.incidenceNonempty wire).mpr
+                    targetEmpty) sourceEmpty)
+            · intro targetEmpty
+              by_cases sourceEmpty :
+                  childResult.incidencePaths wire.index.val = []
+              · exact sourceEmpty
+              · exact False.elim
+                  (((childPreservation.incidenceNonempty wire).mp
+                    sourceEmpty) targetEmpty)
+          rw [Region.incidencePaths_singleton_cut] at sourceRoot ⊢
+          have replaced := RegionPath.rootedTwo_replace []
+            (childResult.incidencePaths wire.index.val)
+            (childOutput.1.incidencePaths wire.index.val) [] 0 sameEmpty
+          simpa only [List.nil_append, List.append_nil] using
+            replaced.mp (by simpa using sourceRoot)
+  termination_by structural sites
+end
+
+/-- Normalize every selected application in one exact authoritative item
+sequence and preserve the canonical, externally two-ended scope of its actual
+occurrence. The normalized endpoint and its instantiation evidence are
+generated solely from the supplied evidence-indexed sites. -/
+theorem normalizeItemsScope
+    {arguments common sourceWires targetWires : List Sig}
+    (pattern : OpenDiagram arguments)
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments common sourceWires targetWires}
+    {data : operation.Data frame}
+    {source : ItemSeq sourceWires} {result : Region common}
+    (evidence :
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        pattern frame.sourceKeep frame.selected source result)
+    (sites : ItemsSites operation data evidence)
+    {boundary : List Sig} {host : OpenDiagram boundary}
+    (occurrence : Occurrence result host) :
+    ∃ normalized : Region common,
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          (identityBoundary pattern) frame.sourceKeep frame.selected source
+            normalized ∧
+        (occurrence.context.fill normalized).Canonical ∧
+        OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
+          (occurrence.context.fill normalized) := by
+  let output := normalizedItems pattern evidence sites
+  let preservation := normalizedItems_scope pattern evidence sites
+  have resultCanonical : result.Canonical :=
+    occurrence.context.holeCanonical result occurrence.sourceCanonical
+  have normalizedCanonical : output.1.Canonical :=
+    preservation.canonical resultCanonical
+  have replacement := occurrence.context.replaceCanonical result output.1
+    occurrence.sourceCanonical normalizedCanonical
+      preservation.incidenceNonempty
+  let sourceEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill result) occurrence.sourceCanonical
+      occurrence.sourceExternalTwoEnded
+  have normalizedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill output.1) :=
+    sourceEndpoint.externalTwoEnded_of_nonempty_iff
+      (occurrence.context.fill output.1) replacement.2
+  exact ⟨output.1, output.2, replacement.1, normalizedExternalTwoEnded⟩
+
+private noncomputable def conjoinSwapIso
+    (left right : Region outer) :
+    RegionIso (WireEquiv.refl outer) (left.conjoin right)
+      (right.conjoin left) := by
+  cases left with
+  | mk leftLocals leftItems =>
+      cases right with
+      | mk rightLocals rightItems =>
+          let localSwap := WireEquiv.swap leftLocals rightLocals
+          let ambient := (WireEquiv.refl outer).append localSwap
+          let sourceLeft := Region.conjoinLeftWire outer leftLocals rightLocals
+          let sourceRight :=
+            Region.conjoinRightWire outer leftLocals rightLocals
+          let targetLeft :=
+            Region.conjoinRightWire outer rightLocals leftLocals
+          let targetRight :=
+            Region.conjoinLeftWire outer rightLocals leftLocals
+          have leftCommutes : ∀ {signature}
+              (wire : Var (outer ++ leftLocals) signature),
+              ambient (sourceLeft wire) = targetLeft wire := by
+            intro signature wire
+            apply Var.appendCases (left := outer) (right := leftLocals)
+              (motive := fun wire =>
+                ambient (sourceLeft wire) = targetLeft wire)
+            · intro inheritedSignature inherited
+              dsimp only [ambient, sourceLeft, targetLeft]
+              simp only [Region.conjoinLeftWire,
+                Region.conjoinRightWire, Var.appendMap_left]
+              change ((WireEquiv.refl outer).append localSwap)
+                (inherited.appendLeft (leftLocals ++ rightLocals)) =
+                  inherited.appendLeft (rightLocals ++ leftLocals)
+              rw [WireEquiv.append_apply_left]
+              rfl
+            · intro localSignature localWire
+              dsimp only [ambient, sourceLeft, targetLeft]
+              simp only [Region.conjoinLeftWire,
+                Region.conjoinRightWire, Var.appendMap_right]
+              change ((WireEquiv.refl outer).append localSwap)
+                (Var.appendRight outer
+                  (localWire.appendLeft rightLocals)) =
+                    Var.appendRight outer
+                      (Var.appendRight rightLocals localWire)
+              rw [WireEquiv.append_apply_right]
+              dsimp only [localSwap, WireEquiv.swap]
+              rw [Var.appendMap_left]
+          have rightCommutes : ∀ {signature}
+              (wire : Var (outer ++ rightLocals) signature),
+              ambient (sourceRight wire) = targetRight wire := by
+            intro signature wire
+            apply Var.appendCases (left := outer) (right := rightLocals)
+              (motive := fun wire =>
+                ambient (sourceRight wire) = targetRight wire)
+            · intro inheritedSignature inherited
+              dsimp only [ambient, sourceRight, targetRight]
+              simp only [Region.conjoinLeftWire,
+                Region.conjoinRightWire, Var.appendMap_left]
+              change ((WireEquiv.refl outer).append localSwap)
+                (inherited.appendLeft (leftLocals ++ rightLocals)) =
+                  inherited.appendLeft (rightLocals ++ leftLocals)
+              rw [WireEquiv.append_apply_left]
+              rfl
+            · intro localSignature localWire
+              dsimp only [ambient, sourceRight, targetRight]
+              simp only [Region.conjoinLeftWire,
+                Region.conjoinRightWire, Var.appendMap_right]
+              change ((WireEquiv.refl outer).append localSwap)
+                (Var.appendRight outer
+                  (Var.appendRight leftLocals localWire)) =
+                    Var.appendRight outer
+                      (localWire.appendLeft leftLocals)
+              rw [WireEquiv.append_apply_right]
+              dsimp only [localSwap, WireEquiv.swap]
+              rw [Var.appendMap_right]
+          let leftIso := ItemSeqIso.renameWires leftItems sourceLeft
+            targetLeft ambient leftCommutes
+          let rightIso := ItemSeqIso.renameWires rightItems sourceRight
+            targetRight ambient rightCommutes
+          let reordered := (ItemSeqIso.append leftIso rightIso).trans
+            (ItemSeqIso.swapAppend
+              (leftItems.renameWires targetLeft)
+              (rightItems.renameWires targetRight))
+          refine .mk localSwap ?_
+          exact reordered.castAmbient (WireEquiv.trans_refl ambient)
 private def appendHostWire (outer hostLocals : List Sig) :
     WireRenaming outer (outer ++ hostLocals) :=
   ⟨fun wire => wire.appendLeft hostLocals⟩
@@ -1036,6 +1605,88 @@ private theorem conjoin_eq_adjoinRename
             Region.adjoinHostWire]
           rw [materialMap]
 
+private theorem renameWires_conjoin
+    (first second : Region sourceWires)
+    (rename : WireRenaming sourceWires targetWires) :
+    (first.conjoin second).renameWires rename =
+      (first.renameWires rename).conjoin (second.renameWires rename) := by
+  cases first with
+  | mk firstLocals firstItems =>
+      cases second with
+      | mk secondLocals secondItems =>
+          have firstMap : WireRenaming.comp
+              (rename.appendRight (firstLocals ++ secondLocals))
+              (Region.conjoinLeftWire sourceWires firstLocals secondLocals) =
+            WireRenaming.comp
+              (Region.conjoinLeftWire targetWires firstLocals secondLocals)
+              (rename.appendRight firstLocals) := by
+            apply WireRenaming.ext
+            intro signature wire
+            apply Var.appendCases (left := sourceWires)
+              (right := firstLocals)
+              (motive := fun wire =>
+                WireRenaming.comp
+                    (rename.appendRight (firstLocals ++ secondLocals))
+                    (Region.conjoinLeftWire sourceWires firstLocals
+                      secondLocals) wire =
+                  WireRenaming.comp
+                    (Region.conjoinLeftWire targetWires firstLocals
+                      secondLocals)
+                    (rename.appendRight firstLocals) wire)
+            · intro inheritedSignature inherited
+              simp [WireRenaming.comp, WireRenaming.appendRight,
+                Region.conjoinLeftWire]
+            · intro localSignature localWire
+              simp [WireRenaming.comp, WireRenaming.appendRight,
+                Region.conjoinLeftWire]
+          have secondMap : WireRenaming.comp
+              (rename.appendRight (firstLocals ++ secondLocals))
+              (Region.conjoinRightWire sourceWires firstLocals secondLocals) =
+            WireRenaming.comp
+              (Region.conjoinRightWire targetWires firstLocals secondLocals)
+              (rename.appendRight secondLocals) := by
+            apply WireRenaming.ext
+            intro signature wire
+            apply Var.appendCases (left := sourceWires)
+              (right := secondLocals)
+              (motive := fun wire =>
+                WireRenaming.comp
+                    (rename.appendRight (firstLocals ++ secondLocals))
+                    (Region.conjoinRightWire sourceWires firstLocals
+                      secondLocals) wire =
+                  WireRenaming.comp
+                    (Region.conjoinRightWire targetWires firstLocals
+                      secondLocals)
+                    (rename.appendRight secondLocals) wire)
+            · intro inheritedSignature inherited
+              simp [WireRenaming.comp, WireRenaming.appendRight,
+                Region.conjoinRightWire]
+            · intro localSignature localWire
+              simp [WireRenaming.comp, WireRenaming.appendRight,
+                Region.conjoinRightWire]
+          simp only [Region.conjoin, Region.renameWires,
+            ItemSeq.renameWires_append, ItemSeq.renameWires_comp]
+          rw [firstMap, secondMap]
+
+private noncomputable def renameWiresConjoinIso
+    (first second : Region sourceWires)
+    (rename : WireRenaming sourceWires targetWires) :
+    RegionIso (WireEquiv.refl targetWires)
+      ((first.conjoin second).renameWires rename)
+      ((first.renameWires rename).conjoin (second.renameWires rename)) := by
+  rw [renameWires_conjoin]
+  exact RegionIso.refl _
+
+private noncomputable def renameWiresCompIso
+    (region : Region sourceWires)
+    (first : WireRenaming sourceWires middleWires)
+    (second : WireRenaming middleWires targetWires) :
+    RegionIso (WireEquiv.refl targetWires)
+      ((region.renameWires first).renameWires second)
+      (region.renameWires (WireRenaming.comp second first)) := by
+  rw [Region.renameWires_comp]
+  exact RegionIso.refl _
+
 private noncomputable def instantiateRenameIso
     (pattern : OpenDiagram arguments)
     (ports : Vars sourceWires arguments)
@@ -1045,7 +1696,7 @@ private noncomputable def instantiateRenameIso
         pattern ports).renameWires rename)
       (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate pattern
         (ports.map fun wire => rename wire)) := by
-  rw [EqualityNormalization.instantiate_renameWires]
+  rw [instantiate_renameWires]
   exact RegionIso.refl _
 
 private theorem canonical_conjoin
@@ -1343,33 +1994,205 @@ private noncomputable def presentationOccurrence
         (DiagramContext.fillIso occurrence.context presentation))
   }
 
-@[simp] private theorem presentationOccurrence_interface
-    {boundary holeWires : List Sig}
-    {before after : Region holeWires}
-    {source : OpenDiagram boundary}
-    (occurrence : Occurrence before source)
-    (afterCanonical : after.Canonical)
-    (sameNonempty : ∀ {signature} (wire : Var holeWires signature),
-      before.incidencePaths wire.index.val ≠ [] ↔
-        after.incidencePaths wire.index.val ≠ [])
-    (presentation : RegionIso (WireEquiv.refl holeWires) before after) :
-    (presentationOccurrence occurrence afterCanonical sameNonempty
-      presentation).interface = occurrence.interface := by
-  simp [presentationOccurrence]
+private def adjoinMaterialEquiv
+    (outer hostLocals addedLocals : List Sig) :
+    WireEquiv ((outer ++ hostLocals) ++ addedLocals)
+      (outer ++ (hostLocals ++ addedLocals)) where
+  toRenaming := Region.adjoinMaterialWire outer hostLocals addedLocals
+  invRenaming := ⟨Var.appendMap
+    (fun wire => (wire.appendLeft hostLocals).appendLeft addedLocals)
+    (fun wire => Var.appendMap
+      (fun hostWire =>
+        (Var.appendRight outer hostWire).appendLeft addedLocals)
+      (fun addedWire => Var.appendRight (outer ++ hostLocals) addedWire)
+      wire)⟩
+  left_inv := by
+    intro signature wire
+    apply Var.appendCases (left := outer ++ hostLocals)
+      (right := addedLocals)
+      (motive := fun wire =>
+        Var.appendMap
+          (fun wire => (wire.appendLeft hostLocals).appendLeft addedLocals)
+          (fun wire => Var.appendMap
+            (fun hostWire =>
+              (Var.appendRight outer hostWire).appendLeft addedLocals)
+            (fun addedWire =>
+              Var.appendRight (outer ++ hostLocals) addedWire)
+            wire)
+          (Region.adjoinMaterialWire outer hostLocals addedLocals wire) =
+            wire)
+    · intro inheritedSignature inherited
+      apply Var.appendCases (left := outer) (right := hostLocals)
+        (motive := fun inherited =>
+          Var.appendMap
+            (fun wire => (wire.appendLeft hostLocals).appendLeft addedLocals)
+            (fun wire => Var.appendMap
+              (fun hostWire =>
+                (Var.appendRight outer hostWire).appendLeft addedLocals)
+              (fun addedWire =>
+                Var.appendRight (outer ++ hostLocals) addedWire)
+              wire)
+            (Region.adjoinMaterialWire outer hostLocals addedLocals
+              (inherited.appendLeft addedLocals)) =
+                inherited.appendLeft addedLocals)
+      · intro outerSignature outerWire
+        simp [Region.adjoinMaterialWire]
+      · intro hostSignature hostWire
+        simp [Region.adjoinMaterialWire]
+    · intro addedSignature addedWire
+      simp [Region.adjoinMaterialWire]
+  right_inv := by
+    intro signature wire
+    apply Var.appendCases (left := outer)
+      (right := hostLocals ++ addedLocals)
+      (motive := fun wire =>
+        Region.adjoinMaterialWire outer hostLocals addedLocals
+          (Var.appendMap
+            (fun wire => (wire.appendLeft hostLocals).appendLeft addedLocals)
+            (fun wire => Var.appendMap
+              (fun hostWire =>
+                (Var.appendRight outer hostWire).appendLeft addedLocals)
+              (fun addedWire =>
+                Var.appendRight (outer ++ hostLocals) addedWire)
+              wire)
+            wire) = wire)
+    · intro outerSignature outerWire
+      simp [Region.adjoinMaterialWire]
+    · intro localSignature localWire
+      apply Var.appendCases (left := hostLocals) (right := addedLocals)
+        (motive := fun localWire =>
+          Region.adjoinMaterialWire outer hostLocals addedLocals
+            (Var.appendMap
+              (fun wire => (wire.appendLeft hostLocals).appendLeft addedLocals)
+              (fun wire => Var.appendMap
+                (fun hostWire =>
+                  (Var.appendRight outer hostWire).appendLeft addedLocals)
+                (fun addedWire =>
+                  Var.appendRight (outer ++ hostLocals) addedWire)
+                wire)
+              (Var.appendRight outer localWire)) =
+                Var.appendRight outer localWire)
+      · intro hostSignature hostWire
+        simp [Region.adjoinMaterialWire]
+      · intro addedSignature addedWire
+        simp [Region.adjoinMaterialWire]
 
-@[simp] private theorem presentationOccurrence_context
-    {boundary holeWires : List Sig}
-    {before after : Region holeWires}
-    {source : OpenDiagram boundary}
-    (occurrence : Occurrence before source)
-    (afterCanonical : after.Canonical)
-    (sameNonempty : ∀ {signature} (wire : Var holeWires signature),
-      before.incidencePaths wire.index.val ≠ [] ↔
-        after.incidencePaths wire.index.val ≠ [])
-    (presentation : RegionIso (WireEquiv.refl holeWires) before after) :
-    (presentationOccurrence occurrence afterCanonical sameNonempty
-      presentation).context = occurrence.context := by
-  simp [presentationOccurrence]
+/-- Lift a material presentation through the exact retained-local prefix of
+an instantiation result. This is the binder-preserving presentation used by
+the recursive equality fold under `RegionResult.mk`. -/
+private noncomputable def adjoinAtIso
+    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
+    {before after : Region (outer ++ hostLocals)}
+    (material : RegionIso (WireEquiv.refl (outer ++ hostLocals))
+      before after) :
+    RegionIso (WireEquiv.refl outer)
+      (Region.adjoinAt hostLocals hostItems before)
+      (Region.adjoinAt hostLocals hostItems after) := by
+  cases material with
+  | @mk _ _ sourceLocals targetLocals _ sourceItems targetItems
+      localIso itemIso =>
+      let localAmbient := (WireEquiv.refl hostLocals).append localIso
+      let ambient := (WireEquiv.refl outer).append localAmbient
+      let sourceAssoc := adjoinMaterialEquiv outer hostLocals sourceLocals
+      let targetAssoc := adjoinMaterialEquiv outer hostLocals targetLocals
+      have sourceBack : ItemSeqIso sourceAssoc.symm
+          (sourceItems.renameWires
+            (Region.adjoinMaterialWire outer hostLocals sourceLocals))
+          sourceItems := by
+        let raw := ItemSeqIso.renameWires sourceItems
+          (Region.adjoinMaterialWire outer hostLocals sourceLocals)
+          WireRenaming.id sourceAssoc.symm (by
+            intro signature wire
+            exact sourceAssoc.left_inv wire)
+        simpa only [ItemSeq.renameWires_id] using raw
+      have targetForward : ItemSeqIso targetAssoc targetItems
+          (targetItems.renameWires
+            (Region.adjoinMaterialWire outer hostLocals targetLocals)) := by
+        let raw := ItemSeqIso.renameWires targetItems WireRenaming.id
+          (Region.adjoinMaterialWire outer hostLocals targetLocals)
+          targetAssoc (by
+            intro signature wire
+            rfl)
+        simpa only [ItemSeq.renameWires_id] using raw
+      let materialItems := (sourceBack.trans itemIso).trans targetForward
+      have assocCommutes : ∀ {signature}
+          (wire : Var ((outer ++ hostLocals) ++ sourceLocals) signature),
+          targetAssoc
+              (((WireEquiv.refl (outer ++ hostLocals)).append localIso) wire) =
+            ambient (sourceAssoc wire) := by
+        intro signature wire
+        apply Var.appendCases (left := outer ++ hostLocals)
+          (right := sourceLocals)
+          (motive := fun wire =>
+            targetAssoc
+                (((WireEquiv.refl (outer ++ hostLocals)).append localIso)
+                  wire) =
+              ambient (sourceAssoc wire))
+        · intro inheritedSignature inherited
+          apply Var.appendCases (left := outer) (right := hostLocals)
+            (motive := fun inherited =>
+              targetAssoc
+                  (((WireEquiv.refl (outer ++ hostLocals)).append localIso)
+                    (inherited.appendLeft sourceLocals)) =
+                ambient (sourceAssoc
+                  (inherited.appendLeft sourceLocals)))
+          · intro outerSignature outerWire
+            simp [sourceAssoc, targetAssoc, adjoinMaterialEquiv, ambient,
+              localAmbient, Region.adjoinMaterialWire]
+          · intro hostSignature hostWire
+            simp [sourceAssoc, targetAssoc, adjoinMaterialEquiv, ambient,
+              localAmbient, Region.adjoinMaterialWire]
+        · intro localSignature localWire
+          simp [sourceAssoc, targetAssoc, adjoinMaterialEquiv, ambient,
+            localAmbient, Region.adjoinMaterialWire]
+      have materialAmbient :
+          (sourceAssoc.symm.trans
+            ((WireEquiv.refl (outer ++ hostLocals)).append localIso)).trans
+              targetAssoc = ambient := by
+        apply WireEquiv.ext
+        intro signature wire
+        let original := sourceAssoc.symm wire
+        calc
+          ((sourceAssoc.symm.trans
+              ((WireEquiv.refl (outer ++ hostLocals)).append localIso)).trans
+                targetAssoc) wire =
+              targetAssoc
+                (((WireEquiv.refl (outer ++ hostLocals)).append localIso)
+                  original) := rfl
+          _ = ambient (sourceAssoc original) := assocCommutes original
+          _ = ambient wire := congrArg (fun mapped => ambient mapped)
+            (sourceAssoc.right_inv wire)
+      have materialItems' : ItemSeqIso ambient
+          (sourceItems.renameWires
+            (Region.adjoinMaterialWire outer hostLocals sourceLocals))
+          (targetItems.renameWires
+            (Region.adjoinMaterialWire outer hostLocals targetLocals)) :=
+        materialItems.castAmbient materialAmbient
+      have hostIso : ItemSeqIso ambient
+          (hostItems.renameWires
+            (Region.adjoinHostWire outer hostLocals sourceLocals))
+          (hostItems.renameWires
+            (Region.adjoinHostWire outer hostLocals targetLocals)) := by
+        apply ItemSeqIso.renameWires hostItems
+          (Region.adjoinHostWire outer hostLocals sourceLocals)
+          (Region.adjoinHostWire outer hostLocals targetLocals) ambient
+        intro signature wire
+        apply Var.appendCases (left := outer) (right := hostLocals)
+          (motive := fun wire =>
+            ((WireEquiv.refl outer).append
+              ((WireEquiv.refl hostLocals).append localIso))
+                (Region.adjoinHostWire outer hostLocals sourceLocals wire) =
+              Region.adjoinHostWire outer hostLocals targetLocals wire)
+        · intro inheritedSignature inherited
+          apply Var.eq_of_index_eq
+          apply Fin.ext
+          simp [Region.adjoinHostWire, Region.conjoinLeftWire]
+        · intro localSignature localWire
+          apply Var.eq_of_index_eq
+          apply Fin.ext
+          simp [Region.adjoinHostWire, Region.conjoinLeftWire]
+      refine .mk localAmbient ?_
+      simpa only [ambient] using ItemSeqIso.append hostIso materialItems'
 
 private theorem pinStep
     {boundary holeWires locals : List Sig}
@@ -1667,39 +2490,6 @@ private theorem pinAllTwiceOfNonempty
   | nil => exact False.elim (nonempty rfl)
   | cons signature tail => exact pinAllTwiceNonempty occurrence rename
 
-private theorem pinAllTwiceRegionOfNonempty
-    {boundary holeWires pinWires : List Sig}
-    {before : Region holeWires}
-    {source : OpenDiagram boundary}
-    (occurrence : Occurrence before source)
-    (rename : WireRenaming pinWires (holeWires ++ before.locals))
-    (nonempty : pinWires ≠ []) :
-    let pins := allPins pinWires rename
-    ∃ targetCanonical :
-        (occurrence.context.fill
-          (.mk before.locals
-            ((before.items.append pins).append pins))).Canonical,
-      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-          occurrence.interface.boundaryWire
-          (occurrence.context.fill
-            (.mk before.locals
-              ((before.items.append pins).append pins))),
-        Relation.TransGen Step source
-            (occurrence.interface.withBody
-              (occurrence.context.fill
-                (.mk before.locals
-                  ((before.items.append pins).append pins)))
-              targetCanonical targetExternalTwoEnded) ∧
-          Relation.TransGen Step
-            (occurrence.interface.withBody
-              (occurrence.context.fill
-                (.mk before.locals
-                  ((before.items.append pins).append pins)))
-              targetCanonical targetExternalTwoEnded)
-            source := by
-  cases before
-  exact pinAllTwiceOfNonempty occurrence rename nonempty
-
 private theorem allPins_renameWires
     (source : List Sig) (rename : WireRenaming source middle)
     (next : WireRenaming middle target) :
@@ -1757,6 +2547,50 @@ private theorem allPins_twice_childrenCanonical
   exact (ItemSeq.childrenCanonical_append _ _).mpr
     ⟨ItemSeq.pinWires_childrenCanonical source rename (fun _ => true),
       ItemSeq.pinWires_childrenCanonical source rename (fun _ => true)⟩
+private def appendAdjoinedPins
+    (hostLocals : List Sig) (hostItems pins : ItemSeq (outer ++ hostLocals))
+    (material : Region (outer ++ hostLocals)) : Region outer :=
+  match material with
+  | .mk materialLocals materialItems =>
+      let hostRename := Region.adjoinHostWire outer hostLocals materialLocals
+      let materialRename :=
+        Region.adjoinMaterialWire outer hostLocals materialLocals
+      .mk (hostLocals ++ materialLocals)
+        (((hostItems.renameWires hostRename).append
+          (materialItems.renameWires materialRename)).append
+            (pins.renameWires hostRename))
+
+/-- Moving a pin block from after adjoined material into the host item block
+is a presentation isomorphism and changes no rewrite authority. -/
+private noncomputable def adjoinPinsIso
+    (hostLocals : List Sig) (hostItems pins : ItemSeq (outer ++ hostLocals))
+    (material : Region (outer ++ hostLocals)) :
+    RegionIso (WireEquiv.refl outer)
+      (appendAdjoinedPins hostLocals hostItems pins material)
+      (Region.adjoinAt hostLocals (hostItems.append pins) material) := by
+  cases material with
+  | mk materialLocals materialItems =>
+      let hostRename := Region.adjoinHostWire outer hostLocals materialLocals
+      let materialRename :=
+        Region.adjoinMaterialWire outer hostLocals materialLocals
+      let host := hostItems.renameWires hostRename
+      let material := materialItems.renameWires materialRename
+      let pinItems := pins.renameWires hostRename
+      let reordered : ItemSeqIso
+          (WireEquiv.refl (outer ++ (hostLocals ++ materialLocals)))
+          ((host.append material).append pinItems)
+          ((host.append pinItems).append material) := by
+        let moved := ItemSeqIso.append (ItemSeqIso.refl host)
+          (ItemSeqIso.swapAppend material pinItems)
+        simpa only [ItemSeq.append_assoc] using moved
+      refine .mk (WireEquiv.refl (hostLocals ++ materialLocals)) ?_
+      simpa only [Region.adjoinAt, Region.locals, Region.items,
+        ItemSeq.renameWires_append, hostRename, materialRename, host,
+        material, pinItems] using
+        reordered.castAmbient
+          (WireEquiv.append_refl outer
+            (hostLocals ++ materialLocals)).symm
+
 private theorem ItemSeq.incidencePaths_append_nonempty_iff
     (first second : ItemSeq wires) (wireIndex itemIndex : Nat) :
     (first.append second).incidencePaths wireIndex itemIndex ≠ [] ↔
@@ -1919,18 +2753,17 @@ private theorem adjoinPinsEquatesNonempty
             pin.append pin := by
         simp only [contextPins, ItemSeq.renameWires_append,
           allPins_renameWires, compId, pin]
-      have rawEq : raw = Region.appendAdjoinedHostSuffix hostLocals hostItems
+      have rawEq : raw = appendAdjoinedPins hostLocals hostItems
           (contextPins outer hostLocals)
           (.mk materialLocals materialItems) := by
-        simp only [raw, Region.appendAdjoinedHostSuffix, hostRename,
-          materialRename,
+        simp only [raw, appendAdjoinedPins, hostRename, materialRename,
           host, material, base, pinsRename, ItemSeq.append_assoc]
       let target := Region.adjoinAt hostLocals
         (hostItems.append (contextPins outer hostLocals))
         (.mk materialLocals materialItems)
       let presentation : RegionIso (WireEquiv.refl outer) raw target := by
         rw [rawEq]
-        exact RegionIso.adjoinAtMoveHostSuffix hostLocals hostItems
+        exact adjoinPinsIso hostLocals hostItems
           (contextPins outer hostLocals)
           (.mk materialLocals materialItems)
       have sourceLocalCanonical :
@@ -2047,7 +2880,7 @@ private noncomputable def supportedAdjoinOccurrence
         (Nat.lt_of_lt_of_le hostPositive afterSublist.length_le)
     exact ⟨fun _ => afterNonempty, fun _ => beforeNonempty⟩
   exact presentationOccurrence occurrence targetLocalCanonical sameNonempty
-    (RegionIso.adjoinAt hostLocals hostItems presentation)
+    (adjoinAtIso hostLocals hostItems presentation)
 
 private theorem supportedAdjoinValidity
     {boundary outer : List Sig}
@@ -2093,16 +2926,176 @@ private theorem supportedAdjoinValidity
   exact ⟨replacement.1,
     sourceEndpoint.externalTwoEnded_of_nonempty_iff _ replacement.2⟩
 
+private def extendHostItems
+    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
+    (leading : Region (outer ++ hostLocals)) :
+    ItemSeq (outer ++ (hostLocals ++ leading.locals)) :=
+  (hostItems.renameWires
+    (Region.adjoinHostWire outer hostLocals leading.locals)).append
+  (leading.items.renameWires
+    (Region.adjoinMaterialWire outer hostLocals leading.locals))
+
+/-- Flatten one leading material block into the retained host. The resulting
+region is exactly the host shape consumed by one selected-site exposure. -/
+private noncomputable def adjoinAssocIso
+    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
+    (first second : Region (outer ++ hostLocals)) :
+    RegionIso (WireEquiv.refl outer)
+      (Region.adjoinAt hostLocals hostItems (first.conjoin second))
+      (Region.adjoinAt (hostLocals ++ first.locals)
+        (extendHostItems hostLocals hostItems first)
+        (second.renameWires
+          (Region.adjoinHostWire outer hostLocals first.locals))) := by
+  cases first with
+  | mk firstLocals firstItems =>
+      cases second with
+      | mk secondLocals secondItems =>
+          let sourceHost := Region.adjoinHostWire outer hostLocals
+            (firstLocals ++ secondLocals)
+          let sourceFirst := WireRenaming.comp
+            (Region.adjoinMaterialWire outer hostLocals
+              (firstLocals ++ secondLocals))
+            (Region.conjoinLeftWire (outer ++ hostLocals) firstLocals
+              secondLocals)
+          let sourceSecond := WireRenaming.comp
+            (Region.adjoinMaterialWire outer hostLocals
+              (firstLocals ++ secondLocals))
+            (Region.conjoinRightWire (outer ++ hostLocals) firstLocals
+              secondLocals)
+          let targetPrefix := Region.adjoinHostWire outer
+            (hostLocals ++ firstLocals) secondLocals
+          let targetHost := WireRenaming.comp targetPrefix
+            (Region.adjoinHostWire outer hostLocals firstLocals)
+          let targetFirst := WireRenaming.comp targetPrefix
+            (Region.adjoinMaterialWire outer hostLocals firstLocals)
+          let targetSecond := WireRenaming.comp
+            (Region.adjoinMaterialWire outer
+              (hostLocals ++ firstLocals) secondLocals)
+            ((Region.adjoinHostWire outer hostLocals firstLocals).appendRight
+              secondLocals)
+          let localsIso := WireEquiv.ofEq
+            (List.append_assoc hostLocals firstLocals secondLocals).symm
+          let ambient := (WireEquiv.refl outer).append localsIso
+          have maps :
+              (∀ {signature} (wire : Var (outer ++ hostLocals) signature),
+                ambient (sourceHost wire) = targetHost wire) ∧
+              (∀ {signature}
+                (wire : Var ((outer ++ hostLocals) ++ firstLocals)
+                  signature),
+                ambient (sourceFirst wire) = targetFirst wire) ∧
+              (∀ {signature}
+                (wire : Var ((outer ++ hostLocals) ++ secondLocals)
+                  signature),
+                ambient (sourceSecond wire) = targetSecond wire) := by
+            constructor
+            · intro signature wire
+              apply Var.appendCases (left := outer) (right := hostLocals)
+                (motive := fun wire =>
+                  ambient (sourceHost wire) = targetHost wire)
+              · intro inheritedSignature inherited
+                apply Var.eq_of_index_eq
+                apply Fin.ext
+                simp [ambient, localsIso, sourceHost, targetHost,
+                  targetPrefix, WireRenaming.comp,
+                  Region.adjoinHostWire, Region.conjoinLeftWire]
+              · intro localSignature localWire
+                apply Var.eq_of_index_eq
+                apply Fin.ext
+                simp [ambient, localsIso, sourceHost, targetHost,
+                  targetPrefix, WireRenaming.comp,
+                  Region.adjoinHostWire, Region.conjoinLeftWire]
+            constructor
+            · intro signature wire
+              apply Var.appendCases (left := outer ++ hostLocals)
+                (right := firstLocals)
+                (motive := fun wire =>
+                  ambient (sourceFirst wire) = targetFirst wire)
+              · intro inheritedSignature inherited
+                apply Var.appendCases (left := outer) (right := hostLocals)
+                  (motive := fun inherited =>
+                    ambient (sourceFirst
+                        (inherited.appendLeft firstLocals)) =
+                      targetFirst (inherited.appendLeft firstLocals))
+                · intro outerSignature outerWire
+                  apply Var.eq_of_index_eq
+                  apply Fin.ext
+                  simp [ambient, localsIso, sourceFirst, targetFirst,
+                    targetPrefix, WireRenaming.comp,
+                    Region.adjoinMaterialWire, Region.adjoinHostWire,
+                    Region.conjoinLeftWire]
+                · intro hostSignature hostWire
+                  apply Var.eq_of_index_eq
+                  apply Fin.ext
+                  simp [ambient, localsIso, sourceFirst, targetFirst,
+                    targetPrefix, WireRenaming.comp,
+                    Region.adjoinMaterialWire, Region.adjoinHostWire,
+                    Region.conjoinLeftWire]
+              · intro localSignature localWire
+                apply Var.eq_of_index_eq
+                apply Fin.ext
+                simp [ambient, localsIso, sourceFirst, targetFirst,
+                  targetPrefix, WireRenaming.comp,
+                  Region.adjoinMaterialWire, Region.adjoinHostWire,
+                  Region.conjoinLeftWire]
+            · intro signature wire
+              apply Var.appendCases (left := outer ++ hostLocals)
+                (right := secondLocals)
+                (motive := fun wire =>
+                  ambient (sourceSecond wire) = targetSecond wire)
+              · intro inheritedSignature inherited
+                apply Var.appendCases (left := outer) (right := hostLocals)
+                  (motive := fun inherited =>
+                    ambient (sourceSecond
+                        (inherited.appendLeft secondLocals)) =
+                      targetSecond (inherited.appendLeft secondLocals))
+                · intro outerSignature outerWire
+                  apply Var.eq_of_index_eq
+                  apply Fin.ext
+                  simp [ambient, localsIso, sourceSecond, targetSecond,
+                    WireRenaming.comp, WireRenaming.appendRight,
+                    Region.adjoinMaterialWire, Region.adjoinHostWire,
+                    Region.conjoinLeftWire, Region.conjoinRightWire]
+                · intro hostSignature hostWire
+                  apply Var.eq_of_index_eq
+                  apply Fin.ext
+                  simp [ambient, localsIso, sourceSecond, targetSecond,
+                    WireRenaming.comp, WireRenaming.appendRight,
+                    Region.adjoinMaterialWire, Region.adjoinHostWire,
+                    Region.conjoinLeftWire, Region.conjoinRightWire]
+              · intro localSignature localWire
+                apply Var.eq_of_index_eq
+                apply Fin.ext
+                simp [ambient, localsIso, sourceSecond, targetSecond,
+                  WireRenaming.comp, WireRenaming.appendRight,
+                  Region.adjoinMaterialWire, Region.adjoinHostWire,
+                  Region.conjoinLeftWire, Region.conjoinRightWire]
+                omega
+          let hostIso := ItemSeqIso.renameWires hostItems sourceHost
+            targetHost ambient maps.1
+          let firstIso := ItemSeqIso.renameWires firstItems sourceFirst
+            targetFirst ambient maps.2.1
+          let secondIso := ItemSeqIso.renameWires secondItems sourceSecond
+            targetSecond ambient maps.2.2
+          let combined := ItemSeqIso.append
+            (ItemSeqIso.append hostIso firstIso) secondIso
+          refine .mk localsIso ?_
+          simpa only [Region.adjoinAt, Region.conjoin, Region.renameWires,
+            Region.locals, Region.items, ItemSeq.renameWires_append,
+            ItemSeq.renameWires_comp, ItemSeq.append_assoc, extendHostItems,
+            sourceHost, sourceFirst, sourceSecond,
+            targetPrefix, targetHost, targetFirst, targetSecond, ambient]
+            using combined
+
 private theorem extendHostCanonical
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
     (leading : Region (outer ++ hostLocals))
     (hostCanonical : (Region.mk hostLocals hostItems).Canonical)
     (leadingCanonical : leading.Canonical) :
     (Region.mk (hostLocals ++ leading.locals)
-      (Region.extendHostItems hostLocals hostItems leading)).Canonical := by
+      (extendHostItems hostLocals hostItems leading)).Canonical := by
   cases leading with
   | mk leadingLocals leadingItems =>
-      simpa only [Region.adjoinAt, Region.extendHostItems, Region.locals,
+      simpa only [Region.adjoinAt, extendHostItems, Region.locals,
         Region.items] using
         Region.Canonical.adjoinAt hostLocals hostItems
           (Region.mk leadingLocals leadingItems) hostCanonical
@@ -2115,7 +3108,7 @@ private theorem extendHost_incidence_nonempty
       (Region.mk hostLocals hostItems).incidencePaths wire.index.val ≠ [])
     {signature} (wire : Var outer signature) :
     (Region.mk (hostLocals ++ leading.locals)
-      (Region.extendHostItems hostLocals hostItems leading)).incidencePaths
+      (extendHostItems hostLocals hostItems leading)).incidencePaths
         wire.index.val ≠ [] := by
   cases leading with
   | mk leadingLocals leadingItems =>
@@ -2123,7 +3116,7 @@ private theorem extendHost_incidence_nonempty
         hostLocals hostItems (Region.mk leadingLocals leadingItems) wire
       have positive := List.length_pos_iff.mpr (hostNonempty wire)
       have targetPositive := Nat.lt_of_lt_of_le positive sublist.length_le
-      simpa only [Region.adjoinAt, Region.extendHostItems, Region.locals,
+      simpa only [Region.adjoinAt, extendHostItems, Region.locals,
         Region.items] using
         (List.length_pos_iff.mp targetPositive)
 
@@ -2141,10 +3134,10 @@ private noncomputable def flattenAdjoinOccurrence
     (secondCanonical : second.Canonical) :
     Occurrence
       (Region.adjoinAt (hostLocals ++ first.locals)
-        (Region.extendHostItems hostLocals hostItems first)
+        (extendHostItems hostLocals hostItems first)
         (second.renameWires
           (Region.adjoinHostWire outer hostLocals first.locals))) source := by
-  let nextHostItems := Region.extendHostItems hostLocals hostItems first
+  let nextHostItems := extendHostItems hostLocals hostItems first
   have nextHostCanonical :
       (Region.mk (hostLocals ++ first.locals) nextHostItems).Canonical :=
     extendHostCanonical hostLocals hostItems first hostCanonical firstCanonical
@@ -2183,7 +3176,72 @@ private noncomputable def flattenAdjoinOccurrence
     exact ⟨fun _ => List.length_pos_iff.mp afterPositive,
       fun _ => List.length_pos_iff.mp beforePositive⟩
   exact presentationOccurrence occurrence targetLocalCanonical sameNonempty
-    (RegionIso.adjoinAtConjoinLeft hostLocals hostItems first second)
+    (adjoinAssocIso hostLocals hostItems first second)
+
+private theorem renameWires_adjoinAt_nil
+    {common locals outer : List Sig}
+    (child : Region (common ++ locals))
+    (rename : WireRenaming common outer) :
+    (Region.adjoinAt locals .nil child).renameWires rename =
+      Region.adjoinAt locals .nil
+        (child.renameWires (rename.appendRight locals)) := by
+  cases child with
+  | mk childLocals childItems =>
+      simp only [Region.renameWires, Region.adjoinAt, ItemSeq.renameWires,
+        ItemSeq.nil_append]
+      rw [ItemSeq.renameWires_comp, ItemSeq.renameWires_comp]
+      have mapEq :
+          WireRenaming.comp (rename.appendRight (locals ++ childLocals))
+              (Region.adjoinMaterialWire common locals childLocals) =
+            WireRenaming.comp
+              (Region.adjoinMaterialWire outer locals childLocals)
+              ((rename.appendRight locals).appendRight childLocals) := by
+        apply WireRenaming.ext
+        intro signature wire
+        apply Var.appendCases (left := common ++ locals)
+          (right := childLocals)
+          (motive := fun wire =>
+            WireRenaming.comp (rename.appendRight (locals ++ childLocals))
+                (Region.adjoinMaterialWire common locals childLocals) wire =
+              WireRenaming.comp
+                (Region.adjoinMaterialWire outer locals childLocals)
+                ((rename.appendRight locals).appendRight childLocals) wire)
+        · intro inheritedSignature inherited
+          apply Var.appendCases (left := common) (right := locals)
+            (motive := fun inherited =>
+              WireRenaming.comp (rename.appendRight (locals ++ childLocals))
+                  (Region.adjoinMaterialWire common locals childLocals)
+                  (inherited.appendLeft childLocals) =
+                WireRenaming.comp
+                  (Region.adjoinMaterialWire outer locals childLocals)
+                  ((rename.appendRight locals).appendRight childLocals)
+                  (inherited.appendLeft childLocals))
+          · intro inheritedSignature inherited
+            simp [WireRenaming.comp, WireRenaming.appendRight,
+              Region.adjoinMaterialWire]
+          · intro localSignature localWire
+            simp [WireRenaming.comp, WireRenaming.appendRight,
+              Region.adjoinMaterialWire]
+        · intro childSignature childWire
+          simp [WireRenaming.comp, WireRenaming.appendRight,
+            Region.adjoinMaterialWire]
+      rw [mapEq]
+
+private noncomputable def renameWiresAdjoinAtNilIso
+    {common locals outer : List Sig}
+    (child : Region (common ++ locals))
+    (rename : WireRenaming common outer) :
+    RegionIso (WireEquiv.refl outer)
+      ((Region.adjoinAt locals .nil child).renameWires rename)
+      (Region.adjoinAt locals .nil
+        (child.renameWires (rename.appendRight locals))) := by
+  rw [renameWires_adjoinAt_nil]
+  exact RegionIso.refl _
+
+private def hostedMaterial
+    (hostItems : ItemSeq wires)
+    (material : Region wires) : Region wires :=
+  (Region.ofItems hostItems).conjoin material
 
 private theorem identityBoundaryMaterial_scope
     (pattern : OpenDiagram arguments)
@@ -2204,6 +3262,158 @@ private theorem identityBoundaryMaterial_scope
   · intro signature wire sourceRoot
     rw [instantiate_rootedTwo_iff] at sourceRoot ⊢
     exact sourceRoot
+
+private theorem hostedMaterial_scope
+    (hostItems : ItemSeq wires)
+    (sourceMaterial targetMaterial : Region wires)
+    (materialScope : ScopePreservation sourceMaterial targetMaterial) :
+    ScopePreservation
+      (hostedMaterial hostItems sourceMaterial)
+      (hostedMaterial hostItems targetMaterial) := by
+  let host := Region.ofItems hostItems
+  have combined := Region.conjoin_preserves_scope
+    host sourceMaterial host targetMaterial
+    (fun canonical => canonical) materialScope.canonical
+    (fun _ => Iff.rfl) materialScope.incidenceNonempty
+    (fun _ rooted => rooted) materialScope.rootedTwo
+  exact {
+    canonical := combined.1
+    incidenceNonempty := fun wire => (combined.2 wire).1
+    rootedTwo := fun wire => (combined.2 wire).2
+  }
+
+private theorem adjoinAt_hostedMaterial
+    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
+    (material : Region (outer ++ hostLocals)) :
+    Region.adjoinAt hostLocals hostItems material =
+      Region.adjoinAt hostLocals .nil
+        (hostedMaterial hostItems material) := by
+  cases material with
+  | mk materialLocals materialItems =>
+      let appendNil : WireRenaming (outer ++ hostLocals)
+          ((outer ++ hostLocals) ++ []) :=
+        ⟨fun wire => wire.appendLeft []⟩
+      have hostMap : WireRenaming.comp
+          (Region.adjoinMaterialWire outer hostLocals materialLocals)
+          (WireRenaming.comp
+            (Region.conjoinLeftWire (outer ++ hostLocals) [] materialLocals)
+            appendNil) =
+          Region.adjoinHostWire outer hostLocals materialLocals := by
+        apply WireRenaming.ext
+        intro signature wire
+        apply Var.appendCases (left := outer) (right := hostLocals)
+          (motive := fun wire =>
+            WireRenaming.comp
+                (Region.adjoinMaterialWire outer hostLocals materialLocals)
+                (WireRenaming.comp
+                  (Region.conjoinLeftWire (outer ++ hostLocals) []
+                    materialLocals) appendNil) wire =
+              Region.adjoinHostWire outer hostLocals materialLocals wire)
+        · intro inheritedSignature inherited
+          simp [WireRenaming.comp, appendNil, Region.conjoinLeftWire,
+            Region.adjoinMaterialWire, Region.adjoinHostWire]
+        · intro localSignature localWire
+          simp [WireRenaming.comp, appendNil, Region.conjoinLeftWire,
+            Region.adjoinMaterialWire, Region.adjoinHostWire]
+      have materialMap : WireRenaming.comp
+          (Region.adjoinMaterialWire outer hostLocals materialLocals)
+          (Region.conjoinRightWire (outer ++ hostLocals) [] materialLocals) =
+          Region.adjoinMaterialWire outer hostLocals materialLocals := by
+        apply WireRenaming.ext
+        intro signature wire
+        apply Var.appendCases (left := outer ++ hostLocals)
+          (right := materialLocals)
+          (motive := fun wire =>
+            WireRenaming.comp
+                (Region.adjoinMaterialWire outer hostLocals materialLocals)
+                (Region.conjoinRightWire (outer ++ hostLocals) []
+                  materialLocals) wire =
+              Region.adjoinMaterialWire outer hostLocals materialLocals wire)
+        · intro inheritedSignature inherited
+          simp [WireRenaming.comp, Region.conjoinRightWire,
+            Region.adjoinMaterialWire]
+        · intro localSignature localWire
+          apply Var.eq_of_index_eq
+          apply Fin.ext
+          simp [WireRenaming.comp, Region.conjoinRightWire,
+            Region.adjoinMaterialWire]
+          simpa only [List.length_nil, Nat.zero_add] using
+            (Var.index_appendRight ([] : List Sig) localWire)
+      simp only [hostedMaterial, Region.ofItems, Region.conjoin,
+        Region.adjoinAt, ItemSeq.renameWires_append,
+        ItemSeq.renameWires_comp, ItemSeq.renameWires,
+        ItemSeq.nil_append, List.nil_append]
+      rw [hostMap, materialMap]
+
+private theorem adjoinAt_preserves_scope
+    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
+    (sourceMaterial targetMaterial : Region (outer ++ hostLocals))
+    (materialScope : ScopePreservation sourceMaterial targetMaterial) :
+    ScopePreservation
+      (Region.adjoinAt hostLocals hostItems sourceMaterial)
+      (Region.adjoinAt hostLocals hostItems targetMaterial) := by
+  let sourceHosted := hostedMaterial hostItems sourceMaterial
+  let targetHosted := hostedMaterial hostItems targetMaterial
+  have sourceEq : Region.adjoinAt hostLocals hostItems sourceMaterial =
+      Region.adjoinAt hostLocals .nil sourceHosted := by
+    simpa only [sourceHosted] using
+      adjoinAt_hostedMaterial hostLocals hostItems sourceMaterial
+  have targetEq : Region.adjoinAt hostLocals hostItems targetMaterial =
+      Region.adjoinAt hostLocals .nil targetHosted := by
+    simpa only [targetHosted] using
+      adjoinAt_hostedMaterial hostLocals hostItems targetMaterial
+  have hostedScope : ScopePreservation sourceHosted targetHosted := by
+    exact hostedMaterial_scope hostItems sourceMaterial targetMaterial
+      materialScope
+  constructor
+  · intro sourceCanonical
+    have sourceAdjoinedCanonical :
+        (Region.adjoinAt hostLocals .nil sourceHosted).Canonical := by
+      rw [← sourceEq]
+      exact sourceCanonical
+    have sourceHostedCanonical : sourceHosted.Canonical :=
+      Region.Canonical.material_of_adjoinAt hostLocals .nil sourceHosted
+        sourceAdjoinedCanonical
+    have targetHostedCanonical : targetHosted.Canonical :=
+      hostedScope.canonical sourceHostedCanonical
+    rw [targetEq]
+    apply Region.Canonical.adjoinAt_of_material_roots hostLocals .nil
+      targetHosted True.intro targetHostedCanonical
+    intro localIndex
+    let localWire := Var.appendRight outer (Var.ofIndex localIndex)
+    have sourceRoot : RegionPath.RootedTwo
+        (sourceHosted.incidencePaths localWire.index.val) := by
+      simpa [localWire] using
+        Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil
+          sourceHosted sourceAdjoinedCanonical localIndex
+    have targetRoot := hostedScope.rootedTwo localWire sourceRoot
+    simpa [localWire] using targetRoot
+  · intro signature wire
+    let hostedWire := wire.appendLeft hostLocals
+    have sourcePaths := Region.incidencePaths_adjoinAt_nil sourceHosted
+      hostedWire
+    have targetPaths := Region.incidencePaths_adjoinAt_nil targetHosted
+      hostedWire
+    have wireIndex : hostedWire.index.val = wire.index.val := by
+      simp [hostedWire]
+    rw [wireIndex] at sourcePaths targetPaths
+    rw [sourceEq, targetEq, sourcePaths, targetPaths]
+    simpa only [hostedWire, Var.index_appendLeft] using
+      hostedScope.incidenceNonempty hostedWire
+  · intro signature wire sourceRoot
+    let hostedWire := wire.appendLeft hostLocals
+    have sourcePaths := Region.incidencePaths_adjoinAt_nil sourceHosted
+      hostedWire
+    have targetPaths := Region.incidencePaths_adjoinAt_nil targetHosted
+      hostedWire
+    have wireIndex : hostedWire.index.val = wire.index.val := by
+      simp [hostedWire]
+    rw [wireIndex] at sourcePaths targetPaths
+    rw [sourceEq, sourcePaths] at sourceRoot
+    rw [targetEq, targetPaths]
+    simpa only [hostedWire, Var.index_appendLeft] using
+      hostedScope.rootedTwo hostedWire (by
+        simpa only [hostedWire, Var.index_appendLeft] using sourceRoot)
 
 /-- One selected instantiation in its exact inferred retained host is
 bidirectionally equivalent to the same application through the ordered
@@ -2487,840 +3697,9 @@ private theorem strictEquates_of_equates
   exact ⟨sourceLoop.reflTransGen equivalent.1,
     equivalent.2.transGen sourceLoop⟩
 
-private theorem identityBoundarySelectedStrict
-    (pattern : OpenDiagram arguments)
-    {common outer hostLocals : List Sig}
-    (ports : Vars common arguments)
-    (rename : WireRenaming common (outer ++ hostLocals))
-    (hostItems : ItemSeq (outer ++ hostLocals))
-    {boundary : List Sig} {source : OpenDiagram boundary}
-    (occurrence : Occurrence
-      (Region.adjoinAt hostLocals hostItems
-        ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          pattern ports).renameWires rename)) source)
-    (targetCanonical :
-      (occurrence.context.fill
-        (Region.adjoinAt hostLocals hostItems
-          ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-            (identityBoundary pattern) ports).renameWires rename))).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire
-      (occurrence.context.fill
-        (Region.adjoinAt hostLocals hostItems
-          ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-            (identityBoundary pattern) ports).renameWires rename)))) :
-    StrictEquates occurrence
-      (Region.adjoinAt hostLocals hostItems
-        ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          (identityBoundary pattern) ports).renameWires rename))
-      targetCanonical targetExternalTwoEnded := by
-  let mappedPorts := ports.map fun wire => rename wire
-  let sourceBefore :=
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-      pattern ports).renameWires rename
-  let sourceAfter :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-      pattern mappedPorts
-  let sourceHostBefore := Region.adjoinAt hostLocals hostItems sourceBefore
-  let sourceHostAfter := Region.adjoinAt hostLocals hostItems sourceAfter
-  change Occurrence sourceHostBefore source at occurrence
-  have sourceHostEq : sourceHostBefore = sourceHostAfter := by
-    simp only [sourceHostBefore, sourceHostAfter, sourceBefore,
-      sourceAfter, mappedPorts, instantiate_renameWires]
-  have sourceAfterCanonical : sourceHostAfter.Canonical := by
-    rw [← sourceHostEq]
-    exact occurrence.context.holeCanonical _ occurrence.sourceCanonical
-  have sourceNonempty : ∀ {signature} (wire : Var outer signature),
-      sourceHostBefore.incidencePaths wire.index.val ≠ [] ↔
-        sourceHostAfter.incidencePaths wire.index.val ≠ [] := by
-    intro signature wire
-    rw [sourceHostEq]
-  let presentedOccurrence : Occurrence sourceHostAfter source :=
-    presentationOccurrence occurrence sourceAfterCanonical sourceNonempty
-      (RegionIso.adjoinAt hostLocals hostItems
-        (instantiateRenameIso pattern ports rename))
-  let targetBefore := Region.adjoinAt hostLocals hostItems
-    ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-      (identityBoundary pattern) ports).renameWires rename)
-  let targetAfter := Region.adjoinAt hostLocals hostItems
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-      (identityBoundary pattern) mappedPorts)
-  change (occurrence.context.fill targetBefore).Canonical at targetCanonical
-  change OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
-    (occurrence.context.fill targetBefore) at targetExternalTwoEnded
-  have targetEq : targetBefore = targetAfter := by
-    simp only [targetBefore, targetAfter, mappedPorts,
-      instantiate_renameWires]
-  have targetAfterCanonical : targetAfter.Canonical := by
-    rw [← targetEq]
-    exact occurrence.context.holeCanonical _ targetCanonical
-  have targetNonempty : ∀ {signature} (wire : Var outer signature),
-      targetBefore.incidencePaths wire.index.val ≠ [] ↔
-        targetAfter.incidencePaths wire.index.val ≠ [] := by
-    intro signature wire
-    rw [targetEq]
-  have targetReplacement := occurrence.context.replaceCanonical
-    targetBefore targetAfter targetCanonical targetAfterCanonical
-      targetNonempty
-  let targetBeforeEndpoint := occurrence.interface.withBody
-    (occurrence.context.fill targetBefore) targetCanonical
-      targetExternalTwoEnded
-  have targetAfterExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire
-      (occurrence.context.fill targetAfter) :=
-    targetBeforeEndpoint.externalTwoEnded_of_nonempty_iff _
-      targetReplacement.2
-  have presentedTargetCanonical :
-      (presentedOccurrence.context.fill targetAfter).Canonical := by
-    exact targetReplacement.1
-  have presentedTargetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      presentedOccurrence.interface.boundaryWire
-      (presentedOccurrence.context.fill targetAfter) := by
-    intro signature wire
-    exact targetAfterExternalTwoEnded wire
-  obtain ⟨ownedTargetCanonical, ownedTargetExternalTwoEnded, equivalent⟩ :=
-    equatesIdentityBoundary pattern mappedPorts presentedOccurrence
-  have strict := strictEquates_of_equates presentedOccurrence equivalent
-  have finalBodyIso : RegionIso (WireEquiv.refl outer) targetAfter
-      targetBefore :=
-    RegionIso.adjoinAt hostLocals hostItems
-      (instantiateRenameIso (identityBoundary pattern) ports rename).symm
-  have finalIso : OpenDiagramIso
-      (presentedOccurrence.interface.withBody
-        (presentedOccurrence.context.fill targetAfter)
-        ownedTargetCanonical ownedTargetExternalTwoEnded)
-      (occurrence.interface.withBody
-        (occurrence.context.fill targetBefore) targetCanonical
-          targetExternalTwoEnded) :=
-    OpenDiagram.withBody_iso ownedTargetCanonical targetCanonical
-      ownedTargetExternalTwoEnded targetExternalTwoEnded
-      (DiagramContext.fillIso occurrence.context finalBodyIso)
-  have presented := StrictEquates.targetIso strict finalIso
-  simpa only [targetBefore, sourceHostBefore, sourceBefore] using presented
-
-private structure SelectedLeafCompiler
-    {arguments : List Sig} (pattern : OpenDiagram arguments) where
-  selectedAt :
-    {common target : List Sig} →
-    Vars common arguments →
-    WireRenaming common target →
-    Region target
-  selectedNaturality :
-    ∀ {common middle target : List Sig}
-      (ports : Vars common arguments)
-      (rename : WireRenaming common middle)
-      (post : WireRenaming middle target),
-      RegionIso (WireEquiv.refl target)
-        ((selectedAt ports rename).renameWires post)
-        (selectedAt ports (WireRenaming.comp post rename))
-  selectedStrict :
-    ∀ {common outer hostLocals boundary : List Sig}
-      (ports : Vars common arguments)
-      (rename : WireRenaming common (outer ++ hostLocals))
-      (hostItems : ItemSeq (outer ++ hostLocals))
-      {source : OpenDiagram boundary}
-      (occurrence : Occurrence
-        (Region.adjoinAt hostLocals hostItems
-          ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-            pattern ports).renameWires rename)) source)
-      (targetCanonical :
-        (occurrence.context.fill
-          (Region.adjoinAt hostLocals hostItems
-            (selectedAt ports rename))).Canonical)
-      (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-        occurrence.interface.boundaryWire
-        (occurrence.context.fill
-          (Region.adjoinAt hostLocals hostItems
-            (selectedAt ports rename)))),
-      StrictEquates occurrence
-        (Region.adjoinAt hostLocals hostItems (selectedAt ports rename))
-        targetCanonical targetExternalTwoEnded
-
-private noncomputable def identitySelectedLeaf
-    (pattern : OpenDiagram arguments) : SelectedLeafCompiler pattern := {
-  selectedAt := fun ports rename =>
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-      (identityBoundary pattern) ports).renameWires rename
-  selectedNaturality := fun ports rename post =>
-    RegionIso.renameWiresComp
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-        (identityBoundary pattern) ports)
-      rename post
-  selectedStrict := fun {_common _outer _hostLocals _boundary} ports rename
-      hostItems {_source} occurrence targetCanonical targetExternalTwoEnded =>
-    identityBoundarySelectedStrict pattern ports rename hostItems
-      (occurrence := occurrence) targetCanonical targetExternalTwoEnded
-}
-
-namespace EvidenceFold
-
 mutual
-  private noncomputable def regionAt
-      {arguments : List Sig} {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : Region sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : RegionSites operation data evidence)
-      (rename : WireRenaming common target) : Region target :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites =>
-      Region.adjoinAt locals .nil
-        (itemsAt leaf childEvidence childSites (rename.appendRight locals))
-  termination_by sizeOf sites
-
-  private noncomputable def itemsAt
-      {arguments : List Sig} {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : ItemSeq sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : ItemsSites operation data evidence)
-      (rename : WireRenaming common target) : Region target :=
-    match sites with
-    | .nil _ => Region.blank target
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item sourceTail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites =>
-      (itemAt leaf itemEvidence itemSites rename).conjoin
-        (itemsAt leaf tailEvidence tailSites rename)
-  termination_by sizeOf sites
-
-  private noncomputable def itemAt
-      {arguments : List Sig} {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : Item sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : ItemSites operation data evidence)
-      (rename : WireRenaming common target) : Region target :=
-    match sites with
-    | .atom head ports =>
-      Region.singleton (.atom (rename head)
-        (ports.map fun wire => rename wire))
-    | .selectedAtom ports _ => leaf.selectedAt ports rename
-    | .identity signature arity ports =>
-      Region.singleton (.identity signature arity
-        (fun position => rename (ports position)))
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites =>
-      Region.singleton (.cut
-        (regionAt leaf childEvidence childSites rename))
-  termination_by sizeOf sites
-end
-
-mutual
-  private theorem regionAt_eq_of_noSelection
-      {arguments : List Sig} {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : Region sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : RegionSites operation data evidence)
-      (none : regionHasSelection sites = false)
-      (rename : WireRenaming common target) :
-      regionAt leaf evidence sites rename = result.renameWires rename :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-      unfold regionAt
-      simp_wf
-      change Region.adjoinAt locals .nil
-          (itemsAt leaf childEvidence childSites (rename.appendRight locals)) =
-        (Region.adjoinAt locals .nil childResult).renameWires rename
-      rw [Region.renameWires_adjoinAt_nil]
-      rw [itemsAt_eq_of_noSelection leaf childEvidence childSites (by
-        simpa only [regionHasSelection] using none) (rename.appendRight locals)]
-  termination_by sizeOf sites
-
-  private theorem itemsAt_eq_of_noSelection
-      {arguments : List Sig} {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : ItemSeq sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : ItemsSites operation data evidence)
-      (none : itemsHaveSelection sites = false)
-      (rename : WireRenaming common target) :
-      itemsAt leaf evidence sites rename = result.renameWires rename :=
-    match sites with
-    | .nil _ => by
-      unfold itemsAt
-      simp_wf
-      rfl
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item sourceTail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites => by
-      unfold itemsAt
-      simp_wf
-      have itemNone : itemHasSelection itemSites = false := by
-        cases selected : itemHasSelection itemSites with
-        | false => rfl
-        | true => simp_all only [itemsHaveSelection, Bool.true_or,
-            Bool.true_eq_false]
-      have tailNone : itemsHaveSelection tailSites = false := by
-        cases selected : itemsHaveSelection tailSites with
-        | false => rfl
-        | true => simp_all only [itemsHaveSelection, Bool.or_true,
-            Bool.true_eq_false]
-      change
-        (itemAt leaf itemEvidence itemSites rename).conjoin
-            (itemsAt leaf tailEvidence tailSites rename) =
-          (itemResult.conjoin tailResult).renameWires rename
-      rw [Region.renameWires_conjoin]
-      rw [itemAt_eq_of_noSelection leaf itemEvidence itemSites itemNone rename]
-      rw [itemsAt_eq_of_noSelection leaf tailEvidence tailSites tailNone rename]
-  termination_by sizeOf sites
-
-  private theorem itemAt_eq_of_noSelection
-      {arguments : List Sig} {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : Item sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : ItemSites operation data evidence)
-      (none : itemHasSelection sites = false)
-      (rename : WireRenaming common target) :
-      itemAt leaf evidence sites rename = result.renameWires rename :=
-    match sites with
-    | .atom head ports => by
-      unfold itemAt
-      simp_wf
-      rw [Region.singleton_renameWires]
-      rfl
-    | .selectedAtom _ _ => by
-      simp only [itemHasSelection, Bool.true_eq_false] at none
-    | .identity signature arity ports => by
-      unfold itemAt
-      simp_wf
-      rw [Region.singleton_renameWires]
-      rfl
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites => by
-      unfold itemAt
-      simp_wf
-      change Region.singleton (.cut
-          (regionAt leaf childEvidence childSites rename)) =
-        (Region.singleton (.cut childResult)).renameWires rename
-      simp only [Region.singleton_renameWires, Item.renameWires]
-      rw [regionAt_eq_of_noSelection leaf childEvidence childSites (by
-        simpa only [itemHasSelection] using none) rename]
-  termination_by sizeOf sites
-end
-
-mutual
-  private noncomputable def regionAtNaturality
-      {arguments : List Sig} {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : Region sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : RegionSites operation data evidence)
-      (rename : WireRenaming common middle)
-      (post : WireRenaming middle target) :
-      RegionIso (WireEquiv.refl target)
-        ((regionAt leaf evidence sites rename).renameWires post)
-        (regionAt leaf evidence sites (WireRenaming.comp post rename)) :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-      unfold regionAt
-      simp_wf
-      have maps : WireRenaming.comp (post.appendRight locals)
-            (rename.appendRight locals) =
-          (WireRenaming.comp post rename).appendRight locals := by
-        apply WireRenaming.ext
-        intro signature wire
-        exact WireRenaming.appendRight_comp_apply rename post locals wire
-      let exposed := RegionIso.renameWiresAdjoinAtNil
-        (itemsAt leaf childEvidence childSites (rename.appendRight locals)) post
-      let child := RegionIso.adjoinAt locals .nil
-        (itemsAtNaturality leaf childEvidence childSites
-          (rename.appendRight locals) (post.appendRight locals))
-      simpa only [maps, WireEquiv.refl_trans] using exposed.trans child
-
-  private noncomputable def itemsAtNaturality
-      {arguments : List Sig} {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : ItemSeq sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : ItemsSites operation data evidence)
-      (rename : WireRenaming common middle)
-      (post : WireRenaming middle target) :
-      RegionIso (WireEquiv.refl target)
-        ((itemsAt leaf evidence sites rename).renameWires post)
-        (itemsAt leaf evidence sites (WireRenaming.comp post rename)) :=
-    match sites with
-    | .nil _ => by
-      unfold itemsAt
-      simp_wf
-      exact RegionIso.refl _
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item sourceTail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites => by
-      unfold itemsAt
-      simp_wf
-      let exposed := RegionIso.renameWiresConjoin
-        (itemAt leaf itemEvidence itemSites rename)
-        (itemsAt leaf tailEvidence tailSites rename) post
-      let children := RegionIso.conjoinCongr
-        (itemAtNaturality leaf itemEvidence itemSites rename post)
-        (itemsAtNaturality leaf tailEvidence tailSites rename post)
-      simpa only [WireEquiv.refl_trans] using exposed.trans children
-
-  private noncomputable def itemAtNaturality
-      {arguments : List Sig} {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : Item sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : ItemSites operation data evidence)
-      (rename : WireRenaming common middle)
-      (post : WireRenaming middle target) :
-      RegionIso (WireEquiv.refl target)
-        ((itemAt leaf evidence sites rename).renameWires post)
-        (itemAt leaf evidence sites (WireRenaming.comp post rename)) :=
-    match sites with
-    | .atom head ports => by
-      unfold itemAt
-      simp_wf
-      simpa only [Region.singleton_renameWires, Item.renameWires,
-        WireRenaming.comp] using
-          RegionIso.renameWiresComp
-            (Region.singleton (.atom head ports)) rename post
-    | .selectedAtom ports _ => by
-      unfold itemAt
-      simp_wf
-      exact leaf.selectedNaturality ports rename post
-    | .identity signature arity ports => by
-      unfold itemAt
-      simp_wf
-      simpa only [Region.singleton_renameWires, Item.renameWires,
-        WireRenaming.comp] using
-          RegionIso.renameWiresComp
-            (Region.singleton (.identity signature arity ports)) rename post
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites => by
-      unfold itemAt
-      simp_wf
-      simpa only [Region.singleton_renameWires, Item.renameWires] using
-        RegionIso.singletonCutCongr
-          (regionAtNaturality leaf childEvidence childSites rename post)
-end
-
-mutual
-  /-- Proof-only evidence that the identity-boundary leaf interpretation is an
-  instantiation of the exact endpoint generated by `regionAt`. -/
-  private def identityRegionEvidence
-      {arguments : List Sig} (pattern : OpenDiagram arguments)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : Region sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : RegionSites operation data evidence) :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-        (identityBoundary pattern) frame.sourceKeep frame.selected source
-          (regionAt (identitySelectedLeaf pattern) evidence sites
-            WireRenaming.id) :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-      unfold regionAt
-      simp_wf
-      have renameEq : WireRenaming.id.appendRight locals =
-          (WireRenaming.id : WireRenaming (common ++ locals)
-            (common ++ locals)) := by
-        apply WireRenaming.ext
-        intro signature wire
-        exact WireRenaming.appendRight_id_apply locals wire
-      rw [renameEq]
-      exact
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
-          (identityItemsEvidence pattern childEvidence childSites)
-  termination_by sizeOf sites
-
-  /-- Proof-only evidence for the exact item-sequence endpoint. -/
-  private def identityItemsEvidence
-      {arguments : List Sig} (pattern : OpenDiagram arguments)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : ItemSeq sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : ItemsSites operation data evidence) :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        (identityBoundary pattern) frame.sourceKeep frame.selected source
-          (itemsAt (identitySelectedLeaf pattern) evidence sites
-            WireRenaming.id) :=
-    match sites with
-    | .nil _ => by
-      unfold itemsAt
-      simp_wf
-      exact
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites => by
-      unfold itemsAt
-      simp_wf
-      exact
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
-          (identityItemEvidence pattern itemEvidence itemSites)
-          (identityItemsEvidence pattern tailEvidence tailSites)
-  termination_by sizeOf sites
-
-  /-- Proof-only evidence for the exact single-item endpoint. -/
-  private def identityItemEvidence
-      {arguments : List Sig} (pattern : OpenDiagram arguments)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : Item sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : ItemSites operation data evidence) :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-        (identityBoundary pattern) frame.sourceKeep frame.selected source
-          (itemAt (identitySelectedLeaf pattern) evidence sites
-            WireRenaming.id) :=
-    match sites with
-    | .atom head ports => by
-      unfold itemAt
-      simp_wf
-      simpa only [WireRenaming.id, Diagram.vars_map_id] using
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
-          head ports
-    | .selectedAtom ports _ => by
-      unfold itemAt identitySelectedLeaf
-      simp_wf
-      simpa only [Region.renameWires_id] using
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
-          (pattern := identityBoundary pattern) ports
-    | .identity signature arity ports => by
-      unfold itemAt
-      simp_wf
-      simpa only [WireRenaming.id] using
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
-          signature arity ports
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites => by
-      unfold itemAt
-      simp_wf
-      exact
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
-          (identityRegionEvidence pattern childEvidence childSites)
-  termination_by sizeOf sites
-end
-
-mutual
-  /-- Scope preservation for the exact identity-boundary region endpoint. -/
-  private theorem identityRegionScope
-      {arguments : List Sig} (pattern : OpenDiagram arguments)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : Region sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : RegionSites operation data evidence)
-      (rename : WireRenaming common target) :
-      ScopePreservation (result.renameWires rename)
-        (regionAt (identitySelectedLeaf pattern) evidence sites rename) :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-      unfold regionAt
-      simp_wf
-      rw [Region.renameWires_adjoinAt_nil]
-      let childTarget := itemsAt (identitySelectedLeaf pattern) childEvidence
-        childSites (rename.appendRight locals)
-      let childPreservation := identityItemsScope pattern childEvidence
-        childSites (rename.appendRight locals)
-      change ScopePreservation
-        (Region.adjoinAt locals .nil
-          (childResult.renameWires (rename.appendRight locals)))
-        (Region.adjoinAt locals .nil childTarget)
-      constructor
-      · intro sourceCanonical
-        have sourceChildCanonical :
-            (childResult.renameWires (rename.appendRight locals)).Canonical :=
-          Region.Canonical.material_of_adjoinAt locals .nil _ sourceCanonical
-        have targetChildCanonical : childTarget.Canonical :=
-          childPreservation.canonical sourceChildCanonical
-        apply Region.Canonical.adjoinAt_of_material_roots locals .nil
-          childTarget True.intro targetChildCanonical
-        intro localIndex
-        let localWire := Var.appendRight target (Var.ofIndex localIndex)
-        have sourceRoot : RegionPath.RootedTwo
-            ((childResult.renameWires (rename.appendRight locals)).incidencePaths
-              localWire.index.val) := by
-          simpa [localWire] using
-            Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil
-              (childResult.renameWires (rename.appendRight locals))
-              sourceCanonical localIndex
-        simpa [localWire] using
-          childPreservation.rootedTwo localWire sourceRoot
-      · intro signature wire
-        let childWire := wire.appendLeft locals
-        have sourcePaths := Region.incidencePaths_adjoinAt_nil
-          (childResult.renameWires (rename.appendRight locals)) childWire
-        have targetPaths := Region.incidencePaths_adjoinAt_nil childTarget
-          childWire
-        have childIndex : childWire.index.val = wire.index.val := by
-          simp [childWire]
-        rw [childIndex] at sourcePaths targetPaths
-        rw [sourcePaths, targetPaths]
-        simpa only [childWire, Var.index_appendLeft] using
-          childPreservation.incidenceNonempty childWire
-      · intro signature wire sourceRoot
-        let childWire := wire.appendLeft locals
-        have sourcePaths := Region.incidencePaths_adjoinAt_nil
-          (childResult.renameWires (rename.appendRight locals)) childWire
-        have targetPaths := Region.incidencePaths_adjoinAt_nil childTarget
-          childWire
-        have childIndex : childWire.index.val = wire.index.val := by
-          simp [childWire]
-        rw [childIndex] at sourcePaths targetPaths
-        rw [sourcePaths] at sourceRoot
-        rw [targetPaths]
-        simpa only [childWire, Var.index_appendLeft] using
-          childPreservation.rootedTwo childWire (by
-            simpa only [childWire, Var.index_appendLeft] using sourceRoot)
-  termination_by sizeOf sites
-
-  /-- Scope preservation for the exact identity-boundary item-sequence
-  endpoint. -/
-  private theorem identityItemsScope
-      {arguments : List Sig} (pattern : OpenDiagram arguments)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : ItemSeq sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : ItemsSites operation data evidence)
-      (rename : WireRenaming common target) :
-      ScopePreservation (result.renameWires rename)
-        (itemsAt (identitySelectedLeaf pattern) evidence sites rename) :=
-    match sites with
-    | .nil _ => by
-      unfold itemsAt
-      simp_wf
-      change ScopePreservation (Region.blank common |>.renameWires rename)
-        (Region.blank target)
-      simpa only [Region.renameWires] using
-        (show ScopePreservation (Region.blank target) (Region.blank target)
-          from {
-            canonical := fun canonical => canonical
-            incidenceNonempty := fun _ => Iff.rfl
-            rootedTwo := fun _ rooted => rooted
-          })
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites => by
-      unfold itemsAt
-      simp_wf
-      rw [Region.renameWires_conjoin]
-      let itemTarget := itemAt (identitySelectedLeaf pattern) itemEvidence
-        itemSites rename
-      let tailTarget := itemsAt (identitySelectedLeaf pattern) tailEvidence
-        tailSites rename
-      let itemPreservation := identityItemScope pattern itemEvidence
-        itemSites rename
-      let tailPreservation := identityItemsScope pattern tailEvidence
-        tailSites rename
-      change ScopePreservation
-        ((itemResult.renameWires rename).conjoin
-          (tailResult.renameWires rename))
-        (itemTarget.conjoin tailTarget)
-      have combined := Region.conjoin_preserves_scope
-        (itemResult.renameWires rename) (tailResult.renameWires rename)
-        itemTarget tailTarget itemPreservation.canonical
-          tailPreservation.canonical itemPreservation.incidenceNonempty
-            tailPreservation.incidenceNonempty itemPreservation.rootedTwo
-              tailPreservation.rootedTwo
-      exact {
-        canonical := combined.1
-        incidenceNonempty := fun wire => (combined.2 wire).1
-        rootedTwo := fun wire => (combined.2 wire).2
-      }
-  termination_by sizeOf sites
-
-  /-- Scope preservation for the exact identity-boundary single-item
-  endpoint. -/
-  private theorem identityItemScope
-      {arguments : List Sig} (pattern : OpenDiagram arguments)
-      {operation : Transform.Operation arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {data : operation.Data frame}
-      {source : Item sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          pattern frame.sourceKeep frame.selected source result)
-      (sites : ItemSites operation data evidence)
-      (rename : WireRenaming common target) :
-      ScopePreservation (result.renameWires rename)
-        (itemAt (identitySelectedLeaf pattern) evidence sites rename) :=
-    match sites with
-    | .atom head ports => by
-      unfold itemAt
-      simp_wf
-      rw [Region.singleton_renameWires]
-      exact {
-        canonical := fun canonical => canonical
-        incidenceNonempty := fun _ => Iff.rfl
-        rootedTwo := fun _ rooted => rooted
-      }
-    | .selectedAtom ports _ => by
-      unfold itemAt identitySelectedLeaf
-      simp_wf
-      rw [instantiate_renameWires, instantiate_renameWires]
-      let mappedPorts := ports.map fun wire => rename wire
-      change ScopePreservation
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          pattern mappedPorts)
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          (identityBoundary pattern) mappedPorts)
-      constructor
-      · intro _
-        exact
-          _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
-            (identityBoundary pattern) mappedPorts
-      · intro signature wire
-        rw [instantiate_incidence_nonempty_iff,
-          instantiate_incidence_nonempty_iff]
-      · intro signature wire sourceRoot
-        rw [instantiate_rootedTwo_iff] at sourceRoot ⊢
-        exact sourceRoot
-    | .identity signature arity ports => by
-      unfold itemAt
-      simp_wf
-      rw [Region.singleton_renameWires]
-      exact {
-        canonical := fun canonical => canonical
-        incidenceNonempty := fun _ => Iff.rfl
-        rootedTwo := fun _ rooted => rooted
-      }
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites => by
-      unfold itemAt
-      simp_wf
-      rw [Region.singleton_renameWires]
-      let childTarget := regionAt (identitySelectedLeaf pattern)
-        childEvidence childSites rename
-      let childPreservation := identityRegionScope pattern childEvidence
-        childSites rename
-      change ScopePreservation
-        (Region.singleton (.cut (childResult.renameWires rename)))
-        (Region.singleton (.cut childTarget))
-      constructor
-      · intro sourceCanonical
-        apply (Region.singleton_cut_canonical_iff childTarget).mpr
-        exact childPreservation.canonical
-          ((Region.singleton_cut_canonical_iff
-            (childResult.renameWires rename)).mp sourceCanonical)
-      · intro signature wire
-        rw [Region.incidencePaths_singleton_cut,
-          Region.incidencePaths_singleton_cut]
-        constructor
-        · intro sourceNonempty
-          have childSourceNonempty :
-              (childResult.renameWires rename).incidencePaths
-                wire.index.val ≠ [] := by
-            intro sourceEmpty
-            exact sourceNonempty ((List.map_eq_nil_iff).mpr sourceEmpty)
-          have childTargetNonempty :=
-            (childPreservation.incidenceNonempty wire).mp childSourceNonempty
-          intro targetEmpty
-          exact childTargetNonempty ((List.map_eq_nil_iff).mp targetEmpty)
-        · intro targetNonempty
-          have childTargetNonempty :
-              childTarget.incidencePaths wire.index.val ≠ [] := by
-            intro targetEmpty
-            exact targetNonempty ((List.map_eq_nil_iff).mpr targetEmpty)
-          have childSourceNonempty :=
-            (childPreservation.incidenceNonempty wire).mpr childTargetNonempty
-          intro sourceEmpty
-          exact childSourceNonempty ((List.map_eq_nil_iff).mp sourceEmpty)
-      · intro signature wire sourceRoot
-        rw [Region.incidencePaths_singleton_cut] at sourceRoot ⊢
-        have sameEmpty :
-            (childResult.renameWires rename).incidencePaths
-                  wire.index.val = [] ↔
-              childTarget.incidencePaths wire.index.val = [] := by
-          constructor
-          · intro sourceEmpty
-            by_cases targetEmpty : childTarget.incidencePaths
-                wire.index.val = []
-            · exact targetEmpty
-            · exact False.elim
-                (((childPreservation.incidenceNonempty wire).mpr targetEmpty)
-                  sourceEmpty)
-          · intro targetEmpty
-            by_cases sourceEmpty :
-                (childResult.renameWires rename).incidencePaths
-                  wire.index.val = []
-            · exact sourceEmpty
-            · exact False.elim
-                (((childPreservation.incidenceNonempty wire).mp sourceEmpty)
-                  targetEmpty)
-        have replaced := RegionPath.rootedTwo_replace []
-          ((childResult.renameWires rename).incidencePaths wire.index.val)
-          (childTarget.incidencePaths wire.index.val) [] 0 sameEmpty
-        simpa only [List.nil_append, List.append_nil] using
-          replaced.mp (by simpa using sourceRoot)
-  termination_by sizeOf sites
-end
-
-end EvidenceFold
-
-namespace EvidenceFold
-
-mutual
-  private noncomputable def regionStrict
-      {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
+  private noncomputable def normalizedRegionStrict
+      (pattern : OpenDiagram arguments)
       {operation : Transform.Operation arguments}
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
@@ -3334,13 +3713,15 @@ mutual
         (occurrence : Occurrence (result.renameWires rename) source)
         (targetCanonical :
           (occurrence.context.fill
-            (regionAt leaf evidence sites rename)).Canonical)
+            (Region.renameWires rename
+              (normalizedRegion pattern evidence sites).1)).Canonical)
         (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
           occurrence.interface.boundaryWire
           (occurrence.context.fill
-            (regionAt leaf evidence sites rename))),
+            (Region.renameWires rename
+              (normalizedRegion pattern evidence sites).1))),
         StrictEquates occurrence
-          (regionAt leaf evidence sites rename)
+          (Region.renameWires rename (normalizedRegion pattern evidence sites).1)
           targetCanonical (fun wire => targetExternalTwoEnded wire) :=
     match sites with
     | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
@@ -3352,7 +3733,7 @@ mutual
         change Occurrence
           ((Region.adjoinAt locals .nil childResult).renameWires rename) source
           at occurrence
-        have sourceEq := Region.renameWires_adjoinAt_nil childResult rename
+        have sourceEq := renameWires_adjoinAt_nil childResult rename
         have childSourceCanonical :
             (Region.adjoinAt locals childHostItems
               (childResult.renameWires childRename)).Canonical := by
@@ -3372,33 +3753,79 @@ mutual
           presentationOccurrence occurrence childSourceCanonical sourceNonempty
             (by
               simpa only [childHostItems, childRename] using
-                RegionIso.renameWiresAdjoinAtNil childResult rename)
-        let childTarget := itemsAt leaf childEvidence childSites childRename
-        simp only [regionAt] at targetCanonical targetExternalTwoEnded ⊢
+                renameWiresAdjoinAtNilIso childResult rename)
+        let normalizedChild :=
+          (normalizedItems pattern childEvidence childSites).1
+        let targetBefore :=
+          (Region.adjoinAt locals (.nil : ItemSeq (common ++ locals))
+            normalizedChild).renameWires rename
+        let targetAfter := Region.adjoinAt locals childHostItems
+          (normalizedChild.renameWires childRename)
+        have targetEq : targetBefore = targetAfter := by
+          simpa only [targetBefore, targetAfter, childHostItems, childRename] using
+            renameWires_adjoinAt_nil normalizedChild rename
+        change (occurrence.context.fill targetBefore).Canonical at targetCanonical
+        change OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
+          (occurrence.context.fill targetBefore) at targetExternalTwoEnded
+        have targetAfterCanonical : targetAfter.Canonical := by
+          rw [← targetEq]
+          exact occurrence.context.holeCanonical _ targetCanonical
+        have targetNonempty : ∀ {signature} (wire : Var outer signature),
+            targetBefore.incidencePaths wire.index.val ≠ [] ↔
+              targetAfter.incidencePaths wire.index.val ≠ [] := by
+          intro signature wire
+          rw [targetEq]
+        have targetReplacement := occurrence.context.replaceCanonical
+          targetBefore targetAfter targetCanonical targetAfterCanonical
+            targetNonempty
+        let targetBeforeEndpoint := occurrence.interface.withBody
+          (occurrence.context.fill targetBefore) targetCanonical
+            targetExternalTwoEnded
+        have targetAfterExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+            occurrence.interface.boundaryWire
+            (occurrence.context.fill targetAfter) :=
+          targetBeforeEndpoint.externalTwoEnded_of_nonempty_iff _
+            targetReplacement.2
         have childTargetCanonical :
             (childOccurrence.context.fill
               (Region.adjoinAt locals childHostItems
-                childTarget)).Canonical := by
-          exact targetCanonical
+                (Region.renameWires childRename
+                  (normalizedItems pattern childEvidence childSites).1))).Canonical := by
+          exact targetReplacement.1
         have childTargetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
             childOccurrence.interface.boundaryWire
             (childOccurrence.context.fill
               (Region.adjoinAt locals childHostItems
-                childTarget)) := by
+                (Region.renameWires childRename
+                  (normalizedItems pattern childEvidence childSites).1))) := by
           intro signature wire
-          exact targetExternalTwoEnded wire
+          exact targetAfterExternalTwoEnded wire
         have childSelection : itemsHaveSelection childSites = true := by
           simpa only [regionHasSelection] using hasSelection
-        have folded := itemsStrict leaf
+        have folded := normalizedItemsStrict pattern
           childEvidence childSites childSelection locals childRename childHostItems
           childOccurrence childTargetCanonical childTargetExternalTwoEnded
-        simpa only [regionAt, childTarget, childHostItems, childRename,
-          childOccurrence] using folded
+        have finalBodyIso : RegionIso (WireEquiv.refl outer) targetAfter
+            targetBefore := by
+          simpa only [targetAfter, targetBefore, childHostItems, childRename] using
+            (renameWiresAdjoinAtNilIso normalizedChild rename).symm
+        have finalIso : OpenDiagramIso
+            (childOccurrence.interface.withBody
+              (childOccurrence.context.fill targetAfter)
+              childTargetCanonical childTargetExternalTwoEnded)
+            (occurrence.interface.withBody
+              (occurrence.context.fill targetBefore) targetCanonical
+                targetExternalTwoEnded) :=
+          OpenDiagram.withBody_iso childTargetCanonical targetCanonical
+            childTargetExternalTwoEnded targetExternalTwoEnded
+            (DiagramContext.fillIso occurrence.context finalBodyIso)
+        have presented := StrictEquates.targetIso folded finalIso
+        simpa only [normalizedRegion, normalizedChild, targetBefore, targetAfter,
+          childHostItems, childRename, childOccurrence] using presented
   termination_by 5 * sizeOf sites
 
-  private noncomputable def itemsStrict
-      {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
+  private noncomputable def normalizedItemsStrict
+      (pattern : OpenDiagram arguments)
       {operation : Transform.Operation arguments}
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
@@ -3417,18 +3844,21 @@ mutual
       (targetCanonical :
         (occurrence.context.fill
           (Region.adjoinAt hostLocals hostItems
-            (itemsAt leaf evidence sites rename))).Canonical)
+            (Region.renameWires rename
+              (normalizedItems pattern evidence sites).1))).Canonical)
       (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
         occurrence.interface.boundaryWire
-          (occurrence.context.fill
-            (Region.adjoinAt hostLocals hostItems
-              (itemsAt leaf evidence sites rename)))) :
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals hostItems
+            (Region.renameWires rename
+              (normalizedItems pattern evidence sites).1)))) :
       StrictEquates occurrence
         (Region.adjoinAt hostLocals hostItems
-          (itemsAt leaf evidence sites rename))
+          (Region.renameWires rename (normalizedItems pattern evidence sites).1))
         targetCanonical (fun wire => targetExternalTwoEnded wire) := by
     let sourceMaterial := result.renameWires rename
-    let targetMaterial := itemsAt leaf evidence sites rename
+    let targetMaterial :=
+      (Region.renameWires rename (normalizedItems pattern evidence sites).1)
     by_cases nonempty : outer ++ hostLocals ≠ []
     · exact (by
     obtain ⟨pinnedSourceCanonical, pinnedSourceExternalTwoEnded,
@@ -3465,7 +3895,7 @@ mutual
     have pinnedTargetValidity := supportedAdjoinValidity hostLocals
       pinnedItems pinnedSourceOccurrence pinnedHostCanonical
       pinnedHostNonempty targetMaterialCanonical
-    have folded := itemsSupportedStrict leaf evidence
+    have folded := normalizedItemsSupportedStrict pattern evidence
       sites hasSelection outer hostLocals rename pinnedItems pinnedSourceOccurrence
       pinnedHostCanonical pinnedHostNonempty pinnedTargetValidity.1
       pinnedTargetValidity.2
@@ -3552,15 +3982,14 @@ mutual
           (Region.mk [] hostItems).incidencePaths wire.index.val ≠ [] := by
         intro signature wire
         exact Fin.elim0 wire.index
-      have folded := itemsSupportedStrict leaf evidence sites
+      have folded := normalizedItemsSupportedStrict pattern evidence sites
         hasSelection [] [] rename hostItems occurrence hostCanonical
           hostNonempty targetCanonical targetExternalTwoEnded
       simpa only [sourceMaterial, targetMaterial] using folded
   termination_by 5 * sizeOf sites + 4
 
-  private noncomputable def itemsSupportedStrict
-      {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
+  private noncomputable def normalizedItemsSupportedStrict
+      (pattern : OpenDiagram arguments)
       {operation : Transform.Operation arguments}
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
@@ -3582,15 +4011,17 @@ mutual
         (targetCanonical :
           (occurrence.context.fill
             (Region.adjoinAt hostLocals hostItems
-              (itemsAt leaf evidence sites rename))).Canonical)
+              (Region.renameWires rename
+                (normalizedItems pattern evidence sites).1))).Canonical)
         (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
           occurrence.interface.boundaryWire
           (occurrence.context.fill
             (Region.adjoinAt hostLocals hostItems
-              (itemsAt leaf evidence sites rename)))),
+              (Region.renameWires rename
+                (normalizedItems pattern evidence sites).1)))),
         StrictEquates occurrence
           (Region.adjoinAt hostLocals hostItems
-            (itemsAt leaf evidence sites rename))
+            (Region.renameWires rename (normalizedItems pattern evidence sites).1))
           targetCanonical targetExternalTwoEnded :=
     match sites with
     | .nil _ => by
@@ -3601,8 +4032,10 @@ mutual
           hostCanonical hostNonempty targetCanonical targetExternalTwoEnded
         let itemBefore := itemResult.renameWires rename
         let tailBefore := tailResult.renameWires rename
-        let itemAfter := itemAt leaf itemEvidence itemSites rename
-        let tailAfter := itemsAt leaf tailEvidence tailSites rename
+        let itemAfter :=
+          (Region.renameWires rename (normalizedItem pattern itemEvidence itemSites).1)
+        let tailAfter :=
+          (Region.renameWires rename (normalizedItems pattern tailEvidence tailSites).1)
         change Occurrence
           (Region.adjoinAt hostLocals hostItems
             ((itemResult.conjoin tailResult).renameWires rename)) source
@@ -3613,7 +4046,7 @@ mutual
             (occurrence.context.holeCanonical _ occurrence.sourceCanonical)
         have sourceMaterialCanonical :
             (itemBefore.conjoin tailBefore).Canonical := by
-          rw [← Region.renameWires_conjoin]
+          rw [← renameWires_conjoin]
           exact sourceBeforeCanonical
         let sourceOccurrence : Occurrence
             (Region.adjoinAt hostLocals hostItems
@@ -3621,15 +4054,15 @@ mutual
           supportedAdjoinOccurrence hostLocals hostItems occurrence hostCanonical
             hostNonempty sourceMaterialCanonical (by
               simpa only [itemBefore, tailBefore] using
-                RegionIso.renameWiresConjoin itemResult tailResult rename)
+                renameWiresConjoinIso itemResult tailResult rename)
         have itemBeforeCanonical :=
           canonical_left_of_conjoin sourceMaterialCanonical
         have tailBeforeCanonical :=
           canonical_right_of_conjoin sourceMaterialCanonical
+        let normalizedHead := (normalizedItem pattern itemEvidence itemSites).1
+        let normalizedTail := (normalizedItems pattern tailEvidence tailSites).1
         let targetBefore :=
-          (itemAt leaf itemEvidence itemSites rename).conjoin
-            (itemsAt leaf tailEvidence tailSites rename)
-        simp only [itemsAt] at targetCanonical targetExternalTwoEnded ⊢
+          (normalizedHead.conjoin normalizedTail).renameWires rename
         change (occurrence.context.fill
           (Region.adjoinAt hostLocals hostItems targetBefore)).Canonical
           at targetCanonical
@@ -3652,8 +4085,8 @@ mutual
             (occurrence.context.holeCanonical _ targetCanonical)
         have targetMaterialCanonical :
             (itemAfter.conjoin tailAfter).Canonical := by
-          simpa only [targetBefore, itemAfter, tailAfter, itemsAt] using
-            targetBeforeCanonical
+          rw [← renameWires_conjoin]
+          exact targetBeforeCanonical
         have itemAfterCanonical :=
           canonical_left_of_conjoin targetMaterialCanonical
         have tailAfterCanonical :=
@@ -3664,7 +4097,7 @@ mutual
         have itemPhaseValidity := supportedAdjoinValidity hostLocals hostItems
           sourceOccurrence hostCanonical hostNonempty
           (canonical_conjoin itemAfterCanonical tailBeforeCanonical)
-        have itemPhase := itemWithTailStrict leaf
+        have itemPhase := normalizedItemWithTailStrict pattern
           itemEvidence itemSites itemSelected hostLocals rename hostItems tailBefore
           sourceOccurrence hostCanonical hostNonempty itemBeforeCanonical
           tailBeforeCanonical itemAfterCanonical itemPhaseValidity.1
@@ -3680,7 +4113,7 @@ mutual
         let flattened := flattenAdjoinOccurrence hostLocals hostItems
           itemAfter tailBefore afterItemOccurrence hostCanonical hostNonempty
           itemAfterCanonical tailBeforeCanonical
-        let nextHostItems := Region.extendHostItems hostLocals hostItems itemAfter
+        let nextHostItems := extendHostItems hostLocals hostItems itemAfter
         let hostWire :=
           Region.adjoinHostWire outer hostLocals itemAfter.locals
         let nextRename := WireRenaming.comp
@@ -3711,20 +4144,18 @@ mutual
             nextHostItems flattened nextHostCanonical nextHostNonempty
             alignedTailCanonical (by
               simpa only [tailBefore, hostWire, nextRename] using
-                RegionIso.renameWiresComp tailResult rename hostWire)
-        let flatTargetMaterial := itemsAt leaf tailEvidence tailSites nextRename
-        have renamedTailCanonical :
-            (tailAfter.renameWires hostWire).Canonical :=
-          (Region.Canonical.renameWires_iff tailAfter hostWire).mpr
+                renameWiresCompIso tailResult rename hostWire)
+        have normalizedTailCanonical : normalizedTail.Canonical :=
+          (Region.Canonical.renameWires_iff normalizedTail rename).mp
             tailAfterCanonical
+        let flatTargetMaterial := normalizedTail.renameWires nextRename
         have flatTargetMaterialCanonical : flatTargetMaterial.Canonical :=
-          (RegionIso.canonical_iff
-            (itemsAtNaturality leaf tailEvidence tailSites rename hostWire)).mp
-              renamedTailCanonical
+          (Region.Canonical.renameWires_iff normalizedTail nextRename).mpr
+            normalizedTailCanonical
         have tailTargetValidity := supportedAdjoinValidity
           (hostLocals ++ itemAfter.locals) nextHostItems alignedFlattened
           nextHostCanonical nextHostNonempty flatTargetMaterialCanonical
-        have tailPhase := itemsSupportedStrict leaf
+        have tailPhase := normalizedItemsSupportedStrict pattern
           tailEvidence tailSites tailSelected outer
           (hostLocals ++ itemAfter.locals) nextRename
           nextHostItems alignedFlattened nextHostCanonical nextHostNonempty
@@ -3737,16 +4168,15 @@ mutual
             tailTargetValidity.2
         have finalBodyIso : RegionIso (WireEquiv.refl outer) flatTarget
             (Region.adjoinAt hostLocals hostItems targetBefore) := by
-          exact (RegionIso.adjoinAt (hostLocals ++ itemAfter.locals)
-            nextHostItems (by
-            simpa only [flatTargetMaterial, tailAfter, nextRename, hostWire]
-              using (itemsAtNaturality leaf tailEvidence tailSites rename
-                hostWire).symm)).trans
-            ((RegionIso.adjoinAtConjoinLeft hostLocals hostItems itemAfter
-              tailAfter).symm.trans
-              (RegionIso.adjoinAt hostLocals hostItems (by
-                simpa only [itemAfter, tailAfter, targetBefore, itemsAt] using
-                  RegionIso.refl (itemAfter.conjoin tailAfter))))
+          exact (adjoinAtIso (hostLocals ++ itemAfter.locals) nextHostItems (by
+            simpa only [flatTargetMaterial, tailAfter, normalizedTail,
+              nextRename, hostWire] using
+                (renameWiresCompIso normalizedTail rename hostWire).symm)).trans
+            ((adjoinAssocIso hostLocals hostItems itemAfter tailAfter).symm.trans
+              (adjoinAtIso hostLocals hostItems (by
+                simpa only [itemAfter, tailAfter, normalizedHead,
+                  normalizedTail, targetBefore] using
+                  (renameWiresConjoinIso normalizedHead normalizedTail rename).symm)))
         have finalIso : OpenDiagramIso flatTargetEndpoint
             (sourceOccurrence.interface.withBody
               (sourceOccurrence.context.fill
@@ -3789,20 +4219,24 @@ mutual
           sourceOccurrence, afterItem, afterItemOccurrence, flattened,
           alignedFlattened, nextHostItems, hostWire, nextRename,
           flatTargetMaterial, flatTarget, flatTargetEndpoint,
-          targetBefore, itemsAt]
+          normalizedHead, normalizedTail, targetBefore, normalizedItems]
           using exactCombined)
           · have tailNone : itemsHaveSelection tailSites = false := by
               cases selected : itemsHaveSelection tailSites with
               | false => rfl
               | true => exact False.elim (tailSelected selected)
+            have normalizedTailEq : normalizedTail = tailResult := by
+              simpa only [normalizedTail] using
+                normalizedItems_eq_of_noSelection pattern tailEvidence
+                  tailSites tailNone
             have tailAfterEq : tailAfter = tailBefore := by
-              simpa only [tailAfter, tailBefore] using
-                itemsAt_eq_of_noSelection leaf tailEvidence tailSites
-                  tailNone rename
+              change Region.renameWires rename normalizedTail =
+                Region.renameWires rename tailResult
+              rw [normalizedTailEq]
             have itemPhaseValidity := supportedAdjoinValidity hostLocals
               hostItems sourceOccurrence hostCanonical hostNonempty
               (canonical_conjoin itemAfterCanonical tailBeforeCanonical)
-            have itemPhase := itemWithTailStrict leaf
+            have itemPhase := normalizedItemWithTailStrict pattern
               itemEvidence itemSites itemSelected hostLocals rename hostItems
               tailBefore sourceOccurrence hostCanonical hostNonempty
               itemBeforeCanonical tailBeforeCanonical itemAfterCanonical
@@ -3817,11 +4251,13 @@ mutual
                 (WireEquiv.refl (outer ++ hostLocals))
                 (itemAfter.conjoin tailBefore) targetBefore := by
               rw [← tailAfterEq]
-              simpa only [targetBefore, itemAfter, tailAfter, itemsAt] using
-                RegionIso.refl (itemAfter.conjoin tailAfter)
+              simpa only [itemAfter, tailAfter, normalizedHead,
+                normalizedTail, targetBefore] using
+                (renameWiresConjoinIso normalizedHead normalizedTail
+                  rename).symm
             have finalBodyIso : RegionIso (WireEquiv.refl outer) afterItem
                 (Region.adjoinAt hostLocals hostItems targetBefore) := by
-              exact RegionIso.adjoinAt hostLocals hostItems materialIso
+              exact adjoinAtIso hostLocals hostItems materialIso
             have finalIso : OpenDiagramIso
                 (sourceOccurrence.interface.withBody
                   (sourceOccurrence.context.fill afterItem)
@@ -3857,8 +4293,8 @@ mutual
                 transGen_iso outputIso presented.2
                   (OpenDiagramIso.refl source)⟩
             simpa only [itemBefore, tailBefore, itemAfter, tailAfter,
-              sourceOccurrence, afterItem, targetBefore, itemsAt]
-              using exactPresented
+              sourceOccurrence, afterItem, normalizedHead, normalizedTail,
+              targetBefore, normalizedItems] using exactPresented
         · have itemNone : itemHasSelection itemSites = false := by
             cases selected : itemHasSelection itemSites with
             | false => rfl
@@ -3869,14 +4305,18 @@ mutual
             | false =>
                 simp only [itemsHaveSelection, itemNone, selected,
                   Bool.false_or, Bool.false_eq_true] at hasSelection
+          have normalizedHeadEq : normalizedHead = itemResult := by
+            simpa only [normalizedHead] using
+              normalizedItem_eq_of_noSelection pattern itemEvidence itemSites
+                itemNone
           have itemAfterEq : itemAfter = itemBefore := by
-            simpa only [itemAfter, itemBefore] using
-              itemAt_eq_of_noSelection leaf itemEvidence itemSites itemNone
-                rename
+            change Region.renameWires rename normalizedHead =
+              Region.renameWires rename itemResult
+            rw [normalizedHeadEq]
           let flattened := flattenAdjoinOccurrence hostLocals hostItems
             itemBefore tailBefore sourceOccurrence hostCanonical hostNonempty
             itemBeforeCanonical tailBeforeCanonical
-          let nextHostItems := Region.extendHostItems hostLocals hostItems itemBefore
+          let nextHostItems := extendHostItems hostLocals hostItems itemBefore
           let hostWire :=
             Region.adjoinHostWire outer hostLocals itemBefore.locals
           let nextRename := WireRenaming.comp hostWire rename
@@ -3903,20 +4343,18 @@ mutual
               nextHostItems flattened nextHostCanonical nextHostNonempty
               alignedTailCanonical (by
                 simpa only [tailBefore, hostWire, nextRename] using
-                  RegionIso.renameWiresComp tailResult rename hostWire)
-          let flatTargetMaterial := itemsAt leaf tailEvidence tailSites nextRename
-          have renamedTailCanonical :
-              (tailAfter.renameWires hostWire).Canonical :=
-            (Region.Canonical.renameWires_iff tailAfter hostWire).mpr
+                  renameWiresCompIso tailResult rename hostWire)
+          have normalizedTailCanonical : normalizedTail.Canonical :=
+            (Region.Canonical.renameWires_iff normalizedTail rename).mp
               tailAfterCanonical
+          let flatTargetMaterial := normalizedTail.renameWires nextRename
           have flatTargetMaterialCanonical : flatTargetMaterial.Canonical :=
-            (RegionIso.canonical_iff
-              (itemsAtNaturality leaf tailEvidence tailSites rename hostWire)).mp
-                renamedTailCanonical
+            (Region.Canonical.renameWires_iff normalizedTail nextRename).mpr
+              normalizedTailCanonical
           have tailTargetValidity := supportedAdjoinValidity
             (hostLocals ++ itemBefore.locals) nextHostItems alignedFlattened
             nextHostCanonical nextHostNonempty flatTargetMaterialCanonical
-          have tailPhase := itemsSupportedStrict leaf
+          have tailPhase := normalizedItemsSupportedStrict pattern
             tailEvidence tailSites tailSelected outer
             (hostLocals ++ itemBefore.locals) nextRename nextHostItems
             alignedFlattened nextHostCanonical nextHostNonempty
@@ -3928,18 +4366,19 @@ mutual
               tailTargetValidity.2
           have finalBodyIso : RegionIso (WireEquiv.refl outer) flatTarget
               (Region.adjoinAt hostLocals hostItems targetBefore) := by
-            exact (RegionIso.adjoinAt (hostLocals ++ itemBefore.locals)
+            exact (adjoinAtIso (hostLocals ++ itemBefore.locals)
               nextHostItems (by
-                simpa only [flatTargetMaterial, tailAfter, nextRename,
-                  hostWire] using
-                    (itemsAtNaturality leaf tailEvidence tailSites rename
-                      hostWire).symm)).trans
-              ((RegionIso.adjoinAtConjoinLeft hostLocals hostItems itemBefore
+                simpa only [flatTargetMaterial, tailAfter, normalizedTail,
+                  nextRename, hostWire] using
+                    (renameWiresCompIso normalizedTail rename hostWire).symm)).trans
+              ((adjoinAssocIso hostLocals hostItems itemBefore
                 tailAfter).symm.trans
-                (RegionIso.adjoinAt hostLocals hostItems (by
+                (adjoinAtIso hostLocals hostItems (by
                   rw [← itemAfterEq]
-                  simpa only [itemAfter, tailAfter, targetBefore, itemsAt] using
-                    RegionIso.refl (itemAfter.conjoin tailAfter))))
+                  simpa only [itemAfter, tailAfter, normalizedHead,
+                    normalizedTail, targetBefore] using
+                    (renameWiresConjoinIso normalizedHead normalizedTail
+                      rename).symm)))
           have finalIso : OpenDiagramIso flatTargetEndpoint
               (sourceOccurrence.interface.withBody
                 (sourceOccurrence.context.fill
@@ -3980,12 +4419,12 @@ mutual
           simpa only [itemBefore, tailBefore, itemAfter, tailAfter,
             sourceOccurrence, flattened, alignedFlattened, nextHostItems,
             hostWire, nextRename, flatTargetMaterial, flatTarget,
-            flatTargetEndpoint, targetBefore, itemsAt] using exactPresented
+            flatTargetEndpoint, normalizedHead, normalizedTail, targetBefore,
+            normalizedItems] using exactPresented
   termination_by 5 * sizeOf sites + 3
 
-  private noncomputable def itemWithTailStrict
-      {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
+  private noncomputable def normalizedItemWithTailStrict
+      (pattern : OpenDiagram arguments)
       {operation : Transform.Operation arguments}
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
@@ -4008,32 +4447,37 @@ mutual
       (itemBeforeCanonical : (result.renameWires rename).Canonical)
       (tailCanonical : tail.Canonical)
       (itemAfterCanonical :
-        (itemAt leaf evidence sites rename).Canonical)
+        (Region.renameWires rename
+          (normalizedItem pattern evidence sites).1).Canonical)
       (targetCanonical :
         (occurrence.context.fill
           (Region.adjoinAt hostLocals hostItems
-            ((itemAt leaf evidence sites rename).conjoin
+            ((Region.renameWires rename
+              (normalizedItem pattern evidence sites).1).conjoin
                 tail))).Canonical)
       (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
         occurrence.interface.boundaryWire
         (occurrence.context.fill
           (Region.adjoinAt hostLocals hostItems
-            ((itemAt leaf evidence sites rename).conjoin tail)))) :
+            ((Region.renameWires rename
+              (normalizedItem pattern evidence sites).1).conjoin tail)))) :
       StrictEquates occurrence
         (Region.adjoinAt hostLocals hostItems
-          ((itemAt leaf evidence sites rename).conjoin tail))
+          ((Region.renameWires rename
+            (normalizedItem pattern evidence sites).1).conjoin tail))
         targetCanonical targetExternalTwoEnded := by
     let itemBefore := result.renameWires rename
-    let itemAfter := itemAt leaf evidence sites rename
+    let itemAfter :=
+      (Region.renameWires rename (normalizedItem pattern evidence sites).1)
     have swappedCanonical : (tail.conjoin itemBefore).Canonical :=
       canonical_conjoin tailCanonical itemBeforeCanonical
     let swapped := supportedAdjoinOccurrence hostLocals hostItems occurrence
       hostCanonical hostNonempty swappedCanonical
-      (RegionIso.conjoinComm itemBefore tail)
+      (conjoinSwapIso itemBefore tail)
     let flattened := flattenAdjoinOccurrence hostLocals hostItems tail
       itemBefore swapped hostCanonical hostNonempty tailCanonical
       itemBeforeCanonical
-    let nextHostItems := Region.extendHostItems hostLocals hostItems tail
+    let nextHostItems := extendHostItems hostLocals hostItems tail
     let hostWire := Region.adjoinHostWire outer hostLocals tail.locals
     let nextRename := WireRenaming.comp
       hostWire rename
@@ -4055,20 +4499,19 @@ mutual
       supportedAdjoinOccurrence (hostLocals ++ tail.locals) nextHostItems
         flattened nextHostCanonical nextHostNonempty alignedSourceCanonical (by
           simpa only [itemBefore, hostWire, nextRename] using
-            RegionIso.renameWiresComp result rename hostWire)
-    let flatTargetMaterial := itemAt leaf evidence sites nextRename
-    have renamedTargetCanonical :
-        (itemAfter.renameWires hostWire).Canonical :=
-      (Region.Canonical.renameWires_iff itemAfter hostWire).mpr
+            renameWiresCompIso result rename hostWire)
+    let normalized := (normalizedItem pattern evidence sites).1
+    have normalizedCanonical : normalized.Canonical :=
+      (Region.Canonical.renameWires_iff normalized rename).mp
         itemAfterCanonical
+    let flatTargetMaterial := normalized.renameWires nextRename
     have flatTargetMaterialCanonical : flatTargetMaterial.Canonical :=
-      (RegionIso.canonical_iff
-        (itemAtNaturality leaf evidence sites rename hostWire)).mp
-          renamedTargetCanonical
+      (Region.Canonical.renameWires_iff normalized nextRename).mpr
+        normalizedCanonical
     have flatTargetValidity := supportedAdjoinValidity
       (hostLocals ++ tail.locals) nextHostItems alignedFlattened
       nextHostCanonical nextHostNonempty flatTargetMaterialCanonical
-    have core := itemStrict leaf evidence sites hasSelection
+    have core := normalizedItemStrict pattern evidence sites hasSelection
       outer (hostLocals ++ tail.locals) nextRename nextHostItems alignedFlattened
       flatTargetValidity.1 flatTargetValidity.2
     let flatTarget := Region.adjoinAt (hostLocals ++ tail.locals)
@@ -4079,13 +4522,12 @@ mutual
     have finalBodyIso : RegionIso (WireEquiv.refl outer) flatTarget
         (Region.adjoinAt hostLocals hostItems
           (itemAfter.conjoin tail)) := by
-      exact (RegionIso.adjoinAt (hostLocals ++ tail.locals) nextHostItems (by
-        simpa only [flatTargetMaterial, itemAfter, nextRename, hostWire] using
-          (itemAtNaturality leaf evidence sites rename hostWire).symm)).trans
-        ((RegionIso.adjoinAtConjoinLeft hostLocals hostItems tail
-          itemAfter).symm.trans
-          (RegionIso.adjoinAt hostLocals hostItems
-            (RegionIso.conjoinComm tail itemAfter)))
+      exact (adjoinAtIso (hostLocals ++ tail.locals) nextHostItems (by
+        simpa only [flatTargetMaterial, itemAfter, normalized, nextRename,
+          hostWire] using
+            (renameWiresCompIso normalized rename hostWire).symm)).trans
+        ((adjoinAssocIso hostLocals hostItems tail itemAfter).symm.trans
+          (adjoinAtIso hostLocals hostItems (conjoinSwapIso tail itemAfter)))
     have presentedTargetCanonical :
         (alignedFlattened.context.fill
           (Region.adjoinAt hostLocals hostItems
@@ -4128,13 +4570,12 @@ mutual
       ⟨transGen_iso (OpenDiagramIso.refl source) presented.1 outputIso,
         transGen_iso outputIso presented.2 (OpenDiagramIso.refl source)⟩
     simpa only [itemBefore, itemAfter, swapped, flattened, alignedFlattened,
-      nextHostItems, hostWire, nextRename, flatTargetMaterial,
+      nextHostItems, hostWire, nextRename, normalized, flatTargetMaterial,
       flatTarget, flatEndpoint] using exactPresented
   termination_by 5 * sizeOf sites + 2
 
-  private noncomputable def itemStrict
-      {pattern : OpenDiagram arguments}
-      (leaf : SelectedLeafCompiler pattern)
+  private noncomputable def normalizedItemStrict
+      (pattern : OpenDiagram arguments)
       {operation : Transform.Operation arguments}
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
@@ -4153,15 +4594,17 @@ mutual
         (targetCanonical :
           (occurrence.context.fill
             (Region.adjoinAt hostLocals hostItems
-              (itemAt leaf evidence sites rename))).Canonical)
+              (Region.renameWires rename
+                (normalizedItem pattern evidence sites).1))).Canonical)
         (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
           occurrence.interface.boundaryWire
           (occurrence.context.fill
             (Region.adjoinAt hostLocals hostItems
-              (itemAt leaf evidence sites rename)))),
+              (Region.renameWires rename
+                (normalizedItem pattern evidence sites).1)))),
         StrictEquates occurrence
           (Region.adjoinAt hostLocals hostItems
-            (itemAt leaf evidence sites rename))
+            (Region.renameWires rename (normalizedItem pattern evidence sites).1))
           targetCanonical targetExternalTwoEnded :=
     match sites with
     | .atom head ports => by
@@ -4169,77 +4612,173 @@ mutual
     | .selectedAtom ports _ => by
         intro outer hostLocals rename hostItems boundary source occurrence
           targetCanonical targetExternalTwoEnded
-        simp only [itemAt] at targetCanonical targetExternalTwoEnded ⊢
-        exact leaf.selectedStrict ports rename hostItems occurrence
-          targetCanonical targetExternalTwoEnded
+        let mappedPorts := ports.map fun wire => rename wire
+        let sourceBefore :=
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            pattern ports).renameWires rename
+        let sourceAfter :=
+          _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            pattern mappedPorts
+        let sourceHostBefore := Region.adjoinAt hostLocals hostItems
+          sourceBefore
+        let sourceHostAfter := Region.adjoinAt hostLocals hostItems sourceAfter
+        change Occurrence sourceHostBefore source at occurrence
+        have sourceHostEq : sourceHostBefore = sourceHostAfter := by
+          simp only [sourceHostBefore, sourceHostAfter, sourceBefore,
+            sourceAfter, mappedPorts, instantiate_renameWires]
+        have sourceAfterCanonical : sourceHostAfter.Canonical := by
+          rw [← sourceHostEq]
+          exact occurrence.context.holeCanonical _ occurrence.sourceCanonical
+        have sourceNonempty : ∀ {signature} (wire : Var outer signature),
+            sourceHostBefore.incidencePaths wire.index.val ≠ [] ↔
+              sourceHostAfter.incidencePaths wire.index.val ≠ [] := by
+          intro signature wire
+          rw [sourceHostEq]
+        let presentedOccurrence : Occurrence sourceHostAfter source :=
+          presentationOccurrence occurrence sourceAfterCanonical
+            sourceNonempty
+            (adjoinAtIso hostLocals hostItems
+              (instantiateRenameIso pattern ports rename))
+        let targetBefore := Region.adjoinAt hostLocals hostItems
+          ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (identityBoundary pattern) ports).renameWires rename)
+        let targetAfter := Region.adjoinAt hostLocals hostItems
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (identityBoundary pattern) mappedPorts)
+        change (occurrence.context.fill targetBefore).Canonical at targetCanonical
+        change OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
+          (occurrence.context.fill targetBefore) at targetExternalTwoEnded
+        have targetEq : targetBefore = targetAfter := by
+          simp only [targetBefore, targetAfter, mappedPorts,
+            instantiate_renameWires]
+        have targetAfterCanonical : targetAfter.Canonical := by
+          rw [← targetEq]
+          exact occurrence.context.holeCanonical _ targetCanonical
+        have targetNonempty : ∀ {signature} (wire : Var outer signature),
+            targetBefore.incidencePaths wire.index.val ≠ [] ↔
+              targetAfter.incidencePaths wire.index.val ≠ [] := by
+          intro signature wire
+          rw [targetEq]
+        have targetReplacement := occurrence.context.replaceCanonical
+          targetBefore targetAfter targetCanonical targetAfterCanonical
+            targetNonempty
+        let targetBeforeEndpoint := occurrence.interface.withBody
+          (occurrence.context.fill targetBefore) targetCanonical
+            targetExternalTwoEnded
+        have targetAfterExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+            occurrence.interface.boundaryWire
+            (occurrence.context.fill targetAfter) :=
+          targetBeforeEndpoint.externalTwoEnded_of_nonempty_iff _
+            targetReplacement.2
+        have presentedTargetCanonical :
+            (presentedOccurrence.context.fill targetAfter).Canonical := by
+          exact targetReplacement.1
+        have presentedTargetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+            presentedOccurrence.interface.boundaryWire
+            (presentedOccurrence.context.fill targetAfter) := by
+          intro signature wire
+          exact targetAfterExternalTwoEnded wire
+        obtain ⟨ownedTargetCanonical, ownedTargetExternalTwoEnded,
+            equivalent⟩ :=
+          equatesIdentityBoundary pattern mappedPorts presentedOccurrence
+        have strict := strictEquates_of_equates presentedOccurrence equivalent
+        have finalBodyIso : RegionIso (WireEquiv.refl outer) targetAfter
+            targetBefore :=
+          adjoinAtIso hostLocals hostItems
+            (instantiateRenameIso (identityBoundary pattern) ports rename).symm
+        have finalIso : OpenDiagramIso
+            (presentedOccurrence.interface.withBody
+              (presentedOccurrence.context.fill targetAfter)
+              ownedTargetCanonical ownedTargetExternalTwoEnded)
+            (occurrence.interface.withBody
+              (occurrence.context.fill targetBefore) targetCanonical
+                targetExternalTwoEnded) :=
+          OpenDiagram.withBody_iso ownedTargetCanonical targetCanonical
+            ownedTargetExternalTwoEnded targetExternalTwoEnded
+            (DiagramContext.fillIso occurrence.context finalBodyIso)
+        have presented := StrictEquates.targetIso strict finalIso
+        simpa only [normalizedItem, targetBefore, sourceHostBefore,
+          sourceBefore] using presented
     | .identity signature arity ports => by
         simp only [itemHasSelection, Bool.false_eq_true] at hasSelection
     | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
         childSites => by
         intro outer hostLocals rename hostItems boundary source occurrence
           targetCanonical targetExternalTwoEnded
-        let childRename := rename
-        let inner : DiagramContext outer (outer ++ hostLocals) :=
-          .cut hostLocals hostItems .nil .hole
+        let appendNil : WireRenaming common (common ++ []) :=
+          ⟨fun wire => wire.appendLeft []⟩
+        let materialRename := Region.adjoinMaterialWire outer hostLocals []
+        let childRename := WireRenaming.comp materialRename
+          (WireRenaming.comp (rename.appendRight []) appendNil)
+        let retained := hostItems.renameWires
+          (Region.adjoinHostWire outer hostLocals [])
+        let inner : DiagramContext outer (outer ++ (hostLocals ++ [])) :=
+          .cut (hostLocals ++ []) retained .nil .hole
+        have childRename_eq (region : Region common) :
+            Region.renameWires materialRename
+                (Region.renameWires (rename.appendRight [])
+                  (Region.renameWires appendNil region)) =
+              Region.renameWires childRename region := by
+          rw [Region.renameWires_comp, Region.renameWires_comp]
+          apply congrArg (fun map => Region.renameWires map region)
+          apply WireRenaming.ext
+          intro signature wire
+          rfl
         let sourceBefore := Region.adjoinAt hostLocals hostItems
           ((Region.singleton (.cut childResult)).renameWires rename)
         let sourceAfter := inner.fill (childResult.renameWires childRename)
         change Occurrence sourceBefore source at occurrence
-        have sourcePresentation : RegionIso (WireEquiv.refl outer)
-            sourceBefore sourceAfter := by
-          simpa only [sourceBefore, sourceAfter, inner, childRename,
-            DiagramContext.fill, Region.singleton_renameWires] using
-              RegionIso.adjoinAtSingleton hostLocals hostItems
-                (.cut (childResult.renameWires rename))
+        have sourceEq : sourceBefore = sourceAfter := by
+          simp only [inner, retained, childRename, materialRename, appendNil,
+            sourceBefore, sourceAfter, DiagramContext.fill,
+            Region.renameWires, Region.singleton, Region.ofItems,
+            Region.adjoinAt, ItemSeq.renameWires, Item.renameWires]
+          rw [childRename_eq]
         have sourceAfterCanonical : sourceAfter.Canonical := by
-          exact (RegionIso.canonical_iff sourcePresentation).mp
-            (occurrence.context.holeCanonical _ occurrence.sourceCanonical)
+          rw [← sourceEq]
+          exact occurrence.context.holeCanonical _ occurrence.sourceCanonical
         have sourceNonempty : ∀ {signature} (wire : Var outer signature),
             sourceBefore.incidencePaths wire.index.val ≠ [] ↔
               sourceAfter.incidencePaths wire.index.val ≠ [] := by
           intro signature wire
-          rw [← List.length_pos_iff, ← List.length_pos_iff,
-            RegionIso.incidencePaths_length_eq sourcePresentation wire]
+          rw [sourceEq]
         let outerOccurrence : Occurrence sourceAfter source :=
           presentationOccurrence occurrence sourceAfterCanonical
-            sourceNonempty sourcePresentation
+            sourceNonempty (by
+              rw [← sourceEq]
+              exact RegionIso.refl _)
         let childOccurrence := Occurrence.nest outerOccurrence
-        let childTarget := regionAt leaf childEvidence childSites childRename
+        let normalizedChild :=
+          (normalizedRegion pattern childEvidence childSites).1
         let targetBefore := Region.adjoinAt hostLocals hostItems
-          (Region.singleton (.cut childTarget))
-        let targetAfter := inner.fill childTarget
-        simp only [itemAt] at targetCanonical targetExternalTwoEnded ⊢
-        have targetBeforeCanonical :
-            (occurrence.context.fill targetBefore).Canonical := by
-          simpa only [targetBefore, childTarget, childRename] using
-            targetCanonical
-        have targetBeforeExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-            occurrence.interface.boundaryWire
-            (occurrence.context.fill targetBefore) := by
-          intro signature wire
-          simpa only [targetBefore, childTarget, childRename] using
-            targetExternalTwoEnded wire
-        have targetPresentation : RegionIso (WireEquiv.refl outer)
-            targetBefore targetAfter := by
-          simpa only [targetBefore, targetAfter, inner,
-            DiagramContext.fill] using
-              RegionIso.adjoinAtSingleton hostLocals hostItems
-                (.cut childTarget)
-        have targetAfterCanonical : targetAfter.Canonical :=
-          (RegionIso.canonical_iff targetPresentation).mp
-            (occurrence.context.holeCanonical _ targetBeforeCanonical)
+          (Region.renameWires rename
+            (normalizedItem pattern evidence (.cut childSites)).1)
+        let targetAfter := inner.fill
+          (Region.renameWires childRename normalizedChild)
+        change (occurrence.context.fill targetBefore).Canonical at targetCanonical
+        change OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
+          (occurrence.context.fill targetBefore) at targetExternalTwoEnded
+        have targetEq : targetBefore = targetAfter := by
+          simp only [normalizedItem, inner, retained, childRename,
+            materialRename, appendNil, normalizedChild, targetBefore,
+            targetAfter, DiagramContext.fill, Region.renameWires,
+            Region.singleton, Region.ofItems, Region.adjoinAt,
+            ItemSeq.renameWires, Item.renameWires]
+          rw [childRename_eq]
+        have targetAfterCanonical : targetAfter.Canonical := by
+          rw [← targetEq]
+          exact occurrence.context.holeCanonical _ targetCanonical
         have targetNonempty : ∀ {signature} (wire : Var outer signature),
             targetBefore.incidencePaths wire.index.val ≠ [] ↔
               targetAfter.incidencePaths wire.index.val ≠ [] := by
           intro signature wire
-          rw [← List.length_pos_iff, ← List.length_pos_iff,
-            RegionIso.incidencePaths_length_eq targetPresentation wire]
+          rw [targetEq]
         have targetReplacement := occurrence.context.replaceCanonical
-          targetBefore targetAfter targetBeforeCanonical targetAfterCanonical
+          targetBefore targetAfter targetCanonical targetAfterCanonical
             targetNonempty
         let targetBeforeEndpoint := occurrence.interface.withBody
-          (occurrence.context.fill targetBefore) targetBeforeCanonical
-            targetBeforeExternalTwoEnded
+          (occurrence.context.fill targetBefore) targetCanonical
+            targetExternalTwoEnded
         have targetAfterExternalTwoEnded : OpenDiagram.ExternalTwoEnded
             occurrence.interface.boundaryWire
             (occurrence.context.fill targetAfter) :=
@@ -4255,56 +4794,55 @@ mutual
           exact targetAfterExternalTwoEnded wire
         have childTargetCanonical :
             (childOccurrence.context.fill
-              childTarget).Canonical := by
+              (Region.renameWires childRename normalizedChild)).Canonical := by
           simpa only [childOccurrence, Occurrence.nest,
             DiagramContext.fill_comp, targetAfter] using outerTargetCanonical
         have childTargetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
             childOccurrence.interface.boundaryWire
             (childOccurrence.context.fill
-              childTarget) := by
+              (Region.renameWires childRename normalizedChild)) := by
           intro signature wire
           simpa only [childOccurrence, Occurrence.nest,
             DiagramContext.fill_comp, targetAfter] using
               outerTargetExternalTwoEnded wire
         have childSelection : regionHasSelection childSites = true := by
           simpa only [itemHasSelection] using hasSelection
-        have child := regionStrict leaf childEvidence
-          childSites childSelection (outer ++ hostLocals) childRename
+        have child := normalizedRegionStrict pattern childEvidence
+          childSites childSelection (outer ++ (hostLocals ++ [])) childRename
           childOccurrence
           childTargetCanonical
           childTargetExternalTwoEnded
         have finalBodyIso : RegionIso (WireEquiv.refl outer) targetAfter
-            targetBefore := targetPresentation.symm
+            targetBefore := by
+          rw [← targetEq]
+          exact RegionIso.refl _
         have outerFinalIso : OpenDiagramIso
             (outerOccurrence.interface.withBody
               (outerOccurrence.context.fill targetAfter)
               outerTargetCanonical outerTargetExternalTwoEnded)
             (occurrence.interface.withBody
-              (occurrence.context.fill targetBefore) targetBeforeCanonical
-                targetBeforeExternalTwoEnded) :=
-          OpenDiagram.withBody_iso outerTargetCanonical targetBeforeCanonical
-            outerTargetExternalTwoEnded targetBeforeExternalTwoEnded
+              (occurrence.context.fill targetBefore) targetCanonical
+                targetExternalTwoEnded) :=
+          OpenDiagram.withBody_iso outerTargetCanonical targetCanonical
+            outerTargetExternalTwoEnded targetExternalTwoEnded
             (DiagramContext.fillIso occurrence.context finalBodyIso)
         have finalIso : OpenDiagramIso
             (childOccurrence.interface.withBody
               (childOccurrence.context.fill
-                childTarget)
+                (Region.renameWires childRename normalizedChild))
               childTargetCanonical childTargetExternalTwoEnded)
             (occurrence.interface.withBody
-              (occurrence.context.fill targetBefore) targetBeforeCanonical
-                targetBeforeExternalTwoEnded) := by
+              (occurrence.context.fill targetBefore) targetCanonical
+                targetExternalTwoEnded) := by
           simpa only [childOccurrence, Occurrence.nest,
             DiagramContext.fill_comp, targetAfter] using outerFinalIso
-        have exactChild : StrictEquates occurrence targetBefore
-            targetBeforeCanonical targetBeforeExternalTwoEnded :=
+        have exactChild : StrictEquates occurrence targetBefore targetCanonical
+            targetExternalTwoEnded :=
           ⟨transGen_iso (OpenDiagramIso.refl source) child.1 finalIso,
             transGen_iso finalIso child.2 (OpenDiagramIso.refl source)⟩
-        simpa only [targetBefore, childTarget, childRename, sourceBefore] using
-          exactChild
+        simpa only [targetBefore, normalizedItem, sourceBefore] using exactChild
   termination_by 5 * sizeOf sites + 1
 end
-
-end EvidenceFold
 
 /-- Normalize every selected application in one exact authoritative item
 sequence and connect the actual occurrence bidirectionally to the generated
@@ -4345,36 +4883,30 @@ theorem normalizeItemsEquates
             OpenDiagram.Isomorphic target reconstructed ∧
               Relation.ReflTransGen Step host target ∧
                 Relation.ReflTransGen Step target host := by
-  let identity : WireRenaming (outer ++ hostLocals)
-      (outer ++ hostLocals) := WireRenaming.id
-  let output := EvidenceFold.itemsAt (identitySelectedLeaf pattern)
-    evidence sites identity
-  let outputEvidence := EvidenceFold.identityItemsEvidence pattern evidence
-    sites
+  let output := normalizedItems pattern evidence sites
   by_cases noSelection : itemsHaveSelection sites = false
-  · have outputEq : output = result := by
-      simpa only [output, identity, Region.renameWires_id] using
-        EvidenceFold.itemsAt_eq_of_noSelection
-          (identitySelectedLeaf pattern) evidence sites noSelection identity
+  · have outputEq : output.1 = result := by
+      simpa only [output] using
+        normalizedItems_eq_of_noSelection pattern evidence sites noSelection
     have targetCanonical :
         (occurrence.context.fill
-          (Region.adjoinAt hostLocals .nil output)).Canonical := by
+          (Region.adjoinAt hostLocals .nil output.1)).Canonical := by
       rw [outputEq]
       exact occurrence.sourceCanonical
     have targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
         occurrence.interface.boundaryWire
         (occurrence.context.fill
-          (Region.adjoinAt hostLocals .nil output)) := by
+          (Region.adjoinAt hostLocals .nil output.1)) := by
       intro signature wire
       rw [outputEq]
       exact occurrence.sourceExternalTwoEnded wire
     have targetIsomorphic : OpenDiagram.Isomorphic host
         (occurrence.interface.withBody
           (occurrence.context.fill
-            (Region.adjoinAt hostLocals .nil output))
+            (Region.adjoinAt hostLocals .nil output.1))
           targetCanonical targetExternalTwoEnded) := by
       exact ⟨by simpa only [outputEq] using occurrence.host_iso⟩
-    refine ⟨output, outputEvidence, targetCanonical,
+    refine ⟨output.1, output.2, targetCanonical,
       targetExternalTwoEnded, ?_⟩
     dsimp only
     rw [if_pos noSelection]
@@ -4382,12 +4914,10 @@ theorem normalizeItemsEquates
       Relation.ReflTransGen.refl, Relation.ReflTransGen.refl⟩
   · exact (by
   let sourceRegion := Region.adjoinAt hostLocals .nil result
-  let targetRegion := Region.adjoinAt hostLocals .nil output
-  let materialScope : ScopePreservation result output := by
-    simpa only [output, identity, Region.renameWires_id] using
-      EvidenceFold.identityItemsScope pattern evidence sites identity
+  let targetRegion := Region.adjoinAt hostLocals .nil output.1
+  let materialScope := normalizedItems_scope pattern evidence sites
   let regionScope := adjoinAt_preserves_scope hostLocals
-    (.nil : ItemSeq (outer ++ hostLocals)) result output materialScope
+    (.nil : ItemSeq (outer ++ hostLocals)) result output.1 materialScope
   have sourceLocalCanonical : sourceRegion.Canonical := by
     exact occurrence.context.holeCanonical _ occurrence.sourceCanonical
   have targetLocalCanonical : targetRegion.Canonical :=
@@ -4409,6 +4939,8 @@ theorem normalizeItemsEquates
     cases selected : itemsHaveSelection sites with
     | false => exact False.elim (noSelection selected)
     | true => rfl
+  let identity : WireRenaming (outer ++ hostLocals)
+      (outer ++ hostLocals) := WireRenaming.id
   let presentedOccurrence : Occurrence
       (Region.adjoinAt hostLocals .nil (result.renameWires identity)) host := {
     interface := occurrence.interface
@@ -4422,8 +4954,7 @@ theorem normalizeItemsEquates
     host_iso := by
       simpa only [identity, Region.renameWires_id] using occurrence.host_iso
   }
-  have folded := EvidenceFold.itemsStrict (outer := outer)
-    (identitySelectedLeaf pattern) evidence sites
+  have folded := normalizedItemsStrict (outer := outer) pattern evidence sites
     hasSelection hostLocals identity (.nil : ItemSeq (outer ++ hostLocals))
       presentedOccurrence (by
         simpa only [presentedOccurrence, targetRegion, identity,
@@ -4438,7 +4969,7 @@ theorem normalizeItemsEquates
     simpa only [presentedOccurrence, targetRegion, identity,
       Region.renameWires_id] using folded
   have equivalent := exactStrict.toEquates
-  refine ⟨output, outputEvidence, targetCanonical,
+  refine ⟨output.1, output.2, targetCanonical,
     targetExternalTwoEnded, ?_⟩
   dsimp only
   rw [if_neg noSelection]
@@ -4553,7 +5084,7 @@ private noncomputable def normalizationSites
 /-- Exact singleton-atom decomposition at an existing pattern item. The
 boundary/equality phases may choose the formal position only by proving that
 the atom's argument list is precisely the remaining boundary. -/
-private structure FormalShape
+structure FormalShape
     {patternWires atomArguments : List Sig}
     (head : Var patternWires (.rel atomArguments))
     (ports : Vars patternWires atomArguments) where
@@ -4576,7 +5107,7 @@ private structure FormalShape
     (Region.singleton (.atom head ports))
 
 /-- The exact open singleton atom selected by a formal leaf decomposition. -/
-private def FormalShape.pattern
+def FormalShape.pattern
     {patternWires atomArguments : List Sig}
     {head : Var patternWires (.rel atomArguments)}
     {ports : Vars patternWires atomArguments}
@@ -4590,6 +5121,137 @@ private def FormalShape.pattern
   canonical := shape.canonical
   externalTwoEnded := shape.externalTwoEnded
 }
+
+/-- Caller-owned exact all-sites evidence for one singleton formal pattern.
+The final primitive is intentionally absent: `compile` below fixes it to
+`itemsFormal`. -/
+structure FormalPhase
+    {patternWires atomArguments : List Sig}
+    {head : Var patternWires (.rel atomArguments)}
+    {ports : Vars patternWires atomArguments}
+    (shape : FormalShape head ports) where
+  outer : List Sig
+  localBefore : List Sig
+  localAfter : List Sig
+  source : ItemSeq
+    (outer ++ (localBefore ++
+      .rel (shape.before ++
+        .rel (shape.before ++ shape.after) :: shape.after) :: localAfter))
+  result : Region (outer ++ (localBefore ++ localAfter))
+  evidence :
+    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      shape.pattern
+      (Leaf.Formal.rootFrame outer localBefore localAfter shape.before
+        shape.after).sourceKeep
+      (Leaf.Formal.rootFrame outer localBefore localAfter shape.before
+        shape.after).selected
+      source result
+  sites : ItemsSites (Leaf.Formal.operation shape.before shape.after)
+    PUnit.unit evidence
+  request : Telescope.Request
+    (Region.adjoinAt (localBefore ++ localAfter) .nil result)
+    (.mk
+      (localBefore ++
+        .rel (shape.before ++
+          .rel (shape.before ++ shape.after) :: shape.after) :: localAfter)
+      source)
+  prepare : ∀ output : ExactEdit
+    (Transform.ItemsEdit (Leaf.Formal.operation shape.before shape.after)
+      (Leaf.Formal.rootFrame outer localBefore localAfter shape.before
+        shape.after)
+      PUnit.unit source)
+    (fun edit => edit.run),
+    request.Preparation
+      (Region.adjoinAt (localBefore ++ ([] ++ localAfter)) .nil
+        output.endpoint)
+
+/-- The singleton-atom branch fixes the final phase to FormalApplication. -/
+private theorem FormalPhase.compile
+    {patternWires atomArguments : List Sig}
+    {head : Var patternWires (.rel atomArguments)}
+    {ports : Vars patternWires atomArguments}
+    {shape : FormalShape head ports}
+    (phase : FormalPhase shape) : phase.request.Result := by
+  exact itemsFormal phase.evidence phase.sites phase.request phase.prepare
+
+/-- Exact singleton-identity decomposition at an existing pattern item. -/
+structure IdentityShape
+    {patternWires : List Sig}
+    (signature : Sig) (arity : Nat)
+    (ports : Fin arity → Var patternWires signature) where
+  boundaryWire : Vars patternWires (List.replicate arity signature)
+  boundary_eq : boundaryWire = Leaf.Identity.Vars.fromFn ports
+  boundarySurjective : ∀ wire : Fin patternWires.length,
+    ∃ position : Fin (List.replicate arity signature).length,
+      (boundaryWire.get position).index = wire
+  canonical :
+    (Region.singleton (.identity signature arity ports)).Canonical
+  externalTwoEnded : OpenDiagram.ExternalTwoEnded boundaryWire
+    (Region.singleton (.identity signature arity ports))
+
+/-- The exact open singleton identity selected by an identity leaf
+decomposition. -/
+def IdentityShape.pattern
+    {patternWires : List Sig}
+    {signature : Sig} {arity : Nat}
+    {ports : Fin arity → Var patternWires signature}
+    (shape : IdentityShape signature arity ports) :
+    OpenDiagram (List.replicate arity signature) := {
+  external := patternWires
+  boundaryWire := shape.boundaryWire
+  boundarySurjective := shape.boundarySurjective
+  body := Region.singleton (.identity signature arity ports)
+  canonical := shape.canonical
+  externalTwoEnded := shape.externalTwoEnded
+}
+
+/-- Caller-owned exact all-sites evidence for one singleton identity pattern.
+The final primitive is intentionally absent: `compile` below fixes it to
+`itemsIdentity`. -/
+structure IdentityPhase
+    {patternWires : List Sig}
+    {signature : Sig} {arity : Nat}
+    {ports : Fin arity → Var patternWires signature}
+    (shape : IdentityShape signature arity ports) where
+  outer : List Sig
+  localBefore : List Sig
+  localAfter : List Sig
+  source : ItemSeq
+    (outer ++ (localBefore ++
+      .rel (List.replicate arity signature) :: localAfter))
+  result : Region (outer ++ (localBefore ++ localAfter))
+  evidence :
+    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      shape.pattern
+      (Leaf.Identity.rootFrame outer localBefore localAfter signature
+        arity).sourceKeep
+      (Leaf.Identity.rootFrame outer localBefore localAfter signature
+        arity).selected
+      source result
+  sites : ItemsSites (Leaf.Identity.operation signature arity)
+    PUnit.unit evidence
+  request : Telescope.Request
+    (Region.adjoinAt (localBefore ++ localAfter) .nil result)
+    (.mk
+      (localBefore ++ .rel (List.replicate arity signature) :: localAfter)
+      source)
+  prepare : ∀ output : ExactEdit
+    (Transform.ItemsEdit (Leaf.Identity.operation signature arity)
+      (Leaf.Identity.rootFrame outer localBefore localAfter signature arity)
+      PUnit.unit source)
+    (fun edit => edit.run),
+    request.Preparation
+      (Region.adjoinAt (localBefore ++ ([] ++ localAfter)) .nil
+        output.endpoint)
+
+/-- The singleton-identity branch fixes the final phase to IdentityLeaf. -/
+private theorem IdentityPhase.compile
+    {patternWires : List Sig}
+    {signature : Sig} {arity : Nat}
+    {ports : Fin arity → Var patternWires signature}
+    {shape : IdentityShape signature arity ports}
+    (phase : IdentityPhase shape) : phase.request.Result := by
+  exact itemsIdentity phase.evidence phase.sites phase.request phase.prepare
 
 /-- One exact strict compiler goal. Its public fields preserve the actual
 region indices of the request, so a structural plan cannot exchange a child
@@ -4617,6 +5279,24 @@ def Goal.Result (goal : Goal) : Prop :=
 
 /-- The exact goal stored by the established blank phase. -/
 def nilGoal {wires : List Sig} (phase : Compiler.NilPhase wires) : Goal :=
+  .ofRequest phase.request
+
+/-- The exact goal stored by a singleton formal phase. -/
+def FormalPhase.goal
+    {patternWires atomArguments : List Sig}
+    {head : Var patternWires (.rel atomArguments)}
+    {ports : Vars patternWires atomArguments}
+    {shape : FormalShape head ports}
+    (phase : FormalPhase shape) : Goal :=
+  .ofRequest phase.request
+
+/-- The exact goal stored by a singleton identity phase. -/
+def IdentityPhase.goal
+    {patternWires : List Sig}
+    {signature : Sig} {arity : Nat}
+    {ports : Fin arity → Var patternWires signature}
+    {shape : IdentityShape signature arity ports}
+    (phase : IdentityPhase shape) : Goal :=
   .ofRequest phase.request
 
 /-- The exact goal for a constructor-preparation segment. Its pending and
@@ -5178,5583 +5858,604 @@ def PatternShape.pattern
   externalTwoEnded := shape.externalTwoEnded
 }
 
-/-! The structural compiler factors every constructor-local support vector
-through the inherited identity vector.  The factor is selected from syntax,
-before any site substitution is known, so its naturality law is part of the
-typed permutation data rather than a side condition supplied by a caller. -/
-
-/-- A typed argument permutation together with the syntactic naturality law
-needed to reuse it at every selected site. -/
-private structure TypedPermutation (source target : List Sig) where
-  value : ArgumentPermutation.Permutation source target
-  map_natural :
-    ∀ {before after : List Sig} (variables : Vars before source)
-      (rename : WireRenaming before after),
-      (value.mapVars variables).map (fun wire => rename wire) =
-        value.mapVars (variables.map fun wire => rename wire)
-
-namespace TypedPermutation
-
-/-- Exchange the first two typed positions. -/
-private def swapHead (first second : Sig) (rest : List Sig) :
-    TypedPermutation (first :: second :: rest) (second :: first :: rest) := {
-  value := {
-    mapVars := fun
-      | .cons firstValue (.cons secondValue restValues) =>
-          .cons secondValue (.cons firstValue restValues)
-    unmapVars := fun
-      | .cons secondValue (.cons firstValue restValues) =>
-          .cons firstValue (.cons secondValue restValues)
-    mapValues := fun _ values => (values.2.1, values.1, values.2.2)
-    unmapValues := fun _ values => (values.2.1, values.1, values.2.2)
-    map_unmap_vars := by
-      intro context values
-      cases values with
-      | cons secondValue tail =>
-          cases tail with
-          | cons firstValue restValues => rfl
-    unmap_map_vars := by
-      intro context values
-      cases values with
-      | cons firstValue tail =>
-          cases tail with
-          | cons secondValue restValues => rfl
-    map_unmap_values := by
-      intro model values
-      cases values with
-      | mk secondValue tail =>
-          cases tail with
-          | mk firstValue restValues => rfl
-    unmap_map_values := by
-      intro model values
-      cases values with
-      | mk firstValue tail =>
-          cases tail with
-          | mk secondValue restValues => rfl
-    evaluate_map := by
-      intro context model variables env
-      cases variables with
-      | cons firstValue tail =>
-          cases tail with
-          | cons secondValue restValues => rfl
-    evaluate_unmap := by
-      intro context model variables env
-      cases variables with
-      | cons secondValue tail =>
-          cases tail with
-          | cons firstValue restValues => rfl
-  }
-  map_natural := by
-    intro before after variables rename
-    cases variables with
-    | cons firstValue tail =>
-        cases tail with
-        | cons secondValue restValues => rfl
-}
-
-/-- Keep one leading typed position while applying a permutation to the
-remaining positions. -/
-private def keepHead (signature : Sig)
-    (permutation : TypedPermutation source target) :
-    TypedPermutation (signature :: source) (signature :: target) := {
-  value := {
-    mapVars := fun
-      | .cons head tail => .cons head (permutation.value.mapVars tail)
-    unmapVars := fun
-      | .cons head tail => .cons head (permutation.value.unmapVars tail)
-    mapValues := fun model values =>
-      (values.1, permutation.value.mapValues model values.2)
-    unmapValues := fun model values =>
-      (values.1, permutation.value.unmapValues model values.2)
-    map_unmap_vars := by
-      intro context variables
-      cases variables with
-      | cons head tail =>
-          exact congrArg (Vars.cons head)
-            (permutation.value.map_unmap_vars tail)
-    unmap_map_vars := by
-      intro context variables
-      cases variables with
-      | cons head tail =>
-          exact congrArg (Vars.cons head)
-            (permutation.value.unmap_map_vars tail)
-    map_unmap_values := by
-      intro model values
-      cases values with
-      | mk head tail =>
-          exact congrArg (Prod.mk head)
-            (permutation.value.map_unmap_values model tail)
-    unmap_map_values := by
-      intro model values
-      cases values with
-      | mk head tail =>
-          exact congrArg (Prod.mk head)
-            (permutation.value.unmap_map_values model tail)
-    evaluate_map := by
-      intro context model variables env
-      cases variables with
-      | cons head tail =>
-          exact congrArg (Prod.mk (env.lookup head))
-            (permutation.value.evaluate_map model tail env)
-    evaluate_unmap := by
-      intro context model variables env
-      cases variables with
-      | cons head tail =>
-          exact congrArg (Prod.mk (env.lookup head))
-            (permutation.value.evaluate_unmap model tail env)
-  }
-  map_natural := by
-    intro before after variables rename
-    cases variables with
-    | cons head tail =>
-        exact congrArg (Vars.cons (rename head))
-          (permutation.map_natural tail rename)
-}
-
-end TypedPermutation
-
-@[simp] private theorem duplicateAt_map
-    (before : List Sig)
-    (variables : Vars source (before ++ signature :: after))
-    (rename : WireRenaming source target) :
-    (Argument.Duplicate.Vars.duplicateAt before variables).map
-        (fun wire => rename wire) =
-      Argument.Duplicate.Vars.duplicateAt before
-        (variables.map fun wire => rename wire) := by
-  induction before with
-  | nil => cases variables; rfl
-  | cons head tail induction =>
-      cases variables with
-      | cons first rest =>
-          exact congrArg (Vars.cons (rename first)) (induction rest)
-
-@[simp] private theorem dropAt_insertAt
-    (before : List Sig) (inserted : Var context signature)
-    (variables : Vars context (before ++ after)) :
-    Argument.Projection.Vars.dropAt before
-        (Argument.Projection.Vars.insertAt before inserted variables) =
-      variables := by
-  induction before with
-  | nil => rfl
-  | cons head tail induction =>
-      cases variables with
-      | cons first rest =>
-          exact congrArg (Vars.cons first) (induction rest)
-
-@[simp] private theorem dropAt_map
-    (before : List Sig)
-    (variables : Vars source (before ++ signature :: after))
-    (rename : WireRenaming source target) :
-    (Argument.Projection.Vars.dropAt before variables).map
-        (fun wire => rename wire) =
-      Argument.Projection.Vars.dropAt before
-        (variables.map fun wire => rename wire) := by
-  induction before with
-  | nil => cases variables; rfl
-  | cons head tail induction =>
-      cases variables with
-      | cons first rest =>
-          exact congrArg (Vars.cons (rename first)) (induction rest)
-
-/-- A syntax-indexed factor from one typed argument vector to another.  Its
-constructors are exactly the three argument primitives used by the compiler,
-plus reflexive and transitive composition. -/
-private inductive VarsFactor {context : List Sig} :
-    {source target : List Sig} →
-      Vars context source → Vars context target → Type 1
-  | refl (variables : Vars context arguments) :
-      VarsFactor variables variables
-  | permute (permutation : TypedPermutation source target)
-      (variables : Vars context source) :
-      VarsFactor variables (permutation.value.mapVars variables)
-  | contract (before : List Sig)
-      (variables : Vars context (before ++ signature :: after)) :
-      VarsFactor (Argument.Duplicate.Vars.duplicateAt before variables)
-        variables
-  | extend (before : List Sig) (inserted : Var context signature)
-      (variables : Vars context (before ++ after)) :
-      VarsFactor variables
-        (Argument.Projection.Vars.insertAt before inserted variables)
-  | trans (first : VarsFactor source middle)
-      (second : VarsFactor middle target) :
-      VarsFactor source target
-
-namespace VarsFactor
-
-/-- A fixed syntax factor survives every ambient wire substitution. -/
-private noncomputable def natural
-    {before sourceArguments targetArguments : List Sig}
-    {source : Vars before sourceArguments}
-    {target : Vars before targetArguments}
-    (factor : VarsFactor source target)
-    (rename : WireRenaming before after) :
-    VarsFactor (source.map fun wire => rename wire)
-      (target.map fun wire => rename wire) := by
-  induction factor with
-  | refl variables => exact .refl _
-  | @permute sourceArguments targetArguments permutation variables =>
-      rw [permutation.map_natural]
-      exact .permute permutation _
-  | contract position variables =>
-      rw [duplicateAt_map]
-      exact .contract position _
-  | extend position inserted variables =>
-      rw [Argument.Projection.Vars.insertAt_map]
-      exact .extend position (rename inserted) _
-  | trans first second firstIH secondIH => exact firstIH.trans secondIH
-
-/-- Keep one leading argument while applying a factor to the tail. -/
-private noncomputable def keepHead (head : Var context signature)
-    (factor : VarsFactor source target) :
-    VarsFactor (.cons head source) (.cons head target) := by
-  induction factor with
-  | refl variables => exact .refl _
-  | @permute sourceArguments targetArguments permutation variables =>
-      exact .permute (TypedPermutation.keepHead signature permutation)
-        (.cons head variables)
-  | contract position variables =>
-      exact .contract (signature :: position) (.cons head variables)
-  | extend position inserted variables =>
-      exact .extend (signature :: position) inserted (.cons head variables)
-  | trans first second firstIH secondIH => exact firstIH.trans secondIH
-
-/-- Build a supplied tuple from the empty tuple using extensions only. -/
-private noncomputable def extendFromNil
-    (added : Vars context additions) :
-    VarsFactor (.nil : Vars context []) added := by
-  induction added with
-  | nil => exact .refl .nil
-  | cons head tail induction =>
-      exact (VarsFactor.extend [] head .nil).trans
-        (induction.keepHead head)
-
-/-- Append a supplied tuple using projection extensions only.  This is the
-monotone first phase of boundary normalization. -/
-private noncomputable def extendAppend
-    (variables : Vars context arguments)
-    (added : Vars context additions) :
-    VarsFactor variables (Arity.Vars.append variables added) := by
-  induction variables with
-  | nil => exact extendFromNil added
-  | cons head tail induction => exact induction.keepHead head
-
-/-- Remove one extra occurrence from in front of the ordered identity tuple.
-Only permutation and duplicate contraction are used. -/
-private noncomputable def removeIdentityExtra
-    (wire : Var context signature) :
-    VarsFactor
-      (.cons wire (Erasure.Exposure.identityBoundary context))
-      (Erasure.Exposure.identityBoundary context) := by
-  induction wire with
-  | @here signature tail =>
-      exact .contract []
-        (Erasure.Exposure.identityBoundary (signature :: tail))
-  | @there tail signature head wire induction =>
-      let identityTail := Erasure.Exposure.identityBoundary tail
-      let source : Vars (head :: tail) (signature :: head :: tail) :=
-        .cons (.there wire)
-          (.cons .here (identityTail.map fun retained => .there retained))
-      let swapped := TypedPermutation.swapHead signature head tail
-      let tailRename : WireRenaming tail (head :: tail) :=
-        ⟨fun retained => .there retained⟩
-      have removeTail := (induction.natural tailRename).keepHead
-        (.here : Var (head :: tail) head)
-      exact (VarsFactor.permute swapped source).trans (by
-        simpa only [Erasure.Exposure.identityBoundary, source, tailRename]
-          using removeTail)
-
-/-- Delete an arbitrary prefix in front of a complete ordered identity tuple.
-The reduction phase contains only permutations and contractions. -/
-private noncomputable def reduceIdentityPrefix
-    (leading : Vars context arguments) :
-    VarsFactor
-      (Arity.Vars.append leading
-        (Erasure.Exposure.identityBoundary context))
-      (Erasure.Exposure.identityBoundary context) := by
-  induction leading with
-  | nil => exact .refl _
-  | cons head tail induction =>
-      exact (induction.keepHead head).trans (removeIdentityExtra head)
-
-end VarsFactor
-
-/-! Positional atom support.  The support context contains one distinct wire
-for the atom head and one distinct wire for every port position.  Its collapse
-renaming is allowed to identify those syntax positions in the ambient
-pattern; the support pattern itself remains linear and canonical. -/
-
-private def atomSupportWires (arguments : List Sig) : List Sig :=
-  .rel arguments :: arguments
-
-private def atomSupportHead (arguments : List Sig) :
-    Var (atomSupportWires arguments) (.rel arguments) :=
-  .here
-
-private def atomSupportPorts (arguments : List Sig) :
-    Vars (atomSupportWires arguments) arguments :=
-  (Erasure.Exposure.identityBoundary arguments).map fun wire => .there wire
-
-private def atomSupportItem (arguments : List Sig) :
-    Item (atomSupportWires arguments) :=
-  .atom (atomSupportHead arguments) (atomSupportPorts arguments)
-
-private def atomSelection
-    (head : Var patternWires (.rel atomArguments))
-    (ports : Vars patternWires atomArguments) :
-    Vars patternWires (atomSupportWires atomArguments) :=
-  .cons head ports
-
-private def atomSupportCollapse
-    (head : Var patternWires (.rel atomArguments))
-    (ports : Vars patternWires atomArguments) :
-    WireRenaming (atomSupportWires atomArguments) patternWires :=
-  EqualityNormalization.formalSubstitution (atomSelection head ports)
-
-private theorem Vars.countIndex_map_of_index
-    (variables : Vars source signatures)
-    (rename : WireRenaming source target)
-    (indexEq : ∀ {signature} (wire : Var source signature),
-      (rename wire).index.val = wire.index.val)
-    (index : Nat) :
-    (variables.map fun wire => rename wire).countIndex index =
-      variables.countIndex index := by
-  induction variables with
-  | nil => rfl
-  | cons head tail induction =>
-      simp only [Vars.map, Vars.countIndex, indexEq head, induction]
-
-@[simp] private theorem atomSupportItem_rename
-    (head : Var patternWires (.rel atomArguments))
-    (ports : Vars patternWires atomArguments) :
-    (atomSupportItem atomArguments).renameWires
-    (atomSupportCollapse head ports) =
-      .atom head ports := by
-  let tailRename : WireRenaming atomArguments
-      (atomSupportWires atomArguments) := ⟨fun wire => .there wire⟩
-  let collapse := atomSupportCollapse head ports
-  have portsEq : (atomSupportPorts atomArguments).map
-      (fun wire => collapse wire) = ports := by
-    calc
-      (atomSupportPorts atomArguments).map (fun wire => collapse wire) =
-          (Erasure.Exposure.identityBoundary atomArguments).map
-            (fun wire => collapse (tailRename wire)) := by
-              simpa only [atomSupportPorts, tailRename] using
-                Diagram.vars_map_comp
-                  (Erasure.Exposure.identityBoundary atomArguments)
-                  tailRename collapse
-      _ = ports := by
-        change (Erasure.Exposure.identityBoundary atomArguments).map
-            (fun wire =>
-              EqualityNormalization.formalSubstitution ports wire) = ports
-        exact EqualityNormalization.formalPorts_map_substitution ports
-  change Item.atom (collapse (atomSupportHead atomArguments))
-      ((atomSupportPorts atomArguments).map fun wire => collapse wire) =
-    Item.atom head ports
-  rw [show collapse (atomSupportHead atomArguments) = head by rfl, portsEq]
-
-private theorem atomSupportCanonical (arguments : List Sig) :
-    (Region.singleton (atomSupportItem arguments)).Canonical := by
-  change (∀ localIndex : Fin 0, RegionPath.RootedTwo _) ∧
-    (ItemSeq.cons _ ItemSeq.nil).ChildrenCanonical
-  exact ⟨fun localIndex => Fin.elim0 localIndex,
-    ⟨True.intro, True.intro⟩⟩
-
-private theorem atomSupportBoundarySurjective
-    (wire : Fin (atomSupportWires arguments).length) :
-    ∃ position : Fin (atomSupportWires arguments).length,
-      ((Erasure.Exposure.identityBoundary
-        (atomSupportWires arguments)).get position).index = wire := by
-  exact ⟨wire, Erasure.Exposure.identityBoundary_get_index wire⟩
-
-private theorem atomSupportExternalTwoEnded (arguments : List Sig) :
+/-- The authoritative all-sites inputs for one structural primitive. It
+contains no edit: the constrained compiler fold is the sole producer of that
+edit and of its exact staged endpoint. -/
+structure ItemsAuthority
+    {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+    (pattern : OpenDiagram arguments)
+    (operation : Transform.Operation arguments)
+    (frame : Transform.Frame arguments (outer ++ resultLocals)
+      sourceWires (outer ++ stagedLocals))
+    (data : operation.Data frame)
+    (source : ItemSeq sourceWires)
+    (result : Region (outer ++ resultLocals))
+    (pending : Region outer) where
+  evidence :
+    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      frame.sourceKeep frame.selected source result
+  sites : ItemsSites operation data evidence
+  request : Telescope.Request
+    (Region.adjoinAt resultLocals .nil result) pending
+  stagedCanonical : ∀ output : ExactEdit
+      (Transform.ItemsEdit operation frame data source)
+      (fun edit => edit.run),
+    (request.occurrence.context.fill
+      (Region.adjoinAt stagedLocals .nil output.endpoint)).Canonical
+  stagedExternalTwoEnded : ∀ output : ExactEdit
+      (Transform.ItemsEdit operation frame data source)
+      (fun edit => edit.run),
     OpenDiagram.ExternalTwoEnded
-      (Erasure.Exposure.identityBoundary (atomSupportWires arguments))
-      (Region.singleton (atomSupportItem arguments)) := by
-  intro signature wire
-  have boundaryPositive : 0 <
-      (Erasure.Exposure.identityBoundary
-        (atomSupportWires arguments)).countIndex wire.index.val := by
-    have positive :=
-      (Erasure.Exposure.identityBoundary (atomSupportWires arguments))
-        |>.countIndex_get_positive wire.index
-    rw [Erasure.Exposure.identityBoundary_get_index] at positive
-    exact positive
-  have bodyPositive : 0 <
-      ((Region.singleton (atomSupportItem arguments)).incidencePaths
-        wire.index.val).length := by
-    simp only [Region.singleton, Region.ofItems, Region.incidencePaths,
-      ItemSeq.renameWires, Item.renameWires, ItemSeq.incidencePaths,
-      Item.incidencePaths, List.append_nil, List.length_replicate,
-      Var.index_appendLeft, atomSupportItem, atomSupportHead]
-    let appendNil : WireRenaming (atomSupportWires arguments)
-        (atomSupportWires arguments ++ []) :=
-      ⟨fun wire => wire.appendLeft []⟩
-    have portCountEq :
-        ((atomSupportPorts arguments).map
-          (fun wire => appendNil wire)).countIndex wire.index.val =
-        (atomSupportPorts arguments).countIndex wire.index.val := by
-      exact Vars.countIndex_map_of_index (atomSupportPorts arguments)
-        appendNil (fun selected => Var.index_appendLeft selected [])
-          wire.index.val
-    rw [show ((atomSupportPorts arguments).map
-        (fun wire => wire.appendLeft [])).countIndex wire.index.val =
-          (atomSupportPorts arguments).countIndex wire.index.val by
-      simpa only [appendNil] using portCountEq]
-    change 0 <
-      (Erasure.Exposure.identityBoundary
-        (atomSupportWires arguments)).countIndex wire.index.val
-    exact boundaryPositive
-  omega
+      request.occurrence.interface.boundaryWire
+      (request.occurrence.context.fill
+        (Region.adjoinAt stagedLocals .nil output.endpoint))
 
-private theorem atomSupportIncidenceNonempty
-    (arguments : List Sig) (wire : Var (atomSupportWires arguments) signature) :
-    (Region.singleton (atomSupportItem arguments)).incidencePaths
-      wire.index.val ≠ [] := by
-  have boundaryPositive : 0 <
-      (Erasure.Exposure.identityBoundary
-        (atomSupportWires arguments)).countIndex wire.index.val := by
-    have positive :=
-      (Erasure.Exposure.identityBoundary (atomSupportWires arguments))
-        |>.countIndex_get_positive wire.index
-    rw [Erasure.Exposure.identityBoundary_get_index] at positive
-    exact positive
-  rw [← List.length_pos_iff]
-  simp only [Region.singleton, Region.ofItems, Region.incidencePaths,
-    ItemSeq.renameWires, Item.renameWires, ItemSeq.incidencePaths,
-    Item.incidencePaths, List.append_nil, List.length_replicate,
-    Var.index_appendLeft, atomSupportItem, atomSupportHead]
-  let appendNil : WireRenaming (atomSupportWires arguments)
-      (atomSupportWires arguments ++ []) :=
-    ⟨fun selected => selected.appendLeft []⟩
-  have portCountEq :
-      ((atomSupportPorts arguments).map
-        (fun selected => appendNil selected)).countIndex wire.index.val =
-      (atomSupportPorts arguments).countIndex wire.index.val :=
-    Vars.countIndex_map_of_index (atomSupportPorts arguments) appendNil
-      (fun selected => Var.index_appendLeft selected []) wire.index.val
-  rw [show ((atomSupportPorts arguments).map
-      (fun selected => selected.appendLeft [])).countIndex wire.index.val =
-        (atomSupportPorts arguments).countIndex wire.index.val by
-    simpa only [appendNil] using portCountEq]
-  change 0 <
-    (Erasure.Exposure.identityBoundary
-      (atomSupportWires arguments)).countIndex wire.index.val
-  exact boundaryPositive
+namespace ItemsAuthority
 
-private def atomFormalShape (arguments : List Sig) :
-    FormalShape (atomSupportHead arguments) (atomSupportPorts arguments) := {
-  before := []
-  after := arguments
-  formal := atomSupportHead arguments
-  retained := atomSupportPorts arguments
-  head_eq := HEq.rfl
-  ports_eq := HEq.rfl
-  boundaryWire :=
-    Erasure.Exposure.identityBoundary (atomSupportWires arguments)
-  boundary_eq := rfl
-  boundarySurjective := atomSupportBoundarySurjective
-  canonical := atomSupportCanonical arguments
-  externalTwoEnded := atomSupportExternalTwoEnded arguments
+abbrev Output
+    {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+    {pattern : OpenDiagram arguments}
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments (outer ++ resultLocals)
+      sourceWires (outer ++ stagedLocals)}
+    {data : operation.Data frame}
+    {source : ItemSeq sourceWires}
+    {result : Region (outer ++ resultLocals)}
+    {pending : Region outer}
+    (_authority : ItemsAuthority pattern operation frame data source result
+      pending) :=
+  ExactEdit (Transform.ItemsEdit operation frame data source)
+    (fun edit => edit.run)
+
+def staged
+    {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+    {pattern : OpenDiagram arguments}
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments (outer ++ resultLocals)
+      sourceWires (outer ++ stagedLocals)}
+    {data : operation.Data frame}
+    {source : ItemSeq sourceWires}
+    {result : Region (outer ++ resultLocals)}
+    {pending : Region outer}
+    (authority : ItemsAuthority pattern operation frame data source result
+      pending)
+    (output : authority.Output) : Region outer :=
+  Region.adjoinAt stagedLocals .nil output.endpoint
+
+abbrev goal
+    {arguments outer resultLocals stagedLocals sourceWires : List Sig}
+    {pattern : OpenDiagram arguments}
+    {operation : Transform.Operation arguments}
+    {frame : Transform.Frame arguments (outer ++ resultLocals)
+      sourceWires (outer ++ stagedLocals)}
+    {data : operation.Data frame}
+    {source : ItemSeq sourceWires}
+    {result : Region (outer ++ resultLocals)}
+    {pending : Region outer}
+    (authority : ItemsAuthority pattern operation frame data source result
+      pending) : Goal :=
+  Goal.ofRequest authority.request
+
+end ItemsAuthority
+
+/-- Build the fixed primitive discharge after recursive compilation has
+supplied only the telescope ending at the authoritative edit endpoint. -/
+private noncomputable def dischargeAtAuthoritativeEdit
+    {localRule : LocalRule}
+    {goal : Goal}
+    (inject : ∀ {stepBoundary : List Sig}
+      {stepSource stepTarget : OpenDiagram stepBoundary},
+      Contextual localRule stepSource stepTarget → Step stepSource stepTarget)
+    {staged rawPrepared rawPending : Region goal.holeWires}
+    (stagedCanonical :
+      (goal.request.occurrence.context.fill staged).Canonical)
+    (stagedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      goal.request.occurrence.interface.boundaryWire
+      (goal.request.occurrence.context.fill staged))
+    (telescope : Telescope goal.request.polarity
+      goal.request.occurrence.interface goal.request.occurrence.context
+      goal.instantiated staged goal.request.instantiatedCanonical
+      goal.request.instantiatedExternalTwoEnded stagedCanonical
+      stagedExternalTwoEnded)
+    (stagedEq : staged = rawPrepared)
+    (rawPendingCanonical :
+      (goal.request.occurrence.context.fill rawPending).Canonical)
+    (rawPendingExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      goal.request.occurrence.interface.boundaryWire
+      (goal.request.occurrence.context.fill rawPending))
+    (pendingIso : RegionIso (WireEquiv.refl goal.holeWires)
+      goal.pending rawPending)
+    (localStep : localRule rawPrepared rawPending) :
+    goal.request.Discharge staged := by
+  let supplied : goal.request.Preparation staged := {
+    prepared := staged
+    preparedCanonical := stagedCanonical
+    preparedExternalTwoEnded := stagedExternalTwoEnded
+    rawPreparedCanonical := stagedCanonical
+    rawPreparedExternalTwoEnded := stagedExternalTwoEnded
+    preparedIso := RegionIso.refl _
+    telescope := telescope
+  }
+  let preparation : goal.request.Preparation rawPrepared := stagedEq ▸ supplied
+  let primitive : PrimitiveTarget localRule goal := {
+    rawPrepared := rawPrepared
+    rawPending := rawPending
+    rawPreparedCanonical := by
+      rw [← stagedEq]
+      exact stagedCanonical
+    rawPreparedExternalTwoEnded := by
+      rw [← stagedEq]
+      exact stagedExternalTwoEnded
+    rawPendingCanonical := rawPendingCanonical
+    rawPendingExternalTwoEnded := rawPendingExternalTwoEnded
+    pendingIso := pendingIso
+    localStep := localStep
+  }
+  exact dischargePrimitive inject
+    (primitive.phase staged preparation (by
+      rw [stagedEq]
+      exact RegionIso.refl _))
+
+/-- Exact authoritative CutShape inputs at an existing cut constructor. -/
+structure CutTarget
+    {patternWires arguments : List Sig}
+    (body : Region patternWires)
+    (shape : PatternShape (Region.singleton (.cut body)) arguments) where
+  outer : List Sig
+  before : List Sig
+  after : List Sig
+  source : ItemSeq
+    (outer ++ (before ++ .rel arguments :: after))
+  result : Region (outer ++ (before ++ after))
+  authority : ItemsAuthority shape.pattern
+    (Content.Cut.operation arguments)
+    (Content.Cut.rootFrame outer before after arguments)
+    (Content.Cut.targetHead outer before after arguments)
+    source result (.mk (before ++ .rel arguments :: after) source)
+
+namespace CutTarget
+
+variable {patternWires arguments : List Sig}
+variable {body : Region patternWires}
+variable {shape : PatternShape (Region.singleton (.cut body)) arguments}
+
+abbrev goal (target : CutTarget body shape) : Goal := target.authority.goal
+abbrev Output (target : CutTarget body shape) : Type :=
+  ItemsAuthority.Output target.authority
+def staged (target : CutTarget body shape) (output : target.Output) :
+    Region target.outer := target.authority.staged output
+
+private def description (target : CutTarget body shape) (output : target.Output) :
+    Content.Cut.Wrap.Description target.outer := {
+  arguments := arguments
+  before := target.before
+  after := target.after
+  items := target.source
+  itemsEdit := output.edit
 }
 
-private theorem atomSupportPins_eq_nil (arguments : List Sig) :
-    Erasure.Exposure.supportPins
-      (Region.singleton (atomSupportItem arguments))
-      (atomSupportWires arguments)
-      (Erasure.Exposure.identityBoundary (atomSupportWires arguments)) =
-        .nil := by
-  apply EqualityNormalization.supportPins_eq_nil
-  intro position
-  exact atomSupportIncidenceNonempty arguments
-    ((Erasure.Exposure.identityBoundary
-      (atomSupportWires arguments)).get position)
-
-private theorem atomSupportBody_eq (arguments : List Sig) :
-    Erasure.Exposure.supportBody
-      (Region.singleton (atomSupportItem arguments)) =
-        Region.singleton (atomSupportItem arguments) := by
-  exact EqualityNormalization.supportBody_eq_of_supportPins_nil _
-    (atomSupportPins_eq_nil arguments)
-
-private theorem atomSupportPattern_eq (arguments : List Sig) :
-    Erasure.Exposure.supportPattern
-      (Region.singleton (atomSupportItem arguments))
-      (atomSupportCanonical arguments) =
-        (atomFormalShape arguments).pattern := by
-  apply EqualityNormalization.OpenDiagram.eq_of_data
-  · rfl
-  · rfl
-  · exact heq_of_eq (atomSupportBody_eq arguments)
-
-/-! Exact first-item presentation of one selected application of an
-identity-boundary cons pattern.  The host is everything except the atom head:
-the sibling tail followed by the authoritative boundary equalities. -/
-
-private def atomBodyWire
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (common : List Sig) :
-    WireRenaming patternWires
-      (common ++ EqualityNormalization.locals shape.pattern) :=
-  let appendNil : WireRenaming patternWires (patternWires ++ []) :=
-    ⟨fun wire => wire.appendLeft []⟩
-  WireRenaming.comp
-    (EqualityNormalization.bodyEmbedding shape.pattern common) appendNil
-
-private def atomSiteHostItems
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires) :
-    ItemSeq (common ++ EqualityNormalization.locals shape.pattern) :=
-  (tail.renameWires (atomBodyWire shape common)).append
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems
-      (application.map fun wire =>
-        EqualityNormalization.actualEmbedding shape.pattern common wire)
-      (shape.pattern.boundaryWire.map fun wire =>
-        EqualityNormalization.patternEmbedding shape.pattern common wire))
-
-private theorem atomInstantiationItems_eq
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires) :
-    EqualityNormalization.items shape.pattern application =
-      .cons
-        (.atom (atomBodyWire shape common head)
-          (ports.map fun wire => atomBodyWire shape common wire))
-        (atomSiteHostItems shape application) := by
-  let appendNil : WireRenaming patternWires (patternWires ++ []) :=
-    ⟨fun wire => wire.appendLeft []⟩
-  let embedding := EqualityNormalization.bodyEmbedding shape.pattern common
-  have headEq : embedding (appendNil head) = atomBodyWire shape common head :=
-    rfl
-  have portsEq :
-      (ports.map fun wire => appendNil wire).map
-          (fun wire => embedding wire) =
-        ports.map (fun wire => atomBodyWire shape common wire) := by
-    simpa only [embedding, appendNil, atomBodyWire, WireRenaming.comp] using
-      Diagram.vars_map_comp ports appendNil embedding
-  have tailEq :
-      (tail.renameWires appendNil).renameWires embedding =
-        tail.renameWires (atomBodyWire shape common) := by
-    simpa only [embedding, appendNil, atomBodyWire] using
-      ItemSeq.renameWires_comp tail appendNil embedding
-  have bodyItems : shape.pattern.body.items =
-      (ItemSeq.cons (.atom head ports) tail).renameWires appendNil := by
-    rfl
-  simp only [EqualityNormalization.items]
-  rw [bodyItems]
-  simp only [ItemSeq.renameWires, Item.renameWires]
-  rw [headEq, portsEq, tailEq]
-  rfl
-
-private def atomExposureDescription
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires) :
-    Rule.Erasure.Description common where
-  materialWires := atomSupportWires atomArguments
-  hostLocals := EqualityNormalization.locals shape.pattern
-  hostItems := atomSiteHostItems shape application
-  material := Region.singleton (atomSupportItem atomArguments)
-  wireMap := WireRenaming.comp (atomBodyWire shape common)
-    (atomSupportCollapse head ports)
-
-private theorem atomExposureApplicationPorts
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires) :
-    Erasure.Exposure.applicationPorts
-        (atomExposureDescription shape application) =
-      .cons (atomBodyWire shape common head)
-        (ports.map fun wire => atomBodyWire shape common wire) := by
-  change (Erasure.Exposure.identityBoundary
-      (atomSupportWires atomArguments)).map
-        (fun wire =>
-          atomBodyWire shape common (atomSupportCollapse head ports wire)) = _
-  rw [← EqualityNormalization.formalPorts_eq_exposure]
-  rw [← Diagram.vars_map_comp
-    (EqualityNormalization.formalPorts (atomSupportWires atomArguments))
-    (atomSupportCollapse head ports) (atomBodyWire shape common)]
-  rw [show (EqualityNormalization.formalPorts
-      (atomSupportWires atomArguments)).map
-        (fun wire => atomSupportCollapse head ports wire) =
-      atomSelection head ports by
-    exact EqualityNormalization.formalPorts_map_substitution
-      (atomSelection head ports)]
-  rfl
-
-private theorem canonical_of_eq
-    {before after : Region wires} (equality : before = after)
-    (canonical : after.Canonical) : before.Canonical := by
-  rw [equality]
-  exact canonical
-
-private theorem atomExposureMaterialRename
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires) :
-    (Region.singleton (atomSupportItem atomArguments)).renameWires
-        (atomExposureDescription shape application).wireMap =
-      Region.singleton
-        (.atom (atomBodyWire shape common head)
-          (ports.map fun wire => atomBodyWire shape common wire)) := by
-  change (Region.singleton (atomSupportItem atomArguments)).renameWires
-      (WireRenaming.comp (atomBodyWire shape common)
-        (atomSupportCollapse head ports)) = _
-  rw [← Region.renameWires_comp]
-  rw [Region.singleton_renameWires, atomSupportItem_rename,
-    Region.singleton_renameWires]
-  rfl
-
-private def atomSelectedItem
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (common : List Sig) :
-    Item (common ++ EqualityNormalization.locals shape.pattern) :=
-  .atom (atomBodyWire shape common head)
-    (ports.map fun wire => atomBodyWire shape common wire)
-
-private theorem atomInstantiation_eq
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires) :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-        shape.pattern application =
-      Region.mk (EqualityNormalization.locals shape.pattern)
-        (.cons (atomSelectedItem shape common)
-          (atomSiteHostItems shape application)) := by
-  rw [EqualityNormalization.instantiate_eq_presentation,
-    atomInstantiationItems_eq]
-  rfl
-
-private theorem atomExposureWires_nonempty
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (common : List Sig) :
-    common ++ EqualityNormalization.locals shape.pattern ≠ [] := by
-  intro empty
-  have localsEmpty : EqualityNormalization.locals shape.pattern = [] :=
-    (List.append_eq_nil_iff.mp empty).2
-  have patternEmpty : patternWires = [] := by
-    have both : patternWires = [] ∧
-        (Region.ofItems (.cons (.atom head ports) tail)).locals = [] := by
-      simpa [EqualityNormalization.locals, PatternShape.pattern] using
-        localsEmpty
-    exact both.1
-  subst patternWires
-  exact Fin.elim0 head.index
-
-private noncomputable def atomExposureSourceIso
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires) :
-    RegionIso (WireEquiv.refl common)
-      (atomExposureDescription shape application).source
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-        shape.pattern application) := by
-  let selected := atomSelectedItem shape common
-  let materialIso : RegionIso
-      (WireEquiv.refl
-        (common ++ EqualityNormalization.locals shape.pattern))
-      ((Region.singleton (atomSupportItem atomArguments)).renameWires
-        (atomExposureDescription shape application).wireMap)
-      (Region.singleton selected) := by
-    exact RegionIso.ofEq (atomExposureMaterialRename shape application)
-  let adjoined := RegionIso.adjoinAt
-    (EqualityNormalization.locals shape.pattern)
-    (atomSiteHostItems shape application) materialIso
-  let flattened := RegionIso.adjoinAtSingleton
-    (EqualityNormalization.locals shape.pattern)
-    (atomSiteHostItems shape application) selected
-  let front := RegionIso.appendSingletonFront
-    (EqualityNormalization.locals shape.pattern)
-    (atomSiteHostItems shape application) selected
-  rw [atomInstantiation_eq shape application]
-  let combined := (adjoined.trans flattened).trans front
-  simpa only [Rule.Erasure.Description.source, Region.spliceAt,
-    atomExposureDescription, selected, WireEquiv.refl_trans] using combined
-
-private def atomPinnedExposureDescription
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires) :
-    Rule.Erasure.Description common :=
-  let raw := atomExposureDescription shape application
-  {
-    materialWires := raw.materialWires
-    hostLocals := raw.hostLocals
-    hostItems := raw.hostItems.append
-      (EqualityNormalization.contextPins common raw.hostLocals)
-    material := raw.material
-    wireMap := raw.wireMap
-  }
-
-private theorem atomSelectedCanonical
-    (head : Var wires (.rel arguments)) (ports : Vars wires arguments) :
-    (Region.singleton (.atom head ports)).Canonical := by
-  change (∀ localIndex : Fin 0, RegionPath.RootedTwo _) ∧
-    (ItemSeq.cons _ ItemSeq.nil).ChildrenCanonical
-  exact ⟨fun localIndex => Fin.elim0 localIndex,
-    ⟨True.intro, True.intro⟩⟩
-
-private theorem atomPinnedHostCanonical
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires) :
-    (Region.mk (EqualityNormalization.locals shape.pattern)
-      ((atomSiteHostItems shape application).append
-        (EqualityNormalization.contextPins common
-          (EqualityNormalization.locals shape.pattern)))).Canonical := by
-  let locals := EqualityNormalization.locals shape.pattern
-  let hostItems := atomSiteHostItems shape application
-  have sourceCanonical :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
-      shape.pattern application
-  rw [atomInstantiation_eq shape application] at sourceCanonical
-  constructor
-  · intro localIndex
-    let localWire := Var.appendRight common (Var.ofIndex localIndex)
-    have pinRoot := EqualityNormalization.allPins_twice_rooted
-      (common ++ locals) WireRenaming.id localWire hostItems.length
-    rw [ItemSeq.incidencePaths_append]
-    apply RegionPath.RootedTwo.of_sublist
-      (List.sublist_append_right _ _)
-    simpa [EqualityNormalization.contextPins, locals, localWire, hostItems,
-      WireRenaming.id] using pinRoot
-  · apply (ItemSeq.childrenCanonical_append _ _).mpr
-    constructor
-    · simpa only [locals, hostItems] using sourceCanonical.2.2
-    · exact EqualityNormalization.allPins_twice_childrenCanonical
-        (common ++ locals) WireRenaming.id
-
-private def atomPinnedRawRegion
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires) : Region common :=
-  let locals := EqualityNormalization.locals shape.pattern
-  let items : ItemSeq (common ++ locals) :=
-    ItemSeq.cons (atomSelectedItem shape common)
-    (atomSiteHostItems shape application)
-  let pins : ItemSeq (common ++ locals) :=
-    EqualityNormalization.allPins (common ++ locals)
-    WireRenaming.id
-  .mk locals ((items.append pins).append pins)
-
-private noncomputable def atomPinnedSourceIso
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires) :
-    RegionIso (WireEquiv.refl common)
-      (atomPinnedExposureDescription shape application).source
-      (atomPinnedRawRegion shape application) := by
-  let locals := EqualityNormalization.locals shape.pattern
-  let selected := atomSelectedItem shape common
-  let pinnedHost := (atomSiteHostItems shape application).append
-    (EqualityNormalization.contextPins common locals)
-  let materialIso : RegionIso (WireEquiv.refl (common ++ locals))
-      ((Region.singleton (atomSupportItem atomArguments)).renameWires
-        (atomExposureDescription shape application).wireMap)
-      (Region.singleton selected) := by
-    exact RegionIso.ofEq (atomExposureMaterialRename shape application)
-  let adjoined := RegionIso.adjoinAt locals pinnedHost
-    materialIso
-  let flattened := RegionIso.adjoinAtSingleton locals pinnedHost selected
-  let front := RegionIso.appendSingletonFront locals pinnedHost selected
-  let combined := (adjoined.trans flattened).trans front
-  simpa only [atomPinnedExposureDescription, atomExposureDescription,
-    Rule.Erasure.Description.source, Region.spliceAt, locals, selected,
-    pinnedHost, atomPinnedRawRegion, EqualityNormalization.contextPins,
-    ItemSeq.append_assoc, WireEquiv.refl_trans] using combined
-
-private theorem atomPinnedRaw_incidence_nonempty
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires)
-    (wire : Var common signature) :
-    (atomPinnedRawRegion shape application).incidencePaths
-      wire.index.val ≠ [] := by
-  let locals := EqualityNormalization.locals shape.pattern
-  let base : ItemSeq (common ++ locals) :=
-    .cons (atomSelectedItem shape common)
-      (atomSiteHostItems shape application)
-  let embedded := wire.appendLeft locals
-  have pinsNonempty := EqualityNormalization.contextPins_incidence_nonempty
-    common locals embedded base.length
-  simp only [atomPinnedRawRegion, Region.incidencePaths]
-  rw [ItemSeq.append_assoc, ItemSeq.incidencePaths_append]
-  apply List.append_ne_nil_of_right_ne_nil
-  simpa [EqualityNormalization.contextPins, locals, embedded,
-    Var.index_appendLeft, base] using pinsNonempty
-
-private theorem atomPinnedSource_incidence_nonempty
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires)
-    (wire : Var common signature) :
-    (atomPinnedExposureDescription shape application).source.incidencePaths
-      wire.index.val ≠ [] := by
-  let locals := EqualityNormalization.locals shape.pattern
-  let hostItems := atomSiteHostItems shape application
-  let pinnedItems := hostItems.append
-    (EqualityNormalization.contextPins common locals)
-  have hostNonempty := EqualityNormalization.pinnedHost_incidence_nonempty
-    locals hostItems wire
-  have sublist := Region.incidencePaths_adjoinAt_host_sublist
-    locals pinnedItems
-    ((Region.singleton (atomSupportItem atomArguments)).renameWires
-      (atomExposureDescription shape application).wireMap) wire
-  have positive := Nat.lt_of_lt_of_le
-    (List.length_pos_iff.mpr (by
-      simpa only [locals, hostItems, pinnedItems] using hostNonempty))
-    sublist.length_le
-  simpa only [atomPinnedExposureDescription, atomExposureDescription,
-    Rule.Erasure.Description.source, Region.spliceAt, locals, hostItems,
-    pinnedItems] using List.length_pos_iff.mp positive
-
-private theorem atomSiteExposurePinned
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires)
-    {source : OpenDiagram boundary}
-    (occurrence : Occurrence
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-        shape.pattern application) source) :
-    let description := atomPinnedExposureDescription shape application
-    ∃ targetCanonical :
-        (occurrence.context.fill
-          (Erasure.Exposure.exposedRegion description
-            (atomSupportCanonical atomArguments))).Canonical,
-      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-          occurrence.interface.boundaryWire
-          (occurrence.context.fill
-            (Erasure.Exposure.exposedRegion description
-              (atomSupportCanonical atomArguments))),
-        Equates occurrence
-          (Erasure.Exposure.exposedRegion description
-            (atomSupportCanonical atomArguments))
-          targetCanonical targetExternalTwoEnded := by
-  dsimp only
-  let description := atomPinnedExposureDescription shape application
-  let locals := EqualityNormalization.locals shape.pattern
-  let baseItems : ItemSeq (common ++ locals) :=
-    .cons (atomSelectedItem shape common)
-      (atomSiteHostItems shape application)
-  have baseSourceCanonical :
-      (occurrence.context.fill (.mk locals baseItems)).Canonical := by
-    rw [← atomInstantiation_eq shape application]
-    exact occurrence.sourceCanonical
-  have baseSourceExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire
-      (occurrence.context.fill (.mk locals baseItems)) := by
-    intro signature wire
-    rw [← atomInstantiation_eq shape application]
-    exact occurrence.sourceExternalTwoEnded wire
-  let baseBodyIso := DiagramContext.fillIso occurrence.context
-    (RegionIso.ofEq (atomInstantiation_eq shape application))
-  let baseEndpointIso : OpenDiagramIso
-      (occurrence.interface.withBody
-        (occurrence.context.fill
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-            shape.pattern application))
-        occurrence.sourceCanonical occurrence.sourceExternalTwoEnded)
-      (occurrence.interface.withBody
-        (occurrence.context.fill (.mk locals baseItems))
-        baseSourceCanonical baseSourceExternalTwoEnded) :=
-    OpenDiagram.withBody_iso occurrence.sourceCanonical baseSourceCanonical
-      occurrence.sourceExternalTwoEnded baseSourceExternalTwoEnded baseBodyIso
-  have baseHostIso : OpenDiagramIso source
-      (occurrence.interface.withBody
-        (occurrence.context.fill (.mk locals baseItems))
-        baseSourceCanonical baseSourceExternalTwoEnded) :=
-    occurrence.host_iso.trans baseEndpointIso
-  let baseOccurrence : Occurrence (.mk locals baseItems) source := {
-    interface := occurrence.interface
-    context := occurrence.context
-    sourceCanonical := baseSourceCanonical
-    sourceExternalTwoEnded := baseSourceExternalTwoEnded
-    host_iso := baseHostIso
-  }
-  obtain ⟨rawCanonical, rawExternalTwoEnded, rawSteps⟩ :=
-    EqualityNormalization.pinAllTwiceOfNonempty baseOccurrence
-      (WireRenaming.id : WireRenaming (common ++ locals)
-        (common ++ locals))
-      (atomExposureWires_nonempty shape common)
-  let rawRegion := atomPinnedRawRegion shape application
-  have rawCanonical' :
-      (occurrence.context.fill rawRegion).Canonical := by
-    simpa only [baseOccurrence, locals, baseItems, rawRegion,
-      atomPinnedRawRegion] using rawCanonical
-  have rawExternalTwoEnded' : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire
-      (occurrence.context.fill rawRegion) := by
-    intro signature wire
-    simpa only [baseOccurrence, locals, baseItems, rawRegion,
-      atomPinnedRawRegion] using rawExternalTwoEnded wire
-  let rawEndpoint := occurrence.interface.withBody
-    (occurrence.context.fill rawRegion) rawCanonical'
-      rawExternalTwoEnded'
-  have rawForward : Relation.TransGen Step source rawEndpoint := by
-    simpa only [baseOccurrence, locals, baseItems, rawRegion,
-      atomPinnedRawRegion, rawEndpoint] using rawSteps.1
-  have rawReverse : Relation.TransGen Step rawEndpoint source := by
-    simpa only [baseOccurrence, locals, baseItems, rawRegion,
-      atomPinnedRawRegion, rawEndpoint] using rawSteps.2
-  let rawOccurrence : Occurrence rawRegion rawEndpoint :=
-    exactOccurrence occurrence.interface occurrence.context rawRegion
-      rawCanonical' rawExternalTwoEnded'
-  let pinnedHost := (atomSiteHostItems shape application).append
-    (EqualityNormalization.contextPins common locals)
-  have pinnedHostCanonical : (Region.mk locals pinnedHost).Canonical := by
-    simpa only [locals, pinnedHost] using
-      atomPinnedHostCanonical shape application
-  have pinnedSourceLocalCanonical : description.source.Canonical := by
-    change (Region.adjoinAt locals pinnedHost
-      ((Region.singleton (atomSupportItem atomArguments)).renameWires
-        (atomExposureDescription shape application).wireMap)).Canonical
-    have materialCanonical :
-        ((Region.singleton (atomSupportItem atomArguments)).renameWires
-          (atomExposureDescription shape application).wireMap).Canonical :=
-      canonical_of_eq (atomExposureMaterialRename shape application)
-        (atomSelectedCanonical _ _)
-    exact Region.Canonical.adjoinAt locals pinnedHost
-      ((Region.singleton (atomSupportItem atomArguments)).renameWires
-        (atomExposureDescription shape application).wireMap)
-      pinnedHostCanonical materialCanonical
-  have rawSourceSameNonempty : ∀ {signature} (wire : Var common signature),
-      rawRegion.incidencePaths wire.index.val ≠ [] ↔
-        description.source.incidencePaths wire.index.val ≠ [] := by
-    intro signature wire
-    exact ⟨fun _ => atomPinnedSource_incidence_nonempty shape application wire,
-      fun _ => atomPinnedRaw_incidence_nonempty shape application wire⟩
-  let pinnedOccurrence : Occurrence description.source rawEndpoint :=
-    EqualityNormalization.presentationOccurrence rawOccurrence
-      pinnedSourceLocalCanonical rawSourceSameNonempty
-      (atomPinnedSourceIso shape application).symm
-  have erasedLocalCanonical : description.target.Canonical := by
-    simpa only [description, atomPinnedExposureDescription,
-      Rule.Erasure.Description.target, locals, pinnedHost] using
-      pinnedHostCanonical
-  have erasedNonempty : ∀ {signature} (wire : Var common signature),
-      description.target.incidencePaths wire.index.val ≠ [] := by
-    intro signature wire
-    simpa only [description, atomPinnedExposureDescription,
-      Rule.Erasure.Description.target, locals, pinnedHost] using
-      EqualityNormalization.pinnedHost_incidence_nonempty
-        (EqualityNormalization.locals shape.pattern)
-        (atomSiteHostItems shape application) wire
-  have erasedSameNonempty : ∀ {signature} (wire : Var common signature),
-      description.source.incidencePaths wire.index.val ≠ [] ↔
-        description.target.incidencePaths wire.index.val ≠ [] := by
-    intro signature wire
-    exact ⟨fun _ => erasedNonempty wire,
-      fun _ => atomPinnedSource_incidence_nonempty shape application wire⟩
-  have erasedReplacement := pinnedOccurrence.context.replaceCanonical
-    description.source description.target pinnedOccurrence.sourceCanonical
-      erasedLocalCanonical erasedSameNonempty
-  let erasedCanonical := erasedReplacement.1
-  let pinnedExact := pinnedOccurrence.interface.withBody
-    (pinnedOccurrence.context.fill description.source)
-    pinnedOccurrence.sourceCanonical
-    pinnedOccurrence.sourceExternalTwoEnded
-  have erasedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      pinnedOccurrence.interface.boundaryWire
-      (pinnedOccurrence.context.fill description.target) :=
-    pinnedExact.externalTwoEnded_of_nonempty_iff _ erasedReplacement.2
-  obtain ⟨materialCanonical, exposedCanonical,
-      exposedExternalTwoEnded, exposedEquates⟩ :=
-    Erasure.Exposure.equates description pinnedOccurrence
-      erasedCanonical erasedExternalTwoEnded
-  have materialProof : materialCanonical =
-      atomSupportCanonical atomArguments := Subsingleton.elim _ _
-  subst materialCanonical
-  refine ⟨?_, ?_, ?_⟩
-  · simpa only [pinnedOccurrence, rawOccurrence, description] using
-      exposedCanonical
-  · intro signature wire
-    simpa only [pinnedOccurrence, rawOccurrence, description] using
-      exposedExternalTwoEnded wire
-  · have strict : EqualityNormalization.StrictEquates occurrence
-        (Erasure.Exposure.exposedRegion description
-          (atomSupportCanonical atomArguments)) exposedCanonical
-          exposedExternalTwoEnded := by
-      refine ⟨?_, ?_⟩
-      · exact rawForward.reflTransGen (by
-          simpa only [pinnedOccurrence, rawOccurrence] using exposedEquates.1)
-      · have reverseExposure : Relation.ReflTransGen Step
-            (pinnedOccurrence.interface.withBody
-              (pinnedOccurrence.context.fill
-                (Erasure.Exposure.exposedRegion description
-                  (atomSupportCanonical atomArguments)))
-              exposedCanonical exposedExternalTwoEnded)
-            rawEndpoint := by
-          simpa only [pinnedOccurrence, rawOccurrence] using
-            exposedEquates.2
-        exact reverseExposure.transGen rawReverse
-    simpa only [description] using strict.toEquates
-
-/-! An arbitrary retained host is merged into the atom exposure description
-before the exposure rule is invoked.  This is the constructor needed by the
-outer evidence fold: sibling material is ordinary host syntax, not another
-kind of occurrence path. -/
-
-private def atomExposureDescriptionWithHost
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (application : Vars (outer ++ hostLocals) patternWires) :
-    Rule.Erasure.Description outer :=
-  let inner := atomExposureDescription shape application
-  let innerHost : Region (outer ++ hostLocals) :=
-    .mk inner.hostLocals inner.hostItems
-  {
-    materialWires := inner.materialWires
-    hostLocals := hostLocals ++ inner.hostLocals
-    hostItems := Region.extendHostItems hostLocals hostItems
-      innerHost
-    material := inner.material
-    wireMap := WireRenaming.comp
-      (Region.adjoinMaterialWire outer hostLocals inner.hostLocals)
-      inner.wireMap
-  }
-
-private def atomPinnedExposureDescriptionWithHost
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (application : Vars (outer ++ hostLocals) patternWires) :
-    Rule.Erasure.Description outer :=
-  let raw := atomExposureDescriptionWithHost shape hostLocals hostItems
-    application
-  {
-    materialWires := raw.materialWires
-    hostLocals := raw.hostLocals
-    hostItems := raw.hostItems.append
-      (EqualityNormalization.contextPins outer raw.hostLocals)
-    material := raw.material
-    wireMap := raw.wireMap
-  }
-
-private noncomputable def atomExposureDescriptionWithHost_exposedIso
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (application : Vars (outer ++ hostLocals) patternWires) :
-    RegionIso (WireEquiv.refl outer)
-      (Erasure.Exposure.exposedRegion
-        (atomExposureDescriptionWithHost shape hostLocals hostItems
-          application)
-        (atomSupportCanonical atomArguments))
-      (Region.adjoinAt hostLocals hostItems
-        (Erasure.Exposure.exposedRegion
-          (atomExposureDescription shape application)
-          (atomSupportCanonical atomArguments))) := by
-  let inner := atomExposureDescription shape application
-  let combined := atomExposureDescriptionWithHost shape hostLocals hostItems
-    application
-  let innerMaterial :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-      (Erasure.Exposure.supportPattern inner.material
-        (atomSupportCanonical atomArguments))
-      (Erasure.Exposure.applicationPorts inner)
-  let assoc := WireEquiv.adjoinMaterialAssoc outer hostLocals
-    inner.hostLocals
-  have applicationPortsEq :
-      Erasure.Exposure.applicationPorts combined =
-        (Erasure.Exposure.applicationPorts inner).map
-          (fun wire => assoc wire) := by
-    simp only [combined, inner, assoc,
-      Erasure.Exposure.applicationPorts, atomExposureDescriptionWithHost,
-      atomExposureDescription]
-    exact (Diagram.vars_map_comp
-      (Erasure.Exposure.identityBoundary (atomSupportWires atomArguments))
-      ((atomBodyWire shape (outer ++ hostLocals)).comp
-        (atomSupportCollapse head ports))
-      (Region.adjoinMaterialWire outer hostLocals
-        (EqualityNormalization.locals shape.pattern))).symm
-  have materialEq :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          (Erasure.Exposure.supportPattern combined.material
-            (atomSupportCanonical atomArguments))
-          (Erasure.Exposure.applicationPorts combined) =
-        innerMaterial.renameWires assoc.toRenaming := by
-    rw [EqualityNormalization.instantiate_renameWires]
-    rw [applicationPortsEq]
-    rfl
-  let flat := Region.adjoinAt (hostLocals ++ inner.hostLocals)
-    (Region.extendHostItems hostLocals hostItems
-      (.mk inner.hostLocals inner.hostItems))
-    (innerMaterial.renameWires assoc.toRenaming)
-  let nested := Region.adjoinAt hostLocals hostItems
-    (Region.adjoinAt inner.hostLocals inner.hostItems innerMaterial)
-  let associated := RegionIso.adjoinAtAssoc hostLocals
-    hostItems inner.hostLocals inner.hostItems innerMaterial
-  have combinedEq :
-      Erasure.Exposure.exposedRegion combined
-          (atomSupportCanonical atomArguments) = flat := by
-    change Region.adjoinAt combined.hostLocals combined.hostItems
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-        (Erasure.Exposure.supportPattern combined.material
-          (atomSupportCanonical atomArguments))
-        (Erasure.Exposure.applicationPorts combined)) = flat
-    rw [materialEq]
-    rfl
-  have nestedEq : nested =
-      Region.adjoinAt hostLocals hostItems
-        (Erasure.Exposure.exposedRegion inner
-          (atomSupportCanonical atomArguments)) := by
-    rfl
-  exact (RegionIso.ofEq combinedEq).trans
-    (associated.trans (RegionIso.ofEq nestedEq))
-
-private theorem atomExposureHostChildrenWithHost
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (application : Vars (outer ++ hostLocals) patternWires)
-    (sourceCanonical :
-      (Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          shape.pattern application)).Canonical) :
-    (atomExposureDescriptionWithHost shape hostLocals hostItems application)
-      |>.hostItems.ChildrenCanonical := by
-  rw [atomInstantiation_eq shape application] at sourceCanonical
-  simp only [Region.adjoinAt, Region.Canonical,
-    ItemSeq.childrenCanonical_append] at sourceCanonical
-  have hostChildren : hostItems.ChildrenCanonical :=
-    (ItemSeq.ChildrenCanonical.renameWires_adjoinHost_iff hostItems).mp
-      sourceCanonical.2.1
-  have instantiatedChildren :
-      (ItemSeq.cons (atomSelectedItem shape (outer ++ hostLocals))
-        (atomSiteHostItems shape application)).ChildrenCanonical :=
-    (ItemSeq.ChildrenCanonical.renameWires_iff _ _).mp
-      sourceCanonical.2.2
-  simp only [atomExposureDescriptionWithHost,
-    atomExposureDescription, Region.extendHostItems,
-    Region.locals, Region.items]
-  apply (ItemSeq.childrenCanonical_append _ _).mpr
-  exact ⟨
-    (ItemSeq.ChildrenCanonical.renameWires_adjoinHost_iff hostItems).mpr
-      hostChildren,
-    (ItemSeq.ChildrenCanonical.renameWires_iff _ _).mpr
-      instantiatedChildren.2⟩
-
-private theorem pinnedHostCanonicalOfChildren
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (children : hostItems.ChildrenCanonical) :
-    (Region.mk hostLocals
-      (hostItems.append
-        (EqualityNormalization.contextPins outer hostLocals))).Canonical := by
-  constructor
-  · intro localIndex
-    let localWire := Var.appendRight outer (Var.ofIndex localIndex)
-    have pinRoot := EqualityNormalization.allPins_twice_rooted
-      (outer ++ hostLocals) WireRenaming.id localWire hostItems.length
-    rw [ItemSeq.incidencePaths_append]
-    apply RegionPath.RootedTwo.of_sublist
-      (List.sublist_append_right _ _)
-    simpa [EqualityNormalization.contextPins, localWire,
-      WireRenaming.id] using pinRoot
-  · exact (ItemSeq.childrenCanonical_append _ _).mpr
-      ⟨children, EqualityNormalization.allPins_twice_childrenCanonical
-        (outer ++ hostLocals) WireRenaming.id⟩
-
-private noncomputable def appendPinsTwiceIso
-    {sourceOuter targetOuter pinWires : List Sig}
-    {before : Region sourceOuter} {after : Region targetOuter}
-    {ambient : WireEquiv sourceOuter targetOuter}
-    (localIso : WireEquiv before.locals after.locals)
-    (itemsIso : ItemSeqIso (ambient.append localIso)
-      before.items after.items)
-    (sourceRename : WireRenaming pinWires
-      (sourceOuter ++ before.locals))
-    (targetRename : WireRenaming pinWires
-      (targetOuter ++ after.locals))
-    (commutes : ∀ {signature} (wire : Var pinWires signature),
-      (ambient.append localIso) (sourceRename wire) = targetRename wire) :
-    RegionIso ambient
-      (.mk before.locals
-        ((before.items.append
-          (EqualityNormalization.allPins pinWires sourceRename)).append
-            (EqualityNormalization.allPins pinWires sourceRename)))
-      (.mk after.locals
-        ((after.items.append
-          (EqualityNormalization.allPins pinWires targetRename)).append
-            (EqualityNormalization.allPins pinWires targetRename))) := by
-  let fullAmbient := ambient.append localIso
-  let sourcePins := EqualityNormalization.allPins pinWires sourceRename
-  let targetPins := EqualityNormalization.allPins pinWires targetRename
-  let rawPins := ItemSeqIso.renameWires sourcePins WireRenaming.id
-    fullAmbient.toRenaming fullAmbient (by
-      intro signature wire
-      rfl)
-  have renameEq : WireRenaming.comp fullAmbient.toRenaming sourceRename =
-      targetRename := by
-    apply WireRenaming.ext
-    exact commutes
-  have renamedPins : sourcePins.renameWires fullAmbient.toRenaming =
-      targetPins := by
-    rw [show sourcePins = EqualityNormalization.allPins pinWires sourceRename
-      by rfl]
-    rw [EqualityNormalization.allPins_renameWires, renameEq]
-  let pinsIso : ItemSeqIso fullAmbient sourcePins targetPins := by
-    simpa only [ItemSeq.renameWires_id, renamedPins] using rawPins
-  exact .mk localIso
-    (ItemSeqIso.append (ItemSeqIso.append itemsIso pinsIso) pinsIso)
-
-private def atomOriginalItemsWithHost
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (application : Vars (outer ++ hostLocals) patternWires) :
-    ItemSeq (outer ++
-      (hostLocals ++ EqualityNormalization.locals shape.pattern)) :=
-  (hostItems.renameWires
-    (Region.adjoinHostWire outer hostLocals
-      (EqualityNormalization.locals shape.pattern))).append
-  ((ItemSeq.cons (atomSelectedItem shape (outer ++ hostLocals))
-      (atomSiteHostItems shape application)).renameWires
-    (Region.adjoinMaterialWire outer hostLocals
-      (EqualityNormalization.locals shape.pattern)))
-
-private def atomOriginalRegionWithHost
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (application : Vars (outer ++ hostLocals) patternWires) : Region outer :=
-  .mk (hostLocals ++ EqualityNormalization.locals shape.pattern)
-    (atomOriginalItemsWithHost shape hostLocals hostItems application)
-
-private noncomputable def atomExposureDescriptionWithHost_source
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (application : Vars (outer ++ hostLocals) patternWires) :
-    RegionIso (WireEquiv.refl outer)
-      (atomExposureDescriptionWithHost shape hostLocals hostItems
-        application).source
-      (Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          shape.pattern application)) := by
-  let inner := atomExposureDescription shape application
-  let combined := atomExposureDescriptionWithHost shape hostLocals hostItems
-    application
-  let innerMaterial := inner.material.renameWires inner.wireMap
-  let assoc := WireEquiv.adjoinMaterialAssoc outer hostLocals
-    inner.hostLocals
-  let materialPresentation :=
-    (RegionIso.renameWiresComp inner.material inner.wireMap
-      assoc.toRenaming).symm
-  let flatPresentation := RegionIso.adjoinAt
-    (hostLocals ++ inner.hostLocals)
-    (Region.extendHostItems hostLocals hostItems
-      (.mk inner.hostLocals inner.hostItems))
-    materialPresentation
-  let associated := RegionIso.adjoinAtAssoc hostLocals
-    hostItems inner.hostLocals inner.hostItems innerMaterial
-  let nestedPresentation := flatPresentation.trans associated
-  let sourcePresentation := nestedPresentation.trans
-    (RegionIso.adjoinAt hostLocals hostItems
-      (atomExposureSourceIso shape application))
-  simpa only [combined, inner, innerMaterial, assoc,
-    atomExposureDescriptionWithHost, Rule.Erasure.Description.source,
-    Region.spliceAt, WireEquiv.adjoinMaterialAssoc] using
-      sourcePresentation
-
-private def atomExposureHostPinRename
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (application : Vars (outer ++ hostLocals) patternWires) :
-    WireRenaming
-      (outer ++ (atomExposureDescriptionWithHost shape hostLocals hostItems
-        application).hostLocals)
-      (outer ++ (atomExposureDescriptionWithHost shape hostLocals hostItems
-        application).source.locals) := by
-  change WireRenaming
-    (outer ++ (hostLocals ++ EqualityNormalization.locals shape.pattern))
-    (outer ++ ((hostLocals ++ EqualityNormalization.locals shape.pattern) ++ []))
-  exact Region.adjoinHostWire outer
-    (hostLocals ++ EqualityNormalization.locals shape.pattern) []
-
-private def atomRawPinnedRegionWithHost
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (application : Vars (outer ++ hostLocals) patternWires) : Region outer :=
-  let raw := atomExposureDescriptionWithHost shape hostLocals hostItems
-    application
-  let pinWires := outer ++ raw.hostLocals
-  let rename := atomExposureHostPinRename shape hostLocals hostItems
-    application
-  let pins := EqualityNormalization.allPins pinWires rename
-  .mk raw.source.locals ((raw.source.items.append pins).append pins)
-
-private theorem atomRawPinnedRegionWithHost_eq
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (application : Vars (outer ++ hostLocals) patternWires) :
-    atomRawPinnedRegionWithHost shape hostLocals hostItems application =
-      Region.appendAdjoinedHostSuffix
-        (atomExposureDescriptionWithHost shape hostLocals hostItems
-          application).hostLocals
-        (atomExposureDescriptionWithHost shape hostLocals hostItems
-          application).hostItems
-        (EqualityNormalization.contextPins outer
-          (atomExposureDescriptionWithHost shape hostLocals hostItems
-            application).hostLocals)
-        ((atomExposureDescriptionWithHost shape hostLocals hostItems
-          application).material.renameWires
-            (atomExposureDescriptionWithHost shape hostLocals hostItems
-              application).wireMap) := by
-  simp only [atomRawPinnedRegionWithHost,
-    atomExposureDescriptionWithHost, atomExposureDescription,
-    atomExposureHostPinRename, Region.appendAdjoinedHostSuffix,
-    EqualityNormalization.contextPins, Region.renameWires, Region.locals,
-    Region.items, Region.singleton, Region.ofItems,
-    Rule.Erasure.Description.source, Region.spliceAt, Region.adjoinAt,
-    ItemSeq.renameWires_append, ItemSeq.renameWires_comp,
-    ItemSeq.append_assoc]
-  rw [EqualityNormalization.allPins_renameWires]
-  congr 2
-
-private theorem atomSiteExposurePinnedWithHost
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
-    (application : Vars (outer ++ hostLocals) patternWires)
-    {source : OpenDiagram boundary}
-    (occurrence : Occurrence
-      (Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          shape.pattern application)) source) :
-    let description := atomPinnedExposureDescriptionWithHost shape
-      hostLocals hostItems application
-    ∃ targetCanonical :
-        (occurrence.context.fill
-          (Erasure.Exposure.exposedRegion description
-            (atomSupportCanonical atomArguments))).Canonical,
-      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-          occurrence.interface.boundaryWire
-          (occurrence.context.fill
-            (Erasure.Exposure.exposedRegion description
-              (atomSupportCanonical atomArguments))),
-        Equates occurrence
-          (Erasure.Exposure.exposedRegion description
-            (atomSupportCanonical atomArguments))
-          targetCanonical targetExternalTwoEnded := by
-  dsimp only
-  let raw := atomExposureDescriptionWithHost shape hostLocals hostItems
-    application
-  let description := atomPinnedExposureDescriptionWithHost shape hostLocals
-    hostItems application
-  let original := Region.adjoinAt hostLocals hostItems
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-      shape.pattern application)
-  let originalOccurrence : Occurrence original source := occurrence
-  let sourcePresentation : RegionIso (WireEquiv.refl outer) raw.source
-      original :=
-    atomExposureDescriptionWithHost_source shape hostLocals hostItems
-      application
-  let localIso := sourcePresentation.localEquiv
-  let itemsIso := sourcePresentation.itemSeqIso
-  exact (by
-      let sourceRename := atomExposureHostPinRename shape hostLocals
-        hostItems application
-      let fullAmbient := (WireEquiv.refl outer).append localIso
-      let targetRename := WireRenaming.comp fullAmbient.toRenaming sourceRename
-      let pinWires := outer ++ raw.hostLocals
-      have pinWiresNonempty : pinWires ≠ [] := by
-        simpa only [pinWires, raw, atomExposureDescriptionWithHost,
-          atomExposureDescription, List.append_assoc] using
-          atomExposureWires_nonempty shape (outer ++ hostLocals)
-      obtain ⟨pinnedCanonical, pinnedExternalTwoEnded, pinnedSteps⟩ :=
-        EqualityNormalization.pinAllTwiceRegionOfNonempty originalOccurrence
-          targetRename pinWiresNonempty
-      let sourcePins := EqualityNormalization.allPins pinWires sourceRename
-      let targetPins := EqualityNormalization.allPins pinWires targetRename
-      let rawPinned : Region outer :=
-        .mk raw.source.locals
-          ((raw.source.items.append sourcePins).append sourcePins)
-      let originalPinned : Region outer :=
-        .mk original.locals
-          ((original.items.append targetPins).append targetPins)
-      have rawPinnedEq : rawPinned =
-          atomRawPinnedRegionWithHost shape hostLocals hostItems application := by
-        rfl
-      have originalPinnedCanonical :
-          (originalOccurrence.context.fill originalPinned).Canonical := by
-        simpa only [originalOccurrence, originalPinned, targetPins,
-          pinWires, targetRename] using pinnedCanonical
-      have originalPinnedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-          originalOccurrence.interface.boundaryWire
-          (originalOccurrence.context.fill originalPinned) := by
-        intro signature wire
-        simpa only [originalOccurrence, originalPinned, targetPins,
-          pinWires, targetRename] using pinnedExternalTwoEnded wire
-      let pinnedEndpoint := originalOccurrence.interface.withBody
-        (originalOccurrence.context.fill originalPinned) originalPinnedCanonical
-          originalPinnedExternalTwoEnded
-      have pinnedForward : Relation.TransGen Step source pinnedEndpoint := by
-        simpa only [originalOccurrence, originalPinned, targetPins,
-          pinWires, targetRename, pinnedEndpoint] using pinnedSteps.1
-      have pinnedReverse : Relation.TransGen Step pinnedEndpoint source := by
-        simpa only [originalOccurrence, originalPinned, targetPins,
-          pinWires, targetRename, pinnedEndpoint] using pinnedSteps.2
-      let extended : RegionIso (WireEquiv.refl outer) rawPinned
-          originalPinned := by
-        simpa only [rawPinned, originalPinned, sourcePins, targetPins,
-          fullAmbient] using
-          appendPinsTwiceIso localIso itemsIso sourceRename targetRename
-            (by intro signature wire; rfl)
-      let moved := RegionIso.adjoinAtMoveHostSuffix raw.hostLocals
-        raw.hostItems (EqualityNormalization.contextPins outer raw.hostLocals)
-        (raw.material.renameWires raw.wireMap)
-      let rawToDescription : RegionIso (WireEquiv.refl outer) rawPinned
-          description.source := by
-        exact (RegionIso.ofEq (rawPinnedEq.trans
-          (atomRawPinnedRegionWithHost_eq shape hostLocals hostItems
-            application))).trans (by
-              simpa only [description,
-                atomPinnedExposureDescriptionWithHost, raw] using moved)
-      let pinnedPresentation : RegionIso (WireEquiv.refl outer)
-          originalPinned description.source :=
-        extended.symm.trans rawToDescription
-      have sourceLocalCanonical :
-          (Region.adjoinAt hostLocals hostItems
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-              shape.pattern application)).Canonical :=
-        occurrence.context.holeCanonical _ occurrence.sourceCanonical
-      have rawHostChildren : raw.hostItems.ChildrenCanonical := by
-        simpa only [raw] using atomExposureHostChildrenWithHost shape
-          hostLocals hostItems application sourceLocalCanonical
-      have pinnedHostCanonical :
-          (Region.mk raw.hostLocals
-            (raw.hostItems.append
-              (EqualityNormalization.contextPins outer raw.hostLocals)))
-              |>.Canonical :=
-        pinnedHostCanonicalOfChildren raw.hostLocals raw.hostItems
-          rawHostChildren
-      have materialCanonical :
-          (raw.material.renameWires raw.wireMap).Canonical := by
-        apply (Region.Canonical.renameWires_iff raw.material raw.wireMap).mpr
-        simpa only [raw, atomExposureDescriptionWithHost,
-          atomExposureDescription] using atomSupportCanonical atomArguments
-      have descriptionSourceCanonical : description.source.Canonical := by
-        change (Region.adjoinAt raw.hostLocals
-          (raw.hostItems.append
-            (EqualityNormalization.contextPins outer raw.hostLocals))
-          (raw.material.renameWires raw.wireMap)).Canonical
-        exact Region.Canonical.adjoinAt raw.hostLocals
-          (raw.hostItems.append
-            (EqualityNormalization.contextPins outer raw.hostLocals))
-          (raw.material.renameWires raw.wireMap) pinnedHostCanonical
-            materialCanonical
-      have originalPinnedNonempty : ∀ {signature}
-          (wire : Var outer signature),
-          originalPinned.incidencePaths wire.index.val ≠ [] := by
-        intro signature wire
-        let pinWire := wire.appendLeft raw.hostLocals
-        have mapped : (targetRename pinWire).index.val = wire.index.val := by
-          have sourceMapped : sourceRename pinWire =
-              wire.appendLeft raw.source.locals := by
-            apply Var.eq_of_index_eq
-            apply Fin.ext
-            calc
-              (sourceRename pinWire).index.val = pinWire.index.val := by
-                dsimp only [sourceRename, atomExposureHostPinRename]
-                exact Region.adjoinHostWire_index_val pinWire
-              _ = wire.index.val := Var.index_appendLeft wire raw.hostLocals
-              _ = (wire.appendLeft raw.source.locals).index.val := by
-                symm
-                exact Var.index_appendLeft wire raw.source.locals
-          rw [show targetRename pinWire =
-            fullAmbient (sourceRename pinWire) by rfl, sourceMapped]
-          exact WireEquiv.refl_append_left_index_val localIso wire
-        have member := EqualityNormalization.allPins_mem_nil pinWires
-          targetRename pinWire 0
-        have pinsNonempty : targetPins.incidencePaths wire.index.val 0 ≠ [] := by
-          rw [← mapped]
-          exact List.ne_nil_of_mem member
-        simp only [originalPinned, Region.incidencePaths]
-        rw [EqualityNormalization.ItemSeq.incidencePaths_append_nonempty_iff]
-        exact Or.inr pinsNonempty
-      have descriptionSourceNonempty : ∀ {signature}
-          (wire : Var outer signature),
-          description.source.incidencePaths wire.index.val ≠ [] := by
-        intro signature wire
-        have hostNonempty := EqualityNormalization.pinnedHost_incidence_nonempty
-          raw.hostLocals raw.hostItems wire
-        have sublist := Region.incidencePaths_adjoinAt_host_sublist
-          raw.hostLocals
-          (raw.hostItems.append
-            (EqualityNormalization.contextPins outer raw.hostLocals))
-          (raw.material.renameWires raw.wireMap) wire
-        have positive := Nat.lt_of_lt_of_le
-          (List.length_pos_iff.mpr hostNonempty) sublist.length_le
-        simpa only [description, atomPinnedExposureDescriptionWithHost,
-          raw, Rule.Erasure.Description.source, Region.spliceAt] using
-          List.length_pos_iff.mp positive
-      let pinnedOriginalOccurrence : Occurrence originalPinned
-          pinnedEndpoint :=
-        exactOccurrence originalOccurrence.interface originalOccurrence.context
-          originalPinned originalPinnedCanonical originalPinnedExternalTwoEnded
-      let exposureOccurrence : Occurrence description.source pinnedEndpoint :=
-        EqualityNormalization.presentationOccurrence pinnedOriginalOccurrence
-          descriptionSourceCanonical (by
-            intro signature wire
-            exact ⟨fun _ => descriptionSourceNonempty wire,
-              fun _ => originalPinnedNonempty wire⟩)
-          pinnedPresentation
-      have erasedLocalCanonical : description.target.Canonical := by
-        simpa only [description, atomPinnedExposureDescriptionWithHost,
-          raw, Rule.Erasure.Description.target] using pinnedHostCanonical
-      have erasedNonempty : ∀ {signature} (wire : Var outer signature),
-          description.target.incidencePaths wire.index.val ≠ [] := by
-        intro signature wire
-        simpa only [description, atomPinnedExposureDescriptionWithHost,
-          raw, Rule.Erasure.Description.target] using
-          EqualityNormalization.pinnedHost_incidence_nonempty
-            raw.hostLocals raw.hostItems wire
-      have erasedReplacement := exposureOccurrence.context.replaceCanonical
-        description.source description.target exposureOccurrence.sourceCanonical
-          erasedLocalCanonical (by
-            intro signature wire
-            exact ⟨fun _ => erasedNonempty wire,
-              fun _ => descriptionSourceNonempty wire⟩)
-      let exposureSourceEndpoint := exposureOccurrence.interface.withBody
-        (exposureOccurrence.context.fill description.source)
-        exposureOccurrence.sourceCanonical
-        exposureOccurrence.sourceExternalTwoEnded
-      have erasedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-          exposureOccurrence.interface.boundaryWire
-          (exposureOccurrence.context.fill description.target) :=
-        exposureSourceEndpoint.externalTwoEnded_of_nonempty_iff _
-          erasedReplacement.2
-      obtain ⟨foundMaterialCanonical, exposedCanonical,
-          exposedExternalTwoEnded, exposedEquates⟩ :=
-        Erasure.Exposure.equates description exposureOccurrence
-          erasedReplacement.1 erasedExternalTwoEnded
-      have materialProof : foundMaterialCanonical =
-          atomSupportCanonical atomArguments := Subsingleton.elim _ _
-      subst foundMaterialCanonical
-      refine ⟨?_, ?_, ?_⟩
-      · simpa only [exposureOccurrence,
-          EqualityNormalization.presentationOccurrence_context,
-          pinnedOriginalOccurrence,
-          originalOccurrence, description] using exposedCanonical
-      · intro signature wire
-        simpa only [exposureOccurrence,
-          EqualityNormalization.presentationOccurrence_interface,
-          EqualityNormalization.presentationOccurrence_context,
-          pinnedOriginalOccurrence,
-          originalOccurrence, description] using exposedExternalTwoEnded wire
-      · have strict : EqualityNormalization.StrictEquates originalOccurrence
-            (Erasure.Exposure.exposedRegion description
-              (atomSupportCanonical atomArguments)) exposedCanonical
-              exposedExternalTwoEnded := by
-          refine ⟨?_, ?_⟩
-          · exact pinnedForward.reflTransGen (by
-              simpa only [exposureOccurrence, pinnedOriginalOccurrence] using
-                exposedEquates.1)
-          · have reverseExposure : Relation.ReflTransGen Step
-                (exposureOccurrence.interface.withBody
-                  (exposureOccurrence.context.fill
-                    (Erasure.Exposure.exposedRegion description
-                      (atomSupportCanonical atomArguments)))
-                  exposedCanonical exposedExternalTwoEnded)
-                pinnedEndpoint := by
-              simpa only [exposureOccurrence, pinnedOriginalOccurrence] using
-                exposedEquates.2
-            exact reverseExposure.transGen pinnedReverse
-        simpa only [originalOccurrence, description] using strict.toEquates
-    )
-
-private theorem atomExposedSelectedWithHostStrict
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostLocals : List Sig)
-    (hostItems : ItemSeq (outer ++ hostLocals))
-    (application : Vars (outer ++ hostLocals) patternWires)
-    {source : OpenDiagram boundary}
-    (occurrence : Occurrence
-      (Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          shape.pattern application)) source)
-    (targetCanonical :
-      (occurrence.context.fill
-        (Region.adjoinAt hostLocals hostItems
-          (Erasure.Exposure.exposedRegion
-            (atomExposureDescription shape application)
-            (atomSupportCanonical atomArguments)))).Canonical)
-    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      occurrence.interface.boundaryWire
-      (occurrence.context.fill
-        (Region.adjoinAt hostLocals hostItems
-          (Erasure.Exposure.exposedRegion
-            (atomExposureDescription shape application)
-            (atomSupportCanonical atomArguments))))) :
-    EqualityNormalization.StrictEquates occurrence
-      (Region.adjoinAt hostLocals hostItems
-        (Erasure.Exposure.exposedRegion
-          (atomExposureDescription shape application)
-          (atomSupportCanonical atomArguments)))
-      targetCanonical targetExternalTwoEnded := by
-  let raw := atomExposureDescriptionWithHost shape hostLocals hostItems
-    application
-  let pinned := atomPinnedExposureDescriptionWithHost shape hostLocals
-    hostItems application
-  let targetRegion := Region.adjoinAt hostLocals hostItems
-    (Erasure.Exposure.exposedRegion
-      (atomExposureDescription shape application)
-      (atomSupportCanonical atomArguments))
-  let targetOccurrence : Occurrence targetRegion
-      (occurrence.interface.withBody
-        (occurrence.context.fill targetRegion) targetCanonical
-          targetExternalTwoEnded) :=
-    exactOccurrence occurrence.interface occurrence.context targetRegion
-      targetCanonical targetExternalTwoEnded
-  let material :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-      (Erasure.Exposure.supportPattern raw.material
-        (atomSupportCanonical atomArguments))
-      (Erasure.Exposure.applicationPorts raw)
-  let rawTarget : Region outer :=
-    .mk (raw.hostLocals ++ material.locals)
-      ((raw.hostItems.renameWires
-        (Region.adjoinHostWire outer raw.hostLocals material.locals)).append
-        (material.items.renameWires
-          (Region.adjoinMaterialWire outer raw.hostLocals material.locals)))
-  have rawTargetEq : rawTarget = Erasure.Exposure.exposedRegion raw
-      (atomSupportCanonical atomArguments) := by
-    change rawTarget = Region.adjoinAt raw.hostLocals raw.hostItems material
-    dsimp only [rawTarget]
-    cases material
-    rfl
-  let presentation : RegionIso (WireEquiv.refl outer) rawTarget
-      targetRegion := by
-    let combined := (RegionIso.ofEq rawTargetEq).trans (by
-        simpa only [targetRegion, raw] using
-          atomExposureDescriptionWithHost_exposedIso shape hostLocals
-            hostItems application)
-    simpa only [WireEquiv.refl_trans] using combined
-  let fullAmbient := (WireEquiv.refl outer).append presentation.localEquiv
-  let pinWires := outer ++ raw.hostLocals
-  let sourceRename : WireRenaming pinWires (outer ++ rawTarget.locals) :=
-    Region.adjoinHostWire outer raw.hostLocals material.locals
-  let targetRename := WireRenaming.comp fullAmbient.toRenaming sourceRename
-  have pinWiresNonempty : pinWires ≠ [] := by
-    simpa only [pinWires, raw, atomExposureDescriptionWithHost,
-      atomExposureDescription, List.append_assoc] using
-      atomExposureWires_nonempty shape (outer ++ hostLocals)
-  obtain ⟨targetPinnedCanonical, targetPinnedExternalTwoEnded, targetPins⟩ :=
-    EqualityNormalization.pinAllTwiceRegionOfNonempty targetOccurrence
-      targetRename pinWiresNonempty
-  let sourcePins := EqualityNormalization.allPins pinWires sourceRename
-  let targetPinsItems := EqualityNormalization.allPins pinWires targetRename
-  let rawPinned : Region outer :=
-    .mk rawTarget.locals
-      ((rawTarget.items.append sourcePins).append sourcePins)
-  let targetPinned : Region outer :=
-    .mk targetRegion.locals
-      ((targetRegion.items.append targetPinsItems).append targetPinsItems)
-  let extended : RegionIso (WireEquiv.refl outer) rawPinned targetPinned := by
-    exact appendPinsTwiceIso presentation.localEquiv presentation.itemSeqIso
-      sourceRename targetRename (by
-        intro signature wire
-        rfl)
-  have rawPinnedEq : rawPinned =
-      Region.appendAdjoinedHostSuffix raw.hostLocals raw.hostItems
-        (EqualityNormalization.contextPins outer raw.hostLocals) material := by
-    have compId : ∀ {left right : List Sig}
-        (rename : WireRenaming left right),
-        WireRenaming.comp rename WireRenaming.id = rename := by
-      intro left right rename
-      apply WireRenaming.ext
-      intro signature wire
-      rfl
-    dsimp only [rawPinned, rawTarget, sourcePins, sourceRename, pinWires]
-    cases materialEq : material with
-    | mk materialLocals materialItems =>
-      simp only [Region.appendAdjoinedHostSuffix,
-        EqualityNormalization.contextPins, Region.locals, Region.items,
-        ItemSeq.renameWires_append,
-        EqualityNormalization.allPins_renameWires, compId,
-        ItemSeq.append_assoc]
-  let moved := RegionIso.adjoinAtMoveHostSuffix raw.hostLocals raw.hostItems
-    (EqualityNormalization.contextPins outer raw.hostLocals) material
-  let rawToPinned : RegionIso (WireEquiv.refl outer) rawPinned
-      (Erasure.Exposure.exposedRegion pinned
-        (atomSupportCanonical atomArguments)) := by
-    exact (RegionIso.ofEq rawPinnedEq).trans (by
-      simpa only [pinned, raw, atomPinnedExposureDescriptionWithHost,
-        Erasure.Exposure.exposedRegion, material] using moved)
-  let pinnedPresentation : RegionIso (WireEquiv.refl outer) targetPinned
-      (Erasure.Exposure.exposedRegion pinned
-        (atomSupportCanonical atomArguments)) :=
-    extended.symm.trans rawToPinned
-  obtain ⟨exposedCanonical, exposedExternalTwoEnded, exposedEquates⟩ :=
-    atomSiteExposurePinnedWithHost shape hostLocals hostItems application
-      occurrence
-  let targetPinnedEndpoint := targetOccurrence.interface.withBody
-    (targetOccurrence.context.fill targetPinned) targetPinnedCanonical
-      targetPinnedExternalTwoEnded
-  let exposedEndpoint := occurrence.interface.withBody
-    (occurrence.context.fill
-      (Erasure.Exposure.exposedRegion pinned
-        (atomSupportCanonical atomArguments))) exposedCanonical
-      exposedExternalTwoEnded
-  let pinnedIso : OpenDiagramIso targetPinnedEndpoint exposedEndpoint :=
-    OpenDiagram.withBody_iso targetPinnedCanonical exposedCanonical
-      targetPinnedExternalTwoEnded exposedExternalTwoEnded
-      (DiagramContext.fillIso occurrence.context pinnedPresentation)
-  have exposureStrict := EqualityNormalization.strictEquates_of_equates
-    occurrence exposedEquates
-  have exposureForward : Relation.TransGen Step source exposedEndpoint := by
-    simpa only [pinned, exposedEndpoint] using exposureStrict.1
-  have exposureReverse : Relation.TransGen Step exposedEndpoint source := by
-    simpa only [pinned, exposedEndpoint] using exposureStrict.2
-  have targetPinForward : Relation.TransGen Step
-      (occurrence.interface.withBody
-        (occurrence.context.fill targetRegion) targetCanonical
-          targetExternalTwoEnded) targetPinnedEndpoint := by
-    simpa only [targetOccurrence, targetPinned, targetPinsItems,
-      targetPinnedEndpoint] using targetPins.1
-  have targetPinReverse : Relation.TransGen Step targetPinnedEndpoint
-      (occurrence.interface.withBody
-        (occurrence.context.fill targetRegion) targetCanonical
-          targetExternalTwoEnded) := by
-    simpa only [targetOccurrence, targetPinned, targetPinsItems,
-      targetPinnedEndpoint] using targetPins.2
-  have exposureToPinned : Relation.TransGen Step source
-      targetPinnedEndpoint :=
-    transGen_iso (OpenDiagramIso.refl source) exposureForward pinnedIso.symm
-  have pinnedToExposure : Relation.TransGen Step targetPinnedEndpoint
-      source :=
-    transGen_iso pinnedIso.symm exposureReverse (OpenDiagramIso.refl source)
-  exact ⟨exposureToPinned.trans targetPinReverse,
-    targetPinForward.trans pinnedToExposure⟩
-
-private theorem atomBodyWire_natural
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (rename : WireRenaming source target) :
-    WireRenaming.comp
-        (rename.appendRight (EqualityNormalization.locals shape.pattern))
-        (atomBodyWire shape source) =
-      atomBodyWire shape target := by
-  apply WireRenaming.ext
-  intro signature wire
-  let appendNil : WireRenaming patternWires (patternWires ++ []) :=
-    ⟨fun selected => selected.appendLeft []⟩
-  exact congrArg (fun map => map (appendNil wire))
-    (EqualityNormalization.bodyEmbedding_natural shape.pattern rename)
-
-private theorem atomSiteHostItems_renameWires
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars source patternWires)
-    (rename : WireRenaming source target) :
-    (atomSiteHostItems shape application).renameWires
-        (rename.appendRight (EqualityNormalization.locals shape.pattern)) =
-      atomSiteHostItems shape
-        (application.map fun wire => rename wire) := by
-  have actualMap :
-      ((application.map fun wire =>
-          EqualityNormalization.actualEmbedding shape.pattern source wire).map
-        fun wire =>
-          rename.appendRight
-            (EqualityNormalization.locals shape.pattern) wire) =
-        (application.map fun wire => rename wire).map fun wire =>
-          EqualityNormalization.actualEmbedding shape.pattern target wire := by
-    calc
-      _ = application.map (fun wire =>
-          rename.appendRight (EqualityNormalization.locals shape.pattern)
-            (EqualityNormalization.actualEmbedding shape.pattern source
-              wire)) :=
-        Diagram.vars_map_comp application
-          (EqualityNormalization.actualEmbedding shape.pattern source)
-          (rename.appendRight
-            (EqualityNormalization.locals shape.pattern))
-      _ = application.map (fun wire =>
-          EqualityNormalization.actualEmbedding shape.pattern target
-            (rename wire)) := by
-        simpa only [WireRenaming.comp] using congrArg
-          (fun map : WireRenaming source
-              (target ++ EqualityNormalization.locals shape.pattern) =>
-            application.map fun wire => map wire)
-          (EqualityNormalization.actualEmbedding_natural shape.pattern rename)
-      _ = _ := (Diagram.vars_map_comp application rename
-        (EqualityNormalization.actualEmbedding shape.pattern target)).symm
-  have patternMap :
-      (shape.pattern.boundaryWire.map fun wire =>
-          EqualityNormalization.patternEmbedding shape.pattern source wire).map
-        (fun wire => rename.appendRight
-          (EqualityNormalization.locals shape.pattern) wire) =
-      shape.pattern.boundaryWire.map fun wire =>
-        EqualityNormalization.patternEmbedding shape.pattern target wire := by
-    calc
-      _ = shape.pattern.boundaryWire.map (fun wire =>
-          rename.appendRight (EqualityNormalization.locals shape.pattern)
-            (EqualityNormalization.patternEmbedding shape.pattern source
-              wire)) :=
-        Diagram.vars_map_comp shape.pattern.boundaryWire
-          (EqualityNormalization.patternEmbedding shape.pattern source)
-          (rename.appendRight
-            (EqualityNormalization.locals shape.pattern))
-      _ = _ := by
-        simpa only [WireRenaming.comp] using congrArg
-          (fun map : WireRenaming shape.pattern.external
-              (target ++ EqualityNormalization.locals shape.pattern) =>
-            shape.pattern.boundaryWire.map fun wire => map wire)
-          (EqualityNormalization.patternEmbedding_natural shape.pattern rename)
-  simp only [atomSiteHostItems, ItemSeq.renameWires_append,
-    ItemSeq.renameWires_comp,
-    _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems_renameWires]
-  rw [atomBodyWire_natural shape rename, actualMap, patternMap]
-
-private theorem atomSelectedAt_renameWires
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars source patternWires)
-    (rename : WireRenaming source target) :
-    (Erasure.Exposure.exposedRegion
-        (atomExposureDescription shape application)
-        (atomSupportCanonical atomArguments)).renameWires rename =
-      Erasure.Exposure.exposedRegion
-        (atomExposureDescription shape
-          (application.map fun wire => rename wire))
-        (atomSupportCanonical atomArguments) := by
-  simp only [Erasure.Exposure.exposedRegion, atomExposureDescription]
-  rw [Region.renameWires_adjoinAt,
-    atomSiteHostItems_renameWires]
-  congr 1
-  rw [EqualityNormalization.instantiate_renameWires]
-  congr 1
-  change
-    (Erasure.Exposure.applicationPorts
-      (atomExposureDescription shape application)).map
-        (fun wire => rename.appendRight
-          (EqualityNormalization.locals shape.pattern) wire) =
-      Erasure.Exposure.applicationPorts
-        (atomExposureDescription shape
-          (application.map fun wire => rename wire))
-  rw [atomExposureApplicationPorts, atomExposureApplicationPorts]
-  calc
-    _ = (atomSelection head ports).map (fun wire =>
-        rename.appendRight (EqualityNormalization.locals shape.pattern)
-          (atomBodyWire shape source wire)) :=
-      Diagram.vars_map_comp (atomSelection head ports)
-        (atomBodyWire shape source)
-        (rename.appendRight (EqualityNormalization.locals shape.pattern))
-    _ = (atomSelection head ports).map (fun wire =>
-        atomBodyWire shape target wire) := by
-      simpa only [WireRenaming.comp] using congrArg
-        (fun map : WireRenaming patternWires
-            (target ++ EqualityNormalization.locals shape.pattern) =>
-          (atomSelection head ports).map fun wire => map wire)
-        (atomBodyWire_natural shape rename)
-    _ = _ := rfl
-
-private noncomputable def atomSelectedAtNaturality
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires) :
-    ∀ {common middle target : List Sig}
-      (application : Vars common patternWires)
-      (rename : WireRenaming common middle)
-      (post : WireRenaming middle target),
-      RegionIso (WireEquiv.refl target)
-        ((Erasure.Exposure.exposedRegion
-            (atomExposureDescription shape
-              (application.map fun wire => rename wire))
-            (atomSupportCanonical atomArguments)).renameWires post)
-        (Erasure.Exposure.exposedRegion
-          (atomExposureDescription shape
-            (application.map fun wire => WireRenaming.comp post rename wire))
-          (atomSupportCanonical atomArguments)) := by
-  intro common middle target application rename post
-  apply RegionIso.ofEq
-  rw [atomSelectedAt_renameWires]
-  apply congrArg (fun mapped => Erasure.Exposure.exposedRegion
-    (atomExposureDescription shape mapped)
-    (atomSupportCanonical atomArguments))
-  simpa only [WireRenaming.comp] using
-    Diagram.vars_map_comp application rename post
-
-private noncomputable def atomSelectedLeaf
-    {patternWires atomArguments : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires) :
-    EqualityNormalization.SelectedLeafCompiler shape.pattern := {
-  selectedAt := fun application rename =>
-    Erasure.Exposure.exposedRegion
-      (atomExposureDescription shape
-        (application.map fun wire => rename wire))
-      (atomSupportCanonical atomArguments)
-  selectedNaturality := atomSelectedAtNaturality shape
-  selectedStrict := fun {_common _outer _hostLocals _boundary} application
-      rename hostItems {_source} occurrence targetCanonical
-      targetExternalTwoEnded => by
-    have sourceEq :
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          shape.pattern application).renameWires rename =
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          shape.pattern (application.map fun wire => rename wire) :=
-      EqualityNormalization.instantiate_renameWires
-        shape.pattern application rename
-    let mappedOccurrence : Occurrence
-        (Region.adjoinAt _hostLocals hostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-            shape.pattern (application.map fun wire => rename wire)))
-        _source := {
-      interface := occurrence.interface
-      context := occurrence.context
-      sourceCanonical := by
-        rw [← sourceEq]
-        exact occurrence.sourceCanonical
-      sourceExternalTwoEnded := by
-        intro signature wire
-        rw [← sourceEq]
-        exact occurrence.sourceExternalTwoEnded wire
-      host_iso := by
-        simpa only [sourceEq] using occurrence.host_iso
-    }
-    have strict := atomExposedSelectedWithHostStrict shape _ hostItems
-      (application.map fun wire => rename wire) mappedOccurrence
-      (by simpa only [mappedOccurrence] using targetCanonical)
-      (by
-        intro signature wire
-        simpa only [mappedOccurrence] using targetExternalTwoEnded wire)
-    simpa only [mappedOccurrence] using strict
-}
-/-! Retained syntax is reindexed through a generated constructor frame.  The
-three mutually recursive theorems below are the nonselected branch of the
-atom-head fold; their result is the original region syntax, not a second
-description of it. -/
-
-mutual
-  private def retainedRegionPresentation : Region wires → Region wires
-    | .mk locals items =>
-        Region.adjoinAt locals .nil (retainedItemsPresentation items)
-
-  private def retainedItemsPresentation : ItemSeq wires → Region wires
-    | .nil => Region.blank wires
-    | .cons item tail =>
-        (retainedItemPresentation item).conjoin
-          (retainedItemsPresentation tail)
-
-  private def retainedItemPresentation : Item wires → Region wires
-    | .atom head ports => Region.singleton (.atom head ports)
-    | .identity signature arity ports =>
-        Region.singleton (.identity signature arity ports)
-    | .cut body =>
-        Region.singleton (.cut (retainedRegionPresentation body))
-end
-
-mutual
-  private theorem retainedRegionResult
-      (pattern : OpenDiagram arguments)
-      (frame : Transform.Frame arguments common sourceWires targetWires)
-      (region : Region common) :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult pattern
-        frame.sourceKeep frame.selected
-        (region.renameWires frame.sourceKeep)
-        (retainedRegionPresentation region) := by
-    cases region with
-    | mk locals items =>
-        simp only [Region.renameWires]
-        have sourceKeepEq :
-            (frame.append locals).sourceKeep =
-              frame.sourceKeep.appendRight locals := by
-          rfl
-        rw [← sourceKeepEq]
-        exact
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
-            (retainedItemsResult pattern (frame.append locals) items)
-  termination_by sizeOf region
-
-  private theorem retainedItemsResult
-      (pattern : OpenDiagram arguments)
-      (frame : Transform.Frame arguments common sourceWires targetWires)
-      (items : ItemSeq common) :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
-        frame.sourceKeep frame.selected
-        (items.renameWires frame.sourceKeep)
-        (retainedItemsPresentation items) := by
-    cases items with
-    | nil =>
-        exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
-    | cons item tail =>
-        exact
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
-            (retainedItemResult pattern frame item)
-            (retainedItemsResult pattern frame tail)
-  termination_by sizeOf items
-
-  private theorem retainedItemResult
-      (pattern : OpenDiagram arguments)
-      (frame : Transform.Frame arguments common sourceWires targetWires)
-      (item : Item common) :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult pattern
-        frame.sourceKeep frame.selected
-        (item.renameWires frame.sourceKeep)
-        (retainedItemPresentation item) := by
-    cases item with
-    | atom head ports =>
-        exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
-          head ports
-    | identity signature arity ports =>
-        exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
-          signature arity ports
-    | cut body =>
-        exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
-          (retainedRegionResult pattern frame body)
-  termination_by sizeOf item
-end
-
-mutual
-  private def retainedRegionSites
-      (pattern : OpenDiagram arguments)
-      (operation : Transform.Operation arguments)
-      (frame : Transform.Frame arguments common sourceWires targetWires)
-      (data : operation.Data frame)
-      (region : Region common) :
-      RegionSites operation data
-        (retainedRegionResult pattern frame region) :=
-    match region with
-    | .mk locals items =>
-        .mk (retainedItemsSites pattern operation (frame.append locals)
-          (operation.appendData frame data locals) items)
-  termination_by sizeOf region
-
-  private def retainedItemsSites
-      (pattern : OpenDiagram arguments)
-      (operation : Transform.Operation arguments)
-      (frame : Transform.Frame arguments common sourceWires targetWires)
-      (data : operation.Data frame)
-      (items : ItemSeq common) :
-      ItemsSites operation data
-        (retainedItemsResult pattern frame items) :=
-    match items with
-    | .nil => .nil _
-    | .cons item tail =>
-        .cons (retainedItemSites pattern operation frame data item)
-          (retainedItemsSites pattern operation frame data tail)
-  termination_by sizeOf items
-
-  private def retainedItemSites
-      (pattern : OpenDiagram arguments)
-      (operation : Transform.Operation arguments)
-      (frame : Transform.Frame arguments common sourceWires targetWires)
-      (data : operation.Data frame)
-      (item : Item common) :
-      ItemSites operation data (retainedItemResult pattern frame item) :=
-    match item with
-    | .atom head ports =>
-        ItemSites.atom (pattern := pattern) (frame := frame) head ports
-    | .identity signature arity ports =>
-        ItemSites.identity (pattern := pattern) (frame := frame)
-          signature arity ports
-    | .cut body =>
-        ItemSites.cut (pattern := pattern) (frame := frame)
-          (retainedRegionSites pattern operation frame data body)
-  termination_by sizeOf item
-end
-
-/-! A selected atom site is presented to FormalApplication as one generated
-positional-binder application after an arbitrary retained host prefix.  Both
-the Instantiation evidence and the matching Transform sites are constructed
-from that literal host syntax. -/
-
-private def atomFormalPrefixSource
-    (frame : Transform.Frame (atomSupportWires atomArguments)
-      common sourceWires targetWires)
-    (hostItems : ItemSeq common)
-    (formal : Var common (.rel atomArguments))
-    (retained : Vars common atomArguments) : ItemSeq sourceWires :=
-  (hostItems.renameWires frame.sourceKeep).append
-    (.cons (.atom frame.selected
-      ((Vars.cons formal retained).map fun wire => frame.sourceKeep wire)) .nil)
-
-private def atomFormalPrefixResult
-    (hostItems : ItemSeq common)
-    (formal : Var common (.rel atomArguments))
-    (retained : Vars common atomArguments) : Region common :=
-  match hostItems with
-  | .nil =>
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-        (atomFormalShape atomArguments).pattern (.cons formal retained)).conjoin
-        (Region.blank common)
-  | .cons item tail =>
-      (retainedItemPresentation item).conjoin
-        (atomFormalPrefixResult tail formal retained)
-
-private theorem atomFormalPrefixEvidence
-    (frame : Transform.Frame (atomSupportWires atomArguments)
-      common sourceWires targetWires)
-    (hostItems : ItemSeq common)
-    (formal : Var common (.rel atomArguments))
-    (retained : Vars common atomArguments) :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-      (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
-      (atomFormalPrefixSource frame hostItems formal retained)
-      (atomFormalPrefixResult hostItems formal retained) := by
-  cases hostItems with
-  | nil =>
-      exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
-          (.cons formal retained))
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
-  | cons item tail =>
-      simp only [atomFormalPrefixSource, ItemSeq.renameWires,
-        ItemSeq.append, atomFormalPrefixResult]
-      change _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
-        (.cons (item.renameWires frame.sourceKeep)
-          (atomFormalPrefixSource frame tail formal retained))
-        ((retainedItemPresentation item).conjoin
-          (atomFormalPrefixResult tail formal retained))
-      exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
-        (retainedItemResult (atomFormalShape atomArguments).pattern frame item)
-        (atomFormalPrefixEvidence frame tail formal retained)
-  termination_by sizeOf hostItems
-
-private def atomFormalPrefixSites
-    (frame : Transform.Frame (atomSupportWires atomArguments)
-      common sourceWires targetWires)
-    (hostItems : ItemSeq common)
-    (formal : Var common (.rel atomArguments))
-    (retained : Vars common atomArguments) :
-    ItemsSites (Leaf.Formal.operation [] atomArguments) PUnit.unit
-      (atomFormalPrefixEvidence frame hostItems formal retained) :=
-  match hostItems with
-  | .nil =>
-      let siteData :
-          (Leaf.Formal.operation [] atomArguments).SiteData frame PUnit.unit
-            (.cons formal retained) :=
-        ⟨formal, ⟨retained, rfl⟩⟩
-      let tailEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-            (atomFormalShape atomArguments).pattern frame.sourceKeep
-            frame.selected .nil (Region.blank common) :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
-      ItemsSites.cons
-        (ItemSites.selectedAtom (pattern := (atomFormalShape atomArguments).pattern)
-          (frame := frame) (.cons formal retained) siteData)
-        (ItemsSites.nil tailEvidence)
-  | .cons item tail =>
-      ItemsSites.cons
-        (retainedItemSites (atomFormalShape atomArguments).pattern
-          (Leaf.Formal.operation [] atomArguments) frame PUnit.unit item)
-        (atomFormalPrefixSites frame tail formal retained)
-  termination_by sizeOf hostItems
-
-mutual
-  /-- The retained Formal prefix uses the same region syntax as its source,
-  presented through the conjunction layout needed by one shared transform
-  root. -/
-  private noncomputable def retainedRegionPresentationIso
-      (region : Region wires) :
-      RegionIso (WireEquiv.refl wires)
-        (retainedRegionPresentation region) region :=
-    match region with
-    | .mk locals items => by
-        let child := RegionIso.adjoinAt locals .nil
-          (retainedItemsPresentationIso items)
-        exact child.trans (RegionIso.adjoinAtOfItems locals items)
-  termination_by sizeOf region
-
-  private noncomputable def retainedItemsPresentationIso
-      (items : ItemSeq wires) :
-      RegionIso (WireEquiv.refl wires)
-        (retainedItemsPresentation items) (Region.ofItems items) :=
-    match items with
-    | .nil => RegionIso.refl _
-    | .cons item tail => by
-        let children := RegionIso.conjoinCongr
-          (retainedItemPresentationIso item)
-          (retainedItemsPresentationIso tail)
-        let presented := RegionIso.ofEq
-          (Region.singleton_conjoin_ofItems item tail)
-        exact children.trans presented
-  termination_by sizeOf items
-
-  private noncomputable def retainedItemPresentationIso
-      (item : Item wires) :
-      RegionIso (WireEquiv.refl wires)
-        (retainedItemPresentation item) (Region.singleton item) :=
-    match item with
-    | .atom _ _ => RegionIso.refl _
-    | .identity _ _ _ => RegionIso.refl _
-    | .cut body =>
-        RegionIso.singletonCutCongr (retainedRegionPresentationIso body)
-  termination_by sizeOf item
-end
-
-/-- The literal result of the selected-leaf Formal evidence presents its
-retained host followed by the one positional Formal instantiation. -/
-private noncomputable def atomFormalPrefixResultIso
-    (hostItems : ItemSeq common)
-    (formal : Var common (.rel atomArguments))
-    (retained : Vars common atomArguments) :
-    RegionIso (WireEquiv.refl common)
-      (atomFormalPrefixResult hostItems formal retained)
-      ((Region.ofItems hostItems).conjoin
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          (atomFormalShape atomArguments).pattern
-          (.cons formal retained))) :=
-  match hostItems with
-  | .nil => by
-      let inner :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          (atomFormalShape atomArguments).pattern (.cons formal retained)
-      exact (RegionIso.conjoinBlank inner).trans
-        (RegionIso.blankConjoin inner).symm
-  | .cons item tail => by
-      let inner :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          (atomFormalShape atomArguments).pattern (.cons formal retained)
-      let children := RegionIso.conjoinCongr
-        (retainedItemPresentationIso item)
-        (atomFormalPrefixResultIso tail formal retained)
-      let associated :=
-        (RegionIso.conjoinAssoc (Region.singleton item)
-          (Region.ofItems tail) inner).symm
-      let prefixIso := RegionIso.conjoinCongr
-        (RegionIso.ofEq (Region.singleton_conjoin_ofItems item tail))
-        (RegionIso.refl inner)
-      exact children.trans (associated.trans prefixIso)
-  termination_by sizeOf hostItems
-
-/-- Close the selected-leaf prefix presentation under the equality locals
-owned by exposure. -/
-private noncomputable def atomFormalSelectedResultIso
-    {patternWires atomArguments common : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (application : Vars common patternWires) :
-    let locals := EqualityNormalization.locals shape.pattern
-    let formal : Var (common ++ EqualityNormalization.locals shape.pattern)
-        (.rel atomArguments) := atomBodyWire shape common head
-    let retained : Vars
-        (common ++ EqualityNormalization.locals shape.pattern) atomArguments :=
-      ports.map fun wire => atomBodyWire shape common wire
-    let hostItems : ItemSeq
-        (common ++ EqualityNormalization.locals shape.pattern) :=
-      atomSiteHostItems (patternWires := patternWires)
-        (atomArguments := atomArguments) (head := head) (ports := ports)
-        (tail := tail) shape application
-    RegionIso (WireEquiv.refl common)
-      (Region.adjoinAt locals .nil
-        (atomFormalPrefixResult hostItems formal retained))
-      (Region.adjoinAt locals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-          (atomFormalShape atomArguments).pattern
-          (.cons formal retained))) := by
-  dsimp only
-  let hostItems := atomSiteHostItems
-    (patternWires := patternWires) (atomArguments := atomArguments)
-    (head := head) (ports := ports) (tail := tail) shape application
-  let formal : Var (common ++ EqualityNormalization.locals shape.pattern)
-      (.rel atomArguments) := atomBodyWire shape common head
-  let retained : Vars
-      (common ++ EqualityNormalization.locals shape.pattern) atomArguments :=
-    ports.map fun wire => atomBodyWire shape common wire
-  let inner :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-      (atomFormalShape atomArguments).pattern (.cons formal retained)
-  let prefixIso := RegionIso.adjoinAt
-    (EqualityNormalization.locals shape.pattern) .nil
-    (atomFormalPrefixResultIso hostItems formal retained)
-  let hosted := adjoinAt_hostedMaterial
-    (EqualityNormalization.locals shape.pattern) hostItems inner
-  exact prefixIso.trans (RegionIso.ofEq hosted.symm)
-
-/-! A factor layout remembers only the substitution originally carried by
-each selected Formal site. The authoritative Formal evidence and site tree
-fix the recursive shape; the current frame and literal source are indices. -/
-mutual
-  private def FactorRegionLayout
-      {baseContext baseArguments currentArguments common sourceWires
-        targetWires : List Sig}
-      (base : Vars baseContext baseArguments)
-      (current : Vars baseContext currentArguments)
-      (factor : VarsFactor base current)
-      {pattern : OpenDiagram baseArguments}
-      {formalSourceWires formalTargetWires : List Sig}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {data : operation.Data formalFrame}
-      {source : Region formalSourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          pattern formalFrame.sourceKeep formalFrame.selected source result)
-      (sites : RegionSites operation data evidence)
-      (currentFrame : Transform.Frame currentArguments common sourceWires
-        targetWires)
-      (currentSource : Region sourceWires) : Prop :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites =>
-      ∃ currentItems : ItemSeq (sourceWires ++ locals),
-        currentSource = .mk locals currentItems ∧
-          FactorItemsLayout base current factor childEvidence childSites
-            (currentFrame.append locals) currentItems
-  termination_by 3 * sizeOf sites
-
-  private def FactorItemsLayout
-      {baseContext baseArguments currentArguments common sourceWires
-        targetWires : List Sig}
-      (base : Vars baseContext baseArguments)
-      (current : Vars baseContext currentArguments)
-      (factor : VarsFactor base current)
-      {pattern : OpenDiagram baseArguments}
-      {formalSourceWires formalTargetWires : List Sig}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {data : operation.Data formalFrame}
-      {source : ItemSeq formalSourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          pattern formalFrame.sourceKeep formalFrame.selected source result)
-      (sites : ItemsSites operation data evidence)
-      (currentFrame : Transform.Frame currentArguments common sourceWires
-        targetWires)
-      (currentSource : ItemSeq sourceWires) : Prop :=
-    match sites with
-    | .nil _ => currentSource = .nil
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites =>
-      ∃ currentItem : Item sourceWires,
-        ∃ currentTail : ItemSeq sourceWires,
-          currentSource = .cons currentItem currentTail ∧
-            FactorItemLayout base current factor itemEvidence itemSites
-              currentFrame currentItem ∧
-            FactorItemsLayout base current factor tailEvidence tailSites
-              currentFrame currentTail
-  termination_by 3 * sizeOf sites + 2
-
-  private def FactorItemLayout
-      {baseContext baseArguments currentArguments common sourceWires
-        targetWires : List Sig}
-      (base : Vars baseContext baseArguments)
-      (current : Vars baseContext currentArguments)
-      (factor : VarsFactor base current)
-      {pattern : OpenDiagram baseArguments}
-      {formalSourceWires formalTargetWires : List Sig}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {data : operation.Data formalFrame}
-      {source : Item formalSourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          pattern formalFrame.sourceKeep formalFrame.selected source result)
-      (sites : ItemSites operation data evidence)
-      (currentFrame : Transform.Frame currentArguments common sourceWires
-        targetWires)
-      (currentSource : Item sourceWires) : Prop :=
-    match sites with
-    | .atom head ports =>
-        currentSource = .atom (currentFrame.sourceKeep head)
-          (ports.map fun wire => currentFrame.sourceKeep wire)
-    | .selectedAtom application _ =>
-        ∃ siteRename : WireRenaming baseContext common,
-          application = base.map (fun wire => siteRename wire) ∧
-            currentSource = .atom currentFrame.selected
-              ((current.map fun wire => siteRename wire).map
-                fun wire => currentFrame.sourceKeep wire)
-    | .identity signature arity ports =>
-        currentSource = .identity signature arity
-          (fun index => currentFrame.sourceKeep (ports index))
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites =>
-      ∃ currentBody : Region sourceWires,
-        currentSource = .cut currentBody ∧
-          FactorRegionLayout base current factor childEvidence childSites
-            currentFrame currentBody
-  termination_by 3 * sizeOf sites + 1
-end
-
-/-! FormalApplication evidence is transported only along the explicit source
-and retained-wire embeddings used to combine accumulator branches.  The
-existing Instantiation proof remains the recursion authority; this theorem
-merely rebuilds that proof and its matching Formal site annotations at the
-renamed indices. -/
-
-mutual
-  private theorem formalRegionReindex
-      {atomArguments common mappedCommon sourceWires mappedSourceWires
-        targetWires mappedTargetWires : List Sig}
-      {frame : Transform.Frame (atomSupportWires atomArguments) common
-        sourceWires targetWires}
-      {mappedFrame : Transform.Frame (atomSupportWires atomArguments)
-        mappedCommon mappedSourceWires mappedTargetWires}
-      {source : Region sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          (atomFormalShape atomArguments).pattern frame.sourceKeep
-          frame.selected source result)
-      (sites : RegionSites (Leaf.Formal.operation [] atomArguments)
-        PUnit.unit evidence)
-      (commonRename : WireRenaming common mappedCommon)
-      (sourceRename : WireRenaming sourceWires mappedSourceWires)
-      (keepCommutes : ∀ {signature} (wire : Var common signature),
-        sourceRename (frame.sourceKeep wire) =
-          mappedFrame.sourceKeep (commonRename wire))
-      (selectedCommutes : sourceRename frame.selected =
-        mappedFrame.selected) :
-      ∃ mappedSource : Region mappedSourceWires,
-        ∃ mappedResult : Region mappedCommon,
-          ∃ mappedEvidence :
-              _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-                (atomFormalShape atomArguments).pattern mappedFrame.sourceKeep
-                mappedFrame.selected mappedSource mappedResult,
-            ∃ mappedSites : RegionSites
-                (Leaf.Formal.operation [] atomArguments) PUnit.unit
-                mappedEvidence,
-              source.renameWires sourceRename = mappedSource ∧
-              Nonempty (RegionIso (WireEquiv.refl mappedCommon)
-                (result.renameWires commonRename) mappedResult) ∧
-              (∀ {baseContext : List Sig}
-                  (base : Vars baseContext (atomSupportWires atomArguments)),
-                FactorRegionLayout base base (.refl base) evidence sites frame
-                    source →
-                  FactorRegionLayout base base (.refl base) mappedEvidence
-                    mappedSites mappedFrame mappedSource) :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-        have keepMaps : WireRenaming.comp sourceRename frame.sourceKeep =
-            WireRenaming.comp mappedFrame.sourceKeep commonRename := by
-          apply WireRenaming.ext
-          intro signature wire
-          exact keepCommutes wire
-        have appendedKeep : ∀ {signature}
-            (wire : Var (common ++ locals) signature),
-            sourceRename.appendRight locals
-                ((frame.append locals).sourceKeep wire) =
-              (mappedFrame.append locals).sourceKeep
-                (commonRename.appendRight locals wire) := by
-          intro signature wire
-          change sourceRename.appendRight locals
-              (frame.sourceKeep.appendRight locals wire) =
-            mappedFrame.sourceKeep.appendRight locals
-              (commonRename.appendRight locals wire)
-          rw [WireRenaming.appendRight_comp_apply,
-            WireRenaming.appendRight_comp_apply, keepMaps]
-        have appendedSelected :
-            sourceRename.appendRight locals
-                (frame.append locals).selected =
-              (mappedFrame.append locals).selected := by
-          simpa only [Transform.Frame.append, WireRenaming.appendRight,
-            Var.appendMap_left] using
-              congrArg (fun wire => wire.appendLeft locals) selectedCommutes
-        obtain ⟨mappedChildSource, mappedChildResult, mappedChildEvidence,
-            mappedChildSites, mappedChildSourceEq, ⟨mappedChildIso⟩,
-            childLayout⟩ :=
-          formalItemsReindex childEvidence childSites
-            (commonRename.appendRight locals)
-            (sourceRename.appendRight locals) appendedKeep appendedSelected
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
-            mappedChildEvidence
-        let mappedSites : RegionSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence :=
-          RegionSites.mk (data := PUnit.unit) (by
-            simpa only [Leaf.Formal.operation] using mappedChildSites)
-        have mappedSourceEq :
-            (Region.mk locals items).renameWires sourceRename =
-              Region.mk locals mappedChildSource := by
-          simpa only [Region.renameWires] using
-            congrArg (Region.mk locals) mappedChildSourceEq
-        let exposed := RegionIso.renameWiresAdjoinAtNil childResult
-          commonRename
-        let child := RegionIso.adjoinAt locals .nil mappedChildIso
-        exact ⟨Region.mk locals mappedChildSource,
-          Region.adjoinAt locals .nil mappedChildResult, mappedEvidence,
-          mappedSites, mappedSourceEq, ⟨exposed.trans child⟩, by
-            intro baseContext base layout
-            unfold FactorRegionLayout at layout ⊢
-            obtain ⟨currentItems, currentEq, currentLayout⟩ := layout
-            cases currentEq
-            exact ⟨mappedChildSource, rfl, childLayout base currentLayout⟩⟩
-  termination_by sizeOf source
-
-  private theorem formalItemsReindex
-      {atomArguments common mappedCommon sourceWires mappedSourceWires
-        targetWires mappedTargetWires : List Sig}
-      {frame : Transform.Frame (atomSupportWires atomArguments) common
-        sourceWires targetWires}
-      {mappedFrame : Transform.Frame (atomSupportWires atomArguments)
-        mappedCommon mappedSourceWires mappedTargetWires}
-      {source : ItemSeq sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          (atomFormalShape atomArguments).pattern frame.sourceKeep
-          frame.selected source result)
-      (sites : ItemsSites (Leaf.Formal.operation [] atomArguments)
-        PUnit.unit evidence)
-      (commonRename : WireRenaming common mappedCommon)
-      (sourceRename : WireRenaming sourceWires mappedSourceWires)
-      (keepCommutes : ∀ {signature} (wire : Var common signature),
-        sourceRename (frame.sourceKeep wire) =
-          mappedFrame.sourceKeep (commonRename wire))
-      (selectedCommutes : sourceRename frame.selected =
-        mappedFrame.selected) :
-      ∃ mappedSource : ItemSeq mappedSourceWires,
-        ∃ mappedResult : Region mappedCommon,
-          ∃ mappedEvidence :
-              _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-                (atomFormalShape atomArguments).pattern mappedFrame.sourceKeep
-                mappedFrame.selected mappedSource mappedResult,
-            ∃ mappedSites : ItemsSites
-                (Leaf.Formal.operation [] atomArguments) PUnit.unit
-                mappedEvidence,
-              source.renameWires sourceRename = mappedSource ∧
-              Nonempty (RegionIso (WireEquiv.refl mappedCommon)
-                (result.renameWires commonRename) mappedResult) ∧
-              (∀ {baseContext : List Sig}
-                  (base : Vars baseContext (atomSupportWires atomArguments)),
-                FactorItemsLayout base base (.refl base) evidence sites frame
-                    source →
-                  FactorItemsLayout base base (.refl base) mappedEvidence
-                    mappedSites mappedFrame mappedSource) :=
-    match sites with
-    | .nil _ =>
-        by
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (retain := mappedFrame.sourceKeep)
-            (selected := mappedFrame.selected)
-        exact ⟨.nil, Region.blank mappedCommon, mappedEvidence,
-          .nil mappedEvidence, rfl, ⟨RegionIso.refl _⟩, by
-            intro baseContext base layout
-            unfold FactorItemsLayout at layout ⊢
-            rfl⟩
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult itemEvidence
-        tailEvidence itemSites tailSites =>
-        by
-        obtain ⟨mappedItemSource, mappedItemResult, mappedItemEvidence,
-            mappedItemSites, mappedItemSourceEq, ⟨mappedItemIso⟩,
-            itemLayout⟩ :=
-          formalItemReindex itemEvidence itemSites commonRename sourceRename
-            keepCommutes selectedCommutes
-        obtain ⟨mappedTailSource, mappedTailResult, mappedTailEvidence,
-            mappedTailSites, mappedTailSourceEq, ⟨mappedTailIso⟩,
-            tailLayout⟩ :=
-          formalItemsReindex tailEvidence tailSites commonRename sourceRename
-            keepCommutes selectedCommutes
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
-            mappedItemEvidence mappedTailEvidence
-        let mappedSites : ItemsSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence := .cons mappedItemSites mappedTailSites
-        have mappedSourceEq :
-            (ItemSeq.cons item tail).renameWires sourceRename =
-              .cons mappedItemSource mappedTailSource := by
-          simp only [ItemSeq.renameWires, mappedItemSourceEq,
-            mappedTailSourceEq]
-        let exposed := RegionIso.renameWiresConjoin itemResult tailResult
-          commonRename
-        let children := RegionIso.conjoinCongr mappedItemIso mappedTailIso
-        exact ⟨.cons mappedItemSource mappedTailSource,
-          mappedItemResult.conjoin mappedTailResult, mappedEvidence,
-          mappedSites, mappedSourceEq, ⟨exposed.trans children⟩, by
-            intro baseContext base layout
-            unfold FactorItemsLayout at layout ⊢
-            obtain ⟨currentItem, currentTail, currentEq, currentItemLayout,
-              currentTailLayout⟩ := layout
-            cases currentEq
-            exact ⟨mappedItemSource, mappedTailSource, rfl,
-              itemLayout base currentItemLayout,
-              tailLayout base currentTailLayout⟩⟩
-  termination_by sizeOf source
-
-  private theorem formalItemReindex
-      {atomArguments common mappedCommon sourceWires mappedSourceWires
-        targetWires mappedTargetWires : List Sig}
-      {frame : Transform.Frame (atomSupportWires atomArguments) common
-        sourceWires targetWires}
-      {mappedFrame : Transform.Frame (atomSupportWires atomArguments)
-        mappedCommon mappedSourceWires mappedTargetWires}
-      {source : Item sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          (atomFormalShape atomArguments).pattern frame.sourceKeep
-          frame.selected source result)
-      (sites : ItemSites (Leaf.Formal.operation [] atomArguments)
-        PUnit.unit evidence)
-      (commonRename : WireRenaming common mappedCommon)
-      (sourceRename : WireRenaming sourceWires mappedSourceWires)
-      (keepCommutes : ∀ {signature} (wire : Var common signature),
-        sourceRename (frame.sourceKeep wire) =
-          mappedFrame.sourceKeep (commonRename wire))
-      (selectedCommutes : sourceRename frame.selected =
-        mappedFrame.selected) :
-      ∃ mappedSource : Item mappedSourceWires,
-        ∃ mappedResult : Region mappedCommon,
-          ∃ mappedEvidence :
-              _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-                (atomFormalShape atomArguments).pattern mappedFrame.sourceKeep
-                mappedFrame.selected mappedSource mappedResult,
-            ∃ mappedSites : ItemSites
-                (Leaf.Formal.operation [] atomArguments) PUnit.unit
-                mappedEvidence,
-              source.renameWires sourceRename = mappedSource ∧
-              Nonempty (RegionIso (WireEquiv.refl mappedCommon)
-                (result.renameWires commonRename) mappedResult) ∧
-              (∀ {baseContext : List Sig}
-                  (base : Vars baseContext (atomSupportWires atomArguments)),
-                FactorItemLayout base base (.refl base) evidence sites frame
-                    source →
-                  FactorItemLayout base base (.refl base) mappedEvidence
-                    mappedSites mappedFrame mappedSource) :=
-    match sites with
-    | .atom head ports =>
-        by
-        let mappedPorts := ports.map fun wire => commonRename wire
-        have keepMaps : WireRenaming.comp sourceRename frame.sourceKeep =
-            WireRenaming.comp mappedFrame.sourceKeep commonRename := by
-          apply WireRenaming.ext
-          intro signature wire
-          exact keepCommutes wire
-        have mappedPortWires :
-            (ports.map fun wire => frame.sourceKeep wire).map
-                (fun wire => sourceRename wire) =
-              mappedPorts.map fun wire => mappedFrame.sourceKeep wire := by
-          calc
-            _ = ports.map (fun wire =>
-                WireRenaming.comp sourceRename frame.sourceKeep wire) :=
-              Diagram.vars_map_comp ports frame.sourceKeep sourceRename
-            _ = ports.map (fun wire =>
-                WireRenaming.comp mappedFrame.sourceKeep commonRename wire) :=
-              congrArg (fun rename : WireRenaming common mappedSourceWires =>
-                ports.map fun wire => rename wire) keepMaps
-            _ = _ := (Diagram.vars_map_comp ports commonRename
-              mappedFrame.sourceKeep).symm
-        have mappedSource :
-            (Item.atom (frame.sourceKeep head)
-              (ports.map fun wire => frame.sourceKeep wire)).renameWires
-                sourceRename =
-              Item.atom (mappedFrame.sourceKeep (commonRename head))
-                (mappedPorts.map fun wire => mappedFrame.sourceKeep wire) := by
-          simp only [Item.renameWires]
-          rw [keepCommutes head]
-          exact congrArg
-            (Item.atom (mappedFrame.sourceKeep (commonRename head)))
-            mappedPortWires
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (retain := mappedFrame.sourceKeep)
-            (selected := mappedFrame.selected)
-            (commonRename head) mappedPorts
-        let mappedSites : ItemSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence := ItemSites.atom (pattern :=
-            (atomFormalShape atomArguments).pattern) (frame := mappedFrame)
-              (commonRename head) mappedPorts
-        have mappedResult :
-            (Region.singleton (.atom head ports)).renameWires commonRename =
-              Region.singleton (.atom (commonRename head) mappedPorts) := by
-          rw [Region.singleton_renameWires]
-          rfl
-        exact ⟨_, _, mappedEvidence, mappedSites, mappedSource,
-          ⟨RegionIso.ofEq mappedResult⟩, by
-            intro baseContext base layout
-            unfold FactorItemLayout at layout ⊢
-            rfl⟩
-    | .selectedAtom ports siteData =>
-        by
-        obtain ⟨formal, retained, portsEq⟩ := siteData
-        let mappedPorts := ports.map fun wire => commonRename wire
-        let mappedFormal := commonRename formal
-        let mappedRetained := retained.map fun wire => commonRename wire
-        have mappedPortsEq : mappedPorts =
-            Argument.Projection.Vars.insertAt [] mappedFormal
-              mappedRetained := by
-          dsimp only [mappedPorts, mappedFormal, mappedRetained]
-          rw [portsEq]
-          exact Argument.Projection.Vars.insertAt_map [] formal retained
-            commonRename
-        let mappedData :
-            (Leaf.Formal.operation [] atomArguments).SiteData mappedFrame
-              PUnit.unit mappedPorts :=
-          ⟨mappedFormal, ⟨mappedRetained, mappedPortsEq⟩⟩
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (retain := mappedFrame.sourceKeep)
-            (selected := mappedFrame.selected) mappedPorts
-        have keepMaps : WireRenaming.comp sourceRename frame.sourceKeep =
-            WireRenaming.comp mappedFrame.sourceKeep commonRename := by
-          apply WireRenaming.ext
-          intro signature wire
-          exact keepCommutes wire
-        have mappedPortWires :
-            (ports.map fun wire => frame.sourceKeep wire).map
-                (fun wire => sourceRename wire) =
-              mappedPorts.map fun wire => mappedFrame.sourceKeep wire := by
-          calc
-            _ = ports.map (fun wire =>
-                WireRenaming.comp sourceRename frame.sourceKeep wire) :=
-              Diagram.vars_map_comp ports frame.sourceKeep sourceRename
-            _ = ports.map (fun wire =>
-                WireRenaming.comp mappedFrame.sourceKeep commonRename wire) :=
-              congrArg (fun rename : WireRenaming common mappedSourceWires =>
-                ports.map fun wire => rename wire) keepMaps
-            _ = _ := (Diagram.vars_map_comp ports commonRename
-              mappedFrame.sourceKeep).symm
-        have mappedSource :
-            (Item.atom frame.selected
-              (ports.map fun wire => frame.sourceKeep wire)).renameWires
-                sourceRename =
-              Item.atom mappedFrame.selected
-                (mappedPorts.map fun wire => mappedFrame.sourceKeep wire) := by
-          simp only [Item.renameWires, selectedCommutes]
-          exact congrArg (Item.atom mappedFrame.selected) mappedPortWires
-        let mappedSites : ItemSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence := ItemSites.selectedAtom
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (frame := mappedFrame) mappedPorts mappedData
-        have mappedResult :
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-              (atomFormalShape atomArguments).pattern ports).renameWires
-                commonRename =
-              _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-                (atomFormalShape atomArguments).pattern mappedPorts := by
-          exact EqualityNormalization.instantiate_renameWires
-            (atomFormalShape atomArguments).pattern ports commonRename
-        exact ⟨_, _, mappedEvidence, mappedSites, mappedSource,
-          ⟨RegionIso.ofEq mappedResult⟩, by
-            intro baseContext base layout
-            unfold FactorItemLayout at layout ⊢
-            obtain ⟨siteRename, portsFromBase, sourceFromBase⟩ := layout
-            let mappedSiteRename : WireRenaming baseContext mappedCommon :=
-              WireRenaming.comp commonRename siteRename
-            refine ⟨mappedSiteRename, ?_, ?_⟩
-            · calc
-                mappedPorts = ports.map (fun wire => commonRename wire) := rfl
-                _ = (base.map fun wire => siteRename wire).map
-                      (fun wire => commonRename wire) := by
-                  rw [portsFromBase]
-                  rfl
-                _ = base.map (fun wire => mappedSiteRename wire) :=
-                  by
-                    simpa only [mappedSiteRename, WireRenaming.comp] using
-                      Diagram.vars_map_comp base siteRename commonRename
-            · change Item.atom mappedFrame.selected
-                  (mappedPorts.map fun wire => mappedFrame.sourceKeep wire) = _
-              congr 1
-              rw [show base.map (fun wire => mappedSiteRename wire) =
-                  mappedPorts by
-                calc
-                  _ = (base.map fun wire => siteRename wire).map
-                      (fun wire => commonRename wire) :=
-                    (Diagram.vars_map_comp base siteRename commonRename).symm
-                  _ = ports.map (fun wire => commonRename wire) := by
-                    rw [← portsFromBase]
-                    rfl
-                  _ = mappedPorts := rfl]⟩
-    | .identity signature arity ports =>
-        by
-        let mappedPorts := fun position => commonRename (ports position)
-        have mappedSource :
-            (Item.identity signature arity
-              (fun position => frame.sourceKeep (ports position))).renameWires
-                sourceRename =
-              Item.identity signature arity
-                (fun position => mappedFrame.sourceKeep
-                  (mappedPorts position)) := by
-          simp only [Item.renameWires, mappedPorts]
-          apply congrArg (Item.identity signature arity)
-          funext position
-          exact keepCommutes (ports position)
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (retain := mappedFrame.sourceKeep)
-            (selected := mappedFrame.selected) signature arity mappedPorts
-        let mappedSites : ItemSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence := ItemSites.identity
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (frame := mappedFrame) signature arity mappedPorts
-        have mappedResult :
-            (Region.singleton (.identity signature arity ports)).renameWires
-                commonRename =
-              Region.singleton (.identity signature arity mappedPorts) := by
-          rw [Region.singleton_renameWires]
-          rfl
-        exact ⟨_, _, mappedEvidence, mappedSites, mappedSource,
-          ⟨RegionIso.ofEq mappedResult⟩, by
-            intro baseContext base layout
-            unfold FactorItemLayout at layout ⊢
-            rfl⟩
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence childSites =>
-        by
-        obtain ⟨mappedChildSource, mappedChildResult, mappedChildEvidence,
-            mappedChildSites, mappedChildSourceEq, ⟨mappedChildIso⟩,
-            childLayout⟩ :=
-          formalRegionReindex childEvidence childSites commonRename sourceRename
-            keepCommutes selectedCommutes
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
-            mappedChildEvidence
-        let mappedSites : ItemSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence := .cut mappedChildSites
-        have mappedSourceEq :
-            (Item.cut body).renameWires sourceRename =
-              Item.cut mappedChildSource := by
-          simpa only [Item.renameWires] using
-            congrArg Item.cut mappedChildSourceEq
-        let exposed : RegionIso (WireEquiv.refl mappedCommon)
-            ((Region.singleton (.cut childResult)).renameWires commonRename)
-            (Region.singleton (.cut
-              (childResult.renameWires commonRename))) := by
-          rw [Region.singleton_renameWires]
-          exact RegionIso.refl _
-        let child := RegionIso.singletonCutCongr mappedChildIso
-        exact ⟨.cut mappedChildSource,
-          Region.singleton (.cut mappedChildResult), mappedEvidence,
-          mappedSites, mappedSourceEq, ⟨exposed.trans child⟩, by
-            intro baseContext base layout
-            unfold FactorItemLayout at layout ⊢
-            obtain ⟨currentBody, currentEq, currentLayout⟩ := layout
-            have bodyEq : currentBody = body := by
-              injection currentEq.symm
-            subst currentBody
-            exact ⟨mappedChildSource, rfl, childLayout base currentLayout⟩⟩
-  termination_by sizeOf source
-end
-
-/-! Concatenating two generated Formal segments preserves their literal
-Instantiation evidence while recording conjunction reassociation only as a
-proof presentation. -/
-private theorem formalItemsAppend
-    {atomArguments common sourceWires targetWires : List Sig}
-    {frame : Transform.Frame (atomSupportWires atomArguments) common
-      sourceWires targetWires}
-    {firstSource secondSource : ItemSeq sourceWires}
-    {firstResult secondResult : Region common}
-    (firstEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
-        firstSource firstResult)
-    (firstSites : ItemsSites (Leaf.Formal.operation [] atomArguments)
-      PUnit.unit firstEvidence)
-    (secondEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
-        secondSource secondResult)
-    (secondSites : ItemsSites (Leaf.Formal.operation [] atomArguments)
-      PUnit.unit secondEvidence) :
-    ∃ combinedResult : Region common,
-      ∃ combinedEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-            (atomFormalShape atomArguments).pattern frame.sourceKeep
-            frame.selected (firstSource.append secondSource) combinedResult,
-        ∃ combinedSites : ItemsSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-            combinedEvidence,
-          Nonempty (RegionIso (WireEquiv.refl common)
-              (firstResult.conjoin secondResult) combinedResult) ∧
-            (∀ {baseContext : List Sig}
-                (base : Vars baseContext (atomSupportWires atomArguments)),
-              FactorItemsLayout base base (.refl base) firstEvidence firstSites
-                  frame firstSource →
-                FactorItemsLayout base base (.refl base) secondEvidence
-                    secondSites frame secondSource →
-                  FactorItemsLayout base base (.refl base) combinedEvidence
-                    combinedSites frame
-                    (firstSource.append secondSource)) :=
-  match firstSites with
-  | .nil _ => by
-      exact ⟨secondResult, secondEvidence, secondSites,
-        ⟨RegionIso.blankConjoin secondResult⟩, by
-          intro baseContext base firstLayout secondLayout
-          simpa only [ItemSeq.nil_append] using secondLayout⟩
-  | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
-      itemEvidence tailEvidence itemSites tailSites => by
-      obtain ⟨combinedTailResult, combinedTailEvidence,
-          combinedTailSites, ⟨combinedTailIso⟩, combineTailLayout⟩ :=
-        formalItemsAppend tailEvidence tailSites secondEvidence secondSites
-      let combinedEvidence :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
-          itemEvidence combinedTailEvidence
-      let combinedSites : ItemsSites
-          (Leaf.Formal.operation [] atomArguments) PUnit.unit
-            combinedEvidence := .cons itemSites combinedTailSites
-      let associated := RegionIso.conjoinAssoc itemResult tailResult
-        secondResult
-      let tailPresented := RegionIso.conjoinCongr
-        (RegionIso.refl itemResult) combinedTailIso
-      exact ⟨itemResult.conjoin combinedTailResult, combinedEvidence,
-        combinedSites, ⟨associated.trans tailPresented⟩, by
-          intro baseContext base firstLayout secondLayout
-          unfold FactorItemsLayout at firstLayout ⊢
-          obtain ⟨currentItem, currentTail, currentEq, currentItemLayout,
-            currentTailLayout⟩ := firstLayout
-          cases currentEq
-          exact ⟨item, tail.append secondSource, rfl,
-            currentItemLayout,
-            combineTailLayout base currentTailLayout secondLayout⟩⟩
-  termination_by sizeOf firstSource
-
-/-! An empty retained partition still changes the dependent Formal frame from
-`frame` to `frame.append []`.  Transport the literal evidence once, then close
-that dependent presentation with the public empty-adjoin unit law. -/
-private theorem formalItemsEmptyRetained
-    {atomArguments common sourceWires targetWires : List Sig}
-    {frame : Transform.Frame (atomSupportWires atomArguments) common
-      sourceWires targetWires}
-    {source : ItemSeq sourceWires} {result endpoint : Region common}
-    (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
-        source result)
-    (sites : ItemsSites (Leaf.Formal.operation [] atomArguments)
-      PUnit.unit evidence)
-    (presentation : RegionIso (WireEquiv.refl common) endpoint result) :
-    ∃ mappedSource : ItemSeq (sourceWires ++ []),
-      ∃ mappedResult : Region (common ++ []),
-        ∃ mappedEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-              (atomFormalShape atomArguments).pattern
-              (frame.append []).sourceKeep (frame.append []).selected
-              mappedSource mappedResult,
-          ∃ mappedSites : ItemsSites
-              (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence,
-            Nonempty (RegionIso (WireEquiv.refl common) endpoint
-              (Region.adjoinAt [] .nil mappedResult)) ∧
-            (∀ {baseContext : List Sig}
-                (base : Vars baseContext (atomSupportWires atomArguments)),
-              FactorItemsLayout base base (.refl base) evidence sites frame
-                  source →
-                FactorItemsLayout base base (.refl base) mappedEvidence
-                  mappedSites (frame.append []) mappedSource) := by
-  let commonEquiv := WireEquiv.appendNil common
-  let sourceEquiv := WireEquiv.appendNil sourceWires
-  let commonAppend := commonEquiv.symm.toRenaming
-  let sourceAppend := sourceEquiv.symm.toRenaming
-  have keepCommutes : ∀ {signature} (wire : Var common signature),
-      sourceAppend (frame.sourceKeep wire) =
-        (frame.append []).sourceKeep (commonAppend wire) := by
-    intro signature wire
-    rw [show sourceAppend (frame.sourceKeep wire) =
-        (frame.sourceKeep wire).appendLeft [] by
-      exact WireEquiv.appendNil_symm_apply sourceWires
-        (frame.sourceKeep wire)]
-    rw [show commonAppend wire = wire.appendLeft [] by
-      exact WireEquiv.appendNil_symm_apply common wire]
-    simp [Transform.Frame.append, WireRenaming.appendRight]
-  have selectedCommutes : sourceAppend frame.selected =
-      (frame.append []).selected := by
-    exact WireEquiv.appendNil_symm_apply sourceWires frame.selected
-  obtain ⟨mappedSource, mappedResult, mappedEvidence, mappedSites,
-      mappedSourceEq, ⟨mappedResultIso⟩, mapLayout⟩ :=
-    formalItemsReindex evidence sites commonAppend sourceAppend
-      keepCommutes selectedCommutes
-  let resultForward : RegionIso commonEquiv.symm result
-      (result.renameWires commonAppend) :=
-    by
-      simpa only [Region.renameWires_id] using
-        RegionIso.renameWires result WireRenaming.id commonAppend
-          commonEquiv.symm (fun _ => rfl)
-  let endpointForward : RegionIso
-      (((WireEquiv.refl common).trans commonEquiv.symm).trans
-        (WireEquiv.refl (common ++ []))) endpoint mappedResult :=
-    (presentation.trans resultForward).trans mappedResultIso
-  let mappedBack : RegionIso commonEquiv mappedResult
-      (mappedResult.renameWires commonEquiv.toRenaming) :=
-    by
-      simpa only [Region.renameWires_id] using
-        RegionIso.renameWires mappedResult WireRenaming.id
-          commonEquiv.toRenaming commonEquiv (fun _ => rfl)
-  let closed : RegionIso
-      (((((WireEquiv.refl common).trans commonEquiv.symm).trans
-        (WireEquiv.refl (common ++ []))).trans commonEquiv).trans
-          (WireEquiv.refl common))
-      endpoint (Region.adjoinAt [] .nil mappedResult) :=
-    (endpointForward.trans mappedBack).trans
-      (RegionIso.adjoinAtNil mappedResult)
-  have ambientEq :
-      ((((WireEquiv.refl common).trans commonEquiv.symm).trans
-        (WireEquiv.refl (common ++ []))).trans commonEquiv).trans
-          (WireEquiv.refl common) = WireEquiv.refl common := by
-    apply WireEquiv.ext
-    intro signature wire
-    exact commonEquiv.right_inv wire
-  exact ⟨mappedSource, mappedResult, mappedEvidence, mappedSites,
-    ⟨closed.castAmbient ambientEq⟩, mapLayout⟩
-
-/-! The Formal accumulator eliminates only into propositions.  Its literal
-witnesses are primitive Instantiation evidence derived from the authoritative
-site tree; the exact prepared endpoint remains the EvidenceFold result. -/
-
-/-! Factor layouts depend only on the source-facing part of their current
-frame.  Primitive edits choose different target wire lists, so this mutual
-transport principle prevents that unused choice from leaking into every
-constructor proof. -/
-mutual
-  private theorem factorRegionLayout_sourceFace
-      {baseContext baseArguments currentArguments common sourceWires
-        firstTargetWires secondTargetWires : List Sig}
-      {base : Vars baseContext baseArguments}
-      {current : Vars baseContext currentArguments}
-      {factor : VarsFactor base current}
-      {pattern : OpenDiagram baseArguments}
-      {formalSourceWires formalTargetWires : List Sig}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {data : operation.Data formalFrame}
-      {source : Region formalSourceWires} {result : Region common}
-      {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          pattern formalFrame.sourceKeep formalFrame.selected source result}
-      (sites : RegionSites operation data evidence)
-      (first : Transform.Frame currentArguments common sourceWires
-        firstTargetWires)
-      (second : Transform.Frame currentArguments common sourceWires
-        secondTargetWires)
-      (keepEq : second.sourceKeep = first.sourceKeep)
-      (selectedEq : second.selected = first.selected)
-      {currentSource : Region sourceWires}
-      (layout : FactorRegionLayout base current factor evidence sites first
-        currentSource) :
-      FactorRegionLayout base current factor evidence sites second
-        currentSource :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-      unfold FactorRegionLayout at layout ⊢
-      obtain ⟨currentItems, rfl, currentItemsLayout⟩ := layout
-      refine ⟨currentItems, rfl, ?_⟩
-      exact factorItemsLayout_sourceFace childSites (first.append locals)
-        (second.append locals) (by
-          simp only [Transform.Frame.append]
-          exact congrArg (fun keep => keep.appendRight locals) keepEq)
-        (by
-          simp only [Transform.Frame.append]
-          exact congrArg (fun selected => selected.appendLeft locals)
-            selectedEq) currentItemsLayout
-  termination_by 3 * sizeOf sites
-
-  private theorem factorItemsLayout_sourceFace
-      {baseContext baseArguments currentArguments common sourceWires
-        firstTargetWires secondTargetWires : List Sig}
-      {base : Vars baseContext baseArguments}
-      {current : Vars baseContext currentArguments}
-      {factor : VarsFactor base current}
-      {pattern : OpenDiagram baseArguments}
-      {formalSourceWires formalTargetWires : List Sig}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {data : operation.Data formalFrame}
-      {source : ItemSeq formalSourceWires} {result : Region common}
-      {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          pattern formalFrame.sourceKeep formalFrame.selected source result}
-      (sites : ItemsSites operation data evidence)
-      (first : Transform.Frame currentArguments common sourceWires
-        firstTargetWires)
-      (second : Transform.Frame currentArguments common sourceWires
-        secondTargetWires)
-      (keepEq : second.sourceKeep = first.sourceKeep)
-      (selectedEq : second.selected = first.selected)
-      {currentSource : ItemSeq sourceWires}
-      (layout : FactorItemsLayout base current factor evidence sites first
-        currentSource) :
-      FactorItemsLayout base current factor evidence sites second
-        currentSource :=
-    match sites with
-    | .nil _ => by simpa only [FactorItemsLayout] using layout
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites => by
-      unfold FactorItemsLayout at layout ⊢
-      obtain ⟨currentItem, currentTail, rfl, itemLayout, tailLayout⟩ := layout
-      exact ⟨currentItem, currentTail, rfl,
-        factorItemLayout_sourceFace itemSites first second keepEq selectedEq
-          itemLayout,
-        factorItemsLayout_sourceFace tailSites first second keepEq selectedEq
-          tailLayout⟩
-  termination_by 3 * sizeOf sites + 2
-
-  private theorem factorItemLayout_sourceFace
-      {baseContext baseArguments currentArguments common sourceWires
-        firstTargetWires secondTargetWires : List Sig}
-      {base : Vars baseContext baseArguments}
-      {current : Vars baseContext currentArguments}
-      {factor : VarsFactor base current}
-      {pattern : OpenDiagram baseArguments}
-      {formalSourceWires formalTargetWires : List Sig}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {data : operation.Data formalFrame}
-      {source : Item formalSourceWires} {result : Region common}
-      {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          pattern formalFrame.sourceKeep formalFrame.selected source result}
-      (sites : ItemSites operation data evidence)
-      (first : Transform.Frame currentArguments common sourceWires
-        firstTargetWires)
-      (second : Transform.Frame currentArguments common sourceWires
-        secondTargetWires)
-      (keepEq : second.sourceKeep = first.sourceKeep)
-      (selectedEq : second.selected = first.selected)
-      {currentSource : Item sourceWires}
-      (layout : FactorItemLayout base current factor evidence sites first
-        currentSource) :
-      FactorItemLayout base current factor evidence sites second
-        currentSource :=
-    match sites with
-    | .atom _ _ => by
-        simpa only [FactorItemLayout, keepEq] using layout
-    | .selectedAtom _ _ => by
-        simpa only [FactorItemLayout, keepEq, selectedEq] using layout
-    | .identity _ _ _ => by
-        simpa only [FactorItemLayout, keepEq] using layout
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites => by
-      unfold FactorItemLayout at layout ⊢
-      obtain ⟨currentBody, rfl, bodyLayout⟩ := layout
-      exact ⟨currentBody, rfl,
-        factorRegionLayout_sourceFace childSites first second keepEq selectedEq
-          bodyLayout⟩
-  termination_by 3 * sizeOf sites + 1
-end
-
-/-! Factor layouts depend on the endpoints of the factor program, not on its
-constructor history.  This transport is explicit now that factor programs
-live in `Type` and their induction structure is proof-relevant. -/
-mutual
-  private theorem factorRegionLayout_factor
-      {baseContext baseArguments currentArguments common sourceWires
-        targetWires : List Sig}
-      {base : Vars baseContext baseArguments}
-      {current : Vars baseContext currentArguments}
-      (first second : VarsFactor base current)
-      {pattern : OpenDiagram baseArguments}
-      {formalSourceWires formalTargetWires : List Sig}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {data : operation.Data formalFrame}
-      {source : Region formalSourceWires} {result : Region common}
-      {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          pattern formalFrame.sourceKeep formalFrame.selected source result}
-      (sites : RegionSites operation data evidence)
-      {currentFrame : Transform.Frame currentArguments common sourceWires
-        targetWires}
-      {currentSource : Region sourceWires}
-      (layout : FactorRegionLayout base current first evidence sites
-        currentFrame currentSource) :
-      FactorRegionLayout base current second evidence sites currentFrame
-        currentSource :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-      unfold FactorRegionLayout at layout ⊢
-      obtain ⟨currentItems, rfl, currentItemsLayout⟩ := layout
-      exact ⟨currentItems, rfl,
-        factorItemsLayout_factor first second childSites currentItemsLayout⟩
-  termination_by 3 * sizeOf sites
-
-  private theorem factorItemsLayout_factor
-      {baseContext baseArguments currentArguments common sourceWires
-        targetWires : List Sig}
-      {base : Vars baseContext baseArguments}
-      {current : Vars baseContext currentArguments}
-      (first second : VarsFactor base current)
-      {pattern : OpenDiagram baseArguments}
-      {formalSourceWires formalTargetWires : List Sig}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {data : operation.Data formalFrame}
-      {source : ItemSeq formalSourceWires} {result : Region common}
-      {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          pattern formalFrame.sourceKeep formalFrame.selected source result}
-      (sites : ItemsSites operation data evidence)
-      {currentFrame : Transform.Frame currentArguments common sourceWires
-        targetWires}
-      {currentSource : ItemSeq sourceWires}
-      (layout : FactorItemsLayout base current first evidence sites
-        currentFrame currentSource) :
-      FactorItemsLayout base current second evidence sites currentFrame
-        currentSource :=
-    match sites with
-    | .nil _ => by simpa only [FactorItemsLayout] using layout
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites => by
-      unfold FactorItemsLayout at layout ⊢
-      obtain ⟨currentItem, currentTail, rfl, itemLayout, tailLayout⟩ := layout
-      exact ⟨currentItem, currentTail, rfl,
-        factorItemLayout_factor first second itemSites itemLayout,
-        factorItemsLayout_factor first second tailSites tailLayout⟩
-  termination_by 3 * sizeOf sites + 2
-
-  private theorem factorItemLayout_factor
-      {baseContext baseArguments currentArguments common sourceWires
-        targetWires : List Sig}
-      {base : Vars baseContext baseArguments}
-      {current : Vars baseContext currentArguments}
-      (first second : VarsFactor base current)
-      {pattern : OpenDiagram baseArguments}
-      {formalSourceWires formalTargetWires : List Sig}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {data : operation.Data formalFrame}
-      {source : Item formalSourceWires} {result : Region common}
-      {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          pattern formalFrame.sourceKeep formalFrame.selected source result}
-      (sites : ItemSites operation data evidence)
-      {currentFrame : Transform.Frame currentArguments common sourceWires
-        targetWires}
-      {currentSource : Item sourceWires}
-      (layout : FactorItemLayout base current first evidence sites currentFrame
-        currentSource) :
-      FactorItemLayout base current second evidence sites currentFrame
-        currentSource :=
-    match sites with
-    | .atom _ _ => by simpa only [FactorItemLayout] using layout
-    | .selectedAtom _ _ => by simpa only [FactorItemLayout] using layout
-    | .identity _ _ _ => by simpa only [FactorItemLayout] using layout
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites => by
-      unfold FactorItemLayout at layout ⊢
-      obtain ⟨currentBody, rfl, bodyLayout⟩ := layout
-      exact ⟨currentBody, rfl,
-        factorRegionLayout_factor first second childSites bodyLayout⟩
-  termination_by 3 * sizeOf sites + 1
-end
-
-/-! Every authoritative source has the reflexive factor layout over its
-identity argument vector.  At a selected site the application itself induces
-the unique positional substitution used by the layout. -/
-mutual
-  private theorem factorRegionLayout_refl
-      {arguments common sourceWires targetWires : List Sig}
-      {pattern : OpenDiagram arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {operation : Transform.Operation arguments}
-      {data : operation.Data frame}
-      {source : Region sourceWires} {result : Region common}
-      {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          pattern frame.sourceKeep frame.selected source result}
-      (sites : RegionSites operation data evidence) :
-      FactorRegionLayout (EqualityNormalization.formalPorts arguments)
-        (EqualityNormalization.formalPorts arguments)
-        (.refl (EqualityNormalization.formalPorts arguments)) evidence sites
-        frame source :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-      unfold FactorRegionLayout
-      exact ⟨items, rfl, factorItemsLayout_refl childSites⟩
-  termination_by structural sites
-
-  private theorem factorItemsLayout_refl
-      {arguments common sourceWires targetWires : List Sig}
-      {pattern : OpenDiagram arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {operation : Transform.Operation arguments}
-      {data : operation.Data frame}
-      {source : ItemSeq sourceWires} {result : Region common}
-      {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          pattern frame.sourceKeep frame.selected source result}
-      (sites : ItemsSites operation data evidence) :
-      FactorItemsLayout (EqualityNormalization.formalPorts arguments)
-        (EqualityNormalization.formalPorts arguments)
-        (.refl (EqualityNormalization.formalPorts arguments)) evidence sites
-        frame source :=
-    match sites with
-    | .nil _ => by
-      unfold FactorItemsLayout
-      rfl
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites => by
-      unfold FactorItemsLayout
-      exact ⟨item, tail, rfl, factorItemLayout_refl itemSites,
-        factorItemsLayout_refl tailSites⟩
-  termination_by structural sites
-
-  private theorem factorItemLayout_refl
-      {arguments common sourceWires targetWires : List Sig}
-      {pattern : OpenDiagram arguments}
-      {frame : Transform.Frame arguments common sourceWires targetWires}
-      {operation : Transform.Operation arguments}
-      {data : operation.Data frame}
-      {source : Item sourceWires} {result : Region common}
-      {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          pattern frame.sourceKeep frame.selected source result}
-      (sites : ItemSites operation data evidence) :
-      FactorItemLayout (EqualityNormalization.formalPorts arguments)
-        (EqualityNormalization.formalPorts arguments)
-        (.refl (EqualityNormalization.formalPorts arguments)) evidence sites
-        frame source :=
-    match sites with
-    | .atom _ _ => by
-      unfold FactorItemLayout
-      rfl
-    | .selectedAtom application _ => by
-      unfold FactorItemLayout
-      let substitution := EqualityNormalization.formalSubstitution application
-      have applicationEq :=
-        EqualityNormalization.formalPorts_map_substitution application
-      refine ⟨substitution, applicationEq.symm, ?_⟩
-      rw [applicationEq]
-    | .identity _ _ _ => by
-      unfold FactorItemLayout
-      rfl
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites => by
-      unfold FactorItemLayout
-      exact ⟨body, rfl, factorRegionLayout_refl childSites⟩
-  termination_by structural sites
-end
-
-/-! Retained syntax contains no selected application.  Consequently its
-factor layout is parametric in the selected argument vector: only the fixed
-source face of the current frame is observable in these branches. -/
-mutual
-  private theorem retainedRegionFactorLayout
-      {baseContext baseArguments common sourceWires
-        targetWires : List Sig}
-      (base : Vars baseContext baseArguments)
-      (pattern : OpenDiagram baseArguments)
-      (operation : Transform.Operation baseArguments)
-      (frame : Transform.Frame baseArguments common sourceWires targetWires)
-      (data : operation.Data frame)
-      (region : Region common) :
-      FactorRegionLayout base base (.refl base)
-        (retainedRegionResult pattern frame region)
-        (retainedRegionSites pattern operation frame data region)
-        frame (region.renameWires frame.sourceKeep) := by
-    cases region with
-    | mk locals items =>
-        unfold retainedRegionSites Region.renameWires
-        simp_wf
-        unfold FactorRegionLayout
-        simp_wf
-        exact retainedItemsFactorLayout base pattern operation
-          (frame.append locals) (operation.appendData frame data locals) items
-  termination_by sizeOf region
-
-  private theorem retainedItemsFactorLayout
-      {baseContext baseArguments common sourceWires
-        targetWires : List Sig}
-      (base : Vars baseContext baseArguments)
-      (pattern : OpenDiagram baseArguments)
-      (operation : Transform.Operation baseArguments)
-      (frame : Transform.Frame baseArguments common sourceWires targetWires)
-      (data : operation.Data frame)
-      (items : ItemSeq common) :
-      FactorItemsLayout base base (.refl base)
-        (retainedItemsResult pattern frame items)
-        (retainedItemsSites pattern operation frame data items)
-        frame (items.renameWires frame.sourceKeep) := by
-    cases items with
-    | nil =>
-        unfold retainedItemsSites
-        simp_wf
-        unfold FactorItemsLayout
-        simp_wf
-        change ItemSeq.renameWires frame.sourceKeep .nil = .nil
-        rfl
-    | cons item tail =>
-        unfold retainedItemsSites ItemSeq.renameWires
-        simp_wf
-        unfold FactorItemsLayout
-        simp_wf
-        refine ⟨item.renameWires frame.sourceKeep,
-          tail.renameWires frame.sourceKeep, ⟨rfl, rfl⟩, ?_, ?_⟩
-        · exact retainedItemFactorLayout base pattern operation frame data item
-        · exact retainedItemsFactorLayout base pattern operation frame data tail
-  termination_by sizeOf items
-
-  private theorem retainedItemFactorLayout
-      {baseContext baseArguments common sourceWires
-        targetWires : List Sig}
-      (base : Vars baseContext baseArguments)
-      (pattern : OpenDiagram baseArguments)
-      (operation : Transform.Operation baseArguments)
-      (frame : Transform.Frame baseArguments common sourceWires targetWires)
-      (data : operation.Data frame)
-      (item : Item common) :
-      FactorItemLayout base base (.refl base)
-        (retainedItemResult pattern frame item)
-        (retainedItemSites pattern operation frame data item)
-        frame (item.renameWires frame.sourceKeep) := by
-    cases item with
-    | atom head ports =>
-        unfold retainedItemSites Item.renameWires
-        simp_wf
-        unfold FactorItemLayout
-        simp_wf
-    | identity signature arity ports =>
-        unfold retainedItemSites Item.renameWires
-        simp_wf
-        unfold FactorItemLayout
-        simp_wf
-    | cut body =>
-        unfold retainedItemSites Item.renameWires
-        simp_wf
-        unfold FactorItemLayout
-        simp_wf
-        exact retainedRegionFactorLayout base pattern operation frame data body
-  termination_by sizeOf item
-end
-
-/-! The generated Formal prefix retains the originating atom selection at
-each selected site.  This is the load-bearing link from the authoritative
-atom syntax to the later argument-vector factorization. -/
-private theorem atomFormalPrefixFactorLayout
-    {patternWires atomArguments common sourceWires targetWires : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    (hostItems : ItemSeq
-      (common ++ EqualityNormalization.locals shape.pattern))
-    (formalFrame : Transform.Frame (atomSupportWires atomArguments) common
-      sourceWires targetWires) :
-    let retainedLocals := EqualityNormalization.locals shape.pattern
-    let frame := formalFrame.append retainedLocals
-    let formal : Var (common ++ retainedLocals) (.rel atomArguments) :=
-      atomBodyWire shape common head
-    let retainedPorts : Vars (common ++ retainedLocals) atomArguments :=
-      ports.map fun wire => atomBodyWire shape common wire
-    FactorItemsLayout (atomSelection head ports) (atomSelection head ports)
-      (.refl (atomSelection head ports))
-      (atomFormalPrefixEvidence frame hostItems formal retainedPorts)
-      (atomFormalPrefixSites frame hostItems formal retainedPorts)
-      frame (atomFormalPrefixSource frame hostItems formal retainedPorts) :=
-  match hostItems with
-  | .nil => by
-      dsimp only
-      unfold atomFormalPrefixSites
-        atomFormalPrefixSource
-      simp_wf
-      unfold FactorItemsLayout FactorItemLayout
-      simp_wf
-      let siteRename : WireRenaming patternWires
-          (common ++ EqualityNormalization.locals shape.pattern) :=
-        atomBodyWire shape common
-      let selectedItem : Item
-          (sourceWires ++ EqualityNormalization.locals shape.pattern) :=
-        .atom
-          (formalFrame.append
-            (EqualityNormalization.locals shape.pattern)).selected
-          (((atomSelection head ports).map fun wire => siteRename wire).map
-            fun wire => (formalFrame.append
-              (EqualityNormalization.locals shape.pattern)).sourceKeep wire)
-      refine ⟨selectedItem, .nil, ?_, ?_, ?_⟩
-      · simp only [ItemSeq.renameWires, ItemSeq.append, selectedItem,
-          siteRename, atomSelection, Vars.map]
-      · exact ⟨siteRename, rfl, rfl⟩
-      · unfold FactorItemsLayout
-        simp_wf
-  | .cons item rest => by
-      dsimp only
-      unfold atomFormalPrefixSites
-        atomFormalPrefixSource
-      simp_wf
-      unfold FactorItemsLayout
-      simp_wf
-      refine ⟨item.renameWires
-          (formalFrame.append
-            (EqualityNormalization.locals shape.pattern)).sourceKeep,
-        atomFormalPrefixSource
-          (formalFrame.append
-            (EqualityNormalization.locals shape.pattern)) rest
-          (atomBodyWire shape common head)
-          (ports.map fun wire => atomBodyWire shape common wire), ?_, ?_, ?_⟩
-      · simp only [ItemSeq.renameWires, ItemSeq.append,
-          atomFormalPrefixSource]
-      · exact retainedItemFactorLayout (atomSelection head ports)
-          (atomFormalShape atomArguments).pattern
-          (Leaf.Formal.operation [] atomArguments)
-          (formalFrame.append
-            (EqualityNormalization.locals shape.pattern)) PUnit.unit item
-      · exact atomFormalPrefixFactorLayout shape rest formalFrame
-  termination_by sizeOf hostItems
-
-private def factorSourceFrame (outer localBefore localAfter arguments : List Sig) :
-    Transform.Frame arguments (outer ++ (localBefore ++ localAfter))
-      (outer ++ (localBefore ++ .rel arguments :: localAfter))
-      (outer ++ (localBefore ++ localAfter)) :=
-  Transform.Frame.replace outer localBefore localAfter [] arguments
-
-/-- Initial atom assembly frame before selected sites contribute their
-retained local partitions. -/
-private def factorInitialFrame (outer arguments : List Sig) :
-    Transform.Frame arguments outer (outer ++ [.rel arguments]) outer where
-  sourceKeep := ⟨fun wire => wire.appendLeft [.rel arguments]⟩
-  targetKeep := WireRenaming.id
-  selected := Var.appendRight outer .here
-
-private def factorBinderRegion (outer localBefore localAfter : List Sig)
-    {arguments : List Sig}
-    (items : ItemSeq
-      (outer ++ (localBefore ++ .rel arguments :: localAfter))) :
-    Region outer :=
-  .mk (localBefore ++ .rel arguments :: localAfter) items
-
-/-! The bridge contains only the exact primitive relation and proof
-presentation between consecutive literal binder-home sources.  In
-particular, transitive factors expose their intermediate literal source. -/
-private inductive FactorItemsBridge
-    (outer localBefore localAfter : List Sig) :
-    {baseContext sourceArguments targetArguments : List Sig} →
-      {sourceVariables : Vars baseContext sourceArguments} →
-      {targetVariables : Vars baseContext targetArguments} →
-      VarsFactor sourceVariables targetVariables →
-      ItemSeq (outer ++
-        (localBefore ++ .rel sourceArguments :: localAfter)) →
-      ItemSeq (outer ++
-        (localBefore ++ .rel targetArguments :: localAfter)) → Prop
-  | refl
-      (variables : Vars baseContext arguments)
-      (items : ItemSeq
-        (outer ++ (localBefore ++ .rel arguments :: localAfter))) :
-      FactorItemsBridge outer localBefore localAfter (.refl variables) items
-        items
-  | permute
-      (permutation : TypedPermutation sourceArguments targetArguments)
-      (variables : Vars baseContext sourceArguments)
-      (sourceItems : ItemSeq
-        (outer ++ (localBefore ++ .rel sourceArguments :: localAfter)))
-      (targetItems : ItemSeq
-        (outer ++ (localBefore ++ .rel targetArguments :: localAfter)))
-      (primitiveTarget : Region outer)
-      (step : ArgumentPermutation.Permutes
-        (factorBinderRegion outer localBefore localAfter sourceItems)
-        primitiveTarget)
-      (presentation : Nonempty (RegionIso (WireEquiv.refl outer)
-        primitiveTarget
-        (factorBinderRegion outer localBefore localAfter targetItems))) :
-      FactorItemsBridge outer localBefore localAfter
-        (.permute permutation variables) sourceItems targetItems
-  | contract
-      (variables : Vars baseContext (before ++ signature :: after))
-      (sourceItems : ItemSeq (outer ++ (localBefore ++
-        .rel (before ++ signature :: signature :: after) :: localAfter)))
-      (targetItems : ItemSeq (outer ++ (localBefore ++
-        .rel (before ++ signature :: after) :: localAfter)))
-      (primitiveTarget : Region outer)
-      (step : Argument.Duplicate.Duplicates
-        (factorBinderRegion outer localBefore localAfter targetItems)
-        primitiveTarget)
-      (presentation : Nonempty (RegionIso (WireEquiv.refl outer)
-        primitiveTarget
-        (factorBinderRegion outer localBefore localAfter sourceItems))) :
-      FactorItemsBridge outer localBefore localAfter
-        (.contract before variables) sourceItems targetItems
-  | extend
-      (inserted : Var baseContext signature)
-      (variables : Vars baseContext (before ++ after))
-      (sourceItems : ItemSeq (outer ++ (localBefore ++
-        .rel (before ++ after) :: localAfter)))
-      (targetItems : ItemSeq (outer ++ (localBefore ++
-        .rel (before ++ signature :: after) :: localAfter)))
-      (primitiveTarget : Region outer)
-      (step : Argument.Projection.Drops
-        (factorBinderRegion outer localBefore localAfter targetItems)
-        primitiveTarget)
-      (presentation : Nonempty (RegionIso (WireEquiv.refl outer)
-        primitiveTarget
-        (factorBinderRegion outer localBefore localAfter sourceItems))) :
-      FactorItemsBridge outer localBefore localAfter
-        (.extend before inserted variables) sourceItems targetItems
-  | trans
-      {baseContext sourceArguments middleArguments targetArguments : List Sig}
-      {sourceVariables : Vars baseContext sourceArguments}
-      {middleVariables : Vars baseContext middleArguments}
-      {targetVariables : Vars baseContext targetArguments}
-      (first : VarsFactor sourceVariables middleVariables)
-      (second : VarsFactor middleVariables targetVariables)
-      (sourceItems : ItemSeq (outer ++ (localBefore ++
-        .rel sourceArguments :: localAfter)))
-      (middleItems : ItemSeq (outer ++ (localBefore ++
-        .rel middleArguments :: localAfter)))
-      (targetItems : ItemSeq (outer ++ (localBefore ++
-        .rel targetArguments :: localAfter)))
-      (firstBridge : FactorItemsBridge outer localBefore localAfter first
-        sourceItems middleItems)
-      (secondBridge : FactorItemsBridge outer localBefore localAfter second
-        middleItems targetItems) :
-      FactorItemsBridge outer localBefore localAfter (.trans first second)
-        sourceItems targetItems
-
-private structure PermuteFrames
-    (sourceArguments targetArguments common sourceWires targetWires
-      nextWires : List Sig) where
-  current : Transform.Frame sourceArguments common sourceWires targetWires
-  next : Transform.Frame targetArguments common targetWires nextWires
-  targetHead : Var targetWires (.rel targetArguments)
-  keepEq : next.sourceKeep = current.targetKeep
-  selectedEq : next.selected = targetHead
-
-private def PermuteFrames.append
-    (frames : PermuteFrames sourceArguments targetArguments common sourceWires
-      targetWires nextWires)
-    (locals : List Sig) :
-    PermuteFrames sourceArguments targetArguments (common ++ locals)
-      (sourceWires ++ locals) (targetWires ++ locals) (nextWires ++ locals) := {
-  current := frames.current.append locals
-  next := frames.next.append locals
-  targetHead := frames.targetHead.appendLeft locals
-  keepEq := by
-    simp only [Transform.Frame.append]
-    exact congrArg (fun keep => keep.appendRight locals) frames.keepEq
-  selectedEq := by
-    simp only [Transform.Frame.append]
-    exact congrArg (fun selected => selected.appendLeft locals)
-      frames.selectedEq
+private theorem staged_eq_target (target : CutTarget body shape)
+    (output : target.Output) :
+    target.staged output = (target.description output).target := by
+  change Region.adjoinAt
+    (target.before ++ .rel arguments :: target.after) .nil output.endpoint =
+      Region.adjoinAt
+        (target.before ++ .rel arguments :: target.after) .nil output.edit.run
+  rw [output.run_eq]
+
+private noncomputable def discharge (target : CutTarget body shape)
+    (output : target.Output)
+    (result : (Goal.preparation target.goal (target.staged output)
+      (target.authority.stagedCanonical output)
+      (target.authority.stagedExternalTwoEnded output)).Result) :
+    target.authority.request.Discharge (target.staged output) := by
+  let description := target.description output
+  exact dischargeAtAuthoritativeEdit
+    (goal := target.goal)
+    (staged := target.staged output)
+    (rawPrepared := description.target)
+    (rawPending := description.source)
+    (fun step => Step.cutShape step)
+    (target.authority.stagedCanonical output)
+    (target.authority.stagedExternalTwoEnded output)
+    (Goal.preparationResult result) (target.staged_eq_target output)
+    (by exact target.authority.request.pendingCanonical)
+    (by exact target.authority.request.pendingExternalTwoEnded)
+    (RegionIso.refl _) (Or.inr (.wrap (.mk description)))
+
+end CutTarget
+
+/-- Exact authoritative ParallelShape inputs at one existing conjunction. -/
+structure ParallelTarget
+    {patternWires arguments : List Sig}
+    (head : Item patternWires)
+    (tail : ItemSeq patternWires)
+    (shape : PatternShape (Region.ofItems (.cons head tail)) arguments) where
+  outer : List Sig
+  before : List Sig
+  after : List Sig
+  source : ItemSeq
+    (outer ++ (before ++ .rel arguments :: after))
+  result : Region (outer ++ (before ++ after))
+  authority : ItemsAuthority shape.pattern
+    (Content.Parallel.operation arguments)
+    (Content.Parallel.rootFrame outer before after arguments)
+    (Content.Parallel.firstHead outer before after arguments,
+      Content.Parallel.secondHead outer before after arguments)
+    source result (.mk (before ++ .rel arguments :: after) source)
+  afterHead : authority.Output → Region outer
+  afterHeadCanonical : ∀ output : authority.Output,
+    (authority.request.occurrence.context.fill (afterHead output)).Canonical
+  afterHeadExternalTwoEnded : ∀ output : authority.Output,
+    OpenDiagram.ExternalTwoEnded
+      authority.request.occurrence.interface.boundaryWire
+      (authority.request.occurrence.context.fill (afterHead output))
+
+namespace ParallelTarget
+
+variable {patternWires arguments : List Sig}
+variable {head : Item patternWires} {tail : ItemSeq patternWires}
+variable {shape : PatternShape (Region.ofItems (.cons head tail)) arguments}
+
+abbrev goal (target : ParallelTarget head tail shape) : Goal :=
+  target.authority.goal
+abbrev Output (target : ParallelTarget head tail shape) : Type :=
+  ItemsAuthority.Output target.authority
+def staged (target : ParallelTarget head tail shape) (output : target.Output) :
+    Region target.outer := target.authority.staged output
+
+private def description (target : ParallelTarget head tail shape)
+    (output : target.Output) :
+    Content.Parallel.Split.Description target.outer := {
+  arguments := arguments
+  before := target.before
+  after := target.after
+  items := target.source
+  itemsEdit := output.edit
 }
 
-private structure ReverseFrames
-    (currentArguments nextArguments common currentSourceWires
-      currentTargetWires nextSourceWires nextTargetWires : List Sig) where
-  current : Transform.Frame currentArguments common currentSourceWires
-    currentTargetWires
-  next : Transform.Frame nextArguments common nextSourceWires nextTargetWires
-  edit : Transform.Frame nextArguments common nextSourceWires
-    currentSourceWires
-  targetHead : Var currentSourceWires (.rel currentArguments)
-  editSourceKeepEq : edit.sourceKeep = next.sourceKeep
-  editSelectedEq : edit.selected = next.selected
-  editTargetKeepEq : edit.targetKeep = current.sourceKeep
-  targetHeadEq : targetHead = current.selected
+private theorem staged_eq_target (target : ParallelTarget head tail shape)
+    (output : target.Output) :
+    target.staged output = (target.description output).target := by
+  change Region.adjoinAt
+    (target.before ++ .rel arguments :: .rel arguments :: target.after)
+      .nil output.endpoint =
+    Region.adjoinAt
+      (target.before ++ .rel arguments :: .rel arguments :: target.after)
+      .nil output.edit.run
+  rw [output.run_eq]
 
-private def ReverseFrames.append
-    (frames : ReverseFrames currentArguments nextArguments common
-      currentSourceWires currentTargetWires nextSourceWires nextTargetWires)
-    (locals : List Sig) :
-    ReverseFrames currentArguments nextArguments (common ++ locals)
-      (currentSourceWires ++ locals) (currentTargetWires ++ locals)
-      (nextSourceWires ++ locals) (nextTargetWires ++ locals) := {
-  current := frames.current.append locals
-  next := frames.next.append locals
-  edit := frames.edit.append locals
-  targetHead := frames.targetHead.appendLeft locals
-  editSourceKeepEq := by
-    simp only [Transform.Frame.append]
-    exact congrArg (fun keep => keep.appendRight locals)
-      frames.editSourceKeepEq
-  editSelectedEq := by
-    simp only [Transform.Frame.append]
-    exact congrArg (fun selected => selected.appendLeft locals)
-      frames.editSelectedEq
-  editTargetKeepEq := by
-    simp only [Transform.Frame.append]
-    exact congrArg (fun keep => keep.appendRight locals)
-      frames.editTargetKeepEq
-  targetHeadEq := by
-    simp only [Transform.Frame.append]
-    exact congrArg (fun selected => selected.appendLeft locals)
-      frames.targetHeadEq
+private noncomputable def discharge
+    (target : ParallelTarget head tail shape)
+    (output : target.Output)
+    (headResult : (Goal.exact target.goal.request.polarity
+      target.goal.request.occurrence.interface
+      target.goal.request.occurrence.context
+      target.goal.request.continuation.1 target.goal.instantiated
+      (target.afterHead output) target.goal.request.instantiatedCanonical
+      target.goal.request.instantiatedExternalTwoEnded
+      (target.afterHeadCanonical output)
+      (target.afterHeadExternalTwoEnded output)).Result)
+    (tailResult : (Goal.exact target.goal.request.polarity
+      target.goal.request.occurrence.interface
+      target.goal.request.occurrence.context
+      target.goal.request.continuation.1 (target.afterHead output)
+      (target.staged output) (target.afterHeadCanonical output)
+      (target.afterHeadExternalTwoEnded output)
+      (target.authority.stagedCanonical output)
+      (target.authority.stagedExternalTwoEnded output)).Result) :
+    target.authority.request.Discharge (target.staged output) := by
+  let description := target.description output
+  exact dischargeAtAuthoritativeEdit
+    (goal := target.goal)
+    (staged := target.staged output)
+    (rawPrepared := description.target)
+    (rawPending := description.source)
+    (fun step => Step.parallelShape step)
+    (target.authority.stagedCanonical output)
+    (target.authority.stagedExternalTwoEnded output)
+    (telescopeTrans
+      (Goal.exactResult
+        (preparedExternalTwoEnded := target.afterHeadExternalTwoEnded output)
+        headResult)
+      (Goal.exactResult
+        (preparedExternalTwoEnded :=
+          target.authority.stagedExternalTwoEnded output)
+        tailResult))
+    (target.staged_eq_target output)
+    (by exact target.authority.request.pendingCanonical)
+    (by exact target.authority.request.pendingExternalTwoEnded)
+    (RegionIso.refl _) (Or.inr (.split (.mk description)))
+
+end ParallelTarget
+
+/-- Exact authoritative Arity inputs for one pattern-local wire. -/
+structure ArityTarget
+    {patternWires arguments : List Sig}
+    (body : Region patternWires)
+    (shape : PatternShape body arguments) where
+  outer : List Sig
+  before : List Sig
+  after : List Sig
+  added : Sig
+  source : ItemSeq
+    (outer ++ (before ++ .rel arguments :: after))
+  result : Region (outer ++ (before ++ after))
+  authority : ItemsAuthority shape.pattern
+    (Arity.operation arguments added)
+    (Arity.rootFrame outer before after arguments added)
+    (Arity.targetHead outer before after arguments added)
+    source result (.mk (before ++ .rel arguments :: after) source)
+
+namespace ArityTarget
+
+variable {patternWires arguments : List Sig}
+variable {body : Region patternWires}
+variable {shape : PatternShape body arguments}
+
+abbrev goal (target : ArityTarget body shape) : Goal := target.authority.goal
+abbrev Output (target : ArityTarget body shape) : Type :=
+  ItemsAuthority.Output target.authority
+def staged (target : ArityTarget body shape) (output : target.Output) :
+    Region target.outer := target.authority.staged output
+
+private def description (target : ArityTarget body shape) (output : target.Output) :
+    Arity.Shift.Description target.outer := {
+  arguments := arguments
+  before := target.before
+  after := target.after
+  added := target.added
+  items := target.source
+  itemsEdit := output.edit
 }
 
-mutual
-  private theorem permuteFactorRegion
-      {baseContext baseArguments sourceArguments targetArguments common
-        formalSourceWires formalTargetWires currentSourceWires
-        currentTargetWires nextTargetWires : List Sig}
-      {baseVariables : Vars baseContext baseArguments}
-      {variables : Vars baseContext sourceArguments}
-      (prior : VarsFactor baseVariables variables)
-      (permutation : TypedPermutation sourceArguments targetArguments)
-      {pattern : OpenDiagram baseArguments}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {formalData : operation.Data formalFrame}
-      {formalSource : Region formalSourceWires} {formalResult : Region common}
-      {formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          pattern formalFrame.sourceKeep formalFrame.selected formalSource
-          formalResult}
-      (formalSites : RegionSites operation formalData formalEvidence)
-      (frames : PermuteFrames sourceArguments targetArguments common
-        currentSourceWires currentTargetWires nextTargetWires)
-      {currentSource : Region currentSourceWires}
-      (currentLayout : FactorRegionLayout baseVariables variables prior
-        formalEvidence formalSites frames.current currentSource) :
-      ∃ nextSource : Region currentTargetWires,
-        FactorRegionLayout baseVariables
-            (permutation.value.mapVars variables)
-            (.trans prior (.permute permutation variables)) formalEvidence
-            formalSites frames.next nextSource ∧
-          ∃ edit : Transform.RegionEdit
-              (ArgumentPermutation.operation sourceArguments targetArguments
-                permutation.value)
-              frames.current frames.targetHead currentSource,
-            Nonempty (RegionIso (WireEquiv.refl currentTargetWires)
-              edit.run nextSource) :=
-    match formalSites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-      unfold FactorRegionLayout at currentLayout ⊢
-      obtain ⟨currentItems, rfl, currentItemsLayout⟩ := currentLayout
-      obtain ⟨nextItems, nextItemsLayout, childEdit, ⟨childIso⟩⟩ :=
-        permuteFactorItems prior permutation childSites (frames.append locals)
-          currentItemsLayout
-      let nextSource : Region currentTargetWires := .mk locals nextItems
-      let edit : Transform.RegionEdit
-          (ArgumentPermutation.operation sourceArguments targetArguments
-            permutation.value)
-          frames.current frames.targetHead (.mk locals currentItems) :=
-        .mk childEdit
-      let presentation :=
-        (RegionIso.adjoinAt locals .nil childIso).trans
-          (RegionIso.adjoinAtOfItems locals nextItems)
-      exact ⟨nextSource, ⟨nextItems, rfl, nextItemsLayout⟩, edit,
-        ⟨by
-          simpa only [edit, nextSource, Transform.RegionEdit.run] using
-            presentation⟩⟩
-  termination_by structural formalSites
+private theorem staged_eq_target (target : ArityTarget body shape)
+    (output : target.Output) :
+    target.staged output = (target.description output).target := by
+  change Region.adjoinAt
+    (target.before ++ .rel (arguments ++ [target.added]) :: target.after)
+      .nil output.endpoint =
+    Region.adjoinAt
+      (target.before ++ .rel (arguments ++ [target.added]) :: target.after)
+      .nil output.edit.run
+  rw [output.run_eq]
 
-  private theorem permuteFactorItems
-      {baseContext baseArguments sourceArguments targetArguments common
-        formalSourceWires formalTargetWires currentSourceWires
-        currentTargetWires nextTargetWires : List Sig}
-      {baseVariables : Vars baseContext baseArguments}
-      {variables : Vars baseContext sourceArguments}
-      (prior : VarsFactor baseVariables variables)
-      (permutation : TypedPermutation sourceArguments targetArguments)
-      {pattern : OpenDiagram baseArguments}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {formalData : operation.Data formalFrame}
-      {formalSource : ItemSeq formalSourceWires} {formalResult : Region common}
-      {formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          pattern formalFrame.sourceKeep formalFrame.selected formalSource
-          formalResult}
-      (formalSites : ItemsSites operation formalData formalEvidence)
-      (frames : PermuteFrames sourceArguments targetArguments common
-        currentSourceWires currentTargetWires nextTargetWires)
-      {currentSource : ItemSeq currentSourceWires}
-      (currentLayout : FactorItemsLayout baseVariables variables prior
-        formalEvidence formalSites frames.current currentSource) :
-      ∃ nextSource : ItemSeq currentTargetWires,
-        FactorItemsLayout baseVariables
-            (permutation.value.mapVars variables)
-            (.trans prior (.permute permutation variables)) formalEvidence
-            formalSites frames.next nextSource ∧
-          ∃ edit : Transform.ItemsEdit
-              (ArgumentPermutation.operation sourceArguments targetArguments
-                permutation.value)
-              frames.current frames.targetHead currentSource,
-            Nonempty (RegionIso (WireEquiv.refl currentTargetWires)
-              edit.run (Region.ofItems nextSource)) :=
-    match formalSites with
-    | .nil _ => by
-        unfold FactorItemsLayout at currentLayout ⊢
-        subst currentSource
-        exact ⟨.nil, rfl, .nil, ⟨RegionIso.refl _⟩⟩
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites => by
-      unfold FactorItemsLayout at currentLayout ⊢
-      obtain ⟨currentItem, currentTail, rfl, currentItemLayout,
-        currentTailLayout⟩ := currentLayout
-      obtain ⟨nextItem, nextItemLayout, itemEdit, ⟨itemIso⟩⟩ :=
-        permuteFactorItem prior permutation itemSites frames currentItemLayout
-      obtain ⟨nextTail, nextTailLayout, tailEdit, ⟨tailIso⟩⟩ :=
-        permuteFactorItems prior permutation tailSites frames currentTailLayout
-      let edit : Transform.ItemsEdit
-          (ArgumentPermutation.operation sourceArguments targetArguments
-            permutation.value)
-          frames.current frames.targetHead (.cons currentItem currentTail) :=
-        .cons itemEdit tailEdit
-      let presentation := (RegionIso.conjoinCongr itemIso tailIso).trans
-        (RegionIso.ofEq
-          (Region.singleton_conjoin_ofItems nextItem nextTail))
-      exact ⟨.cons nextItem nextTail,
-        ⟨nextItem, nextTail, rfl, nextItemLayout, nextTailLayout⟩,
-        edit, ⟨by
-          simpa only [edit, Transform.ItemsEdit.run] using presentation⟩⟩
-  termination_by structural formalSites
+private noncomputable def discharge (target : ArityTarget body shape)
+    (output : target.Output)
+    (result : (Goal.preparation target.goal (target.staged output)
+      (target.authority.stagedCanonical output)
+      (target.authority.stagedExternalTwoEnded output)).Result) :
+    target.authority.request.Discharge (target.staged output) := by
+  let description := target.description output
+  exact dischargeAtAuthoritativeEdit
+    (goal := target.goal)
+    (staged := target.staged output)
+    (rawPrepared := description.target)
+    (rawPending := description.source)
+    (fun step => Step.arity step)
+    (target.authority.stagedCanonical output)
+    (target.authority.stagedExternalTwoEnded output)
+    (Goal.preparationResult result) (target.staged_eq_target output)
+    (by exact target.authority.request.pendingCanonical)
+    (by exact target.authority.request.pendingExternalTwoEnded)
+    (RegionIso.refl _) (Or.inr (.shift (.mk description)))
 
-  private theorem permuteFactorItem
-      {baseContext baseArguments sourceArguments targetArguments common
-        formalSourceWires formalTargetWires currentSourceWires
-        currentTargetWires nextTargetWires : List Sig}
-      {baseVariables : Vars baseContext baseArguments}
-      {variables : Vars baseContext sourceArguments}
-      (prior : VarsFactor baseVariables variables)
-      (permutation : TypedPermutation sourceArguments targetArguments)
-      {pattern : OpenDiagram baseArguments}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {formalData : operation.Data formalFrame}
-      {formalSource : Item formalSourceWires} {formalResult : Region common}
-      {formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          pattern formalFrame.sourceKeep formalFrame.selected formalSource
-          formalResult}
-      (formalSites : ItemSites operation formalData formalEvidence)
-      (frames : PermuteFrames sourceArguments targetArguments common
-        currentSourceWires currentTargetWires nextTargetWires)
-      {currentSource : Item currentSourceWires}
-      (currentLayout : FactorItemLayout baseVariables variables prior
-        formalEvidence formalSites frames.current currentSource) :
-      ∃ nextSource : Item currentTargetWires,
-        FactorItemLayout baseVariables
-            (permutation.value.mapVars variables)
-            (.trans prior (.permute permutation variables)) formalEvidence
-            formalSites frames.next nextSource ∧
-          ∃ edit : Transform.ItemEdit
-              (ArgumentPermutation.operation sourceArguments targetArguments
-                permutation.value)
-              frames.current frames.targetHead currentSource,
-            Nonempty (RegionIso (WireEquiv.refl currentTargetWires)
-              edit.run (Region.singleton nextSource)) :=
-    match formalSites with
-    | .atom head ports => by
-      unfold FactorItemLayout at currentLayout ⊢
-      subst currentSource
-      let nextSource := Item.atom (frames.next.sourceKeep head)
-        (ports.map fun wire => frames.next.sourceKeep wire)
-      let edit : Transform.ItemEdit
-          (ArgumentPermutation.operation sourceArguments targetArguments
-            permutation.value)
-          frames.current frames.targetHead
-          (.atom (frames.current.sourceKeep head)
-            (ports.map fun wire => frames.current.sourceKeep wire)) :=
-        .atom head ports
-      have runEq : edit.run = Region.singleton nextSource := by
-        simp only [edit, nextSource, Transform.ItemEdit.run]
-        rw [frames.keepEq]
-      exact ⟨nextSource, rfl, edit, ⟨RegionIso.ofEq runEq⟩⟩
-    | .selectedAtom application siteData => by
-      unfold FactorItemLayout at currentLayout ⊢
-      obtain ⟨siteRename, applicationEq, currentSourceEq⟩ := currentLayout
-      subst currentSource
-      let currentPorts := variables.map fun wire => siteRename wire
-      let nextPorts := (permutation.value.mapVars variables).map
-        fun wire => siteRename wire
-      let nextSource := Item.atom frames.next.selected
-        (nextPorts.map fun wire => frames.next.sourceKeep wire)
-      let edit : Transform.ItemEdit
-          (ArgumentPermutation.operation sourceArguments targetArguments
-            permutation.value)
-          frames.current frames.targetHead
-          (.atom frames.current.selected
-            (currentPorts.map fun wire => frames.current.sourceKeep wire)) :=
-        .selectedAtom currentPorts PUnit.unit
-      have portsEq : permutation.value.mapVars
-            (currentPorts.map fun wire => frames.current.targetKeep wire) =
-          nextPorts.map fun wire => frames.next.sourceKeep wire := by
-        calc
-          permutation.value.mapVars
-              (currentPorts.map fun wire => frames.current.targetKeep wire) =
-              (permutation.value.mapVars currentPorts).map
-                (fun wire => frames.current.targetKeep wire) :=
-            (permutation.map_natural currentPorts
-              frames.current.targetKeep).symm
-          _ = nextPorts.map (fun wire => frames.current.targetKeep wire) := by
-            exact congrArg
-              (fun ports => ports.map
-                (fun wire => frames.current.targetKeep wire))
-              (permutation.map_natural variables siteRename).symm
-          _ = nextPorts.map (fun wire => frames.next.sourceKeep wire) := by
-            rw [frames.keepEq]
-      have runEq : edit.run = Region.singleton nextSource := by
-        simp only [edit, nextSource, ArgumentPermutation.operation,
-          Transform.ItemEdit.run]
-        rw [frames.selectedEq, portsEq]
-      exact ⟨nextSource, ⟨siteRename, applicationEq, rfl⟩, edit,
-        ⟨RegionIso.ofEq runEq⟩⟩
-    | .identity signature arity ports => by
-      unfold FactorItemLayout at currentLayout ⊢
-      subst currentSource
-      let nextSource := Item.identity signature arity
-        (fun index => frames.next.sourceKeep (ports index))
-      let edit : Transform.ItemEdit
-          (ArgumentPermutation.operation sourceArguments targetArguments
-            permutation.value)
-          frames.current frames.targetHead
-          (.identity signature arity
-            (fun index => frames.current.sourceKeep (ports index))) :=
-        .identity signature arity ports
-      have runEq : edit.run = Region.singleton nextSource := by
-        simp only [edit, nextSource, Transform.ItemEdit.run]
-        rw [frames.keepEq]
-      exact ⟨nextSource, rfl, edit, ⟨RegionIso.ofEq runEq⟩⟩
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites => by
-      unfold FactorItemLayout at currentLayout ⊢
-      obtain ⟨currentBody, rfl, currentBodyLayout⟩ := currentLayout
-      obtain ⟨nextBody, nextBodyLayout, bodyEdit, ⟨bodyIso⟩⟩ :=
-        permuteFactorRegion prior permutation childSites frames
-          currentBodyLayout
-      let nextSource := Item.cut nextBody
-      let edit : Transform.ItemEdit
-          (ArgumentPermutation.operation sourceArguments targetArguments
-            permutation.value)
-          frames.current frames.targetHead (.cut currentBody) := .cut bodyEdit
-      exact ⟨nextSource, ⟨nextBody, rfl, nextBodyLayout⟩, edit, ⟨by
-        simpa only [edit, nextSource, Transform.ItemEdit.run] using
-          RegionIso.singletonCutCongr bodyIso⟩⟩
-  termination_by structural formalSites
-end
+end ArityTarget
 
 mutual
-  private theorem contractFactorRegion
-      {baseContext baseArguments before after common formalSourceWires
-        formalTargetWires currentSourceWires currentTargetWires
-        nextSourceWires nextTargetWires : List Sig}
-      {signature : Sig}
-      {baseVariables : Vars baseContext baseArguments}
-      (variables : Vars baseContext (before ++ signature :: after))
-      (prior : VarsFactor baseVariables
-        (Argument.Duplicate.Vars.duplicateAt before variables))
-      {pattern : OpenDiagram baseArguments}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {formalData : operation.Data formalFrame}
-      {formalSource : Region formalSourceWires} {formalResult : Region common}
-      {formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          pattern formalFrame.sourceKeep formalFrame.selected formalSource
-          formalResult}
-      (formalSites : RegionSites operation formalData formalEvidence)
-      (frames : ReverseFrames
-        (before ++ signature :: signature :: after)
-        (before ++ signature :: after) common currentSourceWires
-        currentTargetWires nextSourceWires nextTargetWires)
-      {currentSource : Region currentSourceWires}
-      (currentLayout : FactorRegionLayout baseVariables
-        (Argument.Duplicate.Vars.duplicateAt before variables) prior
-        formalEvidence formalSites frames.current currentSource) :
-      ∃ nextSource : Region nextSourceWires,
-        FactorRegionLayout baseVariables variables
-            (.trans prior (.contract before variables)) formalEvidence
-            formalSites frames.next nextSource ∧
-          ∃ edit : Transform.RegionEdit
-              (Argument.Duplicate.operation before after signature)
-              frames.edit frames.targetHead nextSource,
-            Nonempty (RegionIso (WireEquiv.refl currentSourceWires)
-              edit.run currentSource) :=
-    match formalSites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-      unfold FactorRegionLayout at currentLayout ⊢
-      obtain ⟨currentItems, rfl, currentItemsLayout⟩ := currentLayout
-      obtain ⟨nextItems, nextItemsLayout, childEdit, ⟨childIso⟩⟩ :=
-        contractFactorItems variables prior childSites (frames.append locals)
-          currentItemsLayout
-      let nextSource : Region nextSourceWires := .mk locals nextItems
-      let edit : Transform.RegionEdit
-          (Argument.Duplicate.operation before after signature)
-          frames.edit frames.targetHead nextSource := .mk childEdit
-      let presentation :=
-        (RegionIso.adjoinAt locals .nil childIso).trans
-          (RegionIso.adjoinAtOfItems locals currentItems)
-      exact ⟨nextSource, ⟨nextItems, rfl, nextItemsLayout⟩, edit, ⟨by
-        simpa only [edit, nextSource, Transform.RegionEdit.run] using
-          presentation⟩⟩
-  termination_by structural formalSites
+  /-- The sole outer-boundary plan normalizes one exact arbitrary pattern to
+  its generated identity-boundary evidence before entering the structural
+  compiler. -/
+  inductive BoundaryPlan :
+      {arguments : List Sig} → OpenDiagram arguments → Goal → Type 1
+    | normalize
+        {arguments : List Sig} {pattern : OpenDiagram arguments}
+        (target : NormalizationTarget pattern)
+        (child : NormalizedPlan target target.normalizedEvidence) :
+        BoundaryPlan pattern target.goal
 
-  private theorem contractFactorItems
-      {baseContext baseArguments before after common formalSourceWires
-        formalTargetWires currentSourceWires currentTargetWires
-        nextSourceWires nextTargetWires : List Sig}
-      {signature : Sig}
-      {baseVariables : Vars baseContext baseArguments}
-      (variables : Vars baseContext (before ++ signature :: after))
-      (prior : VarsFactor baseVariables
-        (Argument.Duplicate.Vars.duplicateAt before variables))
-      {pattern : OpenDiagram baseArguments}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {formalData : operation.Data formalFrame}
-      {formalSource : ItemSeq formalSourceWires}
-      {formalResult : Region common}
-      {formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          pattern formalFrame.sourceKeep formalFrame.selected formalSource
-          formalResult}
-      (formalSites : ItemsSites operation formalData formalEvidence)
-      (frames : ReverseFrames
-        (before ++ signature :: signature :: after)
-        (before ++ signature :: after) common currentSourceWires
-        currentTargetWires nextSourceWires nextTargetWires)
-      {currentSource : ItemSeq currentSourceWires}
-      (currentLayout : FactorItemsLayout baseVariables
-        (Argument.Duplicate.Vars.duplicateAt before variables) prior
-        formalEvidence formalSites frames.current currentSource) :
-      ∃ nextSource : ItemSeq nextSourceWires,
-        FactorItemsLayout baseVariables variables
-            (.trans prior (.contract before variables)) formalEvidence
-            formalSites frames.next nextSource ∧
-          ∃ edit : Transform.ItemsEdit
-              (Argument.Duplicate.operation before after signature)
-              frames.edit frames.targetHead nextSource,
-            Nonempty (RegionIso (WireEquiv.refl currentSourceWires)
-              edit.run (Region.ofItems currentSource)) :=
-    match formalSites with
-    | .nil _ => by
-      unfold FactorItemsLayout at currentLayout ⊢
-      subst currentSource
-      exact ⟨.nil, rfl, .nil, ⟨RegionIso.refl _⟩⟩
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites => by
-      unfold FactorItemsLayout at currentLayout ⊢
-      obtain ⟨currentItem, currentTail, rfl, currentItemLayout,
-        currentTailLayout⟩ := currentLayout
-      obtain ⟨nextItem, nextItemLayout, itemEdit, ⟨itemIso⟩⟩ :=
-        contractFactorItem variables prior itemSites frames currentItemLayout
-      obtain ⟨nextTail, nextTailLayout, tailEdit, ⟨tailIso⟩⟩ :=
-        contractFactorItems variables prior tailSites frames currentTailLayout
-      let edit : Transform.ItemsEdit
-          (Argument.Duplicate.operation before after signature)
-          frames.edit frames.targetHead (.cons nextItem nextTail) :=
-        .cons itemEdit tailEdit
-      let presentation := (RegionIso.conjoinCongr itemIso tailIso).trans
-        (RegionIso.ofEq
-          (Region.singleton_conjoin_ofItems currentItem currentTail))
-      exact ⟨.cons nextItem nextTail,
-        ⟨nextItem, nextTail, rfl, nextItemLayout, nextTailLayout⟩,
-        edit, ⟨by
-          simpa only [edit, Transform.ItemsEdit.run] using presentation⟩⟩
-  termination_by structural formalSites
-
-  private theorem contractFactorItem
-      {baseContext baseArguments before after common formalSourceWires
-        formalTargetWires currentSourceWires currentTargetWires
-        nextSourceWires nextTargetWires : List Sig}
-      {signature : Sig}
-      {baseVariables : Vars baseContext baseArguments}
-      (variables : Vars baseContext (before ++ signature :: after))
-      (prior : VarsFactor baseVariables
-        (Argument.Duplicate.Vars.duplicateAt before variables))
-      {pattern : OpenDiagram baseArguments}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {formalData : operation.Data formalFrame}
-      {formalSource : Item formalSourceWires} {formalResult : Region common}
-      {formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          pattern formalFrame.sourceKeep formalFrame.selected formalSource
-          formalResult}
-      (formalSites : ItemSites operation formalData formalEvidence)
-      (frames : ReverseFrames
-        (before ++ signature :: signature :: after)
-        (before ++ signature :: after) common currentSourceWires
-        currentTargetWires nextSourceWires nextTargetWires)
-      {currentSource : Item currentSourceWires}
-      (currentLayout : FactorItemLayout baseVariables
-        (Argument.Duplicate.Vars.duplicateAt before variables) prior
-        formalEvidence formalSites frames.current currentSource) :
-      ∃ nextSource : Item nextSourceWires,
-        FactorItemLayout baseVariables variables
-            (.trans prior (.contract before variables)) formalEvidence
-            formalSites frames.next nextSource ∧
-          ∃ edit : Transform.ItemEdit
-              (Argument.Duplicate.operation before after signature)
-              frames.edit frames.targetHead nextSource,
-            Nonempty (RegionIso (WireEquiv.refl currentSourceWires)
-              edit.run (Region.singleton currentSource)) :=
-    match formalSites with
-    | .atom head ports => by
-      unfold FactorItemLayout at currentLayout ⊢
-      subst currentSource
-      let nextSource := Item.atom (frames.edit.sourceKeep head)
-        (ports.map fun wire => frames.edit.sourceKeep wire)
-      let edit : Transform.ItemEdit
-          (Argument.Duplicate.operation before after signature)
-          frames.edit frames.targetHead nextSource := .atom head ports
-      have runEq : edit.run = Region.singleton
-          (.atom (frames.current.sourceKeep head)
-            (ports.map fun wire => frames.current.sourceKeep wire)) := by
-        simp only [edit, nextSource, Transform.ItemEdit.run]
-        rw [frames.editTargetKeepEq]
-      exact ⟨nextSource, by
-        simp only [nextSource, frames.editSourceKeepEq], edit,
-          ⟨RegionIso.ofEq runEq⟩⟩
-    | .selectedAtom application siteData => by
-      unfold FactorItemLayout at currentLayout ⊢
-      obtain ⟨siteRename, applicationEq, currentSourceEq⟩ := currentLayout
-      subst currentSource
-      let nextPorts := variables.map fun wire => siteRename wire
-      let currentPorts :=
-        (Argument.Duplicate.Vars.duplicateAt before variables).map
-          fun wire => siteRename wire
-      let nextSource := Item.atom frames.edit.selected
-        (nextPorts.map fun wire => frames.edit.sourceKeep wire)
-      let edit : Transform.ItemEdit
-          (Argument.Duplicate.operation before after signature)
-          frames.edit frames.targetHead
-          nextSource := .selectedAtom nextPorts PUnit.unit
-      have portsEq : Argument.Duplicate.Vars.duplicateAt before
-            (nextPorts.map fun wire => frames.edit.targetKeep wire) =
-          currentPorts.map fun wire => frames.current.sourceKeep wire := by
-        calc
-          Argument.Duplicate.Vars.duplicateAt before
-              (nextPorts.map fun wire => frames.edit.targetKeep wire) =
-              (Argument.Duplicate.Vars.duplicateAt before nextPorts).map
-                (fun wire => frames.edit.targetKeep wire) :=
-            (duplicateAt_map before nextPorts frames.edit.targetKeep).symm
-          _ = currentPorts.map
-                (fun wire => frames.edit.targetKeep wire) := by
-            exact congrArg
-              (fun ports => ports.map
-                (fun wire => frames.edit.targetKeep wire))
-              (duplicateAt_map before variables siteRename).symm
-          _ = currentPorts.map
-                (fun wire => frames.current.sourceKeep wire) := by
-            rw [frames.editTargetKeepEq]
-      have runEq : edit.run = Region.singleton
-          (.atom frames.current.selected
-            (currentPorts.map fun wire => frames.current.sourceKeep wire)) := by
-        simp only [edit, nextSource, Argument.Duplicate.operation,
-          Transform.ItemEdit.run]
-        rw [frames.targetHeadEq, portsEq]
-      exact ⟨nextSource, ⟨siteRename, applicationEq, by
-        simp only [nextSource, nextPorts, frames.editSourceKeepEq,
-          frames.editSelectedEq]⟩, edit,
-        ⟨RegionIso.ofEq runEq⟩⟩
-    | .identity signature arity ports => by
-      unfold FactorItemLayout at currentLayout ⊢
-      subst currentSource
-      let nextSource := Item.identity signature arity
-        (fun index => frames.edit.sourceKeep (ports index))
-      let edit : Transform.ItemEdit
-          (Argument.Duplicate.operation before after _)
-          frames.edit frames.targetHead nextSource :=
-        .identity signature arity ports
-      have runEq : edit.run = Region.singleton
-          (.identity signature arity
-            (fun index => frames.current.sourceKeep (ports index))) := by
-        simp only [edit, Transform.ItemEdit.run]
-        rw [frames.editTargetKeepEq]
-      exact ⟨nextSource, by
-        simp only [nextSource, frames.editSourceKeepEq], edit,
-          ⟨RegionIso.ofEq runEq⟩⟩
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites => by
-      unfold FactorItemLayout at currentLayout ⊢
-      obtain ⟨currentBody, rfl, currentBodyLayout⟩ := currentLayout
-      obtain ⟨nextBody, nextBodyLayout, bodyEdit, ⟨bodyIso⟩⟩ :=
-        contractFactorRegion variables prior childSites frames
-          currentBodyLayout
-      let nextSource := Item.cut nextBody
-      let edit : Transform.ItemEdit
-          (Argument.Duplicate.operation before after signature)
-          frames.edit frames.targetHead nextSource := .cut bodyEdit
-      exact ⟨nextSource, ⟨nextBody, rfl, nextBodyLayout⟩, edit, ⟨by
-        simpa only [edit, nextSource, Transform.ItemEdit.run] using
-          RegionIso.singletonCutCongr bodyIso⟩⟩
-  termination_by structural formalSites
-end
-
-mutual
-  private theorem extendFactorRegion
-      {baseContext baseArguments before after common formalSourceWires
-        formalTargetWires currentSourceWires currentTargetWires
-        nextSourceWires nextTargetWires : List Sig}
-      {signature : Sig}
-      {baseVariables : Vars baseContext baseArguments}
-      (inserted : Var baseContext signature)
-      (variables : Vars baseContext (before ++ after))
-      (prior : VarsFactor baseVariables variables)
-      {pattern : OpenDiagram baseArguments}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {formalData : operation.Data formalFrame}
-      {formalSource : Region formalSourceWires} {formalResult : Region common}
-      {formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          pattern formalFrame.sourceKeep formalFrame.selected formalSource
-          formalResult}
-      (formalSites : RegionSites operation formalData formalEvidence)
-      (frames : ReverseFrames (before ++ after)
-        (before ++ signature :: after) common currentSourceWires
-        currentTargetWires nextSourceWires nextTargetWires)
-      {currentSource : Region currentSourceWires}
-      (currentLayout : FactorRegionLayout baseVariables variables prior
-        formalEvidence formalSites frames.current currentSource) :
-      ∃ nextSource : Region nextSourceWires,
-        FactorRegionLayout baseVariables
-            (Argument.Projection.Vars.insertAt before inserted variables)
-            (.trans prior (.extend before inserted variables)) formalEvidence
-            formalSites frames.next nextSource ∧
-          ∃ edit : Transform.RegionEdit
-              (Argument.Projection.operation before after signature)
-              frames.edit frames.targetHead nextSource,
-            Nonempty (RegionIso (WireEquiv.refl currentSourceWires)
-              edit.run currentSource) :=
-    match formalSites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-      unfold FactorRegionLayout at currentLayout ⊢
-      obtain ⟨currentItems, rfl, currentItemsLayout⟩ := currentLayout
-      obtain ⟨nextItems, nextItemsLayout, childEdit, ⟨childIso⟩⟩ :=
-        extendFactorItems inserted variables prior childSites
-          (frames.append locals) currentItemsLayout
-      let nextSource : Region nextSourceWires := .mk locals nextItems
-      let edit : Transform.RegionEdit
-          (Argument.Projection.operation before after signature)
-          frames.edit frames.targetHead nextSource := .mk childEdit
-      let presentation :=
-        (RegionIso.adjoinAt locals .nil childIso).trans
-          (RegionIso.adjoinAtOfItems locals currentItems)
-      exact ⟨nextSource, ⟨nextItems, rfl, nextItemsLayout⟩, edit, ⟨by
-        simpa only [edit, nextSource, Transform.RegionEdit.run] using
-          presentation⟩⟩
-  termination_by structural formalSites
-
-  private theorem extendFactorItems
-      {baseContext baseArguments before after common formalSourceWires
-        formalTargetWires currentSourceWires currentTargetWires
-        nextSourceWires nextTargetWires : List Sig}
-      {signature : Sig}
-      {baseVariables : Vars baseContext baseArguments}
-      (inserted : Var baseContext signature)
-      (variables : Vars baseContext (before ++ after))
-      (prior : VarsFactor baseVariables variables)
-      {pattern : OpenDiagram baseArguments}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {formalData : operation.Data formalFrame}
-      {formalSource : ItemSeq formalSourceWires}
-      {formalResult : Region common}
-      {formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          pattern formalFrame.sourceKeep formalFrame.selected formalSource
-          formalResult}
-      (formalSites : ItemsSites operation formalData formalEvidence)
-      (frames : ReverseFrames (before ++ after)
-        (before ++ signature :: after) common currentSourceWires
-        currentTargetWires nextSourceWires nextTargetWires)
-      {currentSource : ItemSeq currentSourceWires}
-      (currentLayout : FactorItemsLayout baseVariables variables prior
-        formalEvidence formalSites frames.current currentSource) :
-      ∃ nextSource : ItemSeq nextSourceWires,
-        FactorItemsLayout baseVariables
-            (Argument.Projection.Vars.insertAt before inserted variables)
-            (.trans prior (.extend before inserted variables)) formalEvidence
-            formalSites frames.next nextSource ∧
-          ∃ edit : Transform.ItemsEdit
-              (Argument.Projection.operation before after signature)
-              frames.edit frames.targetHead nextSource,
-            Nonempty (RegionIso (WireEquiv.refl currentSourceWires)
-              edit.run (Region.ofItems currentSource)) :=
-    match formalSites with
-    | .nil _ => by
-      unfold FactorItemsLayout at currentLayout ⊢
-      subst currentSource
-      exact ⟨.nil, rfl, .nil, ⟨RegionIso.refl _⟩⟩
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites => by
-      unfold FactorItemsLayout at currentLayout ⊢
-      obtain ⟨currentItem, currentTail, rfl, currentItemLayout,
-        currentTailLayout⟩ := currentLayout
-      obtain ⟨nextItem, nextItemLayout, itemEdit, ⟨itemIso⟩⟩ :=
-        extendFactorItem inserted variables prior itemSites frames
-          currentItemLayout
-      obtain ⟨nextTail, nextTailLayout, tailEdit, ⟨tailIso⟩⟩ :=
-        extendFactorItems inserted variables prior tailSites frames
-          currentTailLayout
-      let edit : Transform.ItemsEdit
-          (Argument.Projection.operation before after signature)
-          frames.edit frames.targetHead (.cons nextItem nextTail) :=
-        .cons itemEdit tailEdit
-      let presentation := (RegionIso.conjoinCongr itemIso tailIso).trans
-        (RegionIso.ofEq
-          (Region.singleton_conjoin_ofItems currentItem currentTail))
-      exact ⟨.cons nextItem nextTail,
-        ⟨nextItem, nextTail, rfl, nextItemLayout, nextTailLayout⟩,
-        edit, ⟨by
-          simpa only [edit, Transform.ItemsEdit.run] using presentation⟩⟩
-  termination_by structural formalSites
-
-  private theorem extendFactorItem
-      {baseContext baseArguments before after common formalSourceWires
-        formalTargetWires currentSourceWires currentTargetWires
-        nextSourceWires nextTargetWires : List Sig}
-      {signature : Sig}
-      {baseVariables : Vars baseContext baseArguments}
-      (inserted : Var baseContext signature)
-      (variables : Vars baseContext (before ++ after))
-      (prior : VarsFactor baseVariables variables)
-      {pattern : OpenDiagram baseArguments}
-      {formalFrame : Transform.Frame baseArguments common formalSourceWires
-        formalTargetWires}
-      {operation : Transform.Operation baseArguments}
-      {formalData : operation.Data formalFrame}
-      {formalSource : Item formalSourceWires} {formalResult : Region common}
-      {formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          pattern formalFrame.sourceKeep formalFrame.selected formalSource
-          formalResult}
-      (formalSites : ItemSites operation formalData formalEvidence)
-      (frames : ReverseFrames (before ++ after)
-        (before ++ signature :: after) common currentSourceWires
-        currentTargetWires nextSourceWires nextTargetWires)
-      {currentSource : Item currentSourceWires}
-      (currentLayout : FactorItemLayout baseVariables variables prior
-        formalEvidence formalSites frames.current currentSource) :
-      ∃ nextSource : Item nextSourceWires,
-        FactorItemLayout baseVariables
-            (Argument.Projection.Vars.insertAt before inserted variables)
-            (.trans prior (.extend before inserted variables)) formalEvidence
-            formalSites frames.next nextSource ∧
-          ∃ edit : Transform.ItemEdit
-              (Argument.Projection.operation before after signature)
-              frames.edit frames.targetHead nextSource,
-            Nonempty (RegionIso (WireEquiv.refl currentSourceWires)
-              edit.run (Region.singleton currentSource)) :=
-    match formalSites with
-    | .atom head ports => by
-      unfold FactorItemLayout at currentLayout ⊢
-      subst currentSource
-      let nextSource := Item.atom (frames.edit.sourceKeep head)
-        (ports.map fun wire => frames.edit.sourceKeep wire)
-      let edit : Transform.ItemEdit
-          (Argument.Projection.operation before after signature)
-          frames.edit frames.targetHead nextSource := .atom head ports
-      have runEq : edit.run = Region.singleton
-          (.atom (frames.current.sourceKeep head)
-            (ports.map fun wire => frames.current.sourceKeep wire)) := by
-        simp only [edit, nextSource, Transform.ItemEdit.run]
-        rw [frames.editTargetKeepEq]
-      exact ⟨nextSource, by
-        simp only [nextSource, frames.editSourceKeepEq], edit,
-          ⟨RegionIso.ofEq runEq⟩⟩
-    | .selectedAtom application siteData => by
-      unfold FactorItemLayout at currentLayout ⊢
-      obtain ⟨siteRename, applicationEq, currentSourceEq⟩ := currentLayout
-      subst currentSource
-      let currentPorts := variables.map fun wire => siteRename wire
-      let nextPorts :=
-        (Argument.Projection.Vars.insertAt before inserted variables).map
-          fun wire => siteRename wire
-      let nextSource := Item.atom frames.edit.selected
-        (nextPorts.map fun wire => frames.edit.sourceKeep wire)
-      let edit : Transform.ItemEdit
-          (Argument.Projection.operation before after signature)
-          frames.edit frames.targetHead nextSource :=
-        .selectedAtom nextPorts PUnit.unit
-      have portsEq : Argument.Projection.Vars.dropAt before
-            (nextPorts.map fun wire => frames.edit.targetKeep wire) =
-          currentPorts.map fun wire => frames.current.sourceKeep wire := by
-        calc
-          Argument.Projection.Vars.dropAt before
-              (nextPorts.map fun wire => frames.edit.targetKeep wire) =
-              Argument.Projection.Vars.dropAt before
-                ((Argument.Projection.Vars.insertAt before
-                    (siteRename inserted) currentPorts).map
-                  fun wire => frames.edit.targetKeep wire) := by
-            rw [show nextPorts = Argument.Projection.Vars.insertAt before
-                (siteRename inserted) currentPorts by
-              exact Argument.Projection.Vars.insertAt_map before inserted
-                variables siteRename]
-          _ = (Argument.Projection.Vars.dropAt before
-                (Argument.Projection.Vars.insertAt before
-                  (siteRename inserted) currentPorts)).map
-                (fun wire => frames.edit.targetKeep wire) := by
-            exact (dropAt_map before
-              (Argument.Projection.Vars.insertAt before
-                (siteRename inserted) currentPorts)
-              frames.edit.targetKeep).symm
-          _ = currentPorts.map
-                (fun wire => frames.edit.targetKeep wire) := by
-            rw [dropAt_insertAt]
-          _ = currentPorts.map
-                (fun wire => frames.current.sourceKeep wire) := by
-            rw [frames.editTargetKeepEq]
-      have runEq : edit.run = Region.singleton
-          (.atom frames.current.selected
-            (currentPorts.map fun wire => frames.current.sourceKeep wire)) := by
-        simp only [edit, nextSource, Argument.Projection.operation,
-          Transform.ItemEdit.run]
-        rw [frames.targetHeadEq, portsEq]
-      exact ⟨nextSource, ⟨siteRename, applicationEq, by
-        simp only [nextSource, nextPorts, frames.editSourceKeepEq,
-          frames.editSelectedEq]⟩, edit, ⟨RegionIso.ofEq runEq⟩⟩
-    | .identity signature arity ports => by
-      unfold FactorItemLayout at currentLayout ⊢
-      subst currentSource
-      let nextSource := Item.identity signature arity
-        (fun index => frames.edit.sourceKeep (ports index))
-      let edit : Transform.ItemEdit
-          (Argument.Projection.operation before after _)
-          frames.edit frames.targetHead nextSource :=
-        .identity signature arity ports
-      have runEq : edit.run = Region.singleton
-          (.identity signature arity
-            (fun index => frames.current.sourceKeep (ports index))) := by
-        simp only [edit, Transform.ItemEdit.run]
-        rw [frames.editTargetKeepEq]
-      exact ⟨nextSource, by
-        simp only [nextSource, frames.editSourceKeepEq], edit,
-          ⟨RegionIso.ofEq runEq⟩⟩
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites => by
-      unfold FactorItemLayout at currentLayout ⊢
-      obtain ⟨currentBody, rfl, currentBodyLayout⟩ := currentLayout
-      obtain ⟨nextBody, nextBodyLayout, bodyEdit, ⟨bodyIso⟩⟩ :=
-        extendFactorRegion inserted variables prior childSites frames
-          currentBodyLayout
-      let nextSource := Item.cut nextBody
-      let edit : Transform.ItemEdit
-          (Argument.Projection.operation before after signature)
-          frames.edit frames.targetHead nextSource := .cut bodyEdit
-      exact ⟨nextSource, ⟨nextBody, rfl, nextBodyLayout⟩, edit, ⟨by
-        simpa only [edit, nextSource, Transform.ItemEdit.run] using
-          RegionIso.singletonCutCongr bodyIso⟩⟩
-  termination_by structural formalSites
-end
-
-/-! Owning source bridge: the factor fold computes the final literal
-binder-home source.  Its endpoint is not supplied by a caller and is not the
-source of the original Instantiation evidence. -/
-private theorem varsFactorSourceBridge
-    {outer localBefore localAfter baseContext baseArguments sourceArguments
-      targetArguments : List Sig}
-    {baseVariables : Vars baseContext baseArguments}
-    {sourceVariables : Vars baseContext sourceArguments}
-    {targetVariables : Vars baseContext targetArguments}
-    (prior : VarsFactor baseVariables sourceVariables)
-    (factor : VarsFactor sourceVariables targetVariables)
-    {pattern : OpenDiagram baseArguments}
-    {formalSource : ItemSeq
-      (outer ++ (localBefore ++ .rel baseArguments :: localAfter))}
-    {result : Region (outer ++ (localBefore ++ localAfter))}
-    {operation : Transform.Operation baseArguments}
-    {data : operation.Data
-      (factorSourceFrame outer localBefore localAfter baseArguments)}
-    (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
-        (factorSourceFrame outer localBefore localAfter
-          baseArguments).sourceKeep
-        (factorSourceFrame outer localBefore localAfter
-          baseArguments).selected formalSource result)
-    (sites : ItemsSites operation data evidence)
-    {source : ItemSeq
-      (outer ++ (localBefore ++ .rel sourceArguments :: localAfter))}
-    (layout : FactorItemsLayout baseVariables sourceVariables prior evidence
-      sites (factorSourceFrame outer localBefore localAfter sourceArguments)
-      source) :
-    ∃ targetSource : ItemSeq
-        (outer ++ (localBefore ++ .rel targetArguments :: localAfter)),
-      FactorItemsLayout baseVariables targetVariables (.trans prior factor)
-          evidence sites
-          (factorSourceFrame outer localBefore localAfter targetArguments)
-          targetSource ∧
-        FactorItemsBridge outer localBefore localAfter factor source
-          targetSource := by
-  induction factor generalizing baseArguments pattern formalSource result
-      operation data with
-  | refl variables =>
-      exact ⟨source,
-        factorItemsLayout_factor prior (.trans prior (.refl variables)) sites
-          layout,
-        .refl variables source⟩
-  | @permute sourceArguments targetArguments permutation variables =>
-      let primitiveFrame := ArgumentPermutation.rootFrame outer localBefore
-        localAfter sourceArguments targetArguments
-      let nextFrame := factorSourceFrame outer localBefore localAfter
-        targetArguments
-      let targetHead := ArgumentPermutation.targetHead outer localBefore
-        localAfter targetArguments
-      have initialLayout : FactorItemsLayout baseVariables variables prior
-          evidence sites primitiveFrame source := by
-        exact factorItemsLayout_sourceFace sites
-          (factorSourceFrame outer localBefore localAfter sourceArguments)
-          primitiveFrame rfl rfl layout
-      let frames : PermuteFrames _ _ _ _ _ _ := {
-        current := primitiveFrame
-        next := nextFrame
-        targetHead := targetHead
-        keepEq := rfl
-        selectedEq := rfl
-      }
-      obtain ⟨targetSource, targetLayout, edit, ⟨editIso⟩⟩ :=
-        permuteFactorItems prior permutation sites frames initialLayout
-      let description : ArgumentPermutation.Permutes.Description outer := {
-        sourceArguments := sourceArguments
-        targetArguments := targetArguments
-        before := localBefore
-        after := localAfter
-        permutation := permutation.value
-        items := source
-        itemsEdit := edit
-      }
-      let step : ArgumentPermutation.Permutes
-          (factorBinderRegion outer localBefore localAfter source)
-          description.target := .mk description
-      let presentation :=
-        (RegionIso.adjoinAt
-          (localBefore ++ .rel targetArguments :: localAfter) .nil
-          editIso).trans
-          (RegionIso.adjoinAtOfItems
-            (localBefore ++ .rel targetArguments :: localAfter) targetSource)
-      exact ⟨targetSource, targetLayout,
-        .permute permutation variables source targetSource description.target
-          step ⟨presentation⟩⟩
-  | @contract signature after before variables =>
-      let currentFrame := factorSourceFrame outer localBefore localAfter
-        (before ++ signature :: signature :: after)
-      let nextFrame := factorSourceFrame outer localBefore localAfter
-        (before ++ signature :: after)
-      let editFrame := Argument.Duplicate.rootFrame outer localBefore
-        localAfter before after signature
-      let targetHead := Argument.Duplicate.targetHead outer localBefore
-        localAfter before after signature
-      let frames : ReverseFrames _ _ _ _ _ _ _ := {
-        current := currentFrame
-        next := nextFrame
-        edit := editFrame
-        targetHead := targetHead
-        editSourceKeepEq := rfl
-        editSelectedEq := rfl
-        editTargetKeepEq := rfl
-        targetHeadEq := rfl
-      }
-      obtain ⟨targetSource, targetLayout, edit, ⟨editIso⟩⟩ :=
-        contractFactorItems variables prior sites frames (by
-          exact factorItemsLayout_sourceFace sites
-            (factorSourceFrame outer localBefore localAfter
-              (before ++ signature :: signature :: after))
-            currentFrame rfl rfl layout)
-      let description : Argument.Duplicate.Duplicates.Description outer := {
-        before := before
-        after := after
-        localBefore := localBefore
-        localAfter := localAfter
-        signature := signature
-        items := targetSource
-        itemsEdit := edit
-      }
-      let step : Argument.Duplicate.Duplicates
-          (factorBinderRegion outer localBefore localAfter targetSource)
-          description.target := .mk description
-      let presentation :=
-        (RegionIso.adjoinAt
-          (localBefore ++
-            .rel (before ++ signature :: signature :: after) :: localAfter) .nil
-          editIso).trans
-          (RegionIso.adjoinAtOfItems
-            (localBefore ++
-              .rel (before ++ signature :: signature :: after) :: localAfter)
-            source)
-      exact ⟨targetSource, targetLayout,
-        .contract variables source targetSource description.target step
-          ⟨presentation⟩⟩
-  | @extend signature after before inserted variables =>
-      let currentFrame := factorSourceFrame outer localBefore localAfter
-        (before ++ after)
-      let nextFrame := factorSourceFrame outer localBefore localAfter
-        (before ++ signature :: after)
-      let editFrame := Argument.Projection.rootFrame outer localBefore
-        localAfter before after signature
-      let targetHead := Argument.Projection.targetHead outer localBefore
-        localAfter before after
-      let frames : ReverseFrames _ _ _ _ _ _ _ := {
-        current := currentFrame
-        next := nextFrame
-        edit := editFrame
-        targetHead := targetHead
-        editSourceKeepEq := rfl
-        editSelectedEq := rfl
-        editTargetKeepEq := rfl
-        targetHeadEq := rfl
-      }
-      obtain ⟨targetSource, targetLayout, edit, ⟨editIso⟩⟩ :=
-        extendFactorItems inserted variables prior sites frames (by
-          exact factorItemsLayout_sourceFace sites
-            (factorSourceFrame outer localBefore localAfter (before ++ after))
-            currentFrame rfl rfl layout)
-      let description : Argument.Projection.Drops.Description outer := {
-        before := before
-        after := after
-        localBefore := localBefore
-        localAfter := localAfter
-        signature := signature
-        items := targetSource
-        itemsEdit := edit
-      }
-      let step : Argument.Projection.Drops
-          (factorBinderRegion outer localBefore localAfter targetSource)
-          description.target := .mk description
-      let presentation :=
-        (RegionIso.adjoinAt
-          (localBefore ++ .rel (before ++ after) :: localAfter) .nil
-          editIso).trans
-          (RegionIso.adjoinAtOfItems
-            (localBefore ++ .rel (before ++ after) :: localAfter) source)
-      exact ⟨targetSource, targetLayout,
-        .extend inserted variables source targetSource description.target step
-          ⟨presentation⟩⟩
-  | trans first second firstIH secondIH =>
-      obtain ⟨middleSource, middleLayout, firstBridge⟩ :=
-        firstIH prior evidence sites layout
-      obtain ⟨targetSource, targetLayout, secondBridge⟩ :=
-        secondIH (.trans prior first) evidence sites middleLayout
-      refine ⟨targetSource,
-        factorItemsLayout_factor
-          (VarsFactor.trans (VarsFactor.trans prior first) second)
-          (VarsFactor.trans prior (VarsFactor.trans first second)) sites
-            targetLayout,
-        .trans first second source middleSource targetSource firstBridge
-          secondBridge⟩
-
-private def FormalRegion
-    {patternWires atomArguments common sourceWires targetWires
-      originalSourceWires originalTargetWires : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    {originalFrame : Transform.Frame patternWires common
-      originalSourceWires originalTargetWires}
-    {operation : Transform.Operation patternWires}
-    {data : operation.Data originalFrame}
-    {source : Region originalSourceWires} {result : Region common}
-    (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-        shape.pattern originalFrame.sourceKeep originalFrame.selected
-        source result)
-    (sites : RegionSites operation data evidence)
-    (formalFrame : Transform.Frame (atomSupportWires atomArguments) common
-      sourceWires targetWires) : Prop :=
-  ∃ formalSource : Region sourceWires,
-    ∃ formalResult : Region common,
-      ∃ formalEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-            (atomFormalShape atomArguments).pattern formalFrame.sourceKeep
-            formalFrame.selected formalSource formalResult,
-        ∃ formalSites : RegionSites (Leaf.Formal.operation [] atomArguments)
-            PUnit.unit formalEvidence,
-          Nonempty (RegionIso (WireEquiv.refl common)
-            (EqualityNormalization.EvidenceFold.regionAt
-              (atomSelectedLeaf shape) evidence sites WireRenaming.id)
-            formalResult) ∧
-          FactorRegionLayout (atomSelection head ports)
-            (atomSelection head ports) (.refl (atomSelection head ports))
-            formalEvidence formalSites formalFrame formalSource
-
-private def FormalItems
-    {patternWires atomArguments common sourceWires targetWires
-      originalSourceWires originalTargetWires : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    {originalFrame : Transform.Frame patternWires common
-      originalSourceWires originalTargetWires}
-    {operation : Transform.Operation patternWires}
-    {data : operation.Data originalFrame}
-    {source : ItemSeq originalSourceWires} {result : Region common}
-    (evidence :
+  /-- The normalized child is indexed by the compiler-generated exact
+  `ItemsResult` as well as its generated goal and identity-boundary syntax. -/
+  inductive NormalizedPlan :
+      {arguments : List Sig} → {pattern : OpenDiagram arguments} →
+      (target : NormalizationTarget pattern) →
       _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        shape.pattern originalFrame.sourceKeep originalFrame.selected
-        source result)
-    (sites : ItemsSites operation data evidence)
-    (formalFrame : Transform.Frame (atomSupportWires atomArguments) common
-      sourceWires targetWires) : Prop :=
-  ∃ retained : List Sig,
-    ∃ formalSource : ItemSeq (sourceWires ++ retained),
-      ∃ formalResult : Region (common ++ retained),
-        ∃ formalEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-              (atomFormalShape atomArguments).pattern
-              (formalFrame.append retained).sourceKeep
-              (formalFrame.append retained).selected formalSource formalResult,
-          ∃ formalSites : ItemsSites (Leaf.Formal.operation [] atomArguments)
-              PUnit.unit formalEvidence,
-            Nonempty (RegionIso (WireEquiv.refl common)
-              (EqualityNormalization.EvidenceFold.itemsAt
-                (atomSelectedLeaf shape) evidence sites WireRenaming.id)
-              (Region.adjoinAt retained .nil formalResult)) ∧
-            FactorItemsLayout (atomSelection head ports)
-              (atomSelection head ports) (.refl (atomSelection head ports))
-              formalEvidence formalSites (formalFrame.append retained)
-              formalSource
+        (EqualityNormalization.identityBoundary pattern)
+        (normalizationFrame target.outer target.before target.after
+          arguments).sourceKeep
+        (normalizationFrame target.outer target.before target.after
+          arguments).selected target.source target.normalized → Type 1
+    | mk
+        {arguments : List Sig} {pattern : OpenDiagram arguments}
+        {target : NormalizationTarget pattern}
+        (structural : RegionPlan
+          (EqualityNormalization.identityBoundary pattern).body
+          target.normalizedGoal) :
+        NormalizedPlan target target.normalizedEvidence
 
-private def FormalItem
-    {patternWires atomArguments common sourceWires targetWires
-      originalSourceWires originalTargetWires : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    {originalFrame : Transform.Frame patternWires common
-      originalSourceWires originalTargetWires}
-    {operation : Transform.Operation patternWires}
-    {data : operation.Data originalFrame}
-    {source : Item originalSourceWires} {result : Region common}
-    (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-        shape.pattern originalFrame.sourceKeep originalFrame.selected
-        source result)
-    (sites : ItemSites operation data evidence)
-    (formalFrame : Transform.Frame (atomSupportWires atomArguments) common
-      sourceWires targetWires) : Prop :=
-  ∃ retained : List Sig,
-    ∃ formalSource : ItemSeq (sourceWires ++ retained),
-      ∃ formalResult : Region (common ++ retained),
-        ∃ formalEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-              (atomFormalShape atomArguments).pattern
-              (formalFrame.append retained).sourceKeep
-              (formalFrame.append retained).selected formalSource formalResult,
-          ∃ formalSites : ItemsSites (Leaf.Formal.operation [] atomArguments)
-              PUnit.unit formalEvidence,
-            Nonempty (RegionIso (WireEquiv.refl common)
-              (EqualityNormalization.EvidenceFold.itemAt
-                (atomSelectedLeaf shape) evidence sites WireRenaming.id)
-              (Region.adjoinAt retained .nil formalResult)) ∧
-            FactorItemsLayout (atomSelection head ports)
-              (atomSelection head ports) (.refl (atomSelection head ports))
-              formalEvidence formalSites (formalFrame.append retained)
-              formalSource
+  /-- Type-valued structural compiler evidence indexed by one exact existing
+  region. Identity-boundary normalization is owned only by `BoundaryPlan`. -/
+  inductive RegionPlan :
+      {wires : List Sig} → Region wires → Goal → Type 1
+    | mk
+        {outer locals : List Sig}
+        {items : ItemSeq (outer ++ locals)}
+        {goal : Goal}
+        (arity : ArityPlan (.mk locals items) goal) :
+        RegionPlan (.mk locals items) goal
 
-/-- Selected atoms are the only item branch that contributes retained locals
-at the current region level.  Its literal witness is the generated Formal
-prefix, and its endpoint is still the selected EvidenceFold leaf. -/
-private theorem formalSelectedItem
-    {patternWires atomArguments common sourceWires targetWires
-      originalSourceWires originalTargetWires : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    {originalFrame : Transform.Frame patternWires common
-      originalSourceWires originalTargetWires}
-    {operation : Transform.Operation patternWires}
-    {data : operation.Data originalFrame}
-    (application : Vars common patternWires)
-    (siteData : operation.SiteData originalFrame data application)
-    (formalFrame : Transform.Frame (atomSupportWires atomArguments) common
-      sourceWires targetWires) :
-    FormalItem shape
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
-        application)
-      (ItemSites.selectedAtom (pattern := shape.pattern)
-        (frame := originalFrame) application siteData) formalFrame := by
-  unfold FormalItem
-  let retainedLocals := EqualityNormalization.locals shape.pattern
-  let frame := formalFrame.append retainedLocals
-  let hostItems := atomSiteHostItems shape application
-  let formal : Var (common ++ retainedLocals) (.rel atomArguments) :=
-    atomBodyWire shape common head
-  let retainedPorts : Vars (common ++ retainedLocals) atomArguments :=
-    ports.map fun wire => atomBodyWire shape common wire
-  let formalSource := atomFormalPrefixSource frame hostItems formal
-    retainedPorts
-  let formalResult := atomFormalPrefixResult hostItems formal retainedPorts
-  let formalEvidence := atomFormalPrefixEvidence frame hostItems formal
-    retainedPorts
-  let formalSites := atomFormalPrefixSites frame hostItems formal retainedPorts
-  let presentation :=
-    (atomFormalSelectedResultIso shape application).symm
-  have exactPresentation : RegionIso (WireEquiv.refl common)
-      (EqualityNormalization.EvidenceFold.itemAt
-        (atomSelectedLeaf shape)
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
-          application)
-        (ItemSites.selectedAtom (pattern := shape.pattern)
-          (frame := originalFrame) application siteData) WireRenaming.id)
-      (Region.adjoinAt retainedLocals .nil formalResult) := by
-    let mappedApplication := application.map fun wire => WireRenaming.id wire
-    have mappedEq : mappedApplication = application := by
-      simpa only [mappedApplication, WireRenaming.id] using
-        Diagram.vars_map_id application
-    have exposedEq :
-        Erasure.Exposure.exposedRegion
-            (atomExposureDescription shape mappedApplication)
-            (atomSupportCanonical atomArguments) =
-          Region.adjoinAt retainedLocals hostItems
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-              (atomFormalShape atomArguments).pattern
-              (.cons formal retainedPorts)) := by
-      calc
-        _ = Erasure.Exposure.exposedRegion
-            (atomExposureDescription shape application)
-            (atomSupportCanonical atomArguments) := by
-              exact congrArg
-                (fun mapped => Erasure.Exposure.exposedRegion
-                  (atomExposureDescription shape mapped)
-                  (atomSupportCanonical atomArguments)) mappedEq
-        _ = _ := by
-          simp only [Erasure.Exposure.exposedRegion]
-          change Region.adjoinAt
-            (EqualityNormalization.locals shape.pattern)
-            (atomSiteHostItems shape application)
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-              (Erasure.Exposure.supportPattern
-                (Region.singleton (atomSupportItem atomArguments))
-                (atomSupportCanonical atomArguments))
-              (Erasure.Exposure.applicationPorts
-                (atomExposureDescription shape application))) = _
-          rw [atomSupportPattern_eq]
-          rw [atomExposureApplicationPorts]
-          rfl
-    let exposedPresentation :=
-      (RegionIso.ofEq exposedEq).trans presentation
-    simpa only [EqualityNormalization.EvidenceFold.itemAt,
-      atomSelectedLeaf, mappedApplication, retainedLocals, hostItems,
-      formal, retainedPorts, formalResult] using exposedPresentation
-  exact ⟨retainedLocals, formalSource, formalResult, formalEvidence,
-    formalSites, ⟨exactPresentation⟩,
-    atomFormalPrefixFactorLayout shape hostItems formalFrame⟩
+  /-- Pattern-local arity compilation ends at the exact existing region and
+  recurses only at the authoritative shifted endpoint. -/
+  inductive ArityPlan :
+      {wires : List Sig} → Region wires → Goal → Type 1
+    | items
+        {outer locals : List Sig}
+        {bodyItems : ItemSeq (outer ++ locals)}
+        {goal : Goal}
+        (plan : ItemsPlan bodyItems goal) :
+        ArityPlan (.mk locals bodyItems) goal
+    | shift
+        {wires arguments : List Sig}
+        {body : Region wires}
+        {shape : PatternShape body arguments}
+        (target : ArityTarget body shape)
+        (child : ∀ output : target.Output,
+          ArityPlan body (Goal.preparation target.goal
+            (target.staged output)
+            (target.authority.stagedCanonical output)
+            (target.authority.stagedExternalTwoEnded output))) :
+        ArityPlan body target.goal
 
-/-! Package one ordinary Formal item as a one-element segment.  The helper is
-used only by item branches whose retained partition is empty. -/
-private theorem formalSingleItemEmptyRetained
-    {baseContext atomArguments common sourceWires targetWires : List Sig}
-    (base : Vars baseContext (atomSupportWires atomArguments))
-    {frame : Transform.Frame (atomSupportWires atomArguments) common
-      sourceWires targetWires}
-    {itemSource : Item sourceWires} {itemResult endpoint : Region common}
-    (itemEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-        (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
-        itemSource itemResult)
-    (itemSites : ItemSites (Leaf.Formal.operation [] atomArguments)
-      PUnit.unit itemEvidence)
-    (itemLayout : FactorItemLayout base base (.refl base) itemEvidence
-      itemSites frame itemSource)
-    (presentation : RegionIso (WireEquiv.refl common) endpoint itemResult) :
-    ∃ formalSource : ItemSeq (sourceWires ++ []),
-      ∃ formalResult : Region (common ++ []),
-        ∃ formalEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-              (atomFormalShape atomArguments).pattern
-              (frame.append []).sourceKeep (frame.append []).selected
-              formalSource formalResult,
-          ∃ formalSites : ItemsSites
-              (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              formalEvidence,
-            Nonempty (RegionIso (WireEquiv.refl common) endpoint
-              (Region.adjoinAt [] .nil formalResult)) ∧
-            FactorItemsLayout base base (.refl base) formalEvidence
-              formalSites (frame.append []) formalSource := by
-  let tailEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
-        (.nil : ItemSeq sourceWires) (Region.blank common) := .nil
-  let baseEvidence :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
-      itemEvidence tailEvidence
-  let baseSites : ItemsSites (Leaf.Formal.operation [] atomArguments)
-      PUnit.unit baseEvidence := .cons itemSites (.nil tailEvidence)
-  let basePresentation := presentation.trans
-    (RegionIso.conjoinBlank itemResult).symm
-  obtain ⟨formalSource, formalResult, formalEvidence, formalSites,
-      ⟨formalIso⟩, mapLayout⟩ :=
-    formalItemsEmptyRetained baseEvidence baseSites basePresentation
-  have baseLayout : FactorItemsLayout base base (.refl base) baseEvidence
-      baseSites frame (.cons itemSource .nil) := by
-    unfold FactorItemsLayout
-    refine ⟨itemSource, .nil, rfl, itemLayout, ?_⟩
-    unfold FactorItemsLayout
-    rfl
-  exact ⟨formalSource, formalResult, formalEvidence, formalSites,
-    ⟨formalIso⟩, mapLayout base baseLayout⟩
+  /-- Item-sequence compilation fixes cons to ParallelShape and indexes both
+  recursive children by the exact edit endpoint and shared midpoint. -/
+  inductive ItemsPlan :
+      {wires : List Sig} → ItemSeq wires → Goal → Type 1
+    | nil {wires : List Sig} (phase : Compiler.NilPhase wires) :
+        ItemsPlan (.nil : ItemSeq wires) (nilGoal phase)
+    | cons
+        {wires arguments : List Sig}
+        {head : Item wires} {tail : ItemSeq wires}
+        {shape : PatternShape (Region.ofItems (.cons head tail)) arguments}
+        (target : ParallelTarget head tail shape)
+        (headPlan : ∀ output : target.Output,
+          ItemPlan head (Goal.exact target.goal.request.polarity
+            target.goal.request.occurrence.interface
+            target.goal.request.occurrence.context
+            target.goal.request.continuation.1 target.goal.instantiated
+            (target.afterHead output)
+            target.goal.request.instantiatedCanonical
+            target.goal.request.instantiatedExternalTwoEnded
+            (target.afterHeadCanonical output)
+            (target.afterHeadExternalTwoEnded output)))
+        (tailPlan : ∀ output : target.Output,
+          ItemsPlan tail (Goal.exact target.goal.request.polarity
+            target.goal.request.occurrence.interface
+            target.goal.request.occurrence.context
+            target.goal.request.continuation.1 (target.afterHead output)
+            (target.staged output) (target.afterHeadCanonical output)
+            (target.afterHeadExternalTwoEnded output)
+            (target.authority.stagedCanonical output)
+            (target.authority.stagedExternalTwoEnded output))) :
+        ItemsPlan (.cons head tail) target.goal
 
-mutual
-  /-- Every authoritative region site tree has one generated Formal
-  presentation under the inherited shared frame. -/
-  private theorem formalRegion
-      {patternWires atomArguments common sourceWires targetWires
-        originalSourceWires originalTargetWires : List Sig}
-      {head : Var patternWires (.rel atomArguments)}
-      {ports : Vars patternWires atomArguments}
-      {tail : ItemSeq patternWires}
-      (shape : PatternShape
-        (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-      {originalFrame : Transform.Frame patternWires common
-        originalSourceWires originalTargetWires}
-      {operation : Transform.Operation patternWires}
-      {data : operation.Data originalFrame}
-      {source : Region originalSourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          shape.pattern originalFrame.sourceKeep originalFrame.selected
-          source result)
-      (sites : RegionSites operation data evidence)
-      (formalFrame : Transform.Frame (atomSupportWires atomArguments) common
-        sourceWires targetWires) :
-      FormalRegion shape evidence sites formalFrame :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-        obtain ⟨retained, childSource, childFormalResult,
-            childFormalEvidence, childFormalSites, ⟨childIso⟩,
-            childLayout⟩ :=
-          formalItems shape childEvidence childSites
-            (formalFrame.append locals)
-        unfold FormalRegion
-        let combinedRetained := locals ++ retained
-        let commonRename := Region.adjoinMaterialWire common locals retained
-        let sourceRename := Region.adjoinMaterialWire sourceWires locals retained
-        let combinedFrame := formalFrame.append combinedRetained
-        have keepCommutes : ∀ {signature}
-            (wire : Var ((common ++ locals) ++ retained) signature),
-            sourceRename
-                (((formalFrame.append locals).append retained).sourceKeep wire) =
-              combinedFrame.sourceKeep (commonRename wire) := by
-          intro signature wire
-          apply Var.appendCases (left := common ++ locals) (right := retained)
-            (motive := fun wire => sourceRename
-                (((formalFrame.append locals).append retained).sourceKeep wire) =
-              combinedFrame.sourceKeep (commonRename wire))
-          · intro inheritedSignature inherited
-            apply Var.appendCases (left := common) (right := locals)
-              (motive := fun inherited => sourceRename
-                  (((formalFrame.append locals).append retained).sourceKeep
-                    (inherited.appendLeft retained)) =
-                combinedFrame.sourceKeep
-                  (commonRename (inherited.appendLeft retained)))
-            · intro commonSignature commonWire
-              simp [sourceRename, commonRename, combinedFrame,
-                combinedRetained, Transform.Frame.append,
-                WireRenaming.appendRight, Region.adjoinMaterialWire]
-            · intro localSignature localWire
-              simp [sourceRename, commonRename, combinedFrame,
-                combinedRetained, Transform.Frame.append,
-                WireRenaming.appendRight, Region.adjoinMaterialWire]
-          · intro retainedSignature retainedWire
-            simp [sourceRename, commonRename, combinedFrame,
-              combinedRetained, Transform.Frame.append,
-              WireRenaming.appendRight, Region.adjoinMaterialWire]
-        have selectedCommutes :
-            sourceRename
-                (((formalFrame.append locals).append retained).selected) =
-              combinedFrame.selected := by
-          simp [sourceRename, combinedFrame, combinedRetained,
-            Transform.Frame.append, Region.adjoinMaterialWire]
-        obtain ⟨mappedSource, mappedResult, mappedEvidence,
-            mappedSites, mappedSourceEq, ⟨mappedResultIso⟩,
-            mapLayout⟩ :=
-          formalItemsReindex childFormalEvidence childFormalSites
-            commonRename sourceRename keepCommutes selectedCommutes
-        let formalSource : Region sourceWires :=
-          .mk combinedRetained mappedSource
-        let formalResult : Region common :=
-          Region.adjoinAt combinedRetained .nil mappedResult
-        let formalEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-              (atomFormalShape atomArguments).pattern formalFrame.sourceKeep
-              formalFrame.selected formalSource formalResult := by
-          apply _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
-          exact mappedEvidence
-        let formalSites : RegionSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              formalEvidence := by
-          apply RegionSites.mk
-          exact mappedSites
-        let lifted := RegionIso.adjoinAt locals .nil childIso
-        let flattened :=
-          (RegionIso.adjoinAtAssoc locals .nil retained .nil
-            childFormalResult).symm
-        let mappedUnderHost := RegionIso.adjoinAt combinedRetained .nil
-          mappedResultIso
-        have presentation : RegionIso (WireEquiv.refl common)
-            (EqualityNormalization.EvidenceFold.regionAt
-              (atomSelectedLeaf shape) evidence
-              (.mk childSites) WireRenaming.id)
-            formalResult := by
-          unfold EqualityNormalization.EvidenceFold.regionAt
-          simp_wf
-          have renameEq :
-              (WireRenaming.id : WireRenaming common common).appendRight locals =
-                (WireRenaming.id : WireRenaming (common ++ locals)
-                  (common ++ locals)) := by
-            apply WireRenaming.ext
-            intro signature wire
-            exact WireRenaming.appendRight_id_apply locals wire
-          rw [renameEq]
-          let chained := (lifted.trans flattened).trans mappedUnderHost
-          have ambientEq :
-              ((WireEquiv.refl common).trans
-                (WireEquiv.refl common).symm).trans
-                  (WireEquiv.refl common) = WireEquiv.refl common := by
-            apply WireEquiv.ext
-            intro signature wire
-            rfl
-          simpa only [formalResult, combinedRetained, List.append_assoc,
-            commonRename, Region.extendHostItems, ItemSeq.renameWires,
-            ItemSeq.append_nil, ItemSeq.nil_append] using
-              chained.castAmbient ambientEq
-        exact ⟨formalSource, formalResult, formalEvidence,
-          formalSites, ⟨presentation⟩, by
-            unfold FactorRegionLayout
-            exact ⟨mappedSource, rfl,
-              mapLayout (atomSelection head ports) childLayout⟩⟩
-  termination_by 3 * sizeOf sites
-
-  /-- Item-sequence accumulation synthesizes and concatenates exactly the
-  retained partitions contributed by its selected leaves. -/
-  private theorem formalItems
-      {patternWires atomArguments common sourceWires targetWires
-        originalSourceWires originalTargetWires : List Sig}
-      {head : Var patternWires (.rel atomArguments)}
-      {ports : Vars patternWires atomArguments}
-      {tail : ItemSeq patternWires}
-      (shape : PatternShape
-        (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-      {originalFrame : Transform.Frame patternWires common
-        originalSourceWires originalTargetWires}
-      {operation : Transform.Operation patternWires}
-      {data : operation.Data originalFrame}
-      {source : ItemSeq originalSourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          shape.pattern originalFrame.sourceKeep originalFrame.selected
-          source result)
-      (sites : ItemsSites operation data evidence)
-      (formalFrame : Transform.Frame (atomSupportWires atomArguments) common
-        sourceWires targetWires) :
-      FormalItems shape evidence sites formalFrame :=
-    match sites with
-    | .nil nilEvidence => by
-        unfold FormalItems
-        let formalEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-              (atomFormalShape atomArguments).pattern formalFrame.sourceKeep
-              formalFrame.selected (.nil : ItemSeq sourceWires)
-              (Region.blank common) := .nil
-        let formalSites : ItemsSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              formalEvidence := .nil formalEvidence
-        obtain ⟨formalSource, formalResult, mappedEvidence,
-            mappedSites, ⟨presentation⟩, mapLayout⟩ :=
-          formalItemsEmptyRetained formalEvidence formalSites
-            (RegionIso.refl (Region.blank common))
-        exact ⟨[], formalSource, formalResult, mappedEvidence,
-          mappedSites, ⟨by
-            simpa only [EqualityNormalization.EvidenceFold.itemsAt] using
-              presentation⟩, mapLayout (atomSelection head ports) (by
-                unfold FactorItemsLayout
-                rfl)⟩
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item originalTail itemResult tailResult
-        itemEvidence tailEvidence itemSites tailSites => by
-        obtain ⟨itemRetained, itemSource, itemFormalResult,
-            itemFormalEvidence, itemFormalSites, ⟨itemIso⟩,
-            itemLayout⟩ :=
-          formalItem shape itemEvidence itemSites formalFrame
-        obtain ⟨tailRetained, tailSource, tailFormalResult,
-            tailFormalEvidence, tailFormalSites, ⟨tailIso⟩,
-            tailLayout⟩ :=
-          formalItems shape tailEvidence tailSites formalFrame
-        unfold FormalItems
-        let combinedFrame := formalFrame.append
-          (itemRetained ++ tailRetained)
-        let itemCommonRename := Region.conjoinLeftWire common itemRetained
-          tailRetained
-        let tailCommonRename := Region.conjoinRightWire common itemRetained
-          tailRetained
-        let itemSourceRename := Region.conjoinLeftWire sourceWires itemRetained
-          tailRetained
-        let tailSourceRename := Region.conjoinRightWire sourceWires itemRetained
-          tailRetained
-        have itemKeepCommutes : ∀ {signature}
-            (wire : Var (common ++ itemRetained) signature),
-            itemSourceRename
-                ((formalFrame.append itemRetained).sourceKeep wire) =
-              combinedFrame.sourceKeep (itemCommonRename wire) := by
-          intro signature wire
-          apply Var.appendCases (left := common) (right := itemRetained)
-            (motive := fun wire => itemSourceRename
-                ((formalFrame.append itemRetained).sourceKeep wire) =
-              combinedFrame.sourceKeep (itemCommonRename wire))
-          · intro inheritedSignature inherited
-            simp [combinedFrame, itemSourceRename, itemCommonRename,
-              Transform.Frame.append, WireRenaming.appendRight,
-              Region.conjoinLeftWire]
-          · intro localSignature localWire
-            simp [combinedFrame, itemSourceRename, itemCommonRename,
-              Transform.Frame.append, WireRenaming.appendRight,
-              Region.conjoinLeftWire]
-        have itemSelectedCommutes :
-            itemSourceRename (formalFrame.append itemRetained).selected =
-              combinedFrame.selected := by
-          simp [combinedFrame, itemSourceRename, Transform.Frame.append,
-            Region.conjoinLeftWire]
-        have tailKeepCommutes : ∀ {signature}
-            (wire : Var (common ++ tailRetained) signature),
-            tailSourceRename
-                ((formalFrame.append tailRetained).sourceKeep wire) =
-              combinedFrame.sourceKeep (tailCommonRename wire) := by
-          intro signature wire
-          apply Var.appendCases (left := common) (right := tailRetained)
-            (motive := fun wire => tailSourceRename
-                ((formalFrame.append tailRetained).sourceKeep wire) =
-              combinedFrame.sourceKeep (tailCommonRename wire))
-          · intro inheritedSignature inherited
-            simp [combinedFrame, tailSourceRename, tailCommonRename,
-              Transform.Frame.append, WireRenaming.appendRight,
-              Region.conjoinRightWire]
-          · intro localSignature localWire
-            simp [combinedFrame, tailSourceRename, tailCommonRename,
-              Transform.Frame.append, WireRenaming.appendRight,
-              Region.conjoinRightWire]
-        have tailSelectedCommutes :
-            tailSourceRename (formalFrame.append tailRetained).selected =
-              combinedFrame.selected := by
-          simp [combinedFrame, tailSourceRename, Transform.Frame.append,
-            Region.conjoinRightWire]
-        obtain ⟨mappedItemSource, mappedItemResult, mappedItemEvidence,
-            mappedItemSites, mappedItemSourceEq,
-            ⟨mappedItemIso⟩, mapItemLayout⟩ :=
-          formalItemsReindex itemFormalEvidence itemFormalSites
-            itemCommonRename itemSourceRename itemKeepCommutes
-            itemSelectedCommutes
-        obtain ⟨mappedTailSource, mappedTailResult, mappedTailEvidence,
-            mappedTailSites, mappedTailSourceEq,
-            ⟨mappedTailIso⟩, mapTailLayout⟩ :=
-          formalItemsReindex tailFormalEvidence tailFormalSites
-            tailCommonRename tailSourceRename tailKeepCommutes
-            tailSelectedCommutes
-        obtain ⟨combinedResult, combinedEvidence, combinedSites,
-            ⟨combinedIso⟩, combineLayout⟩ :=
-          formalItemsAppend mappedItemEvidence mappedItemSites
-            mappedTailEvidence mappedTailSites
-        let endpointMerged := RegionIso.conjoinCongr itemIso tailIso |>.trans
-          (RegionIso.conjoinAdjoinAt itemRetained tailRetained
-            itemFormalResult tailFormalResult)
-        let mappedChildren := RegionIso.conjoinCongr mappedItemIso mappedTailIso
-        let mappedUnderHost := RegionIso.adjoinAt
-          (itemRetained ++ tailRetained) .nil mappedChildren
-        let combinedUnderHost := RegionIso.adjoinAt
-          (itemRetained ++ tailRetained) .nil combinedIso
-        have presentation : RegionIso (WireEquiv.refl common)
-            (EqualityNormalization.EvidenceFold.itemsAt
-              (atomSelectedLeaf shape) evidence (.cons itemSites tailSites)
-              WireRenaming.id)
-            (Region.adjoinAt (itemRetained ++ tailRetained) .nil
-              combinedResult) := by
-          simpa only [EqualityNormalization.EvidenceFold.itemsAt,
-            Region.renameWires_id] using
-              ((endpointMerged.trans mappedUnderHost).trans
-                combinedUnderHost)
-        exact ⟨itemRetained ++ tailRetained,
-          mappedItemSource.append mappedTailSource, combinedResult,
-          combinedEvidence, combinedSites, ⟨presentation⟩, by
-            exact combineLayout (atomSelection head ports)
-              (mapItemLayout (atomSelection head ports) itemLayout)
-              (mapTailLayout (atomSelection head ports) tailLayout)⟩
-  termination_by 3 * sizeOf sites + 2
-
-  /-- Each individual item becomes a literal Formal segment; only a selected
-  atom contributes a nonempty retained partition. -/
-  private theorem formalItem
-      {patternWires atomArguments common sourceWires targetWires
-        originalSourceWires originalTargetWires : List Sig}
-      {head : Var patternWires (.rel atomArguments)}
-      {ports : Vars patternWires atomArguments}
-      {tail : ItemSeq patternWires}
-      (shape : PatternShape
-        (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-      {originalFrame : Transform.Frame patternWires common
-        originalSourceWires originalTargetWires}
-      {operation : Transform.Operation patternWires}
-      {data : operation.Data originalFrame}
-      {source : Item originalSourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          shape.pattern originalFrame.sourceKeep originalFrame.selected
-          source result)
-      (sites : ItemSites operation data evidence)
-      (formalFrame : Transform.Frame (atomSupportWires atomArguments) common
-        sourceWires targetWires) :
-      FormalItem shape evidence sites formalFrame :=
-    match sites with
-    | .atom atomHead atomPorts => by
-        unfold FormalItem
-        refine ⟨[], ?_⟩
-        let formalItemEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (retain := formalFrame.sourceKeep)
-            (selected := formalFrame.selected) atomHead atomPorts
-        let formalItemSites : ItemSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              formalItemEvidence := ItemSites.atom
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (frame := formalFrame) atomHead atomPorts
-        simpa only [EqualityNormalization.EvidenceFold.itemAt,
-          WireRenaming.id, Diagram.vars_map_id] using
-            formalSingleItemEmptyRetained (atomSelection head ports)
-              formalItemEvidence formalItemSites (by
-                unfold FactorItemLayout
-                rfl)
-              (RegionIso.refl (Region.singleton (.atom atomHead atomPorts)))
-    | .selectedAtom application siteData => by
-        have selected :=
-          formalSelectedItem shape application siteData formalFrame
-        unfold FormalItem at selected ⊢
-        simpa only [EqualityNormalization.EvidenceFold.itemAt] using selected
-    | .identity signature arity identityPorts => by
-        unfold FormalItem
-        refine ⟨[], ?_⟩
-        let formalItemEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (retain := formalFrame.sourceKeep)
-            (selected := formalFrame.selected) signature arity identityPorts
-        let formalItemSites : ItemSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              formalItemEvidence := ItemSites.identity
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (frame := formalFrame) signature arity identityPorts
-        simpa only [EqualityNormalization.EvidenceFold.itemAt,
-          WireRenaming.id] using
-            formalSingleItemEmptyRetained (atomSelection head ports)
-              formalItemEvidence formalItemSites (by
-                unfold FactorItemLayout
-                rfl) (RegionIso.refl
-                (Region.singleton (.identity signature arity identityPorts)))
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
-        childSites => by
-        unfold FormalItem
-        obtain ⟨childSource, childFormalResult, childFormalEvidence,
-            childFormalSites, ⟨childIso⟩, childLayout⟩ :=
-          formalRegion shape childEvidence childSites formalFrame
-        let formalItemEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
-            childFormalEvidence
-        let formalItemSites : ItemSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              formalItemEvidence := .cut childFormalSites
-        have basePresentation : RegionIso (WireEquiv.refl common)
-            (EqualityNormalization.EvidenceFold.itemAt
-              (atomSelectedLeaf shape) evidence (.cut childSites)
-              WireRenaming.id)
-            (Region.singleton (.cut childFormalResult)) := by
-          simpa only [EqualityNormalization.EvidenceFold.itemAt] using
-            RegionIso.singletonCutCongr childIso
-        refine ⟨[], ?_⟩
-        simpa only [EqualityNormalization.EvidenceFold.itemAt] using
-          formalSingleItemEmptyRetained (atomSelection head ports)
-            formalItemEvidence formalItemSites (by
-              unfold FactorItemLayout
-              exact ⟨childSource, rfl, childLayout⟩) basePresentation
-  termination_by 3 * sizeOf sites + 1
+  /-- Item compilation fixes each existing constructor to its production
+  primitive family. -/
+  inductive ItemPlan : {wires : List Sig} → Item wires → Goal → Type 1
+    | atom
+        {patternWires atomArguments : List Sig}
+        {head : Var patternWires (.rel atomArguments)}
+        {ports : Vars patternWires atomArguments}
+        (shape : FormalShape head ports)
+        (phase : FormalPhase shape) :
+        ItemPlan (.atom head ports) phase.goal
+    | identity
+        {patternWires : List Sig}
+        {signature : Sig} {arity : Nat}
+        {ports : Fin arity → Var patternWires signature}
+        (shape : IdentityShape signature arity ports)
+        (phase : IdentityPhase shape) :
+        ItemPlan (.identity signature arity ports) phase.goal
+    | cut
+        {wires arguments : List Sig}
+        {body : Region wires}
+        {shape : PatternShape (Region.singleton (.cut body)) arguments}
+        (target : CutTarget body shape)
+        (child : ∀ output : target.Output,
+          RegionPlan body (Goal.preparation target.goal
+            (target.staged output)
+            (target.authority.stagedCanonical output)
+            (target.authority.stagedExternalTwoEnded output))) :
+        ItemPlan (.cut body) target.goal
 end
 
-private noncomputable def atomSelection_expansion
-    (head : Var patternWires (.rel atomArguments))
-    (ports : Vars patternWires atomArguments) :
-    VarsFactor (atomSelection head ports)
-      (Arity.Vars.append (atomSelection head ports)
-        (Erasure.Exposure.identityBoundary patternWires)) :=
-  VarsFactor.extendAppend (atomSelection head ports)
-    (Erasure.Exposure.identityBoundary patternWires)
+mutual
+  /-- Interpret one exact region plan. -/
+  private def regionResult
+      {wires : List Sig} {body : Region wires} {goal : Goal}
+      (plan : RegionPlan body goal) : goal.Result :=
+    match plan with
+    | .mk arity => arityResult arity
+  termination_by structural plan
 
-private noncomputable def atomSelection_reduction
-    (head : Var patternWires (.rel atomArguments))
-    (ports : Vars patternWires atomArguments) :
-    VarsFactor
-      (Arity.Vars.append (atomSelection head ports)
-        (Erasure.Exposure.identityBoundary patternWires))
-      (Erasure.Exposure.identityBoundary patternWires) :=
-  VarsFactor.reduceIdentityPrefix (atomSelection head ports)
+  /-- Interpret the fixed equality-normalization boundary around the child's
+  mandatory structural core. -/
+  private def boundaryResult
+      {arguments : List Sig} {pattern : OpenDiagram arguments} {goal : Goal}
+      (plan : BoundaryPlan pattern goal) : goal.Result :=
+    match plan with
+    | .normalize target (.mk structural) =>
+        target.compile (regionResult structural)
 
-/-! The atom compiler owns the entire originating-site assembly seam: it
-first synthesizes a literal Formal presentation from the authoritative site
-tree, then folds the induced argument factor to the pattern boundary.  The
-factor endpoint is computed by the fold and is never supplied by a caller. -/
-private theorem atomHeadFactorBridge
-    {patternWires atomArguments common originalSourceWires
-      originalTargetWires : List Sig}
-    {head : Var patternWires (.rel atomArguments)}
-    {ports : Vars patternWires atomArguments}
-    {tail : ItemSeq patternWires}
-    (shape : PatternShape
-      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
-    {originalFrame : Transform.Frame patternWires common
-      originalSourceWires originalTargetWires}
-    {operation : Transform.Operation patternWires}
-    {data : operation.Data originalFrame}
-    {source : ItemSeq originalSourceWires} {result : Region common}
-    (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        shape.pattern originalFrame.sourceKeep originalFrame.selected
-        source result)
-    (sites : ItemsSites operation data evidence) :
-    ∃ retained : List Sig,
-      ∃ formalSource : ItemSeq
-          (common ++ ([] ++
-            .rel (atomSupportWires atomArguments) :: retained)),
-        ∃ formalResult : Region (common ++ retained),
-          Nonempty (RegionIso (WireEquiv.refl common)
-                (EqualityNormalization.EvidenceFold.itemsAt
-                  (atomSelectedLeaf shape) evidence sites WireRenaming.id)
-                (Region.adjoinAt retained .nil formalResult)) ∧
-              ∃ middleSource : ItemSeq
-                  (common ++ ([] ++
-                    .rel (atomSupportWires atomArguments ++ patternWires) ::
-                      retained)),
-                FactorItemsBridge common [] retained
-                    (atomSelection_expansion head ports) formalSource
-                      middleSource ∧
-                ∃ targetSource : ItemSeq
-                  (common ++ ([] ++ .rel patternWires :: retained)),
-                  FactorItemsBridge common [] retained
-                    (atomSelection_reduction head ports) middleSource
-                      targetSource :=
-  by
-    let initialFrame := factorInitialFrame common
-      (atomSupportWires atomArguments)
-    obtain ⟨retained, rawSource, rawResult, rawEvidence, rawSites,
-        ⟨presentation⟩, rawLayout⟩ :=
-      formalItems shape evidence sites initialFrame
-    let commonRename : WireRenaming (common ++ retained)
-        (common ++ retained) := WireRenaming.id
-    let sourceRename := Region.adjoinMaterialWire common
-      [.rel (atomSupportWires atomArguments)] retained
-    let mappedFrame := factorSourceFrame common [] retained
-      (atomSupportWires atomArguments)
-    have keepCommutes : ∀ {signature}
-        (wire : Var (common ++ retained) signature),
-        sourceRename ((initialFrame.append retained).sourceKeep wire) =
-          mappedFrame.sourceKeep (commonRename wire) := by
-      intro signature wire
-      apply Var.appendCases (left := common) (right := retained)
-        (motive := fun wire =>
-          sourceRename ((initialFrame.append retained).sourceKeep wire) =
-            mappedFrame.sourceKeep (commonRename wire))
-      · intro inheritedSignature inherited
-        apply Var.eq_of_index_eq
-        apply Fin.ext
-        simp [sourceRename, commonRename, initialFrame, mappedFrame,
-          factorInitialFrame, factorSourceFrame, Transform.Frame.append,
-          Transform.Frame.replace, Transform.Frame.keep,
-          Transform.Frame.localKeep, WireRenaming.appendRight,
-          WireRenaming.id, Region.adjoinMaterialWire,
-          Var.appendMap_left, Var.index_appendLeft]
-      · intro retainedSignature retainedWire
-        apply Var.eq_of_index_eq
-        apply Fin.ext
-        rw [show retainedWire =
-          Var.appendRight ([] : List Sig) retainedWire by rfl]
-        simp [sourceRename, commonRename, initialFrame, mappedFrame,
-          factorInitialFrame, factorSourceFrame, Transform.Frame.append,
-          Transform.Frame.replace, Transform.Frame.keep,
-          Transform.Frame.localKeep, WireRenaming.appendRight,
-          WireRenaming.id, Region.adjoinMaterialWire,
-          Var.appendMap_right, Var.index_appendRight]
-        rfl
-    have selectedCommutes :
-        sourceRename (initialFrame.append retained).selected =
-          mappedFrame.selected := by
-      apply Var.eq_of_index_eq
-      apply Fin.ext
-      simp [sourceRename, initialFrame, mappedFrame, factorInitialFrame,
-        factorSourceFrame, Transform.Frame.append, Transform.Frame.replace,
-        Transform.Frame.insertedHead, Region.adjoinMaterialWire,
-        Var.appendLeft, Var.appendRight, Var.index,
-        Var.index_appendRight]
-    obtain ⟨formalSource, formalResult, formalEvidence, formalSites,
-        _formalSourceEq, ⟨formalResultIso⟩, mapLayout⟩ :=
-      formalItemsReindex rawEvidence rawSites commonRename sourceRename
-        keepCommutes selectedCommutes
-    have formalLayout : FactorItemsLayout (atomSelection head ports)
-        (atomSelection head ports) (.refl (atomSelection head ports))
-        formalEvidence formalSites mappedFrame formalSource :=
-      mapLayout (atomSelection head ports) rawLayout
-    obtain ⟨middleSource, middleLayout, expansionBridge⟩ :=
-      varsFactorSourceBridge (.refl (atomSelection head ports))
-        (atomSelection_expansion head ports) formalEvidence formalSites
-        formalLayout
-    obtain ⟨targetSource, _targetLayout, reductionBridge⟩ :=
-      varsFactorSourceBridge
-        (.trans (.refl (atomSelection head ports))
-          (atomSelection_expansion head ports))
-        (atomSelection_reduction head ports) formalEvidence formalSites
-        middleLayout
-    have finalPresentation : RegionIso (WireEquiv.refl common)
-        (EqualityNormalization.EvidenceFold.itemsAt
-          (atomSelectedLeaf shape) evidence sites WireRenaming.id)
-        (Region.adjoinAt retained .nil formalResult) := by
-      have normalizedResultIso : RegionIso
-          (WireEquiv.refl (common ++ retained)) rawResult formalResult := by
-        simpa only [commonRename, Region.renameWires_id,
-          List.nil_append] using formalResultIso
-      exact presentation.trans
-        (RegionIso.adjoinAt retained .nil normalizedResultIso)
-    exact ⟨retained, formalSource, formalResult,
-      ⟨finalPresentation⟩, middleSource, expansionBridge,
-        targetSource, reductionBridge⟩
+  /-- Interpret arity phases through their authoritative all-sites folds. -/
+  private def arityResult
+      {wires : List Sig} {body : Region wires} {goal : Goal}
+      (plan : ArityPlan body goal) : goal.Result :=
+    match plan with
+    | .items items => itemsResult items
+    | .shift target child =>
+        Compiler.items
+          (operation := Arity.operation _ target.added)
+          (frame := Arity.rootFrame target.outer target.before target.after _
+            target.added)
+          (Arity.targetHead target.outer target.before target.after _
+            target.added)
+          target.authority.evidence target.authority.sites
+          target.authority.request {
+            close := fun output =>
+              target.discharge output (arityResult (child output))
+          }
+  termination_by structural plan
+
+  /-- Interpret item sequences, deriving ParallelShape only after the exact
+  all-sites edit is returned. -/
+  private def itemsResult
+      {wires : List Sig} {bodyItems : ItemSeq wires} {goal : Goal}
+      (plan : ItemsPlan bodyItems goal) : goal.Result :=
+    match plan with
+    | .nil phase => phase.compile
+    | .cons target headPlan tailPlan =>
+        Compiler.items
+          (operation := Content.Parallel.operation _)
+          (frame := Content.Parallel.rootFrame target.outer target.before
+            target.after _)
+          (Content.Parallel.firstHead target.outer target.before target.after _,
+            Content.Parallel.secondHead target.outer target.before
+              target.after _)
+          target.authority.evidence target.authority.sites
+          target.authority.request {
+            close := fun output => target.discharge output
+              (itemResult (headPlan output)) (itemsResult (tailPlan output))
+          }
+  termination_by structural plan
+
+  /-- Interpret items, deriving CutShape only after the exact all-sites edit
+  is returned. -/
+  private def itemResult
+      {wires : List Sig} {bodyItem : Item wires} {goal : Goal}
+      (plan : ItemPlan bodyItem goal) : goal.Result :=
+    match plan with
+    | .atom _ phase => phase.compile
+    | .identity _ phase => phase.compile
+    | .cut target child =>
+        Compiler.items
+          (operation := Content.Cut.operation _)
+          (frame := Content.Cut.rootFrame target.outer target.before
+            target.after _)
+          (Content.Cut.targetHead target.outer target.before target.after _)
+          target.authority.evidence target.authority.sites
+          target.authority.request {
+            close := fun output =>
+              target.discharge output (regionResult (child output))
+          }
+  termination_by structural plan
+end
+
+/-- Production entry over one existing open pattern and its exact
+syntax-indexed evidence plan. -/
+theorem compile
+    (pattern : OpenDiagram arguments)
+    (plan : BoundaryPlan pattern goal) : goal.Result := by
+  exact boundaryResult plan
 
 end PatternCompiler
 
