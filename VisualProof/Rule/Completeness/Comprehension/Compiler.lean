@@ -7611,523 +7611,9 @@ private noncomputable def atomFormalSelectedResultIso
     (EqualityNormalization.locals shape.pattern) hostItems inner
   exact prefixIso.trans (RegionIso.ofEq hosted.symm)
 
-/-! FormalApplication evidence is transported only along the explicit source
-and retained-wire embeddings used to combine accumulator branches.  The
-existing Instantiation proof remains the recursion authority; this theorem
-merely rebuilds that proof and its matching Formal site annotations at the
-renamed indices. -/
-
-mutual
-  private theorem formalRegionReindex
-      {atomArguments common mappedCommon sourceWires mappedSourceWires
-        targetWires mappedTargetWires : List Sig}
-      {frame : Transform.Frame (atomSupportWires atomArguments) common
-        sourceWires targetWires}
-      {mappedFrame : Transform.Frame (atomSupportWires atomArguments)
-        mappedCommon mappedSourceWires mappedTargetWires}
-      {source : Region sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          (atomFormalShape atomArguments).pattern frame.sourceKeep
-          frame.selected source result)
-      (sites : RegionSites (Leaf.Formal.operation [] atomArguments)
-        PUnit.unit evidence)
-      (commonRename : WireRenaming common mappedCommon)
-      (sourceRename : WireRenaming sourceWires mappedSourceWires)
-      (keepCommutes : ∀ {signature} (wire : Var common signature),
-        sourceRename (frame.sourceKeep wire) =
-          mappedFrame.sourceKeep (commonRename wire))
-      (selectedCommutes : sourceRename frame.selected =
-        mappedFrame.selected) :
-      ∃ mappedSource : Region mappedSourceWires,
-        ∃ mappedResult : Region mappedCommon,
-          ∃ mappedEvidence :
-              _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-                (atomFormalShape atomArguments).pattern mappedFrame.sourceKeep
-                mappedFrame.selected mappedSource mappedResult,
-            Nonempty (RegionSites (Leaf.Formal.operation [] atomArguments)
-                PUnit.unit mappedEvidence) ∧
-              source.renameWires sourceRename = mappedSource ∧
-              Nonempty (RegionIso (WireEquiv.refl mappedCommon)
-                (result.renameWires commonRename) mappedResult) :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites => by
-        have keepMaps : WireRenaming.comp sourceRename frame.sourceKeep =
-            WireRenaming.comp mappedFrame.sourceKeep commonRename := by
-          apply WireRenaming.ext
-          intro signature wire
-          exact keepCommutes wire
-        have appendedKeep : ∀ {signature}
-            (wire : Var (common ++ locals) signature),
-            sourceRename.appendRight locals
-                ((frame.append locals).sourceKeep wire) =
-              (mappedFrame.append locals).sourceKeep
-                (commonRename.appendRight locals wire) := by
-          intro signature wire
-          change sourceRename.appendRight locals
-              (frame.sourceKeep.appendRight locals wire) =
-            mappedFrame.sourceKeep.appendRight locals
-              (commonRename.appendRight locals wire)
-          rw [WireRenaming.appendRight_comp_apply,
-            WireRenaming.appendRight_comp_apply, keepMaps]
-        have appendedSelected :
-            sourceRename.appendRight locals
-                (frame.append locals).selected =
-              (mappedFrame.append locals).selected := by
-          simpa only [Transform.Frame.append, WireRenaming.appendRight,
-            Var.appendMap_left] using
-              congrArg (fun wire => wire.appendLeft locals) selectedCommutes
-        obtain ⟨mappedChildSource, mappedChildResult, mappedChildEvidence,
-            ⟨mappedChildSites⟩, mappedChildSourceEq, ⟨mappedChildIso⟩⟩ :=
-          formalItemsReindex childEvidence childSites
-            (commonRename.appendRight locals)
-            (sourceRename.appendRight locals) appendedKeep appendedSelected
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
-            mappedChildEvidence
-        let mappedSites : RegionSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence :=
-          RegionSites.mk (data := PUnit.unit) (by
-            simpa only [Leaf.Formal.operation] using mappedChildSites)
-        have mappedSourceEq :
-            (Region.mk locals items).renameWires sourceRename =
-              Region.mk locals mappedChildSource := by
-          simpa only [Region.renameWires] using
-            congrArg (Region.mk locals) mappedChildSourceEq
-        let exposed := RegionIso.renameWiresAdjoinAtNil childResult
-          commonRename
-        let child := RegionIso.adjoinAt locals .nil mappedChildIso
-        exact ⟨Region.mk locals mappedChildSource,
-          Region.adjoinAt locals .nil mappedChildResult, mappedEvidence,
-          ⟨mappedSites⟩, mappedSourceEq, ⟨exposed.trans child⟩⟩
-  termination_by sizeOf source
-
-  private theorem formalItemsReindex
-      {atomArguments common mappedCommon sourceWires mappedSourceWires
-        targetWires mappedTargetWires : List Sig}
-      {frame : Transform.Frame (atomSupportWires atomArguments) common
-        sourceWires targetWires}
-      {mappedFrame : Transform.Frame (atomSupportWires atomArguments)
-        mappedCommon mappedSourceWires mappedTargetWires}
-      {source : ItemSeq sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          (atomFormalShape atomArguments).pattern frame.sourceKeep
-          frame.selected source result)
-      (sites : ItemsSites (Leaf.Formal.operation [] atomArguments)
-        PUnit.unit evidence)
-      (commonRename : WireRenaming common mappedCommon)
-      (sourceRename : WireRenaming sourceWires mappedSourceWires)
-      (keepCommutes : ∀ {signature} (wire : Var common signature),
-        sourceRename (frame.sourceKeep wire) =
-          mappedFrame.sourceKeep (commonRename wire))
-      (selectedCommutes : sourceRename frame.selected =
-        mappedFrame.selected) :
-      ∃ mappedSource : ItemSeq mappedSourceWires,
-        ∃ mappedResult : Region mappedCommon,
-          ∃ mappedEvidence :
-              _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-                (atomFormalShape atomArguments).pattern mappedFrame.sourceKeep
-                mappedFrame.selected mappedSource mappedResult,
-            Nonempty (ItemsSites (Leaf.Formal.operation [] atomArguments)
-                PUnit.unit mappedEvidence) ∧
-              source.renameWires sourceRename = mappedSource ∧
-              Nonempty (RegionIso (WireEquiv.refl mappedCommon)
-                (result.renameWires commonRename) mappedResult) :=
-    match sites with
-    | .nil _ =>
-        by
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (retain := mappedFrame.sourceKeep)
-            (selected := mappedFrame.selected)
-        exact ⟨.nil, Region.blank mappedCommon, mappedEvidence,
-          ⟨.nil mappedEvidence⟩, rfl, ⟨RegionIso.refl _⟩⟩
-    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult itemEvidence
-        tailEvidence itemSites tailSites =>
-        by
-        obtain ⟨mappedItemSource, mappedItemResult, mappedItemEvidence,
-            ⟨mappedItemSites⟩, mappedItemSourceEq, ⟨mappedItemIso⟩⟩ :=
-          formalItemReindex itemEvidence itemSites commonRename sourceRename
-            keepCommutes selectedCommutes
-        obtain ⟨mappedTailSource, mappedTailResult, mappedTailEvidence,
-            ⟨mappedTailSites⟩, mappedTailSourceEq, ⟨mappedTailIso⟩⟩ :=
-          formalItemsReindex tailEvidence tailSites commonRename sourceRename
-            keepCommutes selectedCommutes
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
-            mappedItemEvidence mappedTailEvidence
-        let mappedSites : ItemsSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence := .cons mappedItemSites mappedTailSites
-        have mappedSourceEq :
-            (ItemSeq.cons item tail).renameWires sourceRename =
-              .cons mappedItemSource mappedTailSource := by
-          simp only [ItemSeq.renameWires, mappedItemSourceEq,
-            mappedTailSourceEq]
-        let exposed := RegionIso.renameWiresConjoin itemResult tailResult
-          commonRename
-        let children := RegionIso.conjoinCongr mappedItemIso mappedTailIso
-        exact ⟨.cons mappedItemSource mappedTailSource,
-          mappedItemResult.conjoin mappedTailResult, mappedEvidence,
-          ⟨mappedSites⟩, mappedSourceEq, ⟨exposed.trans children⟩⟩
-  termination_by sizeOf source
-
-  private theorem formalItemReindex
-      {atomArguments common mappedCommon sourceWires mappedSourceWires
-        targetWires mappedTargetWires : List Sig}
-      {frame : Transform.Frame (atomSupportWires atomArguments) common
-        sourceWires targetWires}
-      {mappedFrame : Transform.Frame (atomSupportWires atomArguments)
-        mappedCommon mappedSourceWires mappedTargetWires}
-      {source : Item sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          (atomFormalShape atomArguments).pattern frame.sourceKeep
-          frame.selected source result)
-      (sites : ItemSites (Leaf.Formal.operation [] atomArguments)
-        PUnit.unit evidence)
-      (commonRename : WireRenaming common mappedCommon)
-      (sourceRename : WireRenaming sourceWires mappedSourceWires)
-      (keepCommutes : ∀ {signature} (wire : Var common signature),
-        sourceRename (frame.sourceKeep wire) =
-          mappedFrame.sourceKeep (commonRename wire))
-      (selectedCommutes : sourceRename frame.selected =
-        mappedFrame.selected) :
-      ∃ mappedSource : Item mappedSourceWires,
-        ∃ mappedResult : Region mappedCommon,
-          ∃ mappedEvidence :
-              _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-                (atomFormalShape atomArguments).pattern mappedFrame.sourceKeep
-                mappedFrame.selected mappedSource mappedResult,
-            Nonempty (ItemSites (Leaf.Formal.operation [] atomArguments)
-                PUnit.unit mappedEvidence) ∧
-              source.renameWires sourceRename = mappedSource ∧
-              Nonempty (RegionIso (WireEquiv.refl mappedCommon)
-                (result.renameWires commonRename) mappedResult) :=
-    match sites with
-    | .atom head ports =>
-        by
-        let mappedPorts := ports.map fun wire => commonRename wire
-        have keepMaps : WireRenaming.comp sourceRename frame.sourceKeep =
-            WireRenaming.comp mappedFrame.sourceKeep commonRename := by
-          apply WireRenaming.ext
-          intro signature wire
-          exact keepCommutes wire
-        have mappedPortWires :
-            (ports.map fun wire => frame.sourceKeep wire).map
-                (fun wire => sourceRename wire) =
-              mappedPorts.map fun wire => mappedFrame.sourceKeep wire := by
-          calc
-            _ = ports.map (fun wire =>
-                WireRenaming.comp sourceRename frame.sourceKeep wire) :=
-              Diagram.vars_map_comp ports frame.sourceKeep sourceRename
-            _ = ports.map (fun wire =>
-                WireRenaming.comp mappedFrame.sourceKeep commonRename wire) :=
-              congrArg (fun rename : WireRenaming common mappedSourceWires =>
-                ports.map fun wire => rename wire) keepMaps
-            _ = _ := (Diagram.vars_map_comp ports commonRename
-              mappedFrame.sourceKeep).symm
-        have mappedSource :
-            (Item.atom (frame.sourceKeep head)
-              (ports.map fun wire => frame.sourceKeep wire)).renameWires
-                sourceRename =
-              Item.atom (mappedFrame.sourceKeep (commonRename head))
-                (mappedPorts.map fun wire => mappedFrame.sourceKeep wire) := by
-          simp only [Item.renameWires]
-          rw [keepCommutes head]
-          exact congrArg
-            (Item.atom (mappedFrame.sourceKeep (commonRename head)))
-            mappedPortWires
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (retain := mappedFrame.sourceKeep)
-            (selected := mappedFrame.selected)
-            (commonRename head) mappedPorts
-        let mappedSites : ItemSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence := ItemSites.atom (pattern :=
-            (atomFormalShape atomArguments).pattern) (frame := mappedFrame)
-              (commonRename head) mappedPorts
-        have mappedResult :
-            (Region.singleton (.atom head ports)).renameWires commonRename =
-              Region.singleton (.atom (commonRename head) mappedPorts) := by
-          rw [Region.singleton_renameWires]
-          rfl
-        exact ⟨_, _, mappedEvidence, ⟨mappedSites⟩, mappedSource,
-          ⟨RegionIso.ofEq mappedResult⟩⟩
-    | .selectedAtom ports siteData =>
-        by
-        obtain ⟨formal, retained, portsEq⟩ := siteData
-        let mappedPorts := ports.map fun wire => commonRename wire
-        let mappedFormal := commonRename formal
-        let mappedRetained := retained.map fun wire => commonRename wire
-        have mappedPortsEq : mappedPorts =
-            Argument.Projection.Vars.insertAt [] mappedFormal
-              mappedRetained := by
-          dsimp only [mappedPorts, mappedFormal, mappedRetained]
-          rw [portsEq]
-          exact Argument.Projection.Vars.insertAt_map [] formal retained
-            commonRename
-        let mappedData :
-            (Leaf.Formal.operation [] atomArguments).SiteData mappedFrame
-              PUnit.unit mappedPorts :=
-          ⟨mappedFormal, ⟨mappedRetained, mappedPortsEq⟩⟩
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (retain := mappedFrame.sourceKeep)
-            (selected := mappedFrame.selected) mappedPorts
-        have keepMaps : WireRenaming.comp sourceRename frame.sourceKeep =
-            WireRenaming.comp mappedFrame.sourceKeep commonRename := by
-          apply WireRenaming.ext
-          intro signature wire
-          exact keepCommutes wire
-        have mappedPortWires :
-            (ports.map fun wire => frame.sourceKeep wire).map
-                (fun wire => sourceRename wire) =
-              mappedPorts.map fun wire => mappedFrame.sourceKeep wire := by
-          calc
-            _ = ports.map (fun wire =>
-                WireRenaming.comp sourceRename frame.sourceKeep wire) :=
-              Diagram.vars_map_comp ports frame.sourceKeep sourceRename
-            _ = ports.map (fun wire =>
-                WireRenaming.comp mappedFrame.sourceKeep commonRename wire) :=
-              congrArg (fun rename : WireRenaming common mappedSourceWires =>
-                ports.map fun wire => rename wire) keepMaps
-            _ = _ := (Diagram.vars_map_comp ports commonRename
-              mappedFrame.sourceKeep).symm
-        have mappedSource :
-            (Item.atom frame.selected
-              (ports.map fun wire => frame.sourceKeep wire)).renameWires
-                sourceRename =
-              Item.atom mappedFrame.selected
-                (mappedPorts.map fun wire => mappedFrame.sourceKeep wire) := by
-          simp only [Item.renameWires, selectedCommutes]
-          exact congrArg (Item.atom mappedFrame.selected) mappedPortWires
-        let mappedSites : ItemSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence := ItemSites.selectedAtom
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (frame := mappedFrame) mappedPorts mappedData
-        have mappedResult :
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-              (atomFormalShape atomArguments).pattern ports).renameWires
-                commonRename =
-              _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-                (atomFormalShape atomArguments).pattern mappedPorts := by
-          exact EqualityNormalization.instantiate_renameWires
-            (atomFormalShape atomArguments).pattern ports commonRename
-        exact ⟨_, _, mappedEvidence, ⟨mappedSites⟩, mappedSource,
-          ⟨RegionIso.ofEq mappedResult⟩⟩
-    | .identity signature arity ports =>
-        by
-        let mappedPorts := fun position => commonRename (ports position)
-        have mappedSource :
-            (Item.identity signature arity
-              (fun position => frame.sourceKeep (ports position))).renameWires
-                sourceRename =
-              Item.identity signature arity
-                (fun position => mappedFrame.sourceKeep
-                  (mappedPorts position)) := by
-          simp only [Item.renameWires, mappedPorts]
-          apply congrArg (Item.identity signature arity)
-          funext position
-          exact keepCommutes (ports position)
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (retain := mappedFrame.sourceKeep)
-            (selected := mappedFrame.selected) signature arity mappedPorts
-        let mappedSites : ItemSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence := ItemSites.identity
-            (pattern := (atomFormalShape atomArguments).pattern)
-            (frame := mappedFrame) signature arity mappedPorts
-        have mappedResult :
-            (Region.singleton (.identity signature arity ports)).renameWires
-                commonRename =
-              Region.singleton (.identity signature arity mappedPorts) := by
-          rw [Region.singleton_renameWires]
-          rfl
-        exact ⟨_, _, mappedEvidence, ⟨mappedSites⟩, mappedSource,
-          ⟨RegionIso.ofEq mappedResult⟩⟩
-    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence childSites =>
-        by
-        obtain ⟨mappedChildSource, mappedChildResult, mappedChildEvidence,
-            ⟨mappedChildSites⟩, mappedChildSourceEq, ⟨mappedChildIso⟩⟩ :=
-          formalRegionReindex childEvidence childSites commonRename sourceRename
-            keepCommutes selectedCommutes
-        let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
-            mappedChildEvidence
-        let mappedSites : ItemSites
-            (Leaf.Formal.operation [] atomArguments) PUnit.unit
-              mappedEvidence := .cut mappedChildSites
-        have mappedSourceEq :
-            (Item.cut body).renameWires sourceRename =
-              Item.cut mappedChildSource := by
-          simpa only [Item.renameWires] using
-            congrArg Item.cut mappedChildSourceEq
-        let exposed : RegionIso (WireEquiv.refl mappedCommon)
-            ((Region.singleton (.cut childResult)).renameWires commonRename)
-            (Region.singleton (.cut
-              (childResult.renameWires commonRename))) := by
-          rw [Region.singleton_renameWires]
-          exact RegionIso.refl _
-        let child := RegionIso.singletonCutCongr mappedChildIso
-        exact ⟨.cut mappedChildSource,
-          Region.singleton (.cut mappedChildResult), mappedEvidence,
-          ⟨mappedSites⟩, mappedSourceEq, ⟨exposed.trans child⟩⟩
-  termination_by sizeOf source
-end
-
-/-! Concatenating two generated Formal segments preserves their literal
-Instantiation evidence while recording conjunction reassociation only as a
-proof presentation. -/
-private theorem formalItemsAppend
-    {atomArguments common sourceWires targetWires : List Sig}
-    {frame : Transform.Frame (atomSupportWires atomArguments) common
-      sourceWires targetWires}
-    {firstSource secondSource : ItemSeq sourceWires}
-    {firstResult secondResult : Region common}
-    (firstEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
-        firstSource firstResult)
-    (firstSites : ItemsSites (Leaf.Formal.operation [] atomArguments)
-      PUnit.unit firstEvidence)
-    (secondEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
-        secondSource secondResult)
-    (secondSites : ItemsSites (Leaf.Formal.operation [] atomArguments)
-      PUnit.unit secondEvidence) :
-    ∃ combinedResult : Region common,
-      ∃ combinedEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-            (atomFormalShape atomArguments).pattern frame.sourceKeep
-            frame.selected (firstSource.append secondSource) combinedResult,
-        Nonempty (ItemsSites (Leaf.Formal.operation [] atomArguments)
-            PUnit.unit combinedEvidence) ∧
-          Nonempty (RegionIso (WireEquiv.refl common)
-            (firstResult.conjoin secondResult) combinedResult) :=
-  match firstSites with
-  | .nil _ => by
-      exact ⟨secondResult, secondEvidence, ⟨secondSites⟩,
-        ⟨RegionIso.blankConjoin secondResult⟩⟩
-  | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
-      itemEvidence tailEvidence itemSites tailSites => by
-      obtain ⟨combinedTailResult, combinedTailEvidence,
-          ⟨combinedTailSites⟩, ⟨combinedTailIso⟩⟩ :=
-        formalItemsAppend tailEvidence tailSites secondEvidence secondSites
-      let combinedEvidence :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
-          itemEvidence combinedTailEvidence
-      let combinedSites : ItemsSites
-          (Leaf.Formal.operation [] atomArguments) PUnit.unit
-            combinedEvidence := .cons itemSites combinedTailSites
-      let associated := RegionIso.conjoinAssoc itemResult tailResult
-        secondResult
-      let tailPresented := RegionIso.conjoinCongr
-        (RegionIso.refl itemResult) combinedTailIso
-      exact ⟨itemResult.conjoin combinedTailResult, combinedEvidence,
-        ⟨combinedSites⟩, ⟨associated.trans tailPresented⟩⟩
-  termination_by sizeOf firstSource
-
-/-! An empty retained partition still changes the dependent Formal frame from
-`frame` to `frame.append []`.  Transport the literal evidence once, then close
-that dependent presentation with the public empty-adjoin unit law. -/
-private theorem formalItemsEmptyRetained
-    {atomArguments common sourceWires targetWires : List Sig}
-    {frame : Transform.Frame (atomSupportWires atomArguments) common
-      sourceWires targetWires}
-    {source : ItemSeq sourceWires} {result endpoint : Region common}
-    (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
-        source result)
-    (sites : ItemsSites (Leaf.Formal.operation [] atomArguments)
-      PUnit.unit evidence)
-    (presentation : RegionIso (WireEquiv.refl common) endpoint result) :
-    ∃ mappedSource : ItemSeq (sourceWires ++ []),
-      ∃ mappedResult : Region (common ++ []),
-        ∃ mappedEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-              (atomFormalShape atomArguments).pattern
-              (frame.append []).sourceKeep (frame.append []).selected
-              mappedSource mappedResult,
-          Nonempty (ItemsSites (Leaf.Formal.operation [] atomArguments)
-              PUnit.unit mappedEvidence) ∧
-            Nonempty (RegionIso (WireEquiv.refl common) endpoint
-              (Region.adjoinAt [] .nil mappedResult)) := by
-  let commonEquiv := WireEquiv.appendNil common
-  let sourceEquiv := WireEquiv.appendNil sourceWires
-  let commonAppend := commonEquiv.symm.toRenaming
-  let sourceAppend := sourceEquiv.symm.toRenaming
-  have keepCommutes : ∀ {signature} (wire : Var common signature),
-      sourceAppend (frame.sourceKeep wire) =
-        (frame.append []).sourceKeep (commonAppend wire) := by
-    intro signature wire
-    rw [show sourceAppend (frame.sourceKeep wire) =
-        (frame.sourceKeep wire).appendLeft [] by
-      exact WireEquiv.appendNil_symm_apply sourceWires
-        (frame.sourceKeep wire)]
-    rw [show commonAppend wire = wire.appendLeft [] by
-      exact WireEquiv.appendNil_symm_apply common wire]
-    simp [Transform.Frame.append, WireRenaming.appendRight]
-  have selectedCommutes : sourceAppend frame.selected =
-      (frame.append []).selected := by
-    exact WireEquiv.appendNil_symm_apply sourceWires frame.selected
-  obtain ⟨mappedSource, mappedResult, mappedEvidence, ⟨mappedSites⟩,
-      mappedSourceEq, ⟨mappedResultIso⟩⟩ :=
-    formalItemsReindex evidence sites commonAppend sourceAppend
-      keepCommutes selectedCommutes
-  let resultForward : RegionIso commonEquiv.symm result
-      (result.renameWires commonAppend) :=
-    by
-      simpa only [Region.renameWires_id] using
-        RegionIso.renameWires result WireRenaming.id commonAppend
-          commonEquiv.symm (fun _ => rfl)
-  let endpointForward : RegionIso
-      (((WireEquiv.refl common).trans commonEquiv.symm).trans
-        (WireEquiv.refl (common ++ []))) endpoint mappedResult :=
-    (presentation.trans resultForward).trans mappedResultIso
-  let mappedBack : RegionIso commonEquiv mappedResult
-      (mappedResult.renameWires commonEquiv.toRenaming) :=
-    by
-      simpa only [Region.renameWires_id] using
-        RegionIso.renameWires mappedResult WireRenaming.id
-          commonEquiv.toRenaming commonEquiv (fun _ => rfl)
-  let closed : RegionIso
-      (((((WireEquiv.refl common).trans commonEquiv.symm).trans
-        (WireEquiv.refl (common ++ []))).trans commonEquiv).trans
-          (WireEquiv.refl common))
-      endpoint (Region.adjoinAt [] .nil mappedResult) :=
-    (endpointForward.trans mappedBack).trans
-      (RegionIso.adjoinAtNil mappedResult)
-  have ambientEq :
-      ((((WireEquiv.refl common).trans commonEquiv.symm).trans
-        (WireEquiv.refl (common ++ []))).trans commonEquiv).trans
-          (WireEquiv.refl common) = WireEquiv.refl common := by
-    apply WireEquiv.ext
-    intro signature wire
-    exact commonEquiv.right_inv wire
-  exact ⟨mappedSource, mappedResult, mappedEvidence, ⟨mappedSites⟩,
-    ⟨closed.castAmbient ambientEq⟩⟩
-
-/-! The Formal accumulator eliminates only into propositions.  Its literal
-witnesses are primitive Instantiation evidence derived from the authoritative
-site tree; the exact prepared endpoint remains the EvidenceFold result. -/
-
 /-! A factor layout remembers only the substitution originally carried by
-each selected Formal site.  The authoritative Formal evidence and site tree
-fix the recursive shape; the current frame and literal source are indices, not
-an independently chosen endpoint. -/
+each selected Formal site. The authoritative Formal evidence and site tree
+fix the recursive shape; the current frame and literal source are indices. -/
 mutual
   private def FactorRegionLayout
       {baseContext baseArguments currentArguments common sourceWires
@@ -8232,6 +7718,629 @@ mutual
             currentFrame currentBody
   termination_by 3 * sizeOf sites + 1
 end
+
+/-! FormalApplication evidence is transported only along the explicit source
+and retained-wire embeddings used to combine accumulator branches.  The
+existing Instantiation proof remains the recursion authority; this theorem
+merely rebuilds that proof and its matching Formal site annotations at the
+renamed indices. -/
+
+mutual
+  private theorem formalRegionReindex
+      {atomArguments common mappedCommon sourceWires mappedSourceWires
+        targetWires mappedTargetWires : List Sig}
+      {frame : Transform.Frame (atomSupportWires atomArguments) common
+        sourceWires targetWires}
+      {mappedFrame : Transform.Frame (atomSupportWires atomArguments)
+        mappedCommon mappedSourceWires mappedTargetWires}
+      {source : Region sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          (atomFormalShape atomArguments).pattern frame.sourceKeep
+          frame.selected source result)
+      (sites : RegionSites (Leaf.Formal.operation [] atomArguments)
+        PUnit.unit evidence)
+      (commonRename : WireRenaming common mappedCommon)
+      (sourceRename : WireRenaming sourceWires mappedSourceWires)
+      (keepCommutes : ∀ {signature} (wire : Var common signature),
+        sourceRename (frame.sourceKeep wire) =
+          mappedFrame.sourceKeep (commonRename wire))
+      (selectedCommutes : sourceRename frame.selected =
+        mappedFrame.selected) :
+      ∃ mappedSource : Region mappedSourceWires,
+        ∃ mappedResult : Region mappedCommon,
+          ∃ mappedEvidence :
+              _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+                (atomFormalShape atomArguments).pattern mappedFrame.sourceKeep
+                mappedFrame.selected mappedSource mappedResult,
+            ∃ mappedSites : RegionSites
+                (Leaf.Formal.operation [] atomArguments) PUnit.unit
+                mappedEvidence,
+              source.renameWires sourceRename = mappedSource ∧
+              Nonempty (RegionIso (WireEquiv.refl mappedCommon)
+                (result.renameWires commonRename) mappedResult) ∧
+              (∀ {baseContext : List Sig}
+                  (base : Vars baseContext (atomSupportWires atomArguments)),
+                FactorRegionLayout base base (.refl base) evidence sites frame
+                    source →
+                  FactorRegionLayout base base (.refl base) mappedEvidence
+                    mappedSites mappedFrame mappedSource) :=
+    match sites with
+    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
+        childSites => by
+        have keepMaps : WireRenaming.comp sourceRename frame.sourceKeep =
+            WireRenaming.comp mappedFrame.sourceKeep commonRename := by
+          apply WireRenaming.ext
+          intro signature wire
+          exact keepCommutes wire
+        have appendedKeep : ∀ {signature}
+            (wire : Var (common ++ locals) signature),
+            sourceRename.appendRight locals
+                ((frame.append locals).sourceKeep wire) =
+              (mappedFrame.append locals).sourceKeep
+                (commonRename.appendRight locals wire) := by
+          intro signature wire
+          change sourceRename.appendRight locals
+              (frame.sourceKeep.appendRight locals wire) =
+            mappedFrame.sourceKeep.appendRight locals
+              (commonRename.appendRight locals wire)
+          rw [WireRenaming.appendRight_comp_apply,
+            WireRenaming.appendRight_comp_apply, keepMaps]
+        have appendedSelected :
+            sourceRename.appendRight locals
+                (frame.append locals).selected =
+              (mappedFrame.append locals).selected := by
+          simpa only [Transform.Frame.append, WireRenaming.appendRight,
+            Var.appendMap_left] using
+              congrArg (fun wire => wire.appendLeft locals) selectedCommutes
+        obtain ⟨mappedChildSource, mappedChildResult, mappedChildEvidence,
+            mappedChildSites, mappedChildSourceEq, ⟨mappedChildIso⟩,
+            childLayout⟩ :=
+          formalItemsReindex childEvidence childSites
+            (commonRename.appendRight locals)
+            (sourceRename.appendRight locals) appendedKeep appendedSelected
+        let mappedEvidence :=
+          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+            mappedChildEvidence
+        let mappedSites : RegionSites
+            (Leaf.Formal.operation [] atomArguments) PUnit.unit
+              mappedEvidence :=
+          RegionSites.mk (data := PUnit.unit) (by
+            simpa only [Leaf.Formal.operation] using mappedChildSites)
+        have mappedSourceEq :
+            (Region.mk locals items).renameWires sourceRename =
+              Region.mk locals mappedChildSource := by
+          simpa only [Region.renameWires] using
+            congrArg (Region.mk locals) mappedChildSourceEq
+        let exposed := RegionIso.renameWiresAdjoinAtNil childResult
+          commonRename
+        let child := RegionIso.adjoinAt locals .nil mappedChildIso
+        exact ⟨Region.mk locals mappedChildSource,
+          Region.adjoinAt locals .nil mappedChildResult, mappedEvidence,
+          mappedSites, mappedSourceEq, ⟨exposed.trans child⟩, by
+            intro baseContext base layout
+            unfold FactorRegionLayout at layout ⊢
+            obtain ⟨currentItems, currentEq, currentLayout⟩ := layout
+            cases currentEq
+            exact ⟨mappedChildSource, rfl, childLayout base currentLayout⟩⟩
+  termination_by sizeOf source
+
+  private theorem formalItemsReindex
+      {atomArguments common mappedCommon sourceWires mappedSourceWires
+        targetWires mappedTargetWires : List Sig}
+      {frame : Transform.Frame (atomSupportWires atomArguments) common
+        sourceWires targetWires}
+      {mappedFrame : Transform.Frame (atomSupportWires atomArguments)
+        mappedCommon mappedSourceWires mappedTargetWires}
+      {source : ItemSeq sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          (atomFormalShape atomArguments).pattern frame.sourceKeep
+          frame.selected source result)
+      (sites : ItemsSites (Leaf.Formal.operation [] atomArguments)
+        PUnit.unit evidence)
+      (commonRename : WireRenaming common mappedCommon)
+      (sourceRename : WireRenaming sourceWires mappedSourceWires)
+      (keepCommutes : ∀ {signature} (wire : Var common signature),
+        sourceRename (frame.sourceKeep wire) =
+          mappedFrame.sourceKeep (commonRename wire))
+      (selectedCommutes : sourceRename frame.selected =
+        mappedFrame.selected) :
+      ∃ mappedSource : ItemSeq mappedSourceWires,
+        ∃ mappedResult : Region mappedCommon,
+          ∃ mappedEvidence :
+              _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+                (atomFormalShape atomArguments).pattern mappedFrame.sourceKeep
+                mappedFrame.selected mappedSource mappedResult,
+            ∃ mappedSites : ItemsSites
+                (Leaf.Formal.operation [] atomArguments) PUnit.unit
+                mappedEvidence,
+              source.renameWires sourceRename = mappedSource ∧
+              Nonempty (RegionIso (WireEquiv.refl mappedCommon)
+                (result.renameWires commonRename) mappedResult) ∧
+              (∀ {baseContext : List Sig}
+                  (base : Vars baseContext (atomSupportWires atomArguments)),
+                FactorItemsLayout base base (.refl base) evidence sites frame
+                    source →
+                  FactorItemsLayout base base (.refl base) mappedEvidence
+                    mappedSites mappedFrame mappedSource) :=
+    match sites with
+    | .nil _ =>
+        by
+        let mappedEvidence :=
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+            (pattern := (atomFormalShape atomArguments).pattern)
+            (retain := mappedFrame.sourceKeep)
+            (selected := mappedFrame.selected)
+        exact ⟨.nil, Region.blank mappedCommon, mappedEvidence,
+          .nil mappedEvidence, rfl, ⟨RegionIso.refl _⟩, by
+            intro baseContext base layout
+            unfold FactorItemsLayout at layout ⊢
+            rfl⟩
+    | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult itemEvidence
+        tailEvidence itemSites tailSites =>
+        by
+        obtain ⟨mappedItemSource, mappedItemResult, mappedItemEvidence,
+            mappedItemSites, mappedItemSourceEq, ⟨mappedItemIso⟩,
+            itemLayout⟩ :=
+          formalItemReindex itemEvidence itemSites commonRename sourceRename
+            keepCommutes selectedCommutes
+        obtain ⟨mappedTailSource, mappedTailResult, mappedTailEvidence,
+            mappedTailSites, mappedTailSourceEq, ⟨mappedTailIso⟩,
+            tailLayout⟩ :=
+          formalItemsReindex tailEvidence tailSites commonRename sourceRename
+            keepCommutes selectedCommutes
+        let mappedEvidence :=
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+            mappedItemEvidence mappedTailEvidence
+        let mappedSites : ItemsSites
+            (Leaf.Formal.operation [] atomArguments) PUnit.unit
+              mappedEvidence := .cons mappedItemSites mappedTailSites
+        have mappedSourceEq :
+            (ItemSeq.cons item tail).renameWires sourceRename =
+              .cons mappedItemSource mappedTailSource := by
+          simp only [ItemSeq.renameWires, mappedItemSourceEq,
+            mappedTailSourceEq]
+        let exposed := RegionIso.renameWiresConjoin itemResult tailResult
+          commonRename
+        let children := RegionIso.conjoinCongr mappedItemIso mappedTailIso
+        exact ⟨.cons mappedItemSource mappedTailSource,
+          mappedItemResult.conjoin mappedTailResult, mappedEvidence,
+          mappedSites, mappedSourceEq, ⟨exposed.trans children⟩, by
+            intro baseContext base layout
+            unfold FactorItemsLayout at layout ⊢
+            obtain ⟨currentItem, currentTail, currentEq, currentItemLayout,
+              currentTailLayout⟩ := layout
+            cases currentEq
+            exact ⟨mappedItemSource, mappedTailSource, rfl,
+              itemLayout base currentItemLayout,
+              tailLayout base currentTailLayout⟩⟩
+  termination_by sizeOf source
+
+  private theorem formalItemReindex
+      {atomArguments common mappedCommon sourceWires mappedSourceWires
+        targetWires mappedTargetWires : List Sig}
+      {frame : Transform.Frame (atomSupportWires atomArguments) common
+        sourceWires targetWires}
+      {mappedFrame : Transform.Frame (atomSupportWires atomArguments)
+        mappedCommon mappedSourceWires mappedTargetWires}
+      {source : Item sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          (atomFormalShape atomArguments).pattern frame.sourceKeep
+          frame.selected source result)
+      (sites : ItemSites (Leaf.Formal.operation [] atomArguments)
+        PUnit.unit evidence)
+      (commonRename : WireRenaming common mappedCommon)
+      (sourceRename : WireRenaming sourceWires mappedSourceWires)
+      (keepCommutes : ∀ {signature} (wire : Var common signature),
+        sourceRename (frame.sourceKeep wire) =
+          mappedFrame.sourceKeep (commonRename wire))
+      (selectedCommutes : sourceRename frame.selected =
+        mappedFrame.selected) :
+      ∃ mappedSource : Item mappedSourceWires,
+        ∃ mappedResult : Region mappedCommon,
+          ∃ mappedEvidence :
+              _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+                (atomFormalShape atomArguments).pattern mappedFrame.sourceKeep
+                mappedFrame.selected mappedSource mappedResult,
+            ∃ mappedSites : ItemSites
+                (Leaf.Formal.operation [] atomArguments) PUnit.unit
+                mappedEvidence,
+              source.renameWires sourceRename = mappedSource ∧
+              Nonempty (RegionIso (WireEquiv.refl mappedCommon)
+                (result.renameWires commonRename) mappedResult) ∧
+              (∀ {baseContext : List Sig}
+                  (base : Vars baseContext (atomSupportWires atomArguments)),
+                FactorItemLayout base base (.refl base) evidence sites frame
+                    source →
+                  FactorItemLayout base base (.refl base) mappedEvidence
+                    mappedSites mappedFrame mappedSource) :=
+    match sites with
+    | .atom head ports =>
+        by
+        let mappedPorts := ports.map fun wire => commonRename wire
+        have keepMaps : WireRenaming.comp sourceRename frame.sourceKeep =
+            WireRenaming.comp mappedFrame.sourceKeep commonRename := by
+          apply WireRenaming.ext
+          intro signature wire
+          exact keepCommutes wire
+        have mappedPortWires :
+            (ports.map fun wire => frame.sourceKeep wire).map
+                (fun wire => sourceRename wire) =
+              mappedPorts.map fun wire => mappedFrame.sourceKeep wire := by
+          calc
+            _ = ports.map (fun wire =>
+                WireRenaming.comp sourceRename frame.sourceKeep wire) :=
+              Diagram.vars_map_comp ports frame.sourceKeep sourceRename
+            _ = ports.map (fun wire =>
+                WireRenaming.comp mappedFrame.sourceKeep commonRename wire) :=
+              congrArg (fun rename : WireRenaming common mappedSourceWires =>
+                ports.map fun wire => rename wire) keepMaps
+            _ = _ := (Diagram.vars_map_comp ports commonRename
+              mappedFrame.sourceKeep).symm
+        have mappedSource :
+            (Item.atom (frame.sourceKeep head)
+              (ports.map fun wire => frame.sourceKeep wire)).renameWires
+                sourceRename =
+              Item.atom (mappedFrame.sourceKeep (commonRename head))
+                (mappedPorts.map fun wire => mappedFrame.sourceKeep wire) := by
+          simp only [Item.renameWires]
+          rw [keepCommutes head]
+          exact congrArg
+            (Item.atom (mappedFrame.sourceKeep (commonRename head)))
+            mappedPortWires
+        let mappedEvidence :=
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+            (pattern := (atomFormalShape atomArguments).pattern)
+            (retain := mappedFrame.sourceKeep)
+            (selected := mappedFrame.selected)
+            (commonRename head) mappedPorts
+        let mappedSites : ItemSites
+            (Leaf.Formal.operation [] atomArguments) PUnit.unit
+              mappedEvidence := ItemSites.atom (pattern :=
+            (atomFormalShape atomArguments).pattern) (frame := mappedFrame)
+              (commonRename head) mappedPorts
+        have mappedResult :
+            (Region.singleton (.atom head ports)).renameWires commonRename =
+              Region.singleton (.atom (commonRename head) mappedPorts) := by
+          rw [Region.singleton_renameWires]
+          rfl
+        exact ⟨_, _, mappedEvidence, mappedSites, mappedSource,
+          ⟨RegionIso.ofEq mappedResult⟩, by
+            intro baseContext base layout
+            unfold FactorItemLayout at layout ⊢
+            rfl⟩
+    | .selectedAtom ports siteData =>
+        by
+        obtain ⟨formal, retained, portsEq⟩ := siteData
+        let mappedPorts := ports.map fun wire => commonRename wire
+        let mappedFormal := commonRename formal
+        let mappedRetained := retained.map fun wire => commonRename wire
+        have mappedPortsEq : mappedPorts =
+            Argument.Projection.Vars.insertAt [] mappedFormal
+              mappedRetained := by
+          dsimp only [mappedPorts, mappedFormal, mappedRetained]
+          rw [portsEq]
+          exact Argument.Projection.Vars.insertAt_map [] formal retained
+            commonRename
+        let mappedData :
+            (Leaf.Formal.operation [] atomArguments).SiteData mappedFrame
+              PUnit.unit mappedPorts :=
+          ⟨mappedFormal, ⟨mappedRetained, mappedPortsEq⟩⟩
+        let mappedEvidence :=
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+            (pattern := (atomFormalShape atomArguments).pattern)
+            (retain := mappedFrame.sourceKeep)
+            (selected := mappedFrame.selected) mappedPorts
+        have keepMaps : WireRenaming.comp sourceRename frame.sourceKeep =
+            WireRenaming.comp mappedFrame.sourceKeep commonRename := by
+          apply WireRenaming.ext
+          intro signature wire
+          exact keepCommutes wire
+        have mappedPortWires :
+            (ports.map fun wire => frame.sourceKeep wire).map
+                (fun wire => sourceRename wire) =
+              mappedPorts.map fun wire => mappedFrame.sourceKeep wire := by
+          calc
+            _ = ports.map (fun wire =>
+                WireRenaming.comp sourceRename frame.sourceKeep wire) :=
+              Diagram.vars_map_comp ports frame.sourceKeep sourceRename
+            _ = ports.map (fun wire =>
+                WireRenaming.comp mappedFrame.sourceKeep commonRename wire) :=
+              congrArg (fun rename : WireRenaming common mappedSourceWires =>
+                ports.map fun wire => rename wire) keepMaps
+            _ = _ := (Diagram.vars_map_comp ports commonRename
+              mappedFrame.sourceKeep).symm
+        have mappedSource :
+            (Item.atom frame.selected
+              (ports.map fun wire => frame.sourceKeep wire)).renameWires
+                sourceRename =
+              Item.atom mappedFrame.selected
+                (mappedPorts.map fun wire => mappedFrame.sourceKeep wire) := by
+          simp only [Item.renameWires, selectedCommutes]
+          exact congrArg (Item.atom mappedFrame.selected) mappedPortWires
+        let mappedSites : ItemSites
+            (Leaf.Formal.operation [] atomArguments) PUnit.unit
+              mappedEvidence := ItemSites.selectedAtom
+            (pattern := (atomFormalShape atomArguments).pattern)
+            (frame := mappedFrame) mappedPorts mappedData
+        have mappedResult :
+            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+              (atomFormalShape atomArguments).pattern ports).renameWires
+                commonRename =
+              _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+                (atomFormalShape atomArguments).pattern mappedPorts := by
+          exact EqualityNormalization.instantiate_renameWires
+            (atomFormalShape atomArguments).pattern ports commonRename
+        exact ⟨_, _, mappedEvidence, mappedSites, mappedSource,
+          ⟨RegionIso.ofEq mappedResult⟩, by
+            intro baseContext base layout
+            unfold FactorItemLayout at layout ⊢
+            obtain ⟨siteRename, portsFromBase, sourceFromBase⟩ := layout
+            let mappedSiteRename : WireRenaming baseContext mappedCommon :=
+              WireRenaming.comp commonRename siteRename
+            refine ⟨mappedSiteRename, ?_, ?_⟩
+            · calc
+                mappedPorts = ports.map (fun wire => commonRename wire) := rfl
+                _ = (base.map fun wire => siteRename wire).map
+                      (fun wire => commonRename wire) := by
+                  rw [portsFromBase]
+                  rfl
+                _ = base.map (fun wire => mappedSiteRename wire) :=
+                  by
+                    simpa only [mappedSiteRename, WireRenaming.comp] using
+                      Diagram.vars_map_comp base siteRename commonRename
+            · change Item.atom mappedFrame.selected
+                  (mappedPorts.map fun wire => mappedFrame.sourceKeep wire) = _
+              congr 1
+              rw [show base.map (fun wire => mappedSiteRename wire) =
+                  mappedPorts by
+                calc
+                  _ = (base.map fun wire => siteRename wire).map
+                      (fun wire => commonRename wire) :=
+                    (Diagram.vars_map_comp base siteRename commonRename).symm
+                  _ = ports.map (fun wire => commonRename wire) := by
+                    rw [← portsFromBase]
+                    rfl
+                  _ = mappedPorts := rfl]⟩
+    | .identity signature arity ports =>
+        by
+        let mappedPorts := fun position => commonRename (ports position)
+        have mappedSource :
+            (Item.identity signature arity
+              (fun position => frame.sourceKeep (ports position))).renameWires
+                sourceRename =
+              Item.identity signature arity
+                (fun position => mappedFrame.sourceKeep
+                  (mappedPorts position)) := by
+          simp only [Item.renameWires, mappedPorts]
+          apply congrArg (Item.identity signature arity)
+          funext position
+          exact keepCommutes (ports position)
+        let mappedEvidence :=
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+            (pattern := (atomFormalShape atomArguments).pattern)
+            (retain := mappedFrame.sourceKeep)
+            (selected := mappedFrame.selected) signature arity mappedPorts
+        let mappedSites : ItemSites
+            (Leaf.Formal.operation [] atomArguments) PUnit.unit
+              mappedEvidence := ItemSites.identity
+            (pattern := (atomFormalShape atomArguments).pattern)
+            (frame := mappedFrame) signature arity mappedPorts
+        have mappedResult :
+            (Region.singleton (.identity signature arity ports)).renameWires
+                commonRename =
+              Region.singleton (.identity signature arity mappedPorts) := by
+          rw [Region.singleton_renameWires]
+          rfl
+        exact ⟨_, _, mappedEvidence, mappedSites, mappedSource,
+          ⟨RegionIso.ofEq mappedResult⟩, by
+            intro baseContext base layout
+            unfold FactorItemLayout at layout ⊢
+            rfl⟩
+    | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence childSites =>
+        by
+        obtain ⟨mappedChildSource, mappedChildResult, mappedChildEvidence,
+            mappedChildSites, mappedChildSourceEq, ⟨mappedChildIso⟩,
+            childLayout⟩ :=
+          formalRegionReindex childEvidence childSites commonRename sourceRename
+            keepCommutes selectedCommutes
+        let mappedEvidence :=
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+            mappedChildEvidence
+        let mappedSites : ItemSites
+            (Leaf.Formal.operation [] atomArguments) PUnit.unit
+              mappedEvidence := .cut mappedChildSites
+        have mappedSourceEq :
+            (Item.cut body).renameWires sourceRename =
+              Item.cut mappedChildSource := by
+          simpa only [Item.renameWires] using
+            congrArg Item.cut mappedChildSourceEq
+        let exposed : RegionIso (WireEquiv.refl mappedCommon)
+            ((Region.singleton (.cut childResult)).renameWires commonRename)
+            (Region.singleton (.cut
+              (childResult.renameWires commonRename))) := by
+          rw [Region.singleton_renameWires]
+          exact RegionIso.refl _
+        let child := RegionIso.singletonCutCongr mappedChildIso
+        exact ⟨.cut mappedChildSource,
+          Region.singleton (.cut mappedChildResult), mappedEvidence,
+          mappedSites, mappedSourceEq, ⟨exposed.trans child⟩, by
+            intro baseContext base layout
+            unfold FactorItemLayout at layout ⊢
+            obtain ⟨currentBody, currentEq, currentLayout⟩ := layout
+            have bodyEq : currentBody = body := by
+              injection currentEq.symm
+            subst currentBody
+            exact ⟨mappedChildSource, rfl, childLayout base currentLayout⟩⟩
+  termination_by sizeOf source
+end
+
+/-! Concatenating two generated Formal segments preserves their literal
+Instantiation evidence while recording conjunction reassociation only as a
+proof presentation. -/
+private theorem formalItemsAppend
+    {atomArguments common sourceWires targetWires : List Sig}
+    {frame : Transform.Frame (atomSupportWires atomArguments) common
+      sourceWires targetWires}
+    {firstSource secondSource : ItemSeq sourceWires}
+    {firstResult secondResult : Region common}
+    (firstEvidence :
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
+        firstSource firstResult)
+    (firstSites : ItemsSites (Leaf.Formal.operation [] atomArguments)
+      PUnit.unit firstEvidence)
+    (secondEvidence :
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
+        secondSource secondResult)
+    (secondSites : ItemsSites (Leaf.Formal.operation [] atomArguments)
+      PUnit.unit secondEvidence) :
+    ∃ combinedResult : Region common,
+      ∃ combinedEvidence :
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+            (atomFormalShape atomArguments).pattern frame.sourceKeep
+            frame.selected (firstSource.append secondSource) combinedResult,
+        ∃ combinedSites : ItemsSites
+            (Leaf.Formal.operation [] atomArguments) PUnit.unit
+            combinedEvidence,
+          Nonempty (RegionIso (WireEquiv.refl common)
+              (firstResult.conjoin secondResult) combinedResult) ∧
+            (∀ {baseContext : List Sig}
+                (base : Vars baseContext (atomSupportWires atomArguments)),
+              FactorItemsLayout base base (.refl base) firstEvidence firstSites
+                  frame firstSource →
+                FactorItemsLayout base base (.refl base) secondEvidence
+                    secondSites frame secondSource →
+                  FactorItemsLayout base base (.refl base) combinedEvidence
+                    combinedSites frame
+                    (firstSource.append secondSource)) :=
+  match firstSites with
+  | .nil _ => by
+      exact ⟨secondResult, secondEvidence, secondSites,
+        ⟨RegionIso.blankConjoin secondResult⟩, by
+          intro baseContext base firstLayout secondLayout
+          simpa only [ItemSeq.nil_append] using secondLayout⟩
+  | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
+      itemEvidence tailEvidence itemSites tailSites => by
+      obtain ⟨combinedTailResult, combinedTailEvidence,
+          combinedTailSites, ⟨combinedTailIso⟩, combineTailLayout⟩ :=
+        formalItemsAppend tailEvidence tailSites secondEvidence secondSites
+      let combinedEvidence :=
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          itemEvidence combinedTailEvidence
+      let combinedSites : ItemsSites
+          (Leaf.Formal.operation [] atomArguments) PUnit.unit
+            combinedEvidence := .cons itemSites combinedTailSites
+      let associated := RegionIso.conjoinAssoc itemResult tailResult
+        secondResult
+      let tailPresented := RegionIso.conjoinCongr
+        (RegionIso.refl itemResult) combinedTailIso
+      exact ⟨itemResult.conjoin combinedTailResult, combinedEvidence,
+        combinedSites, ⟨associated.trans tailPresented⟩, by
+          intro baseContext base firstLayout secondLayout
+          unfold FactorItemsLayout at firstLayout ⊢
+          obtain ⟨currentItem, currentTail, currentEq, currentItemLayout,
+            currentTailLayout⟩ := firstLayout
+          cases currentEq
+          exact ⟨item, tail.append secondSource, rfl,
+            currentItemLayout,
+            combineTailLayout base currentTailLayout secondLayout⟩⟩
+  termination_by sizeOf firstSource
+
+/-! An empty retained partition still changes the dependent Formal frame from
+`frame` to `frame.append []`.  Transport the literal evidence once, then close
+that dependent presentation with the public empty-adjoin unit law. -/
+private theorem formalItemsEmptyRetained
+    {atomArguments common sourceWires targetWires : List Sig}
+    {frame : Transform.Frame (atomSupportWires atomArguments) common
+      sourceWires targetWires}
+    {source : ItemSeq sourceWires} {result endpoint : Region common}
+    (evidence :
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
+        source result)
+    (sites : ItemsSites (Leaf.Formal.operation [] atomArguments)
+      PUnit.unit evidence)
+    (presentation : RegionIso (WireEquiv.refl common) endpoint result) :
+    ∃ mappedSource : ItemSeq (sourceWires ++ []),
+      ∃ mappedResult : Region (common ++ []),
+        ∃ mappedEvidence :
+            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+              (atomFormalShape atomArguments).pattern
+              (frame.append []).sourceKeep (frame.append []).selected
+              mappedSource mappedResult,
+          ∃ mappedSites : ItemsSites
+              (Leaf.Formal.operation [] atomArguments) PUnit.unit
+              mappedEvidence,
+            Nonempty (RegionIso (WireEquiv.refl common) endpoint
+              (Region.adjoinAt [] .nil mappedResult)) ∧
+            (∀ {baseContext : List Sig}
+                (base : Vars baseContext (atomSupportWires atomArguments)),
+              FactorItemsLayout base base (.refl base) evidence sites frame
+                  source →
+                FactorItemsLayout base base (.refl base) mappedEvidence
+                  mappedSites (frame.append []) mappedSource) := by
+  let commonEquiv := WireEquiv.appendNil common
+  let sourceEquiv := WireEquiv.appendNil sourceWires
+  let commonAppend := commonEquiv.symm.toRenaming
+  let sourceAppend := sourceEquiv.symm.toRenaming
+  have keepCommutes : ∀ {signature} (wire : Var common signature),
+      sourceAppend (frame.sourceKeep wire) =
+        (frame.append []).sourceKeep (commonAppend wire) := by
+    intro signature wire
+    rw [show sourceAppend (frame.sourceKeep wire) =
+        (frame.sourceKeep wire).appendLeft [] by
+      exact WireEquiv.appendNil_symm_apply sourceWires
+        (frame.sourceKeep wire)]
+    rw [show commonAppend wire = wire.appendLeft [] by
+      exact WireEquiv.appendNil_symm_apply common wire]
+    simp [Transform.Frame.append, WireRenaming.appendRight]
+  have selectedCommutes : sourceAppend frame.selected =
+      (frame.append []).selected := by
+    exact WireEquiv.appendNil_symm_apply sourceWires frame.selected
+  obtain ⟨mappedSource, mappedResult, mappedEvidence, mappedSites,
+      mappedSourceEq, ⟨mappedResultIso⟩, mapLayout⟩ :=
+    formalItemsReindex evidence sites commonAppend sourceAppend
+      keepCommutes selectedCommutes
+  let resultForward : RegionIso commonEquiv.symm result
+      (result.renameWires commonAppend) :=
+    by
+      simpa only [Region.renameWires_id] using
+        RegionIso.renameWires result WireRenaming.id commonAppend
+          commonEquiv.symm (fun _ => rfl)
+  let endpointForward : RegionIso
+      (((WireEquiv.refl common).trans commonEquiv.symm).trans
+        (WireEquiv.refl (common ++ []))) endpoint mappedResult :=
+    (presentation.trans resultForward).trans mappedResultIso
+  let mappedBack : RegionIso commonEquiv mappedResult
+      (mappedResult.renameWires commonEquiv.toRenaming) :=
+    by
+      simpa only [Region.renameWires_id] using
+        RegionIso.renameWires mappedResult WireRenaming.id
+          commonEquiv.toRenaming commonEquiv (fun _ => rfl)
+  let closed : RegionIso
+      (((((WireEquiv.refl common).trans commonEquiv.symm).trans
+        (WireEquiv.refl (common ++ []))).trans commonEquiv).trans
+          (WireEquiv.refl common))
+      endpoint (Region.adjoinAt [] .nil mappedResult) :=
+    (endpointForward.trans mappedBack).trans
+      (RegionIso.adjoinAtNil mappedResult)
+  have ambientEq :
+      ((((WireEquiv.refl common).trans commonEquiv.symm).trans
+        (WireEquiv.refl (common ++ []))).trans commonEquiv).trans
+          (WireEquiv.refl common) = WireEquiv.refl common := by
+    apply WireEquiv.ext
+    intro signature wire
+    exact commonEquiv.right_inv wire
+  exact ⟨mappedSource, mappedResult, mappedEvidence, mappedSites,
+    ⟨closed.castAmbient ambientEq⟩, mapLayout⟩
+
+/-! The Formal accumulator eliminates only into propositions.  Its literal
+witnesses are primitive Instantiation evidence derived from the authoritative
+site tree; the exact prepared endpoint remains the EvidenceFold result. -/
 
 /-! Factor layouts depend only on the source-facing part of their current
 frame.  Primitive edits choose different target wire lists, so this mutual
@@ -8628,6 +8737,14 @@ private def factorSourceFrame (outer localBefore localAfter arguments : List Sig
       (outer ++ (localBefore ++ .rel arguments :: localAfter))
       (outer ++ (localBefore ++ localAfter)) :=
   Transform.Frame.replace outer localBefore localAfter [] arguments
+
+/-- Initial atom assembly frame before selected sites contribute their
+retained local partitions. -/
+private def factorInitialFrame (outer arguments : List Sig) :
+    Transform.Frame arguments outer (outer ++ [.rel arguments]) outer where
+  sourceKeep := ⟨fun wire => wire.appendLeft [.rel arguments]⟩
+  targetKeep := WireRenaming.id
+  selected := Var.appendRight outer .here
 
 private def factorBinderRegion (outer localBefore localAfter : List Sig)
     {arguments : List Sig}
@@ -9763,12 +9880,15 @@ private def FormalRegion
           _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
             (atomFormalShape atomArguments).pattern formalFrame.sourceKeep
             formalFrame.selected formalSource formalResult,
-        Nonempty (RegionSites (Leaf.Formal.operation [] atomArguments)
-            PUnit.unit formalEvidence) ∧
+        ∃ formalSites : RegionSites (Leaf.Formal.operation [] atomArguments)
+            PUnit.unit formalEvidence,
           Nonempty (RegionIso (WireEquiv.refl common)
             (EqualityNormalization.EvidenceFold.regionAt
               (atomSelectedLeaf shape) evidence sites WireRenaming.id)
-            formalResult)
+            formalResult) ∧
+          FactorRegionLayout (atomSelection head ports)
+            (atomSelection head ports) (.refl (atomSelection head ports))
+            formalEvidence formalSites formalFrame formalSource
 
 private def FormalItems
     {patternWires atomArguments common sourceWires targetWires
@@ -9798,12 +9918,16 @@ private def FormalItems
               (atomFormalShape atomArguments).pattern
               (formalFrame.append retained).sourceKeep
               (formalFrame.append retained).selected formalSource formalResult,
-          Nonempty (ItemsSites (Leaf.Formal.operation [] atomArguments)
-              PUnit.unit formalEvidence) ∧
+          ∃ formalSites : ItemsSites (Leaf.Formal.operation [] atomArguments)
+              PUnit.unit formalEvidence,
             Nonempty (RegionIso (WireEquiv.refl common)
               (EqualityNormalization.EvidenceFold.itemsAt
                 (atomSelectedLeaf shape) evidence sites WireRenaming.id)
-              (Region.adjoinAt retained .nil formalResult))
+              (Region.adjoinAt retained .nil formalResult)) ∧
+            FactorItemsLayout (atomSelection head ports)
+              (atomSelection head ports) (.refl (atomSelection head ports))
+              formalEvidence formalSites (formalFrame.append retained)
+              formalSource
 
 private def FormalItem
     {patternWires atomArguments common sourceWires targetWires
@@ -9833,12 +9957,16 @@ private def FormalItem
               (atomFormalShape atomArguments).pattern
               (formalFrame.append retained).sourceKeep
               (formalFrame.append retained).selected formalSource formalResult,
-          Nonempty (ItemsSites (Leaf.Formal.operation [] atomArguments)
-              PUnit.unit formalEvidence) ∧
+          ∃ formalSites : ItemsSites (Leaf.Formal.operation [] atomArguments)
+              PUnit.unit formalEvidence,
             Nonempty (RegionIso (WireEquiv.refl common)
               (EqualityNormalization.EvidenceFold.itemAt
                 (atomSelectedLeaf shape) evidence sites WireRenaming.id)
-              (Region.adjoinAt retained .nil formalResult))
+              (Region.adjoinAt retained .nil formalResult)) ∧
+            FactorItemsLayout (atomSelection head ports)
+              (atomSelection head ports) (.refl (atomSelection head ports))
+              formalEvidence formalSites (formalFrame.append retained)
+              formalSource
 
 /-- Selected atoms are the only item branch that contributes retained locals
 at the current region level.  Its literal witness is the generated Formal
@@ -9928,12 +10056,14 @@ private theorem formalSelectedItem
       atomSelectedLeaf, mappedApplication, retainedLocals, hostItems,
       formal, retainedPorts, formalResult] using exposedPresentation
   exact ⟨retainedLocals, formalSource, formalResult, formalEvidence,
-    ⟨formalSites⟩, ⟨exactPresentation⟩⟩
+    formalSites, ⟨exactPresentation⟩,
+    atomFormalPrefixFactorLayout shape hostItems formalFrame⟩
 
 /-! Package one ordinary Formal item as a one-element segment.  The helper is
 used only by item branches whose retained partition is empty. -/
 private theorem formalSingleItemEmptyRetained
-    {atomArguments common sourceWires targetWires : List Sig}
+    {baseContext atomArguments common sourceWires targetWires : List Sig}
+    (base : Vars baseContext (atomSupportWires atomArguments))
     {frame : Transform.Frame (atomSupportWires atomArguments) common
       sourceWires targetWires}
     {itemSource : Item sourceWires} {itemResult endpoint : Region common}
@@ -9943,6 +10073,8 @@ private theorem formalSingleItemEmptyRetained
         itemSource itemResult)
     (itemSites : ItemSites (Leaf.Formal.operation [] atomArguments)
       PUnit.unit itemEvidence)
+    (itemLayout : FactorItemLayout base base (.refl base) itemEvidence
+      itemSites frame itemSource)
     (presentation : RegionIso (WireEquiv.refl common) endpoint itemResult) :
     ∃ formalSource : ItemSeq (sourceWires ++ []),
       ∃ formalResult : Region (common ++ []),
@@ -9951,10 +10083,13 @@ private theorem formalSingleItemEmptyRetained
               (atomFormalShape atomArguments).pattern
               (frame.append []).sourceKeep (frame.append []).selected
               formalSource formalResult,
-          Nonempty (ItemsSites (Leaf.Formal.operation [] atomArguments)
-              PUnit.unit formalEvidence) ∧
+          ∃ formalSites : ItemsSites
+              (Leaf.Formal.operation [] atomArguments) PUnit.unit
+              formalEvidence,
             Nonempty (RegionIso (WireEquiv.refl common) endpoint
-              (Region.adjoinAt [] .nil formalResult)) := by
+              (Region.adjoinAt [] .nil formalResult)) ∧
+            FactorItemsLayout base base (.refl base) formalEvidence
+              formalSites (frame.append []) formalSource := by
   let tailEvidence :
       _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         (atomFormalShape atomArguments).pattern frame.sourceKeep frame.selected
@@ -9966,7 +10101,17 @@ private theorem formalSingleItemEmptyRetained
       PUnit.unit baseEvidence := .cons itemSites (.nil tailEvidence)
   let basePresentation := presentation.trans
     (RegionIso.conjoinBlank itemResult).symm
-  exact formalItemsEmptyRetained baseEvidence baseSites basePresentation
+  obtain ⟨formalSource, formalResult, formalEvidence, formalSites,
+      ⟨formalIso⟩, mapLayout⟩ :=
+    formalItemsEmptyRetained baseEvidence baseSites basePresentation
+  have baseLayout : FactorItemsLayout base base (.refl base) baseEvidence
+      baseSites frame (.cons itemSource .nil) := by
+    unfold FactorItemsLayout
+    refine ⟨itemSource, .nil, rfl, itemLayout, ?_⟩
+    unfold FactorItemsLayout
+    rfl
+  exact ⟨formalSource, formalResult, formalEvidence, formalSites,
+    ⟨formalIso⟩, mapLayout base baseLayout⟩
 
 mutual
   /-- Every authoritative region site tree has one generated Formal
@@ -9996,7 +10141,8 @@ mutual
     | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
         childSites => by
         obtain ⟨retained, childSource, childFormalResult,
-            childFormalEvidence, ⟨childFormalSites⟩, ⟨childIso⟩⟩ :=
+            childFormalEvidence, childFormalSites, ⟨childIso⟩,
+            childLayout⟩ :=
           formalItems shape childEvidence childSites
             (formalFrame.append locals)
         unfold FormalRegion
@@ -10040,7 +10186,8 @@ mutual
           simp [sourceRename, combinedFrame, combinedRetained,
             Transform.Frame.append, Region.adjoinMaterialWire]
         obtain ⟨mappedSource, mappedResult, mappedEvidence,
-            ⟨mappedSites⟩, mappedSourceEq, ⟨mappedResultIso⟩⟩ :=
+            mappedSites, mappedSourceEq, ⟨mappedResultIso⟩,
+            mapLayout⟩ :=
           formalItemsReindex childFormalEvidence childFormalSites
             commonRename sourceRename keepCommutes selectedCommutes
         let formalSource : Region sourceWires :=
@@ -10092,7 +10239,10 @@ mutual
             ItemSeq.append_nil, ItemSeq.nil_append] using
               chained.castAmbient ambientEq
         exact ⟨formalSource, formalResult, formalEvidence,
-          ⟨formalSites⟩, ⟨presentation⟩⟩
+          formalSites, ⟨presentation⟩, by
+            unfold FactorRegionLayout
+            exact ⟨mappedSource, rfl,
+              mapLayout (atomSelection head ports) childLayout⟩⟩
   termination_by 3 * sizeOf sites
 
   /-- Item-sequence accumulation synthesizes and concatenates exactly the
@@ -10130,20 +10280,24 @@ mutual
             (Leaf.Formal.operation [] atomArguments) PUnit.unit
               formalEvidence := .nil formalEvidence
         obtain ⟨formalSource, formalResult, mappedEvidence,
-            ⟨mappedSites⟩, ⟨presentation⟩⟩ :=
+            mappedSites, ⟨presentation⟩, mapLayout⟩ :=
           formalItemsEmptyRetained formalEvidence formalSites
             (RegionIso.refl (Region.blank common))
         exact ⟨[], formalSource, formalResult, mappedEvidence,
-          ⟨mappedSites⟩, ⟨by
+          mappedSites, ⟨by
             simpa only [EqualityNormalization.EvidenceFold.itemsAt] using
-              presentation⟩⟩
+              presentation⟩, mapLayout (atomSelection head ports) (by
+                unfold FactorItemsLayout
+                rfl)⟩
     | @ItemsSites.cons _ _ _ _ _ _ _ _ item originalTail itemResult tailResult
         itemEvidence tailEvidence itemSites tailSites => by
         obtain ⟨itemRetained, itemSource, itemFormalResult,
-            itemFormalEvidence, ⟨itemFormalSites⟩, ⟨itemIso⟩⟩ :=
+            itemFormalEvidence, itemFormalSites, ⟨itemIso⟩,
+            itemLayout⟩ :=
           formalItem shape itemEvidence itemSites formalFrame
         obtain ⟨tailRetained, tailSource, tailFormalResult,
-            tailFormalEvidence, ⟨tailFormalSites⟩, ⟨tailIso⟩⟩ :=
+            tailFormalEvidence, tailFormalSites, ⟨tailIso⟩,
+            tailLayout⟩ :=
           formalItems shape tailEvidence tailSites formalFrame
         unfold FormalItems
         let combinedFrame := formalFrame.append
@@ -10203,19 +10357,19 @@ mutual
           simp [combinedFrame, tailSourceRename, Transform.Frame.append,
             Region.conjoinRightWire]
         obtain ⟨mappedItemSource, mappedItemResult, mappedItemEvidence,
-            ⟨mappedItemSites⟩, mappedItemSourceEq,
-            ⟨mappedItemIso⟩⟩ :=
+            mappedItemSites, mappedItemSourceEq,
+            ⟨mappedItemIso⟩, mapItemLayout⟩ :=
           formalItemsReindex itemFormalEvidence itemFormalSites
             itemCommonRename itemSourceRename itemKeepCommutes
             itemSelectedCommutes
         obtain ⟨mappedTailSource, mappedTailResult, mappedTailEvidence,
-            ⟨mappedTailSites⟩, mappedTailSourceEq,
-            ⟨mappedTailIso⟩⟩ :=
+            mappedTailSites, mappedTailSourceEq,
+            ⟨mappedTailIso⟩, mapTailLayout⟩ :=
           formalItemsReindex tailFormalEvidence tailFormalSites
             tailCommonRename tailSourceRename tailKeepCommutes
             tailSelectedCommutes
-        obtain ⟨combinedResult, combinedEvidence, ⟨combinedSites⟩,
-            ⟨combinedIso⟩⟩ :=
+        obtain ⟨combinedResult, combinedEvidence, combinedSites,
+            ⟨combinedIso⟩, combineLayout⟩ :=
           formalItemsAppend mappedItemEvidence mappedItemSites
             mappedTailEvidence mappedTailSites
         let endpointMerged := RegionIso.conjoinCongr itemIso tailIso |>.trans
@@ -10238,7 +10392,10 @@ mutual
                 combinedUnderHost)
         exact ⟨itemRetained ++ tailRetained,
           mappedItemSource.append mappedTailSource, combinedResult,
-          combinedEvidence, ⟨combinedSites⟩, ⟨presentation⟩⟩
+          combinedEvidence, combinedSites, ⟨presentation⟩, by
+            exact combineLayout (atomSelection head ports)
+              (mapItemLayout (atomSelection head ports) itemLayout)
+              (mapTailLayout (atomSelection head ports) tailLayout)⟩
   termination_by 3 * sizeOf sites + 2
 
   /-- Each individual item becomes a literal Formal segment; only a selected
@@ -10280,7 +10437,10 @@ mutual
             (frame := formalFrame) atomHead atomPorts
         simpa only [EqualityNormalization.EvidenceFold.itemAt,
           WireRenaming.id, Diagram.vars_map_id] using
-            formalSingleItemEmptyRetained formalItemEvidence formalItemSites
+            formalSingleItemEmptyRetained (atomSelection head ports)
+              formalItemEvidence formalItemSites (by
+                unfold FactorItemLayout
+                rfl)
               (RegionIso.refl (Region.singleton (.atom atomHead atomPorts)))
     | .selectedAtom application siteData => by
         have selected :=
@@ -10302,14 +10462,16 @@ mutual
             (frame := formalFrame) signature arity identityPorts
         simpa only [EqualityNormalization.EvidenceFold.itemAt,
           WireRenaming.id] using
-            formalSingleItemEmptyRetained formalItemEvidence formalItemSites
-              (RegionIso.refl
+            formalSingleItemEmptyRetained (atomSelection head ports)
+              formalItemEvidence formalItemSites (by
+                unfold FactorItemLayout
+                rfl) (RegionIso.refl
                 (Region.singleton (.identity signature arity identityPorts)))
     | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
         childSites => by
         unfold FormalItem
         obtain ⟨childSource, childFormalResult, childFormalEvidence,
-            ⟨childFormalSites⟩, ⟨childIso⟩⟩ :=
+            childFormalSites, ⟨childIso⟩, childLayout⟩ :=
           formalRegion shape childEvidence childSites formalFrame
         let formalItemEvidence :=
           _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
@@ -10326,8 +10488,10 @@ mutual
             RegionIso.singletonCutCongr childIso
         refine ⟨[], ?_⟩
         simpa only [EqualityNormalization.EvidenceFold.itemAt] using
-          formalSingleItemEmptyRetained formalItemEvidence formalItemSites
-            basePresentation
+          formalSingleItemEmptyRetained (atomSelection head ports)
+            formalItemEvidence formalItemSites (by
+              unfold FactorItemLayout
+              exact ⟨childSource, rfl, childLayout⟩) basePresentation
   termination_by 3 * sizeOf sites + 1
 end
 
@@ -10337,6 +10501,118 @@ private theorem atomSelection_factor
     VarsFactor (atomSelection head ports)
       (Erasure.Exposure.identityBoundary patternWires) :=
   VarsFactor.factorSelection (atomSelection head ports)
+
+/-! The atom compiler owns the entire originating-site assembly seam: it
+first synthesizes a literal Formal presentation from the authoritative site
+tree, then folds the induced argument factor to the pattern boundary.  The
+factor endpoint is computed by the fold and is never supplied by a caller. -/
+private theorem atomHeadFactorBridge
+    {patternWires atomArguments common originalSourceWires
+      originalTargetWires : List Sig}
+    {head : Var patternWires (.rel atomArguments)}
+    {ports : Vars patternWires atomArguments}
+    {tail : ItemSeq patternWires}
+    (shape : PatternShape
+      (Region.ofItems (.cons (.atom head ports) tail)) patternWires)
+    {originalFrame : Transform.Frame patternWires common
+      originalSourceWires originalTargetWires}
+    {operation : Transform.Operation patternWires}
+    {data : operation.Data originalFrame}
+    {source : ItemSeq originalSourceWires} {result : Region common}
+    (evidence :
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        shape.pattern originalFrame.sourceKeep originalFrame.selected
+        source result)
+    (sites : ItemsSites operation data evidence) :
+    ∃ retained : List Sig,
+      ∃ formalSource : ItemSeq
+          (common ++ ([] ++
+            .rel (atomSupportWires atomArguments) :: retained)),
+        ∃ formalResult : Region (common ++ retained),
+          Nonempty (RegionIso (WireEquiv.refl common)
+                (EqualityNormalization.EvidenceFold.itemsAt
+                  (atomSelectedLeaf shape) evidence sites WireRenaming.id)
+                (Region.adjoinAt retained .nil formalResult)) ∧
+              ∃ targetSource : ItemSeq
+                  (common ++ ([] ++ .rel patternWires :: retained)),
+                FactorItemsBridge common [] retained
+                  (atomSelection_factor head ports) formalSource targetSource :=
+  by
+    let initialFrame := factorInitialFrame common
+      (atomSupportWires atomArguments)
+    obtain ⟨retained, rawSource, rawResult, rawEvidence, rawSites,
+        ⟨presentation⟩, rawLayout⟩ :=
+      formalItems shape evidence sites initialFrame
+    let commonRename : WireRenaming (common ++ retained)
+        (common ++ retained) := WireRenaming.id
+    let sourceRename := Region.adjoinMaterialWire common
+      [.rel (atomSupportWires atomArguments)] retained
+    let mappedFrame := factorSourceFrame common [] retained
+      (atomSupportWires atomArguments)
+    have keepCommutes : ∀ {signature}
+        (wire : Var (common ++ retained) signature),
+        sourceRename ((initialFrame.append retained).sourceKeep wire) =
+          mappedFrame.sourceKeep (commonRename wire) := by
+      intro signature wire
+      apply Var.appendCases (left := common) (right := retained)
+        (motive := fun wire =>
+          sourceRename ((initialFrame.append retained).sourceKeep wire) =
+            mappedFrame.sourceKeep (commonRename wire))
+      · intro inheritedSignature inherited
+        apply Var.eq_of_index_eq
+        apply Fin.ext
+        simp [sourceRename, commonRename, initialFrame, mappedFrame,
+          factorInitialFrame, factorSourceFrame, Transform.Frame.append,
+          Transform.Frame.replace, Transform.Frame.keep,
+          Transform.Frame.localKeep, WireRenaming.appendRight,
+          WireRenaming.id, Region.adjoinMaterialWire,
+          Var.appendMap_left, Var.index_appendLeft]
+      · intro retainedSignature retainedWire
+        apply Var.eq_of_index_eq
+        apply Fin.ext
+        rw [show retainedWire =
+          Var.appendRight ([] : List Sig) retainedWire by rfl]
+        simp [sourceRename, commonRename, initialFrame, mappedFrame,
+          factorInitialFrame, factorSourceFrame, Transform.Frame.append,
+          Transform.Frame.replace, Transform.Frame.keep,
+          Transform.Frame.localKeep, WireRenaming.appendRight,
+          WireRenaming.id, Region.adjoinMaterialWire,
+          Var.appendMap_right, Var.index_appendRight]
+        rfl
+    have selectedCommutes :
+        sourceRename (initialFrame.append retained).selected =
+          mappedFrame.selected := by
+      apply Var.eq_of_index_eq
+      apply Fin.ext
+      simp [sourceRename, initialFrame, mappedFrame, factorInitialFrame,
+        factorSourceFrame, Transform.Frame.append, Transform.Frame.replace,
+        Transform.Frame.insertedHead, Region.adjoinMaterialWire,
+        Var.appendLeft, Var.appendRight, Var.index,
+        Var.index_appendRight]
+    obtain ⟨formalSource, formalResult, formalEvidence, formalSites,
+        _formalSourceEq, ⟨formalResultIso⟩, mapLayout⟩ :=
+      formalItemsReindex rawEvidence rawSites commonRename sourceRename
+        keepCommutes selectedCommutes
+    have formalLayout : FactorItemsLayout (atomSelection head ports)
+        (atomSelection head ports) (.refl (atomSelection head ports))
+        formalEvidence formalSites mappedFrame formalSource :=
+      mapLayout (atomSelection head ports) rawLayout
+    obtain ⟨targetSource, _targetLayout, bridge⟩ :=
+      varsFactorSourceBridge (.refl (atomSelection head ports))
+        (atomSelection_factor head ports) formalEvidence formalSites
+        formalLayout
+    have finalPresentation : RegionIso (WireEquiv.refl common)
+        (EqualityNormalization.EvidenceFold.itemsAt
+          (atomSelectedLeaf shape) evidence sites WireRenaming.id)
+        (Region.adjoinAt retained .nil formalResult) := by
+      have normalizedResultIso : RegionIso
+          (WireEquiv.refl (common ++ retained)) rawResult formalResult := by
+        simpa only [commonRename, Region.renameWires_id,
+          List.nil_append] using formalResultIso
+      exact presentation.trans
+        (RegionIso.adjoinAt retained .nil normalizedResultIso)
+    exact ⟨retained, formalSource, formalResult,
+      ⟨finalPresentation⟩, targetSource, bridge⟩
 
 end PatternCompiler
 
