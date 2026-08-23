@@ -181,7 +181,7 @@ theorem patternEmbedding_natural
     WireRenaming.appendRight, Region.adjoinMaterialWire,
     Region.conjoinRightWire]
 
-@[simp] private theorem actualEmbedding_index_val
+@[simp] theorem actualEmbedding_index_val
     (pattern : OpenDiagram arguments)
     (wire : Var targetWires signature) :
     (actualEmbedding pattern targetWires wire).index.val = wire.index.val := by

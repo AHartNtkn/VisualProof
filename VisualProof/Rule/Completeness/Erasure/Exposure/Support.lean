@@ -1096,7 +1096,7 @@ def advanceAway
         (Identification.retainWire outer state.locals signature 1)).append
         (supportSuffix state selected)))
 
-@[simp] private theorem State.advance_items
+@[simp] theorem State.advance_items
     (state : State outer materialWires material)
     (selected : Var materialWires signature) :
     (state.advance selected).items =
@@ -1253,7 +1253,7 @@ theorem exposureNodeData_exposedNode
   subst rest
   rfl
 
-@[simp] private theorem exposureNodeData_survivor
+@[simp] theorem exposureNodeData_survivor
     (state : State outer materialWires material)
     (selected : Var materialWires signature) :
     (exposureNodeData state selected).survivor =
@@ -1301,33 +1301,33 @@ noncomputable def exposureData
       (state.materialMap (selected.appendLeft material.locals)) 1)
   awayPartition := exposurePartition state selected
 
-@[simp] private theorem exposureData_survivor
+@[simp] theorem exposureData_survivor
     (state : State outer materialWires material)
     (selected : Var materialWires signature) :
     (exposureData state selected).node.survivor =
       state.materialMap (selected.appendLeft material.locals) := rfl
 
-@[simp] private theorem exposureData_locals
+@[simp] theorem exposureData_locals
     (state : State outer materialWires material)
     (selected : Var materialWires signature) :
     (exposureData state selected).locals = state.locals := rfl
 
-@[simp] private theorem exposureData_signature
+@[simp] theorem exposureData_signature
     (state : State outer materialWires material)
     (selected : Var materialWires signature) :
     (exposureData state selected).signature = signature := rfl
 
-@[simp] private theorem exposureData_count
+@[simp] theorem exposureData_count
     (state : State outer materialWires material)
     (selected : Var materialWires signature) :
     (exposureData state selected).count = 1 := rfl
 
-@[simp] private theorem exposureData_node
+@[simp] theorem exposureData_node
     (state : State outer materialWires material)
     (selected : Var materialWires signature) :
     (exposureData state selected).node = exposureNodeData state selected := rfl
 
-@[simp] private theorem exposureData_away
+@[simp] theorem exposureData_away
     (state : State outer materialWires material)
     (selected : Var materialWires signature) :
     (exposureData state selected).away =
@@ -1335,7 +1335,7 @@ noncomputable def exposureData
         (Identification.collapseLocal outer state.locals
           (state.materialMap (selected.appendLeft material.locals)) 1) := rfl
 
-@[simp] private theorem exposureData_awayPartition
+@[simp] theorem exposureData_awayPartition
     (state : State outer materialWires material)
     (selected : Var materialWires signature) :
     (exposureData state selected).awayPartition =

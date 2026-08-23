@@ -1,6 +1,5 @@
 import VisualProof.Rule.Completeness.Comprehension.Normalization.Sites
-import VisualProof.Rule.Completeness.Comprehension.Leaf.Complete
-import VisualProof.Rule.Completeness.Comprehension.Structural.Blank
+import VisualProof.Rule.Completeness.Comprehension.Structural.Complete
 
 namespace VisualProof.Rule.Completeness.Comprehension
 
@@ -53,58 +52,6 @@ theorem complete
         quantified specialized)
     (request : Telescope.Request specialized quantified) :
     request.Result := by
-  have compileSupportPattern :
-      ∀ {materialWires structuralOuter structuralBefore structuralAfter :
-          List Sig}
-        (material : Region materialWires)
-        (materialCanonical : material.Canonical)
-        {items : ItemSeq
-          (structuralOuter ++
-            (structuralBefore ++ .rel materialWires :: structuralAfter))}
-        {result : Region
-          (structuralOuter ++ (structuralBefore ++ structuralAfter))}
-        (evidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-            (Erasure.Exposure.supportPattern material materialCanonical)
-            (_root_.VisualProof.Rule.Comprehension.retain structuralOuter
-              structuralBefore structuralAfter materialWires)
-            (_root_.VisualProof.Rule.Comprehension.selected structuralOuter
-              structuralBefore structuralAfter materialWires)
-            items result)
-        (structuralRequest : Telescope.Request
-          (Region.adjoinAt (structuralBefore ++ structuralAfter) .nil result)
-          (.mk (structuralBefore ++ .rel materialWires :: structuralAfter)
-            items)),
-        structuralRequest.Result := by
-    intro materialWires structuralOuter structuralBefore structuralAfter
-      material materialCanonical items result evidence structuralRequest
-    cases materialWires with
-    | nil =>
-        cases material with
-        | mk materialLocals materialItems =>
-            cases materialLocals with
-            | nil =>
-                cases materialItems with
-                | nil =>
-                    have patternEq :
-                        Erasure.Exposure.supportPattern
-                          (Region.mk [] ItemSeq.nil)
-                            materialCanonical =
-                          Structural.Blank.blankPattern := by
-                      apply EqualityNormalization.OpenDiagram.eq_of_data
-                      · rfl
-                      · rfl
-                      · rfl
-                    rw [patternEq] at evidence
-                    exact
-                      Structural.Blank.itemsEnds
-                        evidence structuralRequest
-                | cons materialHead materialTail =>
-                    sorry
-            | cons materialLocal materialLocals =>
-                sorry
-    | cons materialWire materialWires =>
-        sorry
   cases instantiates with
   | @mk items result evidence =>
       let sites := normalizationSites
@@ -193,7 +140,7 @@ theorem complete
           materialCanonical]
         exact normalizedEvidence
       have core : normalizedRequest.Result :=
-        compileSupportPattern material materialCanonical supportEvidence
+        Structural.supportPatternDerives material materialCanonical supportEvidence
           normalizedRequest
       cases polarityEq : request.polarity with
       | positive =>
