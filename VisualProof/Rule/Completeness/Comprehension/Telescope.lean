@@ -444,6 +444,51 @@ structure Request.Preparation
     request.instantiatedCanonical request.instantiatedExternalTwoEnded
     preparedCanonical preparedExternalTwoEnded
 
+/-- Transport only the raw primitive endpoint of a preparation across a
+structural presentation isomorphism. The actual prepared endpoint and its
+telescope remain authoritative. -/
+noncomputable def Request.Preparation.rawIso
+    {holeWires : List Sig}
+    {instantiated pending rawFirst rawSecond : Region holeWires}
+    {request : Request instantiated pending}
+    (prepare : request.Preparation rawFirst)
+    (iso : RegionIso (WireEquiv.refl holeWires) rawFirst rawSecond) :
+    request.Preparation rawSecond := by
+  let filledIso := DiagramContext.fillIso request.occurrence.context iso
+  have rawSecondCanonical :
+      (request.occurrence.context.fill rawSecond).Canonical :=
+    filledIso.canonical_iff.mp prepare.rawPreparedCanonical
+  have nonemptyIff : ∀ {signature}
+      (wire : Var request.occurrence.interface.external signature),
+      (request.occurrence.context.fill rawFirst).incidencePaths
+          wire.index.val ≠ [] ↔
+        (request.occurrence.context.fill rawSecond).incidencePaths
+          wire.index.val ≠ [] := by
+    intro signature wire
+    have lengthEq := filledIso.incidencePaths_length_eq wire
+    constructor <;> intro nonempty
+    · rw [← List.length_pos_iff] at nonempty ⊢
+      rwa [← lengthEq]
+    · rw [← List.length_pos_iff] at nonempty ⊢
+      rwa [lengthEq]
+  let firstEndpoint := request.occurrence.interface.withBody
+    (request.occurrence.context.fill rawFirst) prepare.rawPreparedCanonical
+      prepare.rawPreparedExternalTwoEnded
+  have rawSecondExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      request.occurrence.interface.boundaryWire
+      (request.occurrence.context.fill rawSecond) :=
+    firstEndpoint.externalTwoEnded_of_nonempty_iff
+      (request.occurrence.context.fill rawSecond) nonemptyIff
+  exact {
+    prepared := prepare.prepared
+    preparedCanonical := prepare.preparedCanonical
+    preparedExternalTwoEnded := prepare.preparedExternalTwoEnded
+    rawPreparedCanonical := rawSecondCanonical
+    rawPreparedExternalTwoEnded := rawSecondExternalTwoEnded
+    preparedIso := prepare.preparedIso.trans iso
+    telescope := prepare.telescope
+  }
+
 /-- Constructor-local evidence for one prepared actual endpoint. This record
 is the sole boundary at which a leaf or compound constructor supplies its
 primitive, endpoint validity, and exact presentation isomorphisms. -/
@@ -555,7 +600,7 @@ structure ExactEdit
   endpoint : Region targetWires
   run_eq : run edit = endpoint
 
-private def ExactEdit.refl
+def ExactEdit.refl
     {targetWires : List Sig}
     {Edit : Type}
     {run : Edit → Region targetWires}
@@ -944,7 +989,7 @@ theorem itemsNilBranch
     request.Result := by
   exact items data evidence (ItemsSites.ofNil data evidence) request contract
 
-private def blankPattern : OpenDiagram [] where
+def blankPattern : OpenDiagram [] where
   external := []
   boundaryWire := .nil
   boundarySurjective := fun wire => Fin.elim0 wire
@@ -1011,31 +1056,6 @@ theorem itemsNil
           exact RegionIso.refl _
         exact .blank stagedIso spawn
     }
-
-/-- Exact caller data for an empty item-sequence node in any existing syntax
-wire context. The phase stores only the authoritative blank request and nil
-instantiation evidence; its compiler below remains the sole conversion to the
-strict result. -/
-structure NilPhase (wires : List Sig) where
-  outer : List Sig
-  before : List Sig
-  after : List Sig
-  request : Telescope.Request
-    (Region.adjoinAt (before ++ after) .nil
-      (Region.blank (outer ++ (before ++ after))))
-    (.mk (before ++ .rel [] :: after) .nil)
-  evidence :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-      blankPattern
-      (Ends.rootFrame outer before after []).sourceKeep
-      (Ends.rootFrame outer before after []).selected
-      .nil (Region.blank (outer ++ (before ++ after)))
-
-/-- Every syntax-indexed blank phase is fixed to the real `itemsNil`/Ends
-branch. -/
-theorem NilPhase.compile {wires : List Sig}
-    (phase : NilPhase wires) : phase.request.Result := by
-  exact itemsNil phase.request phase.evidence
 
 end Compiler
 
