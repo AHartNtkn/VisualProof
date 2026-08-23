@@ -1,4 +1,7 @@
 import VisualProof.Diagram.Semantics.Algebra
+import VisualProof.Diagram.Scope.Isomorphism
+import VisualProof.Diagram.Scope.Rename
+import VisualProof.Diagram.Isomorphism.Algebra
 
 namespace VisualProof.Rule.WirePrimitive.Transform
 
@@ -61,10 +64,162 @@ def keep (outer before inserted after : List Sig) :
     (fun wire => wire.appendLeft (before ++ (inserted ++ after)))
     (fun wire => Var.appendRight outer (localKeep before inserted after wire))⟩
 
+theorem keep_index_eq_of_length_eq
+    (lengthEq : firstInserted.length = secondInserted.length)
+    (wire : Var (outer ++ (before ++ after)) signature) :
+    (keep outer before firstInserted after wire).index.val =
+      (keep outer before secondInserted after wire).index.val := by
+  refine Var.appendCases (left := outer) (right := before ++ after)
+    (motive := fun wire =>
+      (keep outer before firstInserted after wire).index.val =
+        (keep outer before secondInserted after wire).index.val) ?_ ?_ wire
+  · intro inheritedSignature inherited
+    simp [keep]
+  · intro localSignature localWire
+    refine Var.appendCases (left := before) (right := after)
+      (motive := fun selected =>
+        (keep outer before firstInserted after
+            (Var.appendRight outer selected)).index.val =
+          (keep outer before secondInserted after
+            (Var.appendRight outer selected)).index.val) ?_ ?_ localWire
+    · intro beforeSignature beforeWire
+      simp [keep, localKeep]
+    · intro afterSignature afterWire
+      simp [keep, localKeep, lengthEq]
+
+theorem keep_index_eq_iff
+    (left : Var (outer ++ (before ++ after)) leftSignature)
+    (right : Var (outer ++ (before ++ after)) rightSignature) :
+    (keep outer before inserted after left).index.val =
+        (keep outer before inserted after right).index.val ↔
+      left.index.val = right.index.val := by
+  apply Var.appendCases (left := outer) (right := before ++ after)
+    (motive := fun left => ∀ {rightSignature}
+      (right : Var (outer ++ (before ++ after)) rightSignature),
+      (keep outer before inserted after left).index.val =
+          (keep outer before inserted after right).index.val ↔
+        left.index.val = right.index.val)
+  · intro inheritedSignature inherited rightSignature right
+    apply Var.appendCases (left := outer) (right := before ++ after)
+      (motive := fun right =>
+        (keep outer before inserted after
+            (inherited.appendLeft (before ++ after))).index.val =
+            (keep outer before inserted after right).index.val ↔
+          (inherited.appendLeft (before ++ after)).index.val =
+            right.index.val)
+    · intro otherSignature other
+      simp [keep]
+    · intro otherSignature other
+      apply Var.appendCases (left := before) (right := after)
+        (motive := fun other =>
+          (keep outer before inserted after
+              (inherited.appendLeft (before ++ after))).index.val =
+              (keep outer before inserted after
+                (Var.appendRight outer other)).index.val ↔
+            (inherited.appendLeft (before ++ after)).index.val =
+              (Var.appendRight outer other).index.val)
+      · intro beforeSignature beforeWire
+        simp [keep, localKeep]
+      · intro afterSignature afterWire
+        simp [keep, localKeep]
+        omega
+  · intro localSignature localWire rightSignature right
+    apply Var.appendCases (left := outer) (right := before ++ after)
+      (motive := fun right =>
+        (keep outer before inserted after
+            (Var.appendRight outer localWire)).index.val =
+            (keep outer before inserted after right).index.val ↔
+          (Var.appendRight outer localWire).index.val = right.index.val)
+    · intro inheritedSignature inherited
+      apply Var.appendCases (left := before) (right := after)
+        (motive := fun localWire =>
+          (keep outer before inserted after
+              (Var.appendRight outer localWire)).index.val =
+              (keep outer before inserted after
+                (inherited.appendLeft (before ++ after))).index.val ↔
+            (Var.appendRight outer localWire).index.val =
+              (inherited.appendLeft (before ++ after)).index.val)
+      · intro beforeSignature beforeWire
+        simp [keep, localKeep]
+      · intro afterSignature afterWire
+        simp [keep, localKeep]
+        omega
+    · intro otherSignature other
+      apply Var.appendCases (left := before) (right := after)
+        (motive := fun localWire => ∀ {otherSignature}
+          (other : Var (before ++ after) otherSignature),
+          (keep outer before inserted after
+              (Var.appendRight outer localWire)).index.val =
+              (keep outer before inserted after
+                (Var.appendRight outer other)).index.val ↔
+            (Var.appendRight outer localWire).index.val =
+              (Var.appendRight outer other).index.val) ?_ ?_ localWire other
+      · intro beforeSignature beforeWire otherSignature other
+        apply Var.appendCases (left := before) (right := after)
+          (motive := fun other =>
+            (keep outer before inserted after
+                (Var.appendRight outer
+                  (beforeWire.appendLeft after))).index.val =
+                (keep outer before inserted after
+                  (Var.appendRight outer other)).index.val ↔
+              (Var.appendRight outer
+                (beforeWire.appendLeft after)).index.val =
+                (Var.appendRight outer other).index.val)
+        · intro otherSignature other
+          simp [keep, localKeep]
+        · intro otherSignature other
+          simp [keep, localKeep]
+          omega
+      · intro afterSignature afterWire otherSignature other
+        apply Var.appendCases (left := before) (right := after)
+          (motive := fun other =>
+            (keep outer before inserted after
+                (Var.appendRight outer
+                  (Var.appendRight before afterWire))).index.val =
+                (keep outer before inserted after
+                  (Var.appendRight outer other)).index.val ↔
+              (Var.appendRight outer
+                (Var.appendRight before afterWire)).index.val =
+                (Var.appendRight outer other).index.val)
+        · intro otherSignature other
+          simp [keep, localKeep]
+          omega
+        · intro otherSignature other
+          simp [keep, localKeep]
+
 /-- The first wire in a nonempty replacement binder segment. -/
 def insertedHead (outer before after : List Sig) (signature : Sig) :
     Var (outer ++ (before ++ signature :: after)) signature :=
   Var.appendRight outer (Var.appendRight before .here)
+
+theorem insertedHead_ne_keep
+    (wire : Var (outer ++ (before ++ after)) signature) :
+    (insertedHead outer before after selectedSignature).index.val ≠
+      (keep outer before (selectedSignature :: inserted) after wire).index.val := by
+  apply Var.appendCases (left := outer) (right := before ++ after)
+    (motive := fun wire =>
+      (insertedHead outer before after selectedSignature).index.val ≠
+        (keep outer before (selectedSignature :: inserted) after wire).index.val)
+  · intro inheritedSignature inherited
+    simp [insertedHead, keep]
+    omega
+  · intro localSignature localWire
+    apply Var.appendCases (left := before) (right := after)
+      (motive := fun wire =>
+        (insertedHead outer before after selectedSignature).index.val ≠
+          (keep outer before (selectedSignature :: inserted) after
+            (Var.appendRight outer wire)).index.val)
+    · intro beforeSignature beforeWire
+      simp [insertedHead, keep, localKeep]
+      omega
+    · intro afterSignature afterWire
+      simp [insertedHead, keep, localKeep]
+      have positive : 0 <
+          (Var.appendRight (selectedSignature :: inserted) afterWire).index.val := by
+        rw [Var.index_appendRight]
+        simp
+        omega
+      exact Nat.ne_of_lt positive
 
 /-- The second wire in a replacement binder segment. -/
 def insertedSecond (outer before after : List Sig)
@@ -480,6 +635,115 @@ mutual
         ItemEdit operation frame data (.cut body)
 end
 
+/-- A frame reflects equality of retained-wire indices on both sides and
+keeps the selected source wire disjoint from every retained wire.  Unlike
+`IndexedHeadInvariant`, this remains meaningful when a rule removes its
+selected binder and the raw source/target contexts therefore have different
+lengths. -/
+structure RetainedIndexInvariant
+    (frame : Frame arguments common sourceWires targetWires) : Prop where
+  reflects : ∀ {leftSignature rightSignature}
+    (left : Var common leftSignature) (right : Var common rightSignature),
+    (frame.sourceKeep left).index.val =
+        (frame.sourceKeep right).index.val ↔
+      (frame.targetKeep left).index.val =
+        (frame.targetKeep right).index.val
+  selectedFresh : ∀ {signature} (wire : Var common signature),
+    frame.selected.index.val ≠ (frame.sourceKeep wire).index.val
+
+theorem RetainedIndexInvariant.replace
+    (outer before after targetInserted arguments : List Sig) :
+    RetainedIndexInvariant
+      (Frame.replace outer before after targetInserted arguments) := by
+  constructor
+  · intro leftSignature rightSignature left right
+    exact (Frame.keep_index_eq_iff
+      (inserted := [.rel arguments]) left right).trans
+      (Frame.keep_index_eq_iff
+        (inserted := targetInserted) left right).symm
+  · intro signature wire
+    exact Frame.insertedHead_ne_keep
+      (selectedSignature := .rel arguments) (inserted := []) wire
+
+theorem RetainedIndexInvariant.append
+    {arguments common sourceWires targetWires : List Sig}
+    {frame : Frame arguments common sourceWires targetWires}
+    (invariant : RetainedIndexInvariant frame) (locals : List Sig) :
+    RetainedIndexInvariant (frame.append locals) := by
+  constructor
+  · intro leftSignature rightSignature left right
+    apply Var.appendCases (left := common) (right := locals)
+      (motive := fun left => ∀ {rightSignature}
+        (right : Var (common ++ locals) rightSignature),
+        (((frame.append locals).sourceKeep left).index.val =
+            ((frame.append locals).sourceKeep right).index.val ↔
+          ((frame.append locals).targetKeep left).index.val =
+            ((frame.append locals).targetKeep right).index.val))
+    · intro inheritedSignature inherited rightSignature right
+      apply Var.appendCases (left := common) (right := locals)
+        (motive := fun right =>
+          (((frame.append locals).sourceKeep
+              (inherited.appendLeft locals)).index.val =
+              ((frame.append locals).sourceKeep right).index.val ↔
+            ((frame.append locals).targetKeep
+              (inherited.appendLeft locals)).index.val =
+              ((frame.append locals).targetKeep right).index.val))
+      · intro otherSignature other
+        simpa [Frame.append, WireRenaming.appendRight] using
+          invariant.reflects inherited other
+      · intro otherSignature other
+        simp [Frame.append, WireRenaming.appendRight]
+        omega
+    · intro localSignature localWire leftRightSignature right
+      apply Var.appendCases (left := common) (right := locals)
+        (motive := fun right =>
+          (((frame.append locals).sourceKeep
+              (Var.appendRight common localWire)).index.val =
+              ((frame.append locals).sourceKeep right).index.val ↔
+            ((frame.append locals).targetKeep
+              (Var.appendRight common localWire)).index.val =
+              ((frame.append locals).targetKeep right).index.val))
+      · intro inheritedSignature inherited
+        simp [Frame.append, WireRenaming.appendRight]
+        omega
+      · intro otherSignature other
+        simp [Frame.append, WireRenaming.appendRight]
+  · intro signature wire
+    apply Var.appendCases (left := common) (right := locals)
+      (motive := fun wire =>
+        (frame.append locals).selected.index.val ≠
+          ((frame.append locals).sourceKeep wire).index.val)
+    · intro inheritedSignature inherited
+      simpa [Frame.append, WireRenaming.appendRight] using
+        invariant.selectedFresh inherited
+    · intro localSignature localWire
+      simp [Frame.append, WireRenaming.appendRight]
+      omega
+
+theorem Vars.countIndex_map_eq_of_reflection
+    (variables : Vars common signatures)
+    (sourceKeep : WireRenaming common sourceWires)
+    (targetKeep : WireRenaming common targetWires)
+    (reflects : ∀ {leftSignature rightSignature}
+      (left : Var common leftSignature) (right : Var common rightSignature),
+      (sourceKeep left).index.val = (sourceKeep right).index.val ↔
+        (targetKeep left).index.val = (targetKeep right).index.val)
+    (wire : Var common wireSignature) :
+    (variables.map fun selected => sourceKeep selected).countIndex
+        (sourceKeep wire).index.val =
+      (variables.map fun selected => targetKeep selected).countIndex
+        (targetKeep wire).index.val := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [Vars.map, Vars.countIndex]
+      by_cases sourceEq : (sourceKeep head).index.val =
+          (sourceKeep wire).index.val
+      · have targetEq := (reflects head wire).mp sourceEq
+        simp [sourceEq, targetEq, induction]
+      · have targetNe := not_congr (reflects head wire) |>.mp sourceEq
+        simp [sourceEq, targetNe, induction]
+
 mutual
   def RegionEdit.run
       {operation : Operation arguments}
@@ -514,6 +778,896 @@ mutual
         Region.singleton (.identity signature arity
           (fun index => frame.targetKeep (ports index)))
     | .cut bodyEdit => Region.singleton (.cut bodyEdit.run)
+end
+
+/-- Which endpoint of a uniform edit supplies scope validity. -/
+inductive ScopeDirection
+  | sourceToTarget
+  | targetToSource
+
+/-- Canonicality and rooted-incidence transfer for a uniform edit whose
+source and target wire contexts have the same raw indexing. -/
+def ScopeTransfer (direction : ScopeDirection)
+    (source : Region sourceWires) (target : Region targetWires) : Prop :=
+  match direction with
+  | .sourceToTarget =>
+      source.Canonical →
+        target.Canonical ∧
+          ∀ wireIndex, wireIndex < sourceWires.length →
+            (source.incidencePaths wireIndex).Sublist
+              (target.incidencePaths wireIndex)
+  | .targetToSource =>
+      target.Canonical →
+        source.Canonical ∧
+          ∀ wireIndex, wireIndex < sourceWires.length →
+            (target.incidencePaths wireIndex).Sublist
+              (source.incidencePaths wireIndex)
+
+/-- The raw-index invariant shared by argument-edit operations whose datum is
+the replacement head wire. -/
+def IndexedHeadInvariant
+    (frame : Frame arguments common sourceWires targetWires)
+    (head : Var targetWires targetSignature) : Prop :=
+  sourceWires.length = targetWires.length ∧
+    (∀ {wireSignature} (wire : Var common wireSignature),
+      (frame.sourceKeep wire).index.val =
+        (frame.targetKeep wire).index.val) ∧
+    frame.selected.index.val = head.index.val
+
+theorem IndexedHeadInvariant.append
+    {arguments common sourceWires targetWires : List Sig}
+    {targetSignature : Sig}
+    {frame : Frame arguments common sourceWires targetWires}
+    {head : Var targetWires targetSignature}
+    (invariant : IndexedHeadInvariant frame head) (locals : List Sig) :
+    IndexedHeadInvariant (frame.append locals) (head.appendLeft locals) := by
+  refine ⟨by simp [invariant.1], ?_, ?_⟩
+  · intro wireSignature wire
+    apply Var.appendCases (left := common) (right := locals)
+      (motive := fun wire =>
+        ((frame.append locals).sourceKeep wire).index.val =
+          ((frame.append locals).targetKeep wire).index.val)
+    · intro inheritedSignature inherited
+      simpa [Frame.append, WireRenaming.appendRight] using
+        invariant.2.1 inherited
+    · intro localSignature localWire
+      simp [Frame.append, WireRenaming.appendRight, invariant.1]
+  · simpa [Frame.append] using invariant.2.2
+
+mutual
+  theorem RegionEdit.scopeTransfer
+      {arguments common sourceWires targetWires : List Sig}
+      {operation : Operation arguments}
+      {frame : Frame arguments common sourceWires targetWires}
+      (direction : ScopeDirection)
+      (invariant : ∀ {invariantCommon invariantSource invariantTarget}
+        (invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget), operation.Data invariantFrame → Prop)
+      (appendInvariant : ∀
+        {invariantCommon invariantSource invariantTarget}
+        (invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget) (invariantData : operation.Data invariantFrame)
+        (locals : List Sig), invariant invariantFrame invariantData →
+          invariant (invariantFrame.append locals)
+            (operation.appendData invariantFrame invariantData locals))
+      (contextLength : sourceWires.length = targetWires.length)
+      (keepIndex : ∀ {wireSignature} (wire : Var common wireSignature),
+        (frame.sourceKeep wire).index.val =
+          (frame.targetKeep wire).index.val)
+      (selectedAtomTransfer : ∀
+        {siteCommon siteSourceWires siteTargetWires : List Sig}
+        {siteFrame : Frame arguments siteCommon siteSourceWires
+          siteTargetWires}
+        {siteData : operation.Data siteFrame}
+        (_siteInvariant : invariant siteFrame siteData)
+        (ports : Vars siteCommon arguments)
+        (selectedData : operation.SiteData siteFrame siteData ports),
+        ScopeTransfer direction
+          (Region.singleton (.atom siteFrame.selected
+            (ports.map fun wire => siteFrame.sourceKeep wire)))
+          (operation.site siteFrame siteData ports selectedData))
+      (selectedPinTransfer : ∀
+        {siteCommon siteSourceWires siteTargetWires : List Sig}
+        {siteFrame : Frame arguments siteCommon siteSourceWires
+          siteTargetWires}
+        {siteData : operation.Data siteFrame}
+        (_siteInvariant : invariant siteFrame siteData)
+        (ports : Fin 1 → Var siteSourceWires (.rel arguments))
+        (selected : ports 0 = siteFrame.selected),
+        ScopeTransfer direction
+          (Region.singleton (.identity (.rel arguments) 1 ports))
+          (operation.pin siteFrame siteData))
+      (runItemsLength : ∀
+        {itemCommon itemSourceWires itemTargetWires : List Sig}
+        {itemFrame : Frame arguments itemCommon itemSourceWires
+          itemTargetWires}
+        {itemData : operation.Data itemFrame}
+        {itemSource : Item itemSourceWires}
+        (itemEdit : ItemEdit operation itemFrame itemData itemSource),
+        itemEdit.run.items.length = 1)
+      {data : operation.Data frame} {source : Region sourceWires}
+      (dataInvariant : invariant frame data)
+      (edit : RegionEdit operation frame data source) :
+      ScopeTransfer direction source edit.run :=
+    match edit with
+    | @RegionEdit.mk _ _ _ _ _ _ _ locals items itemsEdit => by
+        have appendedKeepIndex : ∀ {wireSignature}
+            (wire : Var (common ++ locals) wireSignature),
+            (((frame.append locals).sourceKeep wire).index.val) =
+              (((frame.append locals).targetKeep wire).index.val) := by
+          intro wireSignature wire
+          apply Var.appendCases (left := common) (right := locals)
+            (motive := fun wire =>
+              ((frame.append locals).sourceKeep wire).index.val =
+                ((frame.append locals).targetKeep wire).index.val)
+          · intro inheritedSignature inherited
+            simpa [Frame.append, WireRenaming.appendRight] using
+              keepIndex inherited
+          · intro localSignature localWire
+            simp [Frame.append, WireRenaming.appendRight, contextLength]
+        have child := ItemsEdit.scopeTransfer direction invariant
+          appendInvariant
+          (by simp [contextLength]) appendedKeepIndex selectedAtomTransfer
+            selectedPinTransfer runItemsLength
+            (appendInvariant frame data locals dataInvariant) itemsEdit
+        cases direction with
+        | targetToSource =>
+            intro targetCanonical
+            have materialCanonical : itemsEdit.run.Canonical :=
+              Region.Canonical.material_of_adjoinAt locals .nil itemsEdit.run
+                targetCanonical
+            have childResult := child materialCanonical
+            have sourceAdjoinedCanonical :
+                (Region.adjoinAt locals .nil
+                  (Region.ofItems items)).Canonical := by
+              apply Region.Canonical.adjoinAt_of_material_roots locals .nil
+                (Region.ofItems items) True.intro childResult.1
+              intro localIndex
+              let commonWire : Var (common ++ locals)
+                  (locals.get localIndex) :=
+                Var.appendRight common (Var.ofIndex localIndex)
+              have targetRoot :=
+                Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil
+                  itemsEdit.run targetCanonical localIndex
+              have paths := childResult.2
+                ((frame.append locals).targetKeep commonWire).index.val (by
+                  rw [← appendedKeepIndex commonWire]
+                  exact ((frame.append locals).sourceKeep commonWire).index.isLt)
+              have sourceIndex :
+                  ((frame.append locals).sourceKeep commonWire).index.val =
+                    sourceWires.length + localIndex.val := by
+                simp [commonWire, Frame.append, WireRenaming.appendRight]
+              have targetIndex :
+                  ((frame.append locals).targetKeep commonWire).index.val =
+                    targetWires.length + localIndex.val := by
+                simp [commonWire, Frame.append, WireRenaming.appendRight]
+              rw [targetIndex] at paths
+              rw [← contextLength] at paths
+              rw [← contextLength] at targetRoot
+              exact RegionPath.RootedTwo.of_sublist paths targetRoot
+            refine ⟨(RegionIso.adjoinAtOfItems locals items).canonical_iff.mp
+              sourceAdjoinedCanonical, ?_⟩
+            intro wireIndex wireBound
+            let targetWire : Var targetWires
+                (targetWires.get ⟨wireIndex, by omega⟩) :=
+              Var.ofIndex ⟨wireIndex, by omega⟩
+            let sourceWire : Var sourceWires
+                (sourceWires.get ⟨wireIndex, wireBound⟩) :=
+              Var.ofIndex ⟨wireIndex, wireBound⟩
+            have targetPaths := Region.incidencePaths_adjoinAt_nil
+              itemsEdit.run (targetWire.appendLeft locals)
+            have sourcePaths := Region.incidencePaths_ofItems items
+              (sourceWire.appendLeft locals)
+            simp [targetWire, sourceWire] at targetPaths sourcePaths
+            simp only [RegionEdit.run]
+            rw [targetPaths]
+            change (itemsEdit.run.incidencePaths wireIndex).Sublist
+              (items.incidencePaths wireIndex 0)
+            rw [← sourcePaths]
+            exact childResult.2 wireIndex (by simp; omega)
+        | sourceToTarget =>
+            intro sourceCanonical
+            have sourceAdjoinedCanonical :
+                (Region.adjoinAt locals .nil
+                  (Region.ofItems items)).Canonical :=
+              (RegionIso.adjoinAtOfItems locals items).canonical_iff.mpr
+                sourceCanonical
+            have materialCanonical : (Region.ofItems items).Canonical :=
+              Region.Canonical.material_of_adjoinAt locals .nil
+                (Region.ofItems items) sourceAdjoinedCanonical
+            have childResult := child materialCanonical
+            have targetCanonical :
+                (Region.adjoinAt locals .nil itemsEdit.run).Canonical := by
+              apply Region.Canonical.adjoinAt_of_material_roots locals .nil
+                itemsEdit.run True.intro childResult.1
+              intro localIndex
+              let commonWire : Var (common ++ locals)
+                  (locals.get localIndex) :=
+                Var.appendRight common (Var.ofIndex localIndex)
+              have sourceRoot :=
+                Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil
+                  (Region.ofItems items) sourceAdjoinedCanonical localIndex
+              have paths := childResult.2
+                ((frame.append locals).sourceKeep commonWire).index.val
+                ((frame.append locals).sourceKeep commonWire).index.isLt
+              have sourceIndex :
+                  ((frame.append locals).sourceKeep commonWire).index.val =
+                    sourceWires.length + localIndex.val := by
+                simp [commonWire, Frame.append, WireRenaming.appendRight]
+              have targetIndex :
+                  ((frame.append locals).targetKeep commonWire).index.val =
+                    targetWires.length + localIndex.val := by
+                simp [commonWire, Frame.append, WireRenaming.appendRight]
+              rw [sourceIndex] at paths
+              rw [contextLength] at paths sourceRoot
+              exact RegionPath.RootedTwo.of_sublist paths sourceRoot
+            refine ⟨targetCanonical, ?_⟩
+            intro wireIndex wireBound
+            let targetWire : Var targetWires
+                (targetWires.get ⟨wireIndex, by omega⟩) :=
+              Var.ofIndex ⟨wireIndex, by omega⟩
+            let sourceWire : Var sourceWires
+                (sourceWires.get ⟨wireIndex, wireBound⟩) :=
+              Var.ofIndex ⟨wireIndex, wireBound⟩
+            have targetPaths := Region.incidencePaths_adjoinAt_nil
+              itemsEdit.run (targetWire.appendLeft locals)
+            have sourcePaths := Region.incidencePaths_ofItems items
+              (sourceWire.appendLeft locals)
+            simp [targetWire, sourceWire] at targetPaths sourcePaths
+            simp only [RegionEdit.run]
+            rw [targetPaths]
+            change (items.incidencePaths wireIndex 0).Sublist
+              (itemsEdit.run.incidencePaths wireIndex)
+            rw [← sourcePaths]
+            exact childResult.2 wireIndex (by simp; omega)
+  termination_by structural edit
+
+  theorem ItemsEdit.scopeTransfer
+      {arguments common sourceWires targetWires : List Sig}
+      {operation : Operation arguments}
+      {frame : Frame arguments common sourceWires targetWires}
+      (direction : ScopeDirection)
+      (invariant : ∀ {invariantCommon invariantSource invariantTarget}
+        (invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget), operation.Data invariantFrame → Prop)
+      (appendInvariant : ∀
+        {invariantCommon invariantSource invariantTarget}
+        (invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget) (invariantData : operation.Data invariantFrame)
+        (locals : List Sig), invariant invariantFrame invariantData →
+          invariant (invariantFrame.append locals)
+            (operation.appendData invariantFrame invariantData locals))
+      (contextLength : sourceWires.length = targetWires.length)
+      (keepIndex : ∀ {wireSignature} (wire : Var common wireSignature),
+        (frame.sourceKeep wire).index.val =
+          (frame.targetKeep wire).index.val)
+      (selectedAtomTransfer : ∀
+        {siteCommon siteSourceWires siteTargetWires : List Sig}
+        {siteFrame : Frame arguments siteCommon siteSourceWires
+          siteTargetWires}
+        {siteData : operation.Data siteFrame}
+        (_siteInvariant : invariant siteFrame siteData)
+        (ports : Vars siteCommon arguments)
+        (selectedData : operation.SiteData siteFrame siteData ports),
+        ScopeTransfer direction
+          (Region.singleton (.atom siteFrame.selected
+            (ports.map fun wire => siteFrame.sourceKeep wire)))
+          (operation.site siteFrame siteData ports selectedData))
+      (selectedPinTransfer : ∀
+        {siteCommon siteSourceWires siteTargetWires : List Sig}
+        {siteFrame : Frame arguments siteCommon siteSourceWires
+          siteTargetWires}
+        {siteData : operation.Data siteFrame}
+        (_siteInvariant : invariant siteFrame siteData)
+        (ports : Fin 1 → Var siteSourceWires (.rel arguments))
+        (selected : ports 0 = siteFrame.selected),
+        ScopeTransfer direction
+          (Region.singleton (.identity (.rel arguments) 1 ports))
+          (operation.pin siteFrame siteData))
+      (runItemsLength : ∀
+        {itemCommon itemSourceWires itemTargetWires : List Sig}
+        {itemFrame : Frame arguments itemCommon itemSourceWires
+          itemTargetWires}
+        {itemData : operation.Data itemFrame}
+        {itemSource : Item itemSourceWires}
+        (itemEdit : ItemEdit operation itemFrame itemData itemSource),
+        itemEdit.run.items.length = 1)
+      {data : operation.Data frame} {source : ItemSeq sourceWires}
+      (dataInvariant : invariant frame data)
+      (edit : ItemsEdit operation frame data source) :
+      ScopeTransfer direction (Region.ofItems source) edit.run :=
+    match edit with
+    | .nil => by
+        cases direction <;> intro canonical <;>
+          exact ⟨by simpa [ItemsEdit.run] using canonical,
+            fun _ _ => List.Sublist.refl _⟩
+    | @ItemsEdit.cons _ _ _ _ _ _ _ item tail itemEdit tailEdit => by
+        have itemChild := ItemEdit.scopeTransfer direction invariant
+          appendInvariant contextLength
+          keepIndex selectedAtomTransfer selectedPinTransfer runItemsLength
+            dataInvariant itemEdit
+        have tailChild := ItemsEdit.scopeTransfer direction invariant
+          appendInvariant contextLength
+          keepIndex selectedAtomTransfer selectedPinTransfer runItemsLength
+            dataInvariant tailEdit
+        cases direction with
+        | targetToSource =>
+            intro targetCanonical
+            have split := (Region.Canonical.conjoin_iff _ _).mp targetCanonical
+            have itemResult := itemChild split.1
+            have tailResult := tailChild split.2
+            have sourceCanonical :
+                (Region.ofItems (.cons item tail)).Canonical := by
+              rw [← Region.singleton_conjoin_ofItems]
+              exact (Region.Canonical.conjoin_iff _ _).mpr
+                ⟨itemResult.1, tailResult.1⟩
+            refine ⟨sourceCanonical, ?_⟩
+            intro wireIndex wireBound
+            simp only [ItemsEdit.run]
+            rw [← Region.singleton_conjoin_ofItems]
+            let targetWire : Var targetWires
+                (targetWires.get ⟨wireIndex, by omega⟩) :=
+              Var.ofIndex ⟨wireIndex, by omega⟩
+            let sourceWire : Var sourceWires
+                (sourceWires.get ⟨wireIndex, wireBound⟩) :=
+              Var.ofIndex ⟨wireIndex, wireBound⟩
+            have targetPaths := Region.incidencePaths_conjoin itemEdit.run
+              tailEdit.run targetWire
+            have sourcePaths := Region.incidencePaths_conjoin
+              (Region.singleton item) (Region.ofItems tail) sourceWire
+            simp [targetWire, sourceWire] at targetPaths sourcePaths
+            rw [targetPaths, sourcePaths]
+            simpa [runItemsLength itemEdit] using
+              (itemResult.2 wireIndex wireBound).append
+              ((tailResult.2 wireIndex wireBound).map
+                (RegionPath.shiftHead 1))
+        | sourceToTarget =>
+            intro sourceCanonical
+            rw [← Region.singleton_conjoin_ofItems] at sourceCanonical
+            have split := (Region.Canonical.conjoin_iff _ _).mp sourceCanonical
+            have itemResult := itemChild split.1
+            have tailResult := tailChild split.2
+            have targetCanonical := (Region.Canonical.conjoin_iff _ _).mpr
+              ⟨itemResult.1, tailResult.1⟩
+            refine ⟨targetCanonical, ?_⟩
+            intro wireIndex wireBound
+            simp only [ItemsEdit.run]
+            rw [← Region.singleton_conjoin_ofItems]
+            let targetWire : Var targetWires
+                (targetWires.get ⟨wireIndex, by omega⟩) :=
+              Var.ofIndex ⟨wireIndex, by omega⟩
+            let sourceWire : Var sourceWires
+                (sourceWires.get ⟨wireIndex, wireBound⟩) :=
+              Var.ofIndex ⟨wireIndex, wireBound⟩
+            have targetPaths := Region.incidencePaths_conjoin itemEdit.run
+              tailEdit.run targetWire
+            have sourcePaths := Region.incidencePaths_conjoin
+              (Region.singleton item) (Region.ofItems tail) sourceWire
+            simp [targetWire, sourceWire] at targetPaths sourcePaths
+            rw [targetPaths, sourcePaths]
+            simpa [runItemsLength itemEdit] using
+              (itemResult.2 wireIndex wireBound).append
+              ((tailResult.2 wireIndex wireBound).map
+                (RegionPath.shiftHead 1))
+  termination_by structural edit
+
+  theorem ItemEdit.scopeTransfer
+      {arguments common sourceWires targetWires : List Sig}
+      {operation : Operation arguments}
+      {frame : Frame arguments common sourceWires targetWires}
+      (direction : ScopeDirection)
+      (invariant : ∀ {invariantCommon invariantSource invariantTarget}
+        (invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget), operation.Data invariantFrame → Prop)
+      (appendInvariant : ∀
+        {invariantCommon invariantSource invariantTarget}
+        (invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget) (invariantData : operation.Data invariantFrame)
+        (locals : List Sig), invariant invariantFrame invariantData →
+          invariant (invariantFrame.append locals)
+            (operation.appendData invariantFrame invariantData locals))
+      (contextLength : sourceWires.length = targetWires.length)
+      (keepIndex : ∀ {wireSignature} (wire : Var common wireSignature),
+        (frame.sourceKeep wire).index.val =
+          (frame.targetKeep wire).index.val)
+      (selectedAtomTransfer : ∀
+        {siteCommon siteSourceWires siteTargetWires : List Sig}
+        {siteFrame : Frame arguments siteCommon siteSourceWires
+          siteTargetWires}
+        {siteData : operation.Data siteFrame}
+        (_siteInvariant : invariant siteFrame siteData)
+        (ports : Vars siteCommon arguments)
+        (selectedData : operation.SiteData siteFrame siteData ports),
+        ScopeTransfer direction
+          (Region.singleton (.atom siteFrame.selected
+            (ports.map fun wire => siteFrame.sourceKeep wire)))
+          (operation.site siteFrame siteData ports selectedData))
+      (selectedPinTransfer : ∀
+        {siteCommon siteSourceWires siteTargetWires : List Sig}
+        {siteFrame : Frame arguments siteCommon siteSourceWires
+          siteTargetWires}
+        {siteData : operation.Data siteFrame}
+        (_siteInvariant : invariant siteFrame siteData)
+        (ports : Fin 1 → Var siteSourceWires (.rel arguments))
+        (selected : ports 0 = siteFrame.selected),
+        ScopeTransfer direction
+          (Region.singleton (.identity (.rel arguments) 1 ports))
+          (operation.pin siteFrame siteData))
+      (runItemsLength : ∀
+        {itemCommon itemSourceWires itemTargetWires : List Sig}
+        {itemFrame : Frame arguments itemCommon itemSourceWires
+          itemTargetWires}
+        {itemData : operation.Data itemFrame}
+        {itemSource : Item itemSourceWires}
+        (itemEdit : ItemEdit operation itemFrame itemData itemSource),
+        itemEdit.run.items.length = 1)
+      {data : operation.Data frame} {source : Item sourceWires}
+      (dataInvariant : invariant frame data)
+      (edit : ItemEdit operation frame data source) :
+      ScopeTransfer direction (Region.singleton source) edit.run :=
+    match edit with
+    | .atom head ports => by
+        cases direction <;> intro _ <;>
+          refine ⟨⟨fun index => Fin.elim0 index,
+            ⟨True.intro, True.intro⟩⟩, ?_⟩ <;>
+          intro wireIndex wireBound <;>
+          simp only [ItemEdit.run, Region.singleton, Region.ofItems,
+            Region.incidencePaths, ItemSeq.renameWires,
+            Item.renameWires, ItemSeq.incidencePaths, Item.incidencePaths,
+            List.append_nil, Var.index_appendLeft] <;>
+          apply (List.replicate_sublist_replicate []).mpr <;>
+          simp only [Vars.countIndex_map_appendLeft_nil]
+        · have countEq := Vars.countIndex_map_eq_of_index_eq ports
+            (fun selected => frame.sourceKeep selected)
+            (fun selected => frame.targetKeep selected)
+            (fun selected => keepIndex selected) wireIndex
+          rw [countEq, ← keepIndex head]
+          exact Nat.le_refl _
+        · have countEq := Vars.countIndex_map_eq_of_index_eq ports
+            (fun selected => frame.targetKeep selected)
+            (fun selected => frame.sourceKeep selected)
+            (fun selected => (keepIndex selected).symm) wireIndex
+          rw [countEq, keepIndex head]
+          exact Nat.le_refl _
+    | .selectedAtom ports siteData =>
+        selectedAtomTransfer dataInvariant ports siteData
+    | .selectedPin ports selected =>
+        selectedPinTransfer dataInvariant ports selected
+    | .identity identitySignature arity ports => by
+        cases direction <;> intro _ <;>
+          refine ⟨⟨fun index => Fin.elim0 index,
+            ⟨True.intro, True.intro⟩⟩, ?_⟩ <;>
+          intro wireIndex wireBound <;>
+          simp only [ItemEdit.run, Region.singleton, Region.ofItems,
+            Region.incidencePaths, ItemSeq.renameWires, Item.renameWires,
+            ItemSeq.incidencePaths, Item.incidencePaths, List.append_nil,
+            Var.index_appendLeft] <;>
+          apply (List.replicate_sublist_replicate []).mpr
+        · have indicesEq :
+              List.ofFn (fun i =>
+                (frame.sourceKeep (ports i)).index.val) =
+              List.ofFn (fun i =>
+                (frame.targetKeep (ports i)).index.val) := by
+            apply List.ext_get
+            · simp
+            · intro n hn hn'
+              simp [List.get_eq_getElem, keepIndex]
+          rw [indicesEq]
+          exact Nat.le_refl _
+        · have indicesEq :
+              List.ofFn (fun i =>
+                (frame.targetKeep (ports i)).index.val) =
+              List.ofFn (fun i =>
+                (frame.sourceKeep (ports i)).index.val) := by
+            apply List.ext_get
+            · simp
+            · intro n hn hn'
+              simp [List.get_eq_getElem, keepIndex]
+          rw [indicesEq]
+          exact Nat.le_refl _
+    | @ItemEdit.cut _ _ _ _ _ _ _ body bodyEdit => by
+        have child := RegionEdit.scopeTransfer direction invariant
+          appendInvariant contextLength keepIndex selectedAtomTransfer
+            selectedPinTransfer runItemsLength dataInvariant bodyEdit
+        cases direction with
+        | targetToSource =>
+            intro targetCanonical
+            have childResult := child
+              ((Region.singleton_cut_canonical_iff _).mp targetCanonical)
+            refine ⟨(Region.singleton_cut_canonical_iff _).mpr childResult.1,
+              ?_⟩
+            intro wireIndex wireBound
+            let targetWire : Var targetWires
+                (targetWires.get ⟨wireIndex, by omega⟩) :=
+              Var.ofIndex ⟨wireIndex, by omega⟩
+            let sourceWire : Var sourceWires
+                (sourceWires.get ⟨wireIndex, wireBound⟩) :=
+              Var.ofIndex ⟨wireIndex, wireBound⟩
+            have targetRename :=
+              Region.incidencePaths_renameWires_appendLeft_nil
+                bodyEdit.run targetWire
+            have sourceRename :=
+              Region.incidencePaths_renameWires_appendLeft_nil body sourceWire
+            simp [targetWire, sourceWire] at targetRename sourceRename
+            simp only [ItemEdit.run, Region.singleton, Region.ofItems,
+              Region.incidencePaths, ItemSeq.renameWires, Item.renameWires,
+              ItemSeq.incidencePaths, Item.incidencePaths, List.append_nil,
+              Var.index_appendLeft]
+            rw [targetRename, sourceRename]
+            exact (childResult.2 wireIndex wireBound).map (List.cons 0)
+        | sourceToTarget =>
+            intro sourceCanonical
+            have childResult := child
+              ((Region.singleton_cut_canonical_iff _).mp sourceCanonical)
+            refine ⟨(Region.singleton_cut_canonical_iff _).mpr childResult.1,
+              ?_⟩
+            intro wireIndex wireBound
+            let targetWire : Var targetWires
+                (targetWires.get ⟨wireIndex, by omega⟩) :=
+              Var.ofIndex ⟨wireIndex, by omega⟩
+            let sourceWire : Var sourceWires
+                (sourceWires.get ⟨wireIndex, wireBound⟩) :=
+              Var.ofIndex ⟨wireIndex, wireBound⟩
+            have targetRename :=
+              Region.incidencePaths_renameWires_appendLeft_nil
+                bodyEdit.run targetWire
+            have sourceRename :=
+              Region.incidencePaths_renameWires_appendLeft_nil body sourceWire
+            simp [targetWire, sourceWire] at targetRename sourceRename
+            simp only [ItemEdit.run, Region.singleton, Region.ofItems,
+              Region.incidencePaths, ItemSeq.renameWires, Item.renameWires,
+              ItemSeq.incidencePaths, Item.incidencePaths, List.append_nil,
+              Var.index_appendLeft]
+            rw [targetRename, sourceRename]
+            exact (childResult.2 wireIndex wireBound).map (List.cons 0)
+  termination_by structural edit
+end
+
+/-- Canonicality transfer across an edit which removes a source-only selected
+binder.  Retained wires are compared through the frame embeddings instead of
+by raw indices, so this is the owner theorem needed by leaf rules whose source
+and target contexts have different lengths. -/
+def RetainedScopeTransfer
+    (frame : Frame arguments common sourceWires targetWires)
+    (source : Region sourceWires) (target : Region targetWires) : Prop :=
+  target.Canonical → source.Canonical ∧
+    ∀ {signature} (wire : Var common signature),
+      target.incidencePaths (frame.targetKeep wire).index.val =
+        source.incidencePaths (frame.sourceKeep wire).index.val
+
+mutual
+  /-- The edit contains no selected-pin case.  Comprehension instantiation
+  evidence has this property structurally. -/
+  def RegionEdit.NoSelectedPin :
+      {source : Region sourceWires} →
+        RegionEdit operation frame data source → Prop
+    | _, .mk itemsEdit => itemsEdit.NoSelectedPin
+
+  def ItemsEdit.NoSelectedPin :
+      {source : ItemSeq sourceWires} →
+        ItemsEdit operation frame data source → Prop
+    | _, .nil => True
+    | _, .cons itemEdit tailEdit =>
+        itemEdit.NoSelectedPin ∧ tailEdit.NoSelectedPin
+
+  def ItemEdit.NoSelectedPin :
+      {source : Item sourceWires} →
+        ItemEdit operation frame data source → Prop
+    | _, .selectedPin _ _ => False
+    | _, .cut bodyEdit => bodyEdit.NoSelectedPin
+    | _, _ => True
+end
+
+theorem countPorts_map_eq_of_reflection
+    (arity : Nat) (ports : Fin arity → Var common signature)
+    (sourceKeep : WireRenaming common sourceWires)
+    (targetKeep : WireRenaming common targetWires)
+    (reflects : ∀ {leftSignature rightSignature}
+      (left : Var common leftSignature) (right : Var common rightSignature),
+      (sourceKeep left).index.val = (sourceKeep right).index.val ↔
+        (targetKeep left).index.val = (targetKeep right).index.val)
+    (wire : Var common wireSignature) :
+    (List.ofFn fun position : Fin arity =>
+        (sourceKeep (ports position)).index.val).count
+          (sourceKeep wire).index.val =
+      (List.ofFn fun position : Fin arity =>
+        (targetKeep (ports position)).index.val).count
+          (targetKeep wire).index.val := by
+  induction arity with
+  | zero => rfl
+  | succ arity induction =>
+      rw [List.ofFn_succ, List.ofFn_succ]
+      have tailEq := induction (fun position => ports position.succ)
+      by_cases sourceEq : (sourceKeep (ports 0)).index.val =
+          (sourceKeep wire).index.val
+      · have targetEq := (reflects (ports 0) wire).mp sourceEq
+        simp [sourceEq, targetEq, tailEq]
+      · have targetNe := not_congr (reflects (ports 0) wire) |>.mp sourceEq
+        simp [sourceEq, targetNe, tailEq]
+
+mutual
+  theorem RegionEdit.retainedTargetToSource
+      {arguments common sourceWires targetWires : List Sig}
+      {operation : Operation arguments}
+      {frame : Frame arguments common sourceWires targetWires}
+      (invariant : ∀ {invariantCommon invariantSource invariantTarget}
+        (invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget), operation.Data invariantFrame → Prop)
+      (appendInvariant : ∀
+        {invariantCommon invariantSource invariantTarget}
+        (invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget) (invariantData : operation.Data invariantFrame)
+        (locals : List Sig), invariant invariantFrame invariantData →
+          invariant (invariantFrame.append locals)
+            (operation.appendData invariantFrame invariantData locals))
+      (indexInvariant : ∀
+        {invariantCommon invariantSource invariantTarget}
+        {invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget} {invariantData : operation.Data invariantFrame},
+        invariant invariantFrame invariantData →
+          RetainedIndexInvariant invariantFrame)
+      (selectedAtomTransfer : ∀
+        {siteCommon siteSourceWires siteTargetWires : List Sig}
+        {siteFrame : Frame arguments siteCommon siteSourceWires
+          siteTargetWires} {siteData : operation.Data siteFrame}
+        (_siteInvariant : invariant siteFrame siteData)
+        (ports : Vars siteCommon arguments)
+        (selectedData : operation.SiteData siteFrame siteData ports),
+        RetainedScopeTransfer siteFrame
+          (Region.singleton (.atom siteFrame.selected
+            (ports.map fun wire => siteFrame.sourceKeep wire)))
+          (operation.site siteFrame siteData ports selectedData))
+      (runItemsLength : ∀
+        {itemCommon itemSourceWires itemTargetWires : List Sig}
+        {itemFrame : Frame arguments itemCommon itemSourceWires
+          itemTargetWires} {itemData : operation.Data itemFrame}
+        {itemSource : Item itemSourceWires}
+        (itemEdit : ItemEdit operation itemFrame itemData itemSource),
+        itemEdit.NoSelectedPin → itemEdit.run.items.length = 1)
+      {data : operation.Data frame} {source : Region sourceWires}
+      (dataInvariant : invariant frame data)
+      (edit : RegionEdit operation frame data source)
+      (noPin : edit.NoSelectedPin) :
+      RetainedScopeTransfer frame source edit.run :=
+    match edit with
+    | @RegionEdit.mk _ _ _ _ _ _ _ locals items itemsEdit => by
+        intro targetCanonical
+        have child := ItemsEdit.retainedTargetToSource invariant
+          appendInvariant indexInvariant selectedAtomTransfer runItemsLength
+          (appendInvariant frame data locals dataInvariant) itemsEdit
+          noPin
+          (Region.Canonical.material_of_adjoinAt locals .nil itemsEdit.run
+            targetCanonical)
+        have sourceAdjoined : (Region.adjoinAt locals .nil
+            (Region.ofItems items)).Canonical := by
+          apply Region.Canonical.adjoinAt_of_material_roots locals .nil
+            (Region.ofItems items) True.intro child.1
+          intro localIndex
+          let localWire : Var (common ++ locals) (locals.get localIndex) :=
+            Var.appendRight common (Var.ofIndex localIndex)
+          have targetRoot :=
+            Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil
+              itemsEdit.run targetCanonical localIndex
+          have paths := child.2 localWire
+          have targetRoot' : RegionPath.RootedTwo
+              (itemsEdit.run.incidencePaths
+                ((frame.append locals).targetKeep localWire).index.val) := by
+            simpa [localWire, Frame.append, WireRenaming.appendRight] using
+              targetRoot
+          have sourceRoot' : RegionPath.RootedTwo
+              ((Region.ofItems items).incidencePaths
+                ((frame.append locals).sourceKeep localWire).index.val) := by
+            rw [← paths]
+            exact targetRoot'
+          simpa [localWire, Frame.append, WireRenaming.appendRight] using
+            sourceRoot'
+        refine ⟨(RegionIso.adjoinAtOfItems locals items).canonical_iff.mp
+          sourceAdjoined, ?_⟩
+        intro signature wire
+        have targetPaths := Region.incidencePaths_adjoinAt_nil itemsEdit.run
+          ((frame.targetKeep wire).appendLeft locals)
+        have targetPaths' :
+            (Region.adjoinAt locals .nil itemsEdit.run).incidencePaths
+                (frame.targetKeep wire).index.val =
+              itemsEdit.run.incidencePaths
+                (frame.targetKeep wire).index.val := by
+          simpa using targetPaths
+        have childEq := child.2 (wire.appendLeft locals)
+        have childEq' : itemsEdit.run.incidencePaths
+              (frame.targetKeep wire).index.val =
+            (Region.ofItems items).incidencePaths
+              (frame.sourceKeep wire).index.val := by
+          simpa [Frame.append, WireRenaming.appendRight] using childEq
+        have sourcePaths := Region.incidencePaths_ofItems items
+          ((frame.sourceKeep wire).appendLeft locals)
+        have sourcePaths' : (Region.ofItems items).incidencePaths
+              (frame.sourceKeep wire).index.val =
+            items.incidencePaths (frame.sourceKeep wire).index.val 0 := by
+          simpa using sourcePaths
+        simpa [RegionEdit.run] using
+          targetPaths'.trans (childEq'.trans sourcePaths')
+  termination_by structural edit
+
+  theorem ItemsEdit.retainedTargetToSource
+      {arguments common sourceWires targetWires : List Sig}
+      {operation : Operation arguments}
+      {frame : Frame arguments common sourceWires targetWires}
+      (invariant : ∀ {invariantCommon invariantSource invariantTarget}
+        (invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget), operation.Data invariantFrame → Prop)
+      (appendInvariant : ∀
+        {invariantCommon invariantSource invariantTarget}
+        (invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget) (invariantData : operation.Data invariantFrame)
+        (locals : List Sig), invariant invariantFrame invariantData →
+          invariant (invariantFrame.append locals)
+            (operation.appendData invariantFrame invariantData locals))
+      (indexInvariant : ∀
+        {invariantCommon invariantSource invariantTarget}
+        {invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget} {invariantData : operation.Data invariantFrame},
+        invariant invariantFrame invariantData →
+          RetainedIndexInvariant invariantFrame)
+      (selectedAtomTransfer : ∀
+        {siteCommon siteSourceWires siteTargetWires : List Sig}
+        {siteFrame : Frame arguments siteCommon siteSourceWires
+          siteTargetWires} {siteData : operation.Data siteFrame}
+        (_siteInvariant : invariant siteFrame siteData)
+        (ports : Vars siteCommon arguments)
+        (selectedData : operation.SiteData siteFrame siteData ports),
+        RetainedScopeTransfer siteFrame
+          (Region.singleton (.atom siteFrame.selected
+            (ports.map fun wire => siteFrame.sourceKeep wire)))
+          (operation.site siteFrame siteData ports selectedData))
+      (runItemsLength : ∀
+        {itemCommon itemSourceWires itemTargetWires : List Sig}
+        {itemFrame : Frame arguments itemCommon itemSourceWires
+          itemTargetWires} {itemData : operation.Data itemFrame}
+        {itemSource : Item itemSourceWires}
+        (itemEdit : ItemEdit operation itemFrame itemData itemSource),
+        itemEdit.NoSelectedPin → itemEdit.run.items.length = 1)
+      {data : operation.Data frame} {source : ItemSeq sourceWires}
+      (dataInvariant : invariant frame data)
+      (edit : ItemsEdit operation frame data source)
+      (noPin : edit.NoSelectedPin) :
+      RetainedScopeTransfer frame (Region.ofItems source) edit.run :=
+    match edit with
+    | .nil => by
+        intro targetCanonical
+        exact ⟨by simpa [ItemsEdit.run] using targetCanonical,
+          fun _ => rfl⟩
+    | @ItemsEdit.cons _ _ _ _ _ _ _ item tail itemEdit tailEdit => by
+        intro targetCanonical
+        have split := (Region.Canonical.conjoin_iff _ _).mp targetCanonical
+        have headResult := ItemEdit.retainedTargetToSource invariant
+          appendInvariant indexInvariant selectedAtomTransfer runItemsLength
+          dataInvariant itemEdit noPin.1 split.1
+        have tailResult := ItemsEdit.retainedTargetToSource invariant
+          appendInvariant indexInvariant selectedAtomTransfer runItemsLength
+          dataInvariant tailEdit noPin.2 split.2
+        refine ⟨by
+          rw [← Region.singleton_conjoin_ofItems]
+          exact (Region.Canonical.conjoin_iff _ _).mpr
+            ⟨headResult.1, tailResult.1⟩, ?_⟩
+        intro signature wire
+        have targetPaths := Region.incidencePaths_conjoin itemEdit.run
+          tailEdit.run (frame.targetKeep wire)
+        have sourcePaths := Region.incidencePaths_conjoin
+          (Region.singleton item) (Region.ofItems tail) (frame.sourceKeep wire)
+        have singletonLength : (Region.singleton item).items.length = 1 := by
+          rfl
+        simp only [ItemsEdit.run, ← Region.singleton_conjoin_ofItems]
+        rw [targetPaths, sourcePaths, headResult.2 wire, tailResult.2 wire]
+        rw [runItemsLength itemEdit noPin.1,
+          singletonLength]
+  termination_by structural edit
+
+  theorem ItemEdit.retainedTargetToSource
+      {arguments common sourceWires targetWires : List Sig}
+      {operation : Operation arguments}
+      {frame : Frame arguments common sourceWires targetWires}
+      (invariant : ∀ {invariantCommon invariantSource invariantTarget}
+        (invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget), operation.Data invariantFrame → Prop)
+      (appendInvariant : ∀
+        {invariantCommon invariantSource invariantTarget}
+        (invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget) (invariantData : operation.Data invariantFrame)
+        (locals : List Sig), invariant invariantFrame invariantData →
+          invariant (invariantFrame.append locals)
+            (operation.appendData invariantFrame invariantData locals))
+      (indexInvariant : ∀
+        {invariantCommon invariantSource invariantTarget}
+        {invariantFrame : Frame arguments invariantCommon invariantSource
+          invariantTarget} {invariantData : operation.Data invariantFrame},
+        invariant invariantFrame invariantData →
+          RetainedIndexInvariant invariantFrame)
+      (selectedAtomTransfer : ∀
+        {siteCommon siteSourceWires siteTargetWires : List Sig}
+        {siteFrame : Frame arguments siteCommon siteSourceWires
+          siteTargetWires} {siteData : operation.Data siteFrame}
+        (_siteInvariant : invariant siteFrame siteData)
+        (ports : Vars siteCommon arguments)
+        (selectedData : operation.SiteData siteFrame siteData ports),
+        RetainedScopeTransfer siteFrame
+          (Region.singleton (.atom siteFrame.selected
+            (ports.map fun wire => siteFrame.sourceKeep wire)))
+          (operation.site siteFrame siteData ports selectedData))
+      (runItemsLength : ∀
+        {itemCommon itemSourceWires itemTargetWires : List Sig}
+        {itemFrame : Frame arguments itemCommon itemSourceWires
+          itemTargetWires} {itemData : operation.Data itemFrame}
+        {itemSource : Item itemSourceWires}
+        (itemEdit : ItemEdit operation itemFrame itemData itemSource),
+        itemEdit.NoSelectedPin → itemEdit.run.items.length = 1)
+      {data : operation.Data frame} {source : Item sourceWires}
+      (dataInvariant : invariant frame data)
+      (edit : ItemEdit operation frame data source)
+      (noPin : edit.NoSelectedPin) :
+      RetainedScopeTransfer frame (Region.singleton source) edit.run :=
+    match edit with
+    | .atom head ports => by
+        intro _
+        refine ⟨⟨fun index => Fin.elim0 index,
+          ⟨True.intro, True.intro⟩⟩, ?_⟩
+        intro signature wire
+        have index := indexInvariant dataInvariant
+        have portsEq := Vars.countIndex_map_eq_of_reflection ports
+          frame.sourceKeep frame.targetKeep index.reflects wire
+        have targetAppend := Vars.countIndex_map_eq_of_index_eq ports
+          (fun selected => (frame.targetKeep selected).appendLeft [])
+          (fun selected => frame.targetKeep selected)
+          (fun selected => Var.index_appendLeft _ _) (frame.targetKeep wire).index.val
+        have sourceAppend := Vars.countIndex_map_eq_of_index_eq ports
+          (fun selected => (frame.sourceKeep selected).appendLeft [])
+          (fun selected => frame.sourceKeep selected)
+          (fun selected => Var.index_appendLeft _ _) (frame.sourceKeep wire).index.val
+        simp only [ItemEdit.run, Region.singleton, Region.ofItems,
+          Region.incidencePaths, ItemSeq.renameWires, Item.renameWires,
+          ItemSeq.incidencePaths, Item.incidencePaths, List.append_nil,
+          Var.index_appendLeft]
+        by_cases sourceEq : (frame.sourceKeep head).index.val =
+            (frame.sourceKeep wire).index.val
+        · have targetEq := (index.reflects head wire).mp sourceEq
+          simp [sourceEq, targetEq]
+          exact targetAppend.trans (portsEq.symm.trans sourceAppend.symm)
+        · have targetNe := not_congr (index.reflects head wire) |>.mp sourceEq
+          simp [sourceEq, targetNe]
+          exact targetAppend.trans (portsEq.symm.trans sourceAppend.symm)
+    | .selectedAtom ports siteData =>
+        selectedAtomTransfer dataInvariant ports siteData
+    | .selectedPin ports selected => False.elim noPin
+    | .identity identitySignature arity ports => by
+        intro _
+        refine ⟨⟨fun index => Fin.elim0 index,
+          ⟨True.intro, True.intro⟩⟩, ?_⟩
+        intro signature wire
+        have index := indexInvariant dataInvariant
+        have portsEq := countPorts_map_eq_of_reflection arity ports
+          frame.sourceKeep frame.targetKeep index.reflects wire
+        simp only [ItemEdit.run, Region.singleton, Region.ofItems,
+          Region.incidencePaths, ItemSeq.renameWires, Item.renameWires,
+          ItemSeq.incidencePaths, Item.incidencePaths, List.append_nil,
+          Var.index_appendLeft]
+        rw [portsEq]
+    | @ItemEdit.cut _ _ _ _ _ _ _ body bodyEdit => by
+        intro targetCanonical
+        have child := RegionEdit.retainedTargetToSource invariant
+          appendInvariant indexInvariant selectedAtomTransfer runItemsLength
+          dataInvariant bodyEdit noPin
+          ((Region.singleton_cut_canonical_iff _).mp targetCanonical)
+        refine ⟨(Region.singleton_cut_canonical_iff _).mpr child.1, ?_⟩
+        intro signature wire
+        have targetRename := Region.incidencePaths_renameWires_appendLeft_nil
+          bodyEdit.run (frame.targetKeep wire)
+        have sourceRename := Region.incidencePaths_renameWires_appendLeft_nil
+          body (frame.sourceKeep wire)
+        simp only [ItemEdit.run, Region.singleton, Region.ofItems,
+          Region.incidencePaths, ItemSeq.renameWires, Item.renameWires,
+          ItemSeq.incidencePaths, Item.incidencePaths, List.append_nil,
+          Var.index_appendLeft]
+        rw [targetRename, sourceRename, child.2 wire]
+  termination_by structural edit
 end
 
 private theorem EnvironmentsAgree.append

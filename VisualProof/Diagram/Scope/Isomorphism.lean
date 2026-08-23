@@ -1004,6 +1004,19 @@ theorem Region.incidencePaths_adjoinAt_nil
         (addedLocals := addedLocals) addedItems materialWire 0
       simpa [Region.adjoinAt, Region.incidencePaths, materialWire] using renamed
 
+/-- The empty-local presentation preserves every inherited incidence path. -/
+theorem Region.incidencePaths_ofItems
+    (items : ItemSeq wires) (wire : Var wires signature) :
+    (Region.ofItems items).incidencePaths wire.index.val =
+      items.incidencePaths wire.index.val 0 := by
+  let appendNil : WireRenaming wires (wires ++ []) :=
+    ⟨fun inherited => inherited.appendLeft []⟩
+  have renamed := ItemSeq.incidencePaths_renameWires_preservesIndex items
+    appendNil (by simp) (by
+      intro inheritedSignature inherited
+      simp [appendNil]) wire 0
+  simpa [Region.ofItems, Region.incidencePaths, appendNil] using renamed
+
 /-- A singleton cut is canonical exactly when its body is canonical. -/
 theorem Region.singleton_cut_canonical_iff
     (body : Region wires) :

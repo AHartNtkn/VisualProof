@@ -160,11 +160,39 @@ inductive Vars (context : List Sig) : List Sig → Type
 
 namespace Vars
 
+/-- Concatenate two ordered typed wire tuples. -/
+def extend : Vars context left → Vars context right →
+    Vars context (left ++ right)
+  | .nil, right => right
+  | .cons head tail, right => .cons head (extend tail right)
+
+theorem extend_assoc
+    (first : Vars context firstSignatures)
+    (second : Vars context secondSignatures)
+    (third : Vars context thirdSignatures) :
+    HEq (extend (extend first second) third)
+      (extend first (extend second third)) := by
+  induction first with
+  | nil => rfl
+  | @cons signature rest head tail induction =>
+      simp only [extend]
+      congr 1
+      exact List.append_assoc _ _ _
+
 def get : (variables : Vars context signatures) →
     (index : Fin signatures.length) → Var context (signatures.get index)
   | .cons head _, ⟨0, _⟩ => head
   | .cons _ tail, ⟨index + 1, bound⟩ =>
       tail.get ⟨index, Nat.lt_of_succ_lt_succ bound⟩
+
+theorem extend_nil (variables : Vars context signatures) :
+    HEq (extend variables .nil) variables := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [extend]
+      congr
+      exact List.append_nil _
 
 def countIndex (wireIndex : Nat) : Vars context signatures → Nat
   | .nil => 0
@@ -176,6 +204,43 @@ def map (rename : ∀ {signature}, Var source signature → Var target signature
     Vars source signatures → Vars target signatures
   | .nil => .nil
   | .cons head tail => .cons (rename head) (tail.map rename)
+
+@[simp] theorem map_extend
+    (left : Vars source leftSignatures)
+    (right : Vars source rightSignatures)
+    (rename : ∀ {signature}, Var source signature → Var target signature) :
+    (extend left right).map rename =
+      extend (left.map rename) (right.map rename) := by
+  induction left with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [extend, map]
+      exact congrArg (Vars.cons (rename head)) induction
+
+@[simp] theorem map_map
+    (variables : Vars source signatures)
+    (first : ∀ {signature}, Var source signature → Var middle signature)
+    (second : ∀ {signature}, Var middle signature → Var target signature) :
+    (variables.map first).map second =
+      variables.map (fun wire => second (first wire)) := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [map]
+      exact congrArg (Vars.cons (second (first head))) induction
+
+theorem map_congr
+    (variables : Vars source signatures)
+    (first second : ∀ {signature},
+      Var source signature → Var target signature)
+    (equal : ∀ {signature} (wire : Var source signature),
+      first wire = second wire) :
+    variables.map first = variables.map second := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [map]
+      rw [equal head, induction]
 
 theorem countIndex_get_positive
     (variables : Vars context signatures)
@@ -194,6 +259,31 @@ theorem countIndex_get_positive
           (if head.index.val = (tail.get index).index.val then 1 else 0) +
             tail.countIndex (tail.get index).index.val
         exact Nat.lt_of_lt_of_le (induction index) (Nat.le_add_left _ _)
+
+/-- Renamings with the same raw de Bruijn action preserve the same tuple
+incidence count, even when their codomain contexts differ. -/
+theorem countIndex_map_eq_of_index_eq
+    (variables : Vars source signatures)
+    (first : ∀ {signature}, Var source signature → Var firstTarget signature)
+    (second : ∀ {signature}, Var source signature → Var secondTarget signature)
+    (sameIndex : ∀ {signature} (wire : Var source signature),
+      (first wire).index.val = (second wire).index.val)
+    (wireIndex : Nat) :
+    (variables.map first).countIndex wireIndex =
+      (variables.map second).countIndex wireIndex := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [map, countIndex, sameIndex head, induction]
+
+@[simp] theorem countIndex_map_appendLeft_nil
+    (variables : Vars context signatures) (wireIndex : Nat) :
+    (variables.map fun wire => wire.appendLeft []).countIndex wireIndex =
+      variables.countIndex wireIndex := by
+  induction variables with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [map, countIndex, Var.index_appendLeft, induction]
 
 end Vars
 

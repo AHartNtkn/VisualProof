@@ -31,7 +31,7 @@ private theorem Vars.countIndex_map_of_reflect
       · have targetNe := not_congr headIff |>.mpr sourceEq
         simp only [sourceEq, targetNe, if_false, induction]
 
-private theorem Vars.countIndex_map_eq_zero_of_no_preimage
+theorem Vars.countIndex_map_eq_zero_of_no_preimage
     (variables : Vars source signatures) (rename : WireRenaming source target)
     (targetIndex : Nat)
     (noPreimage : ∀ {signature} (wire : Var source signature),
@@ -44,7 +44,7 @@ private theorem Vars.countIndex_map_eq_zero_of_no_preimage
           (tail.map (fun wire => rename wire)).countIndex targetIndex = 0
       simp [noPreimage head, induction]
 
-private theorem countPorts_map_eq_zero_of_no_preimage
+theorem countPorts_map_eq_zero_of_no_preimage
     (arity : Nat) (ports : Fin arity → Var source signature)
     (rename : WireRenaming source target) (targetIndex : Nat)
     (noPreimage : ∀ {wireSignature} (wire : Var source wireSignature),
@@ -481,6 +481,30 @@ theorem ItemSeq.incidencePaths_renameWires_preservesIndex
   simpa [preserves wire] using
     indexEmbedding_of_preservesIndex rename length_eq preserves wire
 
+theorem Region.incidencePaths_renameWires_appendLeft_nil
+    (region : Region wires) (wire : Var wires signature) :
+    (region.renameWires ⟨fun inherited => inherited.appendLeft []⟩).incidencePaths
+        wire.index.val =
+      region.incidencePaths wire.index.val := by
+  cases region with
+  | mk locals items =>
+      simp only [Region.renameWires, Region.incidencePaths]
+      simpa using ItemSeq.incidencePaths_renameWires_preservesIndex items
+        ((⟨fun inherited => inherited.appendLeft []⟩ :
+          WireRenaming wires (wires ++ [])).appendRight locals)
+        (by simp) (by
+          intro inheritedSignature inherited
+          apply Var.appendCases (left := wires) (right := locals)
+            (motive := fun inherited =>
+              ((((⟨fun wire => wire.appendLeft []⟩ :
+                WireRenaming wires (wires ++ [])).appendRight locals)
+                  inherited).index.val = inherited.index.val))
+          · intro sourceSignature sourceWire
+            simp [WireRenaming.appendRight]
+          · intro localSignature localWire
+            simp [WireRenaming.appendRight])
+        (wire.appendLeft locals) 0
+
 theorem ItemSeq.ChildrenCanonical.renameWires_preservesIndex_iff
     (items : ItemSeq source) (rename : WireRenaming source target)
     (length_eq : source.length = target.length)
@@ -837,7 +861,7 @@ private theorem ItemSeq.startsWith_of_mem_incidencePaths_lt
         omega)
     items wireIndex itemIndex member starts
 
-private theorem Region.incidencePaths_conjoin
+theorem Region.incidencePaths_conjoin
     (first second : Region outer) (wire : Var outer signature) :
     (first.conjoin second).incidencePaths wire.index.val =
       first.incidencePaths wire.index.val ++
@@ -1137,7 +1161,7 @@ private theorem Region.rootedTwo_conjoin_secondLocal_iff
 
 /-- Conjunction is canonical exactly when both independently owned regions
 are canonical. -/
-private theorem Region.Canonical.conjoin_iff
+theorem Region.Canonical.conjoin_iff
     (first second : Region outer) :
     (first.conjoin second).Canonical ↔
       first.Canonical ∧ second.Canonical := by

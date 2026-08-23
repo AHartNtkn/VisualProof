@@ -1428,7 +1428,7 @@ private theorem Vars.map_commutesExisting
               congrArg (Vars.cons (targetRename (oldAmbient head))) induction
 
 mutual
-  private noncomputable def RegionIso.renameExisting
+  noncomputable def RegionIso.renameExisting
       {sourceOuter targetOuter : List Sig}
       {oldAmbient : WireEquiv sourceOuter targetOuter}
       {before : Region sourceOuter} {after : Region targetOuter}
@@ -1468,7 +1468,7 @@ mutual
           appendedAmbient appendCommutes)
   termination_by structural iso
 
-  private noncomputable def ItemIso.renameExisting
+  noncomputable def ItemIso.renameExisting
       {sourceWires targetWires : List Sig}
       {oldAmbient : WireEquiv sourceWires targetWires}
       {before : Item sourceWires} {after : Item targetWires}
@@ -1514,7 +1514,7 @@ mutual
         ambient commutes)
   termination_by structural iso
 
-  private noncomputable def ItemSeqIso.renameExisting
+  noncomputable def ItemSeqIso.renameExisting
       {sourceWires targetWires : List Sig}
       {oldAmbient : WireEquiv sourceWires targetWires}
       {before : ItemSeq sourceWires} {after : ItemSeq targetWires}
