@@ -1,5 +1,4 @@
 import VisualProof.Rule.Completeness.Comprehension.Telescope
-import VisualProof.Rule.Completeness.Erasure.Exposure
 import VisualProof.Diagram.Scope.Isomorphism
 import VisualProof.Diagram.Isomorphism.Algebra
 
@@ -9,16 +8,255 @@ open Diagram
 open Theory
 open WirePrimitive
 
-def blankPattern : OpenDiagram [] where
-  external := []
-  boundaryWire := .nil
-  boundarySurjective := fun wire => Fin.elim0 wire
-  body := Region.blank []
-  canonical := by
-    simp [Region.blank, Region.Canonical, ItemSeq.ChildrenCanonical]
-  externalTwoEnded := by
-    intro signature wire
-    cases wire
+/-- An existing transform edit together with the exact staged region computed
+by its authoritative `run`; no edit leaves the structural fold unaccounted. -/
+structure ExactEdit
+    {targetWires : List Sig}
+    (Edit : Type)
+    (run : Edit → Region targetWires) where
+  edit : Edit
+  endpoint : Region targetWires
+  run_eq : run edit = endpoint
+
+def ExactEdit.refl
+    {targetWires : List Sig}
+    {Edit : Type}
+    {run : Edit → Region targetWires}
+    (edit : Edit) : ExactEdit Edit run where
+  edit := edit
+  endpoint := run edit
+  run_eq := rfl
+
+
+/-! These witnesses live in `Type` only to make the demand for
+`Operation.SiteData` explicit and to expose their genuine recursive shape to
+Lean's termination checker. The authoritative `Instantiation` proof is the
+index of every constructor; the witnesses carry no alternate source, result,
+transform, or validity authority. In particular, no proposition is eliminated
+to manufacture Type-valued site data. -/
+
+mutual
+  /-- Demand-driven selected-site evidence for one actual recursive region
+result. It asks for site data only where the authoritative evidence contains a
+selected application. -/
+  inductive RegionSites (operation : Transform.Operation arguments) :
+      {common sourceWires targetWires : List Sig} →
+      {pattern : OpenDiagram arguments} →
+      {frame : Transform.Frame arguments common sourceWires targetWires} →
+      (data : operation.Data frame) →
+      {source : Region sourceWires} → {result : Region common} →
+      _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        pattern frame.sourceKeep frame.selected source result → Type
+    | mk
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        {locals : List Sig}
+        {items : ItemSeq (sourceWires ++ locals)}
+        {result : Region (common ++ locals)}
+        {evidence :
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+            pattern (frame.sourceKeep.appendRight locals)
+            (frame.selected.appendLeft locals) items result}
+        (sites : ItemsSites operation
+          (operation.appendData frame data locals) evidence) :
+        RegionSites operation data
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+            evidence)
+
+  /-- Demand-driven selected-site evidence for an actual item sequence. -/
+  inductive ItemsSites (operation : Transform.Operation arguments) :
+      {common sourceWires targetWires : List Sig} →
+      {pattern : OpenDiagram arguments} →
+      {frame : Transform.Frame arguments common sourceWires targetWires} →
+      (data : operation.Data frame) →
+      {source : ItemSeq sourceWires} → {result : Region common} →
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        pattern frame.sourceKeep frame.selected source result → Type
+    | nil
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        (evidence :
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+            pattern frame.sourceKeep frame.selected
+            (.nil : ItemSeq sourceWires) (Region.blank common)) :
+        ItemsSites operation data evidence
+    | cons
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        {item : Item sourceWires} {tail : ItemSeq sourceWires}
+        {itemResult tailResult : Region common}
+        {itemEvidence :
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+            pattern frame.sourceKeep frame.selected item itemResult}
+        {tailEvidence :
+          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+            pattern frame.sourceKeep frame.selected tail tailResult}
+        (itemSites : ItemSites operation data itemEvidence)
+        (tailSites : ItemsSites operation data tailEvidence) :
+        ItemsSites operation data
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+            itemEvidence tailEvidence)
+
+  /-- Demand-driven selected-site evidence for one actual item. Nonselected
+atoms and identities need no operation site data. -/
+  inductive ItemSites (operation : Transform.Operation arguments) :
+      {common sourceWires targetWires : List Sig} →
+      {pattern : OpenDiagram arguments} →
+      {frame : Transform.Frame arguments common sourceWires targetWires} →
+      (data : operation.Data frame) →
+      {source : Item sourceWires} → {result : Region common} →
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        pattern frame.sourceKeep frame.selected source result → Type
+    | atom
+        {common sourceWires targetWires atomArguments : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        (head : Var common (.rel atomArguments))
+        (ports : Vars common atomArguments) :
+        ItemSites operation data
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+            head ports)
+    | selectedAtom
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        (ports : Vars common arguments)
+        (siteData : operation.SiteData frame data ports) :
+        ItemSites operation data
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+            ports)
+    | identity
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        (signature : Sig) (arity : Nat)
+        (ports : Fin arity → Var common signature) :
+        ItemSites operation data
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+            signature arity ports)
+    | cut
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        {body : Region sourceWires} {result : Region common}
+        {evidence :
+          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+            pattern frame.sourceKeep frame.selected body result}
+        (sites : RegionSites operation data evidence) :
+        ItemSites operation data
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+            evidence)
+end
+
+
+/-! `RegionResult`, `ItemsResult`, and `ItemResult` describe the simultaneous
+layout of every selected site for one `Transform` primitive. Their recursive
+shape therefore builds one exact edit; it does not introduce recursive
+calculus steps or duplicate the surrounding telescope request. -/
+
+mutual
+  /-- Fold authoritative region evidence and its demand-driven sites into one
+existing transform edit at its exact `run` endpoint. -/
+  def regionEdit
+      {arguments common sourceWires targetWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      (data : operation.Data frame)
+      {source : Region sourceWires}
+      {result : Region common}
+      (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        pattern frame.sourceKeep frame.selected source result)
+      (sites : RegionSites operation data evidence) :
+      ExactEdit
+        (Transform.RegionEdit operation frame data source)
+        (fun edit => edit.run) :=
+    match sites with
+    | .mk childSites =>
+        let childOutput := itemsEdit
+          (operation.appendData frame data _) _ childSites
+        {
+          edit := .mk childOutput.edit
+          endpoint := Region.adjoinAt _ .nil childOutput.endpoint
+          run_eq := by
+            simp only [Transform.RegionEdit.run]
+            rw [childOutput.run_eq]
+        }
+  termination_by structural sites
+
+  /-- Fold one authoritative item sequence into the same all-sites edit. -/
+  def itemsEdit
+      {arguments common sourceWires targetWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      (data : operation.Data frame)
+      {source : ItemSeq sourceWires}
+      {result : Region common}
+      (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemsSites operation data evidence) :
+      ExactEdit
+        (Transform.ItemsEdit operation frame data source)
+        (fun edit => edit.run) :=
+    match sites with
+    | .nil _ => ExactEdit.refl .nil
+    | .cons itemSites tailSites =>
+        let itemOutput := itemEdit data _ itemSites
+        let tailOutput := itemsEdit data _ tailSites
+        {
+          edit := .cons itemOutput.edit tailOutput.edit
+          endpoint := itemOutput.endpoint.conjoin tailOutput.endpoint
+          run_eq := by
+            simp only [Transform.ItemsEdit.run]
+            rw [itemOutput.run_eq, tailOutput.run_eq]
+        }
+  termination_by structural sites
+
+  /-- Fold one authoritative item. Only its selected-atom branch consumes
+operation-specific site data. -/
+  def itemEdit
+      {arguments common sourceWires targetWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires targetWires}
+      (data : operation.Data frame)
+      {source : Item sourceWires}
+      {result : Region common}
+      (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemSites operation data evidence) :
+      ExactEdit
+        (Transform.ItemEdit operation frame data source)
+        (fun edit => edit.run) :=
+    match sites with
+    | .atom head ports => ExactEdit.refl (.atom head ports)
+    | .selectedAtom ports siteData =>
+        ExactEdit.refl (.selectedAtom ports siteData)
+    | .identity signature arity ports =>
+        ExactEdit.refl (.identity signature arity ports)
+    | .cut childSites =>
+        let childOutput := regionEdit data _ childSites
+        {
+          edit := .cut childOutput.edit
+          endpoint := Region.singleton (.cut childOutput.endpoint)
+          run_eq := by
+            simp only [Transform.ItemEdit.run]
+            rw [childOutput.run_eq]
+        }
+  termination_by structural sites
+end
+
 
 /-- One transform traversal carrying both the primitive's actual site data and
 the authoritative full comprehension application used by later argument
@@ -93,281 +331,6 @@ mutual
 
 end
 
-/-- Instantiating the literal blank pattern is a presentation of the blank
-region. -/
-noncomputable def blankPatternInstantiationIso
-    (application : Vars wires []) :
-    RegionIso (WireEquiv.refl wires)
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
-        blankPattern application) (Region.blank wires) := by
-  cases application
-  let inner := RegionIso.blankConjoin (Region.blank (wires ++ []))
-  let hosted := RegionIso.adjoinAt [] .nil inner
-  let collapsed := hosted.trans
-    (RegionIso.adjoinAtNil (Region.blank (wires ++ []))).symm
-  simpa [
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate,
-    blankPattern, Region.blank, Region.renameWires] using collapsed
-
-mutual
-  /-- The Ends operation has unit site data at every selected blank-pattern
-  application, so authoritative region evidence admits exact sites. -/
-  theorem endsRegionSites_nonempty
-      {frame : Transform.Frame [] common sourceWires targetWires}
-      {source : Region sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          blankPattern frame.sourceKeep frame.selected source result) :
-      Nonempty (RegionSites (Content.Ends.operation []) PUnit.unit evidence) := by
-    cases evidence with
-    | mk childEvidence =>
-        obtain ⟨childSites⟩ := endsItemsSites_nonempty
-          (frame := frame.append _) childEvidence
-        exact ⟨.mk childSites⟩
-  termination_by sizeOf source
-
-  theorem endsItemsSites_nonempty
-      {frame : Transform.Frame [] common sourceWires targetWires}
-      {source : ItemSeq sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          blankPattern frame.sourceKeep frame.selected source result) :
-      Nonempty (ItemsSites (Content.Ends.operation []) PUnit.unit evidence) := by
-    cases evidence with
-    | nil => exact ⟨.nil _⟩
-    | cons itemEvidence tailEvidence =>
-        obtain ⟨itemSites⟩ := endsItemSites_nonempty itemEvidence
-        obtain ⟨tailSites⟩ := endsItemsSites_nonempty tailEvidence
-        exact ⟨.cons itemSites tailSites⟩
-  termination_by sizeOf source
-
-  theorem endsItemSites_nonempty
-      {frame : Transform.Frame [] common sourceWires targetWires}
-      {source : Item sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          blankPattern frame.sourceKeep frame.selected source result) :
-      Nonempty (ItemSites (Content.Ends.operation []) PUnit.unit evidence) := by
-    cases evidence with
-    | atom head ports => exact ⟨.atom (pattern := blankPattern) head ports⟩
-    | selectedAtom application =>
-        exact ⟨.selectedAtom (pattern := blankPattern) application PUnit.unit⟩
-    | identity signature arity ports =>
-        exact ⟨.identity (pattern := blankPattern) signature arity ports⟩
-    | cut childEvidence =>
-        obtain ⟨childSites⟩ := endsRegionSites_nonempty childEvidence
-        exact ⟨.cut childSites⟩
-  termination_by sizeOf source
-end
-
-noncomputable def endsItemsSites
-    {frame : Transform.Frame [] common sourceWires targetWires}
-    {source : ItemSeq sourceWires} {result : Region common}
-    (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        blankPattern frame.sourceKeep frame.selected source result) :
-    ItemsSites (Content.Ends.operation []) PUnit.unit evidence :=
-  Classical.choice (endsItemsSites_nonempty evidence)
-
-mutual
-  /-- Ends removes precisely the selected blank applications; its recursive
-  edit endpoint is therefore a presentation of the authoritative result. -/
-  theorem endsRegionEndpointIso_nonempty
-      {frame : Transform.Frame [] common sourceWires common}
-      {source : Region sourceWires} {result : Region common}
-      {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
-          blankPattern frame.sourceKeep frame.selected source result}
-      (sites : RegionSites (Content.Ends.operation []) PUnit.unit evidence)
-      (targetKeepEq : frame.targetKeep = WireRenaming.id) :
-      Nonempty (RegionIso (WireEquiv.refl common)
-        (regionEdit (operation := Content.Ends.operation []) PUnit.unit
-          evidence sites).endpoint result) :=
-    match sites with
-    | @RegionSites.mk _ _ _ _ _ _ _ _ locals items childResult childEvidence
-        childSites =>
-        by
-          have childIdentity :
-              (frame.append locals).targetKeep = WireRenaming.id := by
-            apply WireRenaming.ext
-            intro signature wire
-            change frame.targetKeep.appendRight locals wire = wire
-            rw [targetKeepEq]
-            exact WireRenaming.appendRight_id_apply locals wire
-          obtain ⟨childIso⟩ :=
-            endsItemsEndpointIso_nonempty childSites childIdentity
-          exact ⟨RegionIso.adjoinAt locals .nil childIso⟩
-  termination_by sizeOf source
-
-  theorem endsItemsEndpointIso_nonempty
-      {frame : Transform.Frame [] common sourceWires common}
-      {source : ItemSeq sourceWires} {result : Region common}
-      {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          blankPattern frame.sourceKeep frame.selected source result}
-      (sites : ItemsSites (Content.Ends.operation []) PUnit.unit evidence)
-      (targetKeepEq : frame.targetKeep = WireRenaming.id) :
-      Nonempty (RegionIso (WireEquiv.refl common)
-        (itemsEdit (operation := Content.Ends.operation []) PUnit.unit
-          evidence sites).endpoint result) :=
-    match sites with
-    | .nil _ => ⟨RegionIso.refl _⟩
-    | .cons itemSites tailSites => by
-          obtain ⟨itemIso⟩ :=
-            endsItemEndpointIso_nonempty itemSites targetKeepEq
-          obtain ⟨tailIso⟩ :=
-            endsItemsEndpointIso_nonempty tailSites targetKeepEq
-          exact ⟨RegionIso.conjoinCongr itemIso tailIso⟩
-  termination_by sizeOf source
-
-  theorem endsItemEndpointIso_nonempty
-      {frame : Transform.Frame [] common sourceWires common}
-      {source : Item sourceWires} {result : Region common}
-      {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
-          blankPattern frame.sourceKeep frame.selected source result}
-      (sites : ItemSites (Content.Ends.operation []) PUnit.unit evidence)
-      (targetKeepEq : frame.targetKeep = WireRenaming.id) :
-      Nonempty (RegionIso (WireEquiv.refl common)
-        (itemEdit (operation := Content.Ends.operation []) PUnit.unit
-          evidence sites).endpoint result) :=
-    match sites with
-    | .atom head ports => by
-        have portsEq :
-            ports.map (fun wire => frame.targetKeep wire) = ports := by
-          rw [targetKeepEq]
-          exact Diagram.vars_map_id ports
-        have headEq : frame.targetKeep head = head := by
-          rw [targetKeepEq]
-          rfl
-        exact ⟨RegionIso.ofEq (by
-          simp only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
-            headEq, portsEq])⟩
-    | .selectedAtom application siteData => by
-        exact ⟨(blankPatternInstantiationIso application).symm⟩
-    | .identity signature arity ports => by
-        have portsEq :
-            (fun position => frame.targetKeep (ports position)) = ports := by
-          funext position
-          rw [targetKeepEq]
-          rfl
-        exact ⟨RegionIso.ofEq (by
-          simp only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
-            portsEq])⟩
-    | .cut childSites => by
-        obtain ⟨childIso⟩ :=
-          endsRegionEndpointIso_nonempty childSites targetKeepEq
-        exact ⟨RegionIso.singletonCutCongr childIso⟩
-  termination_by sizeOf source
-end
-
-/-- Compile every authoritative blank-pattern site through one Ends spawn at
-the binder home. Sites, the deterministic edit, and its presentation of the
-authoritative result are all derived internally from the evidence. -/
-theorem itemsEnds
-    {outer before after : List Sig}
-    {source : ItemSeq (outer ++ (before ++ .rel [] :: after))}
-    {result : Region (outer ++ (before ++ after))}
-    (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-        blankPattern
-        (Content.Ends.rootFrame outer before after []).sourceKeep
-        (Content.Ends.rootFrame outer before after []).selected source result)
-    (request : Telescope.Request
-      (Region.adjoinAt (before ++ after) .nil result)
-      (.mk (before ++ .rel [] :: after) source)) :
-    request.Result := by
-  let frame := Content.Ends.rootFrame outer before after []
-  let sites := endsItemsSites evidence
-  let output := itemsEdit (operation := Content.Ends.operation []) PUnit.unit
-    evidence sites
-  have targetKeepEq : frame.targetKeep = WireRenaming.id := by
-    apply WireRenaming.ext
-    intro signature wire
-    apply Var.appendCases (left := outer) (right := before ++ after)
-      (motive := fun wire => frame.targetKeep wire = WireRenaming.id wire)
-    · intro inheritedSignature inherited
-      simp [frame, Content.Ends.rootFrame, Transform.Frame.replace,
-        Transform.Frame.keep, WireRenaming.id]
-    · intro localSignature localWire
-      apply Var.appendCases (left := before) (right := after)
-        (motive := fun localWire =>
-          frame.targetKeep (Var.appendRight outer localWire) =
-            WireRenaming.id (Var.appendRight outer localWire))
-      · intro beforeSignature beforeWire
-        simp [frame, Content.Ends.rootFrame, Transform.Frame.replace,
-          Transform.Frame.keep, Transform.Frame.localKeep, WireRenaming.id]
-      · intro afterSignature afterWire
-        simp only [frame, Content.Ends.rootFrame, Transform.Frame.replace,
-          Transform.Frame.keep, Transform.Frame.localKeep, WireRenaming.id,
-          Var.appendMap_right]
-        apply Var.eq_of_index_eq
-        apply Fin.ext
-        simp [Var.index_appendRight, Var.appendRight]
-  obtain ⟨endpointIso⟩ :=
-    endsItemsEndpointIso_nonempty sites targetKeepEq
-  let description : Content.Ends.Delete.Description outer := {
-    arguments := []
-    before := before
-    after := after
-    items := source
-    itemsEdit := output.edit
-  }
-  let instantiated := Region.adjoinAt (before ++ after) .nil result
-  have rawPreparedEq :
-      Region.adjoinAt (before ++ after) .nil output.endpoint =
-        description.target := by
-    change Region.adjoinAt (before ++ after) .nil output.endpoint =
-      Region.adjoinAt (before ++ after) .nil output.edit.run
-    rw [output.run_eq]
-  let rawPreparedIso : RegionIso (WireEquiv.refl outer)
-      instantiated description.target :=
-    (RegionIso.adjoinAt (before ++ after) .nil endpointIso.symm).trans
-      (RegionIso.ofEq rawPreparedEq)
-  let basePreparation : request.Preparation instantiated := {
-    prepared := instantiated
-    preparedCanonical := request.instantiatedCanonical
-    preparedExternalTwoEnded := request.instantiatedExternalTwoEnded
-    rawPreparedCanonical := request.instantiatedCanonical
-    rawPreparedExternalTwoEnded := request.instantiatedExternalTwoEnded
-    preparedIso := RegionIso.refl instantiated
-    telescope := Telescope.refl request.polarity request.occurrence.interface
-      request.occurrence.context request.instantiatedCanonical
-      request.instantiatedExternalTwoEnded request.continuation.1
-  }
-  let preparation : request.Preparation description.target :=
-    basePreparation.rawIso rawPreparedIso
-  have pendingEq :
-      (.mk (before ++ .rel [] :: after) source : Region outer) =
-        description.source := by
-    rfl
-  have rawPendingCanonical :
-      (request.occurrence.context.fill description.source).Canonical := by
-    rw [← pendingEq]
-    exact request.pendingCanonical
-  have rawPendingExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      request.occurrence.interface.boundaryWire
-      (request.occurrence.context.fill description.source) := by
-    intro signature wire
-    rw [← pendingEq]
-    exact request.pendingExternalTwoEnded wire
-  let branch : request.Branch preparation.prepared := {
-    rawPrepared := description.target
-    rawPending := description.source
-    localRule := Content.Ends.Local
-    inject := fun step => Step.ends step
-    preparedCanonical := preparation.preparedCanonical
-    preparedExternalTwoEnded := preparation.preparedExternalTwoEnded
-    rawPreparedCanonical := preparation.rawPreparedCanonical
-    rawPreparedExternalTwoEnded := preparation.rawPreparedExternalTwoEnded
-    rawPendingCanonical := rawPendingCanonical
-    rawPendingExternalTwoEnded := rawPendingExternalTwoEnded
-    preparedIso := preparation.preparedIso
-    pendingIso := RegionIso.ofEq pendingEq
-    localStep := .spawn (.mk description)
-    preparation := preparation.telescope
-  }
-  exact branch.compile
 
 mutual
   theorem regionEdit_noSelectedPin
@@ -687,7 +650,7 @@ mutual
   termination_by structural sites
 end
 
-/-- Compile one authoritative cut-pattern layer through the single CutShape
+/-- Derive one authoritative cut-pattern layer through the single CutShape
 primitive at the binder home. The recursive child supplies only the exact
 telescope ending at the deterministic all-sites edit endpoint. -/
 theorem itemsCut
@@ -765,9 +728,9 @@ theorem itemsCut
         localStep := Or.inr (.wrap (.mk description))
         preparation := preparation.telescope
       }
-      exact branch.compile
+      exact branch.derive
 
-/-- Compile one authoritative pattern-local wire through the single Arity
+/-- Derive one authoritative pattern-local wire through the single Arity
 primitive at the binder home. The preparation is indexed by the deterministic
 all-sites edit endpoint. -/
 theorem itemsArity
@@ -848,10 +811,10 @@ theorem itemsArity
         localStep := Or.inr (.shift (.mk description))
         preparation := preparation.telescope
       }
-      exact branch.compile
+      exact branch.derive
 
-/-- Compile one authoritative conjunction layer through the single
-ParallelShape primitive at the binder home. Recursive child compilation has
+/-- Derive one authoritative conjunction layer through the single
+ParallelShape primitive at the binder home. Recursive child derivation has
 already supplied the one combined preparation ending at the deterministic
 all-sites edit endpoint. -/
 theorem itemsParallel
@@ -936,11 +899,11 @@ theorem itemsParallel
         localStep := Or.inr (.split (.mk description))
         preparation := preparation.telescope
       }
-      exact branch.compile
+      exact branch.derive
 
 
-/-- Compile one complete selected-application layer through formal
-application. Boundary and equality compilation prepare the authoritative
+/-- Derive one complete selected-application layer through formal
+application. Boundary and equality derivation prepare the authoritative
 instantiation endpoint to the exact all-sites transform endpoint; this theorem
 owns the mandatory primitive at the comprehension binder's home occurrence. -/
 theorem itemsFormal
@@ -1035,17 +998,9 @@ theorem itemsFormal
             localStep := .abstractFormal (.mk description)
             preparation := preparation.telescope
           }
-          have stagedIso : RegionIso (WireEquiv.refl outer)
-              (Region.adjoinAt (localBefore ++ ([] ++ localAfter)) .nil staged)
-              branch.rawPrepared := by
-            change RegionIso (WireEquiv.refl outer)
-              (Region.adjoinAt (localBefore ++ ([] ++ localAfter)) .nil staged)
-              description.target
-            rw [stagedEq]
-            exact RegionIso.refl _
-          exact (Telescope.Request.Discharge.primitive branch stagedIso).compile
+          exact branch.derive
 
-/-- Compile one complete selected-application layer through identity leaf.
+/-- Derive one complete selected-application layer through identity leaf.
 The preparation is indexed by the deterministic all-sites edit endpoint, and
 this theorem owns the single directed primitive at the binder home. -/
 theorem itemsIdentity
@@ -1137,15 +1092,7 @@ theorem itemsIdentity
         localStep := .abstractIdentity (.mk description)
         preparation := preparation.telescope
       }
-      have stagedIso : RegionIso (WireEquiv.refl outer)
-          (Region.adjoinAt (localBefore ++ ([] ++ localAfter)) .nil staged)
-          branch.rawPrepared := by
-        change RegionIso (WireEquiv.refl outer)
-          (Region.adjoinAt (localBefore ++ ([] ++ localAfter)) .nil staged)
-          description.target
-        rw [stagedEq]
-        exact RegionIso.refl _
-      exact (Telescope.Request.Discharge.primitive branch stagedIso).compile
+      exact branch.derive
 
 
 end VisualProof.Rule.Completeness.Comprehension

@@ -1505,7 +1505,7 @@ theorem atomFormal
           (_continuation : Telescope polarity interface context
             pending endpoint pendingCanonical pendingExternalTwoEnded
             endpointCanonical endpointExternalTwoEnded),
-          Telescope.Compiles polarity
+          Telescope.StrictDerives polarity
             (exactOccurrence interface context
               (polaritySource polarity result endpoint)
               (match polarity with
@@ -1812,7 +1812,7 @@ theorem identityLeaf
           (_continuation : Telescope polarity interface context
             pending endpoint pendingCanonical pendingExternalTwoEnded
             endpointCanonical endpointExternalTwoEnded),
-          Telescope.Compiles polarity
+          Telescope.StrictDerives polarity
             (exactOccurrence interface context
               (polaritySource polarity result endpoint)
               (match polarity with

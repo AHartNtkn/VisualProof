@@ -1,4 +1,5 @@
 import VisualProof.Rule.Completeness.Comprehension.Structural.Hosted
+import VisualProof.Rule.Completeness.Comprehension.Leaf.Sites
 
 namespace VisualProof.Rule.Completeness.Comprehension
 

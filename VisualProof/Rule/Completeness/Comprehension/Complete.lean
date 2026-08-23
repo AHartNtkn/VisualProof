@@ -1,4 +1,6 @@
+import VisualProof.Rule.Completeness.Comprehension.Normalization.Sites
 import VisualProof.Rule.Completeness.Comprehension.Leaf.Complete
+import VisualProof.Rule.Completeness.Comprehension.Structural.Blank
 
 namespace VisualProof.Rule.Completeness.Comprehension
 
@@ -88,14 +90,14 @@ theorem complete
                         Erasure.Exposure.supportPattern
                           (Region.mk [] ItemSeq.nil)
                             materialCanonical =
-                          _root_.VisualProof.Rule.Completeness.Comprehension.blankPattern := by
+                          Structural.Blank.blankPattern := by
                       apply EqualityNormalization.OpenDiagram.eq_of_data
                       · rfl
                       · rfl
                       · rfl
                     rw [patternEq] at evidence
                     exact
-                      _root_.VisualProof.Rule.Completeness.Comprehension.itemsEnds
+                      Structural.Blank.itemsEnds
                         evidence structuralRequest
                 | cons materialHead materialTail =>
                     sorry
@@ -200,7 +202,7 @@ theorem complete
                 (request.occurrence.context.fill request.endpoint)
                 request.endpointCanonical request.endpointExternalTwoEnded) := by
             simpa only [normalizedRequest, Telescope.Request.Result,
-              Telescope.Compiles, polarityEq, polaritySource, polarityTarget,
+              Telescope.StrictDerives, polarityEq, polaritySource, polarityTarget,
               exactOccurrence, normalizedEndpoint] using core
           have phaseIso : OpenDiagramIso phaseTarget normalizedEndpoint := by
             simpa only [phaseTarget, normalizedEndpoint] using normalizedIso
@@ -218,7 +220,7 @@ theorem complete
               request.occurrence.host_iso.symm
           have presented :=
             transGen_iso sourceIso exact (OpenDiagramIso.refl _)
-          simpa only [Telescope.Request.Result, Telescope.Compiles,
+          simpa only [Telescope.Request.Result, Telescope.StrictDerives,
             polarityEq, polarityTarget] using presented
       | negative =>
           have coreSteps : Relation.TransGen Step
@@ -227,7 +229,7 @@ theorem complete
                 request.endpointCanonical request.endpointExternalTwoEnded)
               normalizedEndpoint := by
             simpa only [normalizedRequest, Telescope.Request.Result,
-              Telescope.Compiles, polarityEq, polaritySource, polarityTarget,
+              Telescope.StrictDerives, polarityEq, polaritySource, polarityTarget,
               exactOccurrence, normalizedEndpoint] using core
           have phaseIso : OpenDiagramIso phaseTarget normalizedEndpoint := by
             simpa only [phaseTarget, normalizedEndpoint] using normalizedIso
@@ -250,7 +252,7 @@ theorem complete
               request.occurrence.host_iso.symm
           have presented :=
             transGen_iso sourceIso exact (OpenDiagramIso.refl _)
-          simpa only [Telescope.Request.Result, Telescope.Compiles,
+          simpa only [Telescope.Request.Result, Telescope.StrictDerives,
             polarityEq, polarityTarget, originalEndpoint] using presented
 
 

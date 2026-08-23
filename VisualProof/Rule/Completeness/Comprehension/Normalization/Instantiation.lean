@@ -1,4 +1,5 @@
 import VisualProof.Rule.Completeness.Comprehension.Sites
+import VisualProof.Rule.Completeness.Erasure.Exposure
 
 namespace VisualProof.Rule.Completeness.Comprehension
 
