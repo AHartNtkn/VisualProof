@@ -1243,6 +1243,154 @@ mutual
   termination_by sizeOf source
 end
 
+mutual
+  /-- Reverse leaf scope for a region, stable under inherited-wire
+  renaming. -/
+  theorem leafRegionReverseHostedScope
+      {arguments common sourceWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires common}
+      {data : operation.Data frame}
+      {source : Region sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : RegionSites operation data evidence)
+      (targetKeepEq : frame.targetKeep = WireRenaming.id)
+      (selected : ∀
+        {siteCommon siteSourceWires : List Sig}
+        {siteFrame : Transform.Frame arguments siteCommon siteSourceWires
+          siteCommon}
+        {siteData : operation.Data siteFrame}
+        (siteTargetKeepEq : siteFrame.targetKeep = WireRenaming.id)
+        (ports : Vars siteCommon arguments)
+        (site : operation.SiteData siteFrame siteData ports),
+        HostedScope
+          (operation.site siteFrame siteData ports site)
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            pattern ports)) :
+      HostedScope (regionEdit data evidence sites).endpoint result := by
+    intro target rename
+    cases sites with
+    | @mk _ _ _ _ _ _ locals _ _ _ childSites =>
+        have childTargetKeep : (frame.append locals).targetKeep =
+            WireRenaming.id := by
+          apply WireRenaming.ext
+          intro signature wire
+          change frame.targetKeep.appendRight locals wire = wire
+          rw [targetKeepEq]
+          exact WireRenaming.appendRight_id_apply locals wire
+        have childScope :=
+          leafItemsReverseHostedScope _ childSites childTargetKeep selected
+            (rename.appendRight locals)
+        have lifted :=
+          adjoinAt_preserves_scope locals .nil _ _ childScope
+        simpa only [regionEdit, Region.renameWires_adjoinAt_nil] using lifted
+  termination_by sizeOf source
+
+  /-- Reverse leaf scope for an item sequence, stable under inherited-wire
+  renaming. -/
+  theorem leafItemsReverseHostedScope
+      {arguments common sourceWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires common}
+      {data : operation.Data frame}
+      {source : ItemSeq sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemsSites operation data evidence)
+      (targetKeepEq : frame.targetKeep = WireRenaming.id)
+      (selected : ∀
+        {siteCommon siteSourceWires : List Sig}
+        {siteFrame : Transform.Frame arguments siteCommon siteSourceWires
+          siteCommon}
+        {siteData : operation.Data siteFrame}
+        (siteTargetKeepEq : siteFrame.targetKeep = WireRenaming.id)
+        (ports : Vars siteCommon arguments)
+        (site : operation.SiteData siteFrame siteData ports),
+        HostedScope
+          (operation.site siteFrame siteData ports site)
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            pattern ports)) :
+      HostedScope (itemsEdit data evidence sites).endpoint result := by
+    intro target rename
+    cases sites with
+    | nil _ =>
+        exact ScopePreservation.refl _
+    | cons itemSites tailSites =>
+        have itemScope :=
+          leafItemReverseHostedScope _ itemSites targetKeepEq selected rename
+        have tailScope :=
+          leafItemsReverseHostedScope _ tailSites targetKeepEq selected rename
+        simpa only [itemsEdit, Region.renameWires_conjoin] using
+          ScopePreservation.conjoin itemScope tailScope
+  termination_by sizeOf source
+
+  /-- Reverse leaf scope for one item, stable under inherited-wire
+  renaming. -/
+  theorem leafItemReverseHostedScope
+      {arguments common sourceWires : List Sig}
+      {pattern : OpenDiagram arguments}
+      {operation : Transform.Operation arguments}
+      {frame : Transform.Frame arguments common sourceWires common}
+      {data : operation.Data frame}
+      {source : Item sourceWires} {result : Region common}
+      (evidence :
+        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          pattern frame.sourceKeep frame.selected source result)
+      (sites : ItemSites operation data evidence)
+      (targetKeepEq : frame.targetKeep = WireRenaming.id)
+      (selected : ∀
+        {siteCommon siteSourceWires : List Sig}
+        {siteFrame : Transform.Frame arguments siteCommon siteSourceWires
+          siteCommon}
+        {siteData : operation.Data siteFrame}
+        (siteTargetKeepEq : siteFrame.targetKeep = WireRenaming.id)
+        (ports : Vars siteCommon arguments)
+        (site : operation.SiteData siteFrame siteData ports),
+        HostedScope
+          (operation.site siteFrame siteData ports site)
+          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            pattern ports)) :
+      HostedScope (itemEdit data evidence sites).endpoint result := by
+    intro target rename
+    cases sites with
+    | atom head ports =>
+        have headEq : frame.targetKeep head = head := by
+          rw [targetKeepEq]
+          rfl
+        have portsEq : ports.map (fun wire => frame.targetKeep wire) = ports := by
+          rw [targetKeepEq]
+          exact Diagram.vars_map_id ports
+        simpa only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
+          headEq, portsEq] using
+          ScopePreservation.refl
+            ((Region.singleton (.atom head ports)).renameWires rename)
+    | selectedAtom ports site =>
+        simpa only [itemEdit, ExactEdit.refl] using
+          selected targetKeepEq ports site rename
+    | identity signature arity ports =>
+        have portsEq : (fun index => frame.targetKeep (ports index)) = ports := by
+          funext index
+          rw [targetKeepEq]
+          rfl
+        simpa only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
+          portsEq] using
+          ScopePreservation.refl
+            ((Region.singleton (.identity signature arity ports)
+              ).renameWires rename)
+    | cut childSites =>
+        have childScope :=
+          leafRegionReverseHostedScope _ childSites targetKeepEq selected rename
+        simpa only [itemEdit, Region.singleton_renameWires,
+          Item.renameWires] using
+          ScopePreservation.cut childScope
+  termination_by sizeOf source
+end
+
 /-- The selected-site endpoint transformation for the positional identity
 leaf. The recording payload is irrelevant to the primitive endpoint. -/
 theorem positionalIdentityLeafEndpoint
@@ -1450,7 +1598,13 @@ theorem positionalAtomLeafEndpoint
           (positionalAtomPattern atomArguments) application)
         ((recordingOperation
           (Leaf.Formal.operation [] atomArguments) originalArguments).site
-            frame PUnit.unit application site) := by
+            frame PUnit.unit application site) ∧
+      HostedScope
+        ((recordingOperation
+          (Leaf.Formal.operation [] atomArguments) originalArguments).site
+            frame PUnit.unit application site)
+        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (positionalAtomPattern atomArguments) application) := by
   rcases site with ⟨⟨formal, ⟨retained, applicationEq⟩⟩,
     recordedApplication⟩
   simp only [Argument.Projection.Vars.insertAt] at applicationEq
@@ -1509,7 +1663,32 @@ theorem positionalAtomLeafEndpoint
           simp only [Vars.countIndex] at countBound
           simpa only [Vars.countIndex] using
             Nat.ne_of_gt (by omega), rfl⟩
-  refine ⟨?_, reverseScope⟩
+  have directHostedScope : HostedScope
+      (Region.singleton (.atom formal retained))
+      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (positionalAtomPattern atomArguments) (.cons formal retained)) := by
+    intro target rename
+    let mappedFormal := rename formal
+    let mappedRetained := retained.map fun wire => rename wire
+    have directEq :
+        (Region.singleton (.atom formal retained)).renameWires rename =
+          Region.singleton (.atom mappedFormal mappedRetained) := by
+      simp [mappedFormal, mappedRetained, Region.singleton_renameWires,
+        Item.renameWires]
+    have instantiatedEq :
+        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (positionalAtomPattern atomArguments) (.cons formal retained)
+          ).renameWires rename =
+        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (positionalAtomPattern atomArguments)
+          (.cons mappedFormal mappedRetained) := by
+      simpa only [mappedFormal, mappedRetained, Theory.Vars.map] using
+        EqualityNormalization.instantiate_renameWires
+          (positionalAtomPattern atomArguments) (.cons formal retained) rename
+    rw [directEq, instantiatedEq]
+    simpa only [List.nil_append] using
+      positionalAtomInstantiation_scope mappedFormal mappedRetained
+  refine ⟨?_, reverseScope, directHostedScope⟩
   intro outer hostLocals rename hostItems boundary source occurrence
     targetCanonical targetExternalTwoEnded
   let mappedFormal := rename formal

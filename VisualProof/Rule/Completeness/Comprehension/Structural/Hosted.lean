@@ -29,6 +29,51 @@ def HostedStrict (before after : Region common) : Prop :=
       (Region.adjoinAt hostLocals hostItems (after.renameWires rename))
       targetCanonical targetExternalTwoEnded
 
+/-- Structural scope preservation stable under every inherited-wire
+renaming. -/
+def HostedScope (before after : Region common) : Prop :=
+  ∀ {target : List Sig} (rename : WireRenaming common target),
+    ScopePreservation (before.renameWires rename)
+      (after.renameWires rename)
+
+/-- Lift renaming-stable material scope beneath an arbitrary supported host. -/
+theorem HostedScope.adjoinHost
+    {before after : Region common}
+    (scope : HostedScope before after)
+    (outer hostLocals : List Sig)
+    (rename : WireRenaming common (outer ++ hostLocals))
+    (hostItems : ItemSeq (outer ++ hostLocals)) :
+    ScopePreservation
+      (Region.adjoinAt hostLocals hostItems (before.renameWires rename))
+      (Region.adjoinAt hostLocals hostItems (after.renameWires rename)) := by
+  exact adjoinAt_preserves_scope hostLocals hostItems
+    (before.renameWires rename) (after.renameWires rename) (scope rename)
+
+/-- Structural presentations preserve scope under every inherited-wire
+renaming. -/
+theorem HostedScope.ofIso
+    {before after : Region common}
+    (presentation : RegionIso (WireEquiv.refl common) before after) :
+    HostedScope before after := by
+  intro target rename
+  exact ScopePreservation.ofIso
+    (RegionIso.renameExisting presentation rename rename
+      (WireEquiv.refl target) (fun _ => rfl))
+
+/-- Lift renaming-stable scope beneath one locally bound region. -/
+theorem HostedScope.adjoinAt
+    {common : List Sig} (locals : List Sig)
+    (before after : Region (common ++ locals))
+    (scope : HostedScope before after) :
+    HostedScope (Region.adjoinAt locals .nil before)
+      (Region.adjoinAt locals .nil after) := by
+  intro target rename
+  have childScope := scope (rename.appendRight locals)
+  have lifted := adjoinAt_preserves_scope locals .nil
+    (before.renameWires (rename.appendRight locals))
+    (after.renameWires (rename.appendRight locals)) childScope
+  simpa only [Region.renameWires_adjoinAt_nil] using lifted
+
 /-- The canonical nonempty loop witnesses hosted strict reflexivity. -/
 theorem HostedStrict.refl (region : Region common) :
     HostedStrict region region := by
@@ -276,6 +321,108 @@ theorem HostedStrict.specialize
         (RegionIso.ofEq targetEq.symm))
   exact ⟨transGen_iso (OpenDiagramIso.refl source) core.1 targetIso,
     transGen_iso targetIso core.2 (OpenDiagramIso.refl source)⟩
+
+/-- Consume a hosted strict transformation at one actual material
+occurrence. -/
+theorem HostedStrict.atOccurrence
+    {before after : Region common}
+    (transformation : HostedStrict before after)
+    {boundary : List Sig} {host : OpenDiagram boundary}
+    (occurrence : Occurrence before host)
+    (targetCanonical : (occurrence.context.fill after).Canonical)
+    (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill after)) :
+    EqualityNormalization.StrictEquates occurrence after targetCanonical
+      targetExternalTwoEnded := by
+  let emptyEquiv := WireEquiv.appendNil common
+  let emptyRename : WireRenaming common (common ++ []) :=
+    emptyEquiv.symm.toRenaming
+  let emptyHostIso (region : Region common) :
+      RegionIso (WireEquiv.refl common) region
+        (Region.adjoinAt [] .nil (region.renameWires emptyRename)) := by
+    let directToCollapsed := RegionIso.renameWires region WireRenaming.id
+      (WireRenaming.comp emptyEquiv.toRenaming emptyRename)
+      (WireEquiv.refl common) (by
+        intro signature wire
+        exact (emptyEquiv.right_inv wire).symm)
+    let collapsedFromHosted :=
+      (RegionIso.renameWiresComp region emptyRename
+        emptyEquiv.toRenaming).symm
+    let chained := (directToCollapsed.trans collapsedFromHosted).trans
+      (RegionIso.adjoinAtNil (region.renameWires emptyRename))
+    have ambientEq :
+        (((WireEquiv.refl common).trans
+          (WireEquiv.refl common).symm).trans
+          (WireEquiv.refl common)) = WireEquiv.refl common := by
+      apply WireEquiv.ext
+      intro signature wire
+      rfl
+    simpa only [Region.renameWires_id] using
+      chained.castAmbient ambientEq
+  let sourceHosted := Region.adjoinAt [] .nil
+    (before.renameWires emptyRename)
+  let sourcePresentation : RegionIso (WireEquiv.refl common)
+      before sourceHosted := emptyHostIso before
+  have sourceHostedCanonical : sourceHosted.Canonical :=
+    sourcePresentation.canonical_iff.mp
+      (occurrence.context.holeCanonical before occurrence.sourceCanonical)
+  have sourceHostedNonempty : ∀ {signature}
+      (wire : Var common signature),
+      before.incidencePaths wire.index.val ≠ [] ↔
+        sourceHosted.incidencePaths wire.index.val ≠ [] := by
+    intro signature wire
+    have lengthEq := sourcePresentation.incidencePaths_length_eq wire
+    exact ⟨fun nonempty => by
+      rw [← List.length_pos_iff] at nonempty ⊢
+      rwa [← lengthEq], fun nonempty => by
+      rw [← List.length_pos_iff] at nonempty ⊢
+      rwa [lengthEq]⟩
+  let presentedOccurrence : Occurrence sourceHosted host :=
+    EqualityNormalization.presentationOccurrence occurrence
+      sourceHostedCanonical sourceHostedNonempty sourcePresentation
+  let targetHosted := Region.adjoinAt [] .nil
+    (after.renameWires emptyRename)
+  let targetPresentation : RegionIso (WireEquiv.refl common)
+      after targetHosted := emptyHostIso after
+  have targetHostedCanonical : targetHosted.Canonical :=
+    targetPresentation.canonical_iff.mp
+      (occurrence.context.holeCanonical after targetCanonical)
+  have targetHostedNonempty : ∀ {signature}
+      (wire : Var common signature),
+      after.incidencePaths wire.index.val ≠ [] ↔
+        targetHosted.incidencePaths wire.index.val ≠ [] := by
+    intro signature wire
+    have lengthEq := targetPresentation.incidencePaths_length_eq wire
+    exact ⟨fun nonempty => by
+      rw [← List.length_pos_iff] at nonempty ⊢
+      rwa [← lengthEq], fun nonempty => by
+      rw [← List.length_pos_iff] at nonempty ⊢
+      rwa [lengthEq]⟩
+  have targetReplacement := occurrence.context.replaceCanonical after
+    targetHosted targetCanonical targetHostedCanonical targetHostedNonempty
+  let directTarget := occurrence.interface.withBody
+    (occurrence.context.fill after) targetCanonical targetExternalTwoEnded
+  have targetHostedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill targetHosted) :=
+    directTarget.externalTwoEnded_of_nonempty_iff _ targetReplacement.2
+  have core := transformation common [] emptyRename .nil
+    presentedOccurrence targetReplacement.1 targetHostedExternalTwoEnded
+  let targetIso : OpenDiagramIso
+      (presentedOccurrence.interface.withBody
+        (presentedOccurrence.context.fill targetHosted)
+        targetReplacement.1 targetHostedExternalTwoEnded)
+      (occurrence.interface.withBody
+        (occurrence.context.fill after)
+        targetCanonical targetExternalTwoEnded) :=
+    OpenDiagram.withBody_iso targetReplacement.1 targetCanonical
+      targetHostedExternalTwoEnded targetExternalTwoEnded
+      (DiagramContext.fillIso occurrence.context targetPresentation.symm)
+  have presented :=
+    EqualityNormalization.StrictEquates.targetIso core targetIso
+  simpa only [EqualityNormalization.StrictEquates, presentedOccurrence,
+    EqualityNormalization.presentationOccurrence] using presented
 
 /-- Lift a hosted strict transformation beneath one locally bound region. -/
 theorem HostedStrict.adjoinAt
