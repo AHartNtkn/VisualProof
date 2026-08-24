@@ -1025,6 +1025,24 @@ theorem ScopePreservation.refl (region : Region wires) :
   rootedTwo := fun _ rooted => rooted
 }
 
+/-- Closed regions preserve scope whenever the target is canonical: neither
+endpoint can contribute an inherited-wire incidence or rooted pair. -/
+theorem ScopePreservation.of_incidence_empty
+    {source target : Region wires}
+    (targetCanonical : target.Canonical)
+    (sourceEmpty : ∀ {signature} (wire : Var wires signature),
+      source.incidencePaths wire.index.val = [])
+    (targetEmpty : ∀ {signature} (wire : Var wires signature),
+      target.incidencePaths wire.index.val = []) :
+    ScopePreservation source target := by
+  constructor
+  · intro _
+    exact targetCanonical
+  · intro signature wire
+    rw [sourceEmpty wire, targetEmpty wire]
+  · intro signature wire sourceRooted
+    exact False.elim (sourceRooted.nonempty (sourceEmpty wire))
+
 theorem ScopePreservation.conjoin
     {firstBefore firstAfter secondBefore secondAfter : Region wires}
     (firstScope : ScopePreservation firstBefore firstAfter)

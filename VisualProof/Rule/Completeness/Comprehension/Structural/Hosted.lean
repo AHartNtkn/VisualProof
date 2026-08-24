@@ -36,6 +36,171 @@ theorem HostedStrict.refl (region : Region common) :
     targetCanonical targetExternalTwoEnded
   exact EqualityNormalization.StrictEquates.refl occurrence
 
+/-- Reverse a hosted strict equivalence without changing its host or wire
+substitution. -/
+theorem HostedStrict.symm
+    {before after : Region common}
+    (transformation : HostedStrict before after) :
+    HostedStrict after before := by
+  intro outer hostLocals rename hostItems boundary source occurrence
+    targetCanonical targetExternalTwoEnded
+  let hostedBefore := Region.adjoinAt hostLocals hostItems
+    (before.renameWires rename)
+  let hostedAfter := Region.adjoinAt hostLocals hostItems
+    (after.renameWires rename)
+  change Occurrence hostedAfter source at occurrence
+  change (occurrence.context.fill hostedBefore).Canonical at targetCanonical
+  change OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
+    (occurrence.context.fill hostedBefore) at targetExternalTwoEnded
+  let beforeEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill hostedBefore) targetCanonical
+      targetExternalTwoEnded
+  let beforeOccurrence : Occurrence hostedBefore beforeEndpoint :=
+    exactOccurrence occurrence.interface occurrence.context hostedBefore
+      targetCanonical targetExternalTwoEnded
+  have core := transformation outer hostLocals rename hostItems
+    beforeOccurrence occurrence.sourceCanonical
+      occurrence.sourceExternalTwoEnded
+  have forward := transGen_iso occurrence.host_iso.symm core.2
+    (OpenDiagramIso.refl beforeEndpoint)
+  have reverse := transGen_iso (OpenDiagramIso.refl beforeEndpoint) core.1
+    occurrence.host_iso.symm
+  exact ⟨forward, reverse⟩
+
+/-- Transport a hosted strict equivalence across structural presentations of
+both endpoints. -/
+theorem HostedStrict.iso
+    {before before' after after' : Region common}
+    (sourceIso : RegionIso (WireEquiv.refl common) before' before)
+    (targetIso : RegionIso (WireEquiv.refl common) after after')
+    (transformation : HostedStrict before after) :
+    HostedStrict before' after' := by
+  intro outer hostLocals rename hostItems boundary source occurrence
+    targetCanonical targetExternalTwoEnded
+  let sourceBefore := Region.adjoinAt hostLocals hostItems
+    (before'.renameWires rename)
+  let sourceAfter := Region.adjoinAt hostLocals hostItems
+    (before.renameWires rename)
+  change Occurrence sourceBefore source at occurrence
+  let mappedSourceIso : RegionIso (WireEquiv.refl (outer ++ hostLocals))
+      (before'.renameWires rename) (before.renameWires rename) :=
+    RegionIso.renameExisting sourceIso rename rename
+      (WireEquiv.refl (outer ++ hostLocals)) (fun _ => rfl)
+  let hostedSourceIso : RegionIso (WireEquiv.refl outer)
+      sourceBefore sourceAfter :=
+    RegionIso.adjoinAt hostLocals hostItems mappedSourceIso
+  have sourceAfterCanonical : sourceAfter.Canonical :=
+    hostedSourceIso.canonical_iff.mp
+      (occurrence.context.holeCanonical sourceBefore
+        occurrence.sourceCanonical)
+  let sourceScope := ScopePreservation.ofIso hostedSourceIso
+  let presentedOccurrence : Occurrence sourceAfter source :=
+    EqualityNormalization.presentationOccurrence occurrence
+      sourceAfterCanonical sourceScope.incidenceNonempty hostedSourceIso
+  let targetBefore := Region.adjoinAt hostLocals hostItems
+    (after'.renameWires rename)
+  let targetAfter := Region.adjoinAt hostLocals hostItems
+    (after.renameWires rename)
+  change (occurrence.context.fill targetBefore).Canonical at targetCanonical
+  change OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
+    (occurrence.context.fill targetBefore) at targetExternalTwoEnded
+  let mappedTargetIso : RegionIso (WireEquiv.refl (outer ++ hostLocals))
+      (after.renameWires rename) (after'.renameWires rename) :=
+    RegionIso.renameExisting targetIso rename rename
+      (WireEquiv.refl (outer ++ hostLocals)) (fun _ => rfl)
+  let hostedTargetIso : RegionIso (WireEquiv.refl outer)
+      targetAfter targetBefore :=
+    RegionIso.adjoinAt hostLocals hostItems mappedTargetIso
+  have targetAfterCanonical : targetAfter.Canonical :=
+    hostedTargetIso.canonical_iff.mpr
+      (occurrence.context.holeCanonical targetBefore targetCanonical)
+  let targetScope := ScopePreservation.ofIso hostedTargetIso.symm
+  have targetReplacement := occurrence.context.replaceCanonical
+    targetBefore targetAfter targetCanonical targetAfterCanonical
+      targetScope.incidenceNonempty
+  let targetBeforeEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill targetBefore) targetCanonical
+      targetExternalTwoEnded
+  have targetAfterExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill targetAfter) :=
+    targetBeforeEndpoint.externalTwoEnded_of_nonempty_iff _
+      targetReplacement.2
+  have core := transformation outer hostLocals rename hostItems
+    presentedOccurrence targetReplacement.1 targetAfterExternalTwoEnded
+  let finalIso : OpenDiagramIso
+      (presentedOccurrence.interface.withBody
+        (presentedOccurrence.context.fill targetAfter)
+        targetReplacement.1 targetAfterExternalTwoEnded)
+      (occurrence.interface.withBody
+        (occurrence.context.fill targetBefore)
+        targetCanonical targetExternalTwoEnded) :=
+    OpenDiagram.withBody_iso targetReplacement.1 targetCanonical
+      targetAfterExternalTwoEnded targetExternalTwoEnded
+      (DiagramContext.fillIso occurrence.context hostedTargetIso)
+  exact ⟨transGen_iso (OpenDiagramIso.refl source) core.1 finalIso,
+    transGen_iso finalIso core.2 (OpenDiagramIso.refl source)⟩
+
+/-- Every structural presentation is a hosted strict equivalence. -/
+theorem HostedStrict.ofIso
+    {before after : Region common}
+    (presentation : RegionIso (WireEquiv.refl common) before after) :
+    HostedStrict before after := by
+  exact HostedStrict.iso (RegionIso.refl before) presentation
+    (HostedStrict.refl before)
+
+/-- Compose hosted strict equivalences when the final endpoint supplies the
+scope facts needed to validate the shared middle endpoint in every host. -/
+theorem HostedStrict.trans
+    {before middle after : Region common}
+    (first : HostedStrict before middle)
+    (second : HostedStrict middle after)
+    (middleScope : ∀ (outer hostLocals : List Sig)
+      (rename : WireRenaming common (outer ++ hostLocals))
+      (hostItems : ItemSeq (outer ++ hostLocals)),
+      ScopePreservation
+        (Region.adjoinAt hostLocals hostItems (after.renameWires rename))
+        (Region.adjoinAt hostLocals hostItems (middle.renameWires rename))) :
+    HostedStrict before after := by
+  intro outer hostLocals rename hostItems boundary source occurrence
+    targetCanonical targetExternalTwoEnded
+  let hostedBefore := Region.adjoinAt hostLocals hostItems
+    (before.renameWires rename)
+  let hostedMiddle := Region.adjoinAt hostLocals hostItems
+    (middle.renameWires rename)
+  let hostedAfter := Region.adjoinAt hostLocals hostItems
+    (after.renameWires rename)
+  change Occurrence hostedBefore source at occurrence
+  change (occurrence.context.fill hostedAfter).Canonical at targetCanonical
+  change OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
+    (occurrence.context.fill hostedAfter) at targetExternalTwoEnded
+  have reverseScope : ScopePreservation hostedAfter hostedMiddle :=
+    middleScope outer hostLocals rename hostItems
+  have middleCanonical : hostedMiddle.Canonical :=
+    reverseScope.canonical
+      (occurrence.context.holeCanonical hostedAfter targetCanonical)
+  have middleReplacement := occurrence.context.replaceCanonical
+    hostedAfter hostedMiddle targetCanonical middleCanonical
+      reverseScope.incidenceNonempty
+  let afterEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill hostedAfter) targetCanonical
+      targetExternalTwoEnded
+  have middleExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill hostedMiddle) :=
+    afterEndpoint.externalTwoEnded_of_nonempty_iff _ middleReplacement.2
+  have firstCore := first outer hostLocals rename hostItems occurrence
+    middleReplacement.1 middleExternalTwoEnded
+  let middleEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill hostedMiddle) middleReplacement.1
+      middleExternalTwoEnded
+  let middleOccurrence : Occurrence hostedMiddle middleEndpoint :=
+    exactOccurrence occurrence.interface occurrence.context hostedMiddle
+      middleReplacement.1 middleExternalTwoEnded
+  have secondCore := second outer hostLocals rename hostItems middleOccurrence
+    targetCanonical targetExternalTwoEnded
+  exact EqualityNormalization.StrictEquates.trans firstCore secondCore
+
 /-- Specialize a hosted transformation along one fixed wire substitution. -/
 theorem HostedStrict.specialize
     {before after : Region sourceWires}
