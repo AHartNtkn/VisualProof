@@ -6,6 +6,95 @@ open Diagram
 open Theory
 open WirePrimitive
 
+/-- A completeness-local naturality law for operation data.  The relation is
+chosen by the caller: proof-irrelevant operations use `True`, while operations
+whose data names target wires record exactly how those names are transported.
+This keeps data transport explicit without adding proof fields to the calculus
+operation itself. -/
+structure DataNaturality (operation : Transform.Operation arguments) where
+  Coherent : ∀
+    {common mappedCommon sourceWires mappedSourceWires targetWires
+      mappedTargetWires : List Sig}
+    (frame : Transform.Frame arguments common sourceWires targetWires)
+    (mappedFrame : Transform.Frame arguments mappedCommon mappedSourceWires
+      mappedTargetWires),
+    operation.Data frame → operation.Data mappedFrame →
+      WireRenaming common mappedCommon →
+      WireRenaming targetWires mappedTargetWires → Prop
+  append : ∀
+    {common mappedCommon sourceWires mappedSourceWires targetWires
+      mappedTargetWires : List Sig}
+    {frame : Transform.Frame arguments common sourceWires targetWires}
+    {mappedFrame : Transform.Frame arguments mappedCommon mappedSourceWires
+      mappedTargetWires}
+    {data : operation.Data frame} {mappedData : operation.Data mappedFrame}
+    {commonRename : WireRenaming common mappedCommon}
+    {targetRename : WireRenaming targetWires mappedTargetWires},
+    Coherent frame mappedFrame data mappedData commonRename targetRename →
+      ∀ locals,
+        Coherent (frame.append locals) (mappedFrame.append locals)
+          (operation.appendData frame data locals)
+          (operation.appendData mappedFrame mappedData locals)
+          (commonRename.appendRight locals) (targetRename.appendRight locals)
+  appendAssoc : ∀
+    {common sourceWires targetWires : List Sig}
+    (frame : Transform.Frame arguments common sourceWires targetWires)
+    (data : operation.Data frame) (first second : List Sig),
+    Coherent ((frame.append first).append second)
+      (frame.append (first ++ second))
+      (operation.appendData (frame.append first)
+        (operation.appendData frame data first) second)
+      (operation.appendData frame data (first ++ second))
+      (Region.adjoinMaterialWire common first second)
+      (Region.adjoinMaterialWire targetWires first second)
+  conjoinLeft : ∀
+    {common sourceWires targetWires : List Sig}
+    (frame : Transform.Frame arguments common sourceWires targetWires)
+    (data : operation.Data frame) (first second : List Sig),
+    Coherent (frame.append first) (frame.append (first ++ second))
+      (operation.appendData frame data first)
+      (operation.appendData frame data (first ++ second))
+      (Region.conjoinLeftWire common first second)
+      (Region.conjoinLeftWire targetWires first second)
+  conjoinRight : ∀
+    {common sourceWires targetWires : List Sig}
+    (frame : Transform.Frame arguments common sourceWires targetWires)
+    (data : operation.Data frame) (first second : List Sig),
+    Coherent (frame.append second) (frame.append (first ++ second))
+      (operation.appendData frame data second)
+      (operation.appendData frame data (first ++ second))
+      (Region.conjoinRightWire common first second)
+      (Region.conjoinRightWire targetWires first second)
+  appendNil : ∀
+    {common sourceWires targetWires : List Sig}
+    (frame : Transform.Frame arguments common sourceWires targetWires)
+    (data : operation.Data frame),
+    Coherent frame (frame.append []) data
+      (operation.appendData frame data [])
+      (WireEquiv.appendNil common).symm.toRenaming
+      (WireEquiv.appendNil targetWires).symm.toRenaming
+  site : ∀
+    {common mappedCommon sourceWires mappedSourceWires targetWires
+      mappedTargetWires : List Sig}
+    {frame : Transform.Frame arguments common sourceWires targetWires}
+    {mappedFrame : Transform.Frame arguments mappedCommon mappedSourceWires
+      mappedTargetWires}
+    {data : operation.Data frame} {mappedData : operation.Data mappedFrame}
+    {commonRename : WireRenaming common mappedCommon}
+    {targetRename : WireRenaming targetWires mappedTargetWires},
+    Coherent frame mappedFrame data mappedData commonRename targetRename →
+      (∀ {wireSignature} (wire : Var common wireSignature),
+        targetRename (frame.targetKeep wire) =
+          mappedFrame.targetKeep (commonRename wire)) →
+      ∀ (ports : Vars common arguments)
+        (siteData : operation.SiteData frame data ports),
+        ∃ mappedSiteData : operation.SiteData mappedFrame mappedData
+            (ports.map fun wire => commonRename wire),
+          Nonempty (RegionIso (WireEquiv.refl mappedTargetWires)
+            ((operation.site frame data ports siteData).renameWires targetRename)
+            (operation.site mappedFrame mappedData
+              (ports.map fun wire => commonRename wire) mappedSiteData))
+
 def positionalAtomWires (arguments : List Sig) : List Sig :=
   .rel arguments :: arguments
 
@@ -192,6 +281,21 @@ theorem identitySiteNatural
   apply congrArg (Item.identity signature arity)
   funext position
   exact siteTargetKeepCommutes (site.val position)
+
+def identityDataNaturality (signature : Sig) (arity : Nat) :
+    DataNaturality (Leaf.Identity.operation signature arity) where
+  Coherent := fun _ _ _ _ _ _ => True
+  append := by intros; trivial
+  appendAssoc := by intros; trivial
+  conjoinLeft := by intros; trivial
+  conjoinRight := by intros; trivial
+  appendNil := by intros; trivial
+  site := by
+    intro common mappedCommon sourceWires mappedSourceWires targetWires
+      mappedTargetWires frame mappedFrame data mappedData commonRename
+      targetRename _coherent targetKeepCommutes ports siteData
+    exact identitySiteNatural commonRename targetRename targetKeepCommutes
+      ports siteData
 
 theorem identityRecordingSiteNatural
     {signature : Sig} {arity : Nat} {patternArguments : List Sig}

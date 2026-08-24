@@ -887,6 +887,23 @@ theorem formalSiteNatural
     _ = _ := (Diagram.vars_map_comp retained commonRename
       mappedFrame.targetKeep).symm
 
+def formalDataNaturality (atomArguments : List Sig) :
+    DataNaturality (Leaf.Formal.operation [] atomArguments) where
+  Coherent := fun _ _ _ _ _ _ => True
+  append := by intros; trivial
+  appendAssoc := by intros; trivial
+  conjoinLeft := by intros; trivial
+  conjoinRight := by intros; trivial
+  appendNil := by intros; trivial
+  site := by
+    intro common mappedCommon sourceWires mappedSourceWires targetWires
+      mappedTargetWires frame mappedFrame data mappedData commonRename
+      targetRename _coherent targetKeepCommutes ports siteData
+    cases data
+    cases mappedData
+    exact formalSiteNatural commonRename targetRename targetKeepCommutes
+      ports siteData
+
 theorem formalRecordingSiteNatural
     {atomArguments patternArguments common mappedCommon sourceWires
       mappedSourceWires targetWires mappedTargetWires : List Sig}
@@ -952,35 +969,9 @@ mutual
           mappedFrame.targetKeep (commonRename wire))
       (selectedCommutes : sourceRename frame.selected =
         mappedFrame.selected)
-      (siteNatural : ∀
-        {siteCommon siteMappedCommon siteSourceWires siteMappedSourceWires
-          siteTargetWires siteMappedTargetWires : List Sig}
-        {siteFrame : Transform.Frame arguments siteCommon siteSourceWires
-          siteTargetWires}
-        {siteMappedFrame : Transform.Frame arguments siteMappedCommon
-          siteMappedSourceWires siteMappedTargetWires}
-        {siteData : baseOperation.Data siteFrame}
-        {siteMappedData : baseOperation.Data siteMappedFrame}
-        (siteCommonRename : WireRenaming siteCommon siteMappedCommon)
-        (siteTargetRename : WireRenaming siteTargetWires
-          siteMappedTargetWires)
-        (_siteTargetKeepCommutes : ∀ {wireSignature}
-          (wire : Var siteCommon wireSignature),
-          siteTargetRename (siteFrame.targetKeep wire) =
-            siteMappedFrame.targetKeep (siteCommonRename wire))
-        (ports : Vars siteCommon arguments)
-        (site : (recordingOperation baseOperation external).SiteData
-          siteFrame siteData ports),
-        ∃ mappedSite : (recordingOperation baseOperation external).SiteData
-            siteMappedFrame siteMappedData
-            (ports.map fun wire => siteCommonRename wire),
-          Nonempty (RegionIso (WireEquiv.refl siteMappedTargetWires)
-            (((recordingOperation baseOperation external).site
-              siteFrame siteData ports site).renameWires
-              siteTargetRename)
-            ((recordingOperation baseOperation external).site
-              siteMappedFrame siteMappedData
-              (ports.map fun wire => siteCommonRename wire) mappedSite))) :
+      (naturality : DataNaturality baseOperation)
+      (dataCoherent : naturality.Coherent frame mappedFrame data mappedData
+        commonRename targetRename) :
       ∃ mappedSource : Region mappedSourceWires,
         ∃ mappedResult : Region mappedCommon,
           ∃ mappedEvidence :
@@ -1055,7 +1046,7 @@ mutual
                   (commonRename.appendRight locals wire)
               rw [WireRenaming.appendRight_comp_apply,
                 WireRenaming.appendRight_comp_apply, targetMaps])
-            appendedSelected siteNatural
+            appendedSelected naturality (naturality.append dataCoherent locals)
         let mappedEvidence :=
           _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
             mappedChildEvidence
@@ -1130,35 +1121,9 @@ mutual
           mappedFrame.targetKeep (commonRename wire))
       (selectedCommutes : sourceRename frame.selected =
         mappedFrame.selected)
-      (siteNatural : ∀
-        {siteCommon siteMappedCommon siteSourceWires siteMappedSourceWires
-          siteTargetWires siteMappedTargetWires : List Sig}
-        {siteFrame : Transform.Frame arguments siteCommon siteSourceWires
-          siteTargetWires}
-        {siteMappedFrame : Transform.Frame arguments siteMappedCommon
-          siteMappedSourceWires siteMappedTargetWires}
-        {siteData : baseOperation.Data siteFrame}
-        {siteMappedData : baseOperation.Data siteMappedFrame}
-        (siteCommonRename : WireRenaming siteCommon siteMappedCommon)
-        (siteTargetRename : WireRenaming siteTargetWires
-          siteMappedTargetWires)
-        (_siteTargetKeepCommutes : ∀ {wireSignature}
-          (wire : Var siteCommon wireSignature),
-          siteTargetRename (siteFrame.targetKeep wire) =
-            siteMappedFrame.targetKeep (siteCommonRename wire))
-        (ports : Vars siteCommon arguments)
-        (site : (recordingOperation baseOperation external).SiteData
-          siteFrame siteData ports),
-        ∃ mappedSite : (recordingOperation baseOperation external).SiteData
-            siteMappedFrame siteMappedData
-            (ports.map fun wire => siteCommonRename wire),
-          Nonempty (RegionIso (WireEquiv.refl siteMappedTargetWires)
-            (((recordingOperation baseOperation external).site
-              siteFrame siteData ports site).renameWires
-              siteTargetRename)
-            ((recordingOperation baseOperation external).site
-              siteMappedFrame siteMappedData
-              (ports.map fun wire => siteCommonRename wire) mappedSite))) :
+      (naturality : DataNaturality baseOperation)
+      (dataCoherent : naturality.Coherent frame mappedFrame data mappedData
+        commonRename targetRename) :
       ∃ mappedSource : ItemSeq mappedSourceWires,
         ∃ mappedResult : Region mappedCommon,
           ∃ mappedEvidence :
@@ -1206,7 +1171,7 @@ mutual
             ⟨mappedItemEndpointIso⟩⟩ :=
           targetItemReindex itemEvidence itemSites current commonRename
             sourceRename targetRename keepCommutes targetKeepCommutes
-            selectedCommutes siteNatural
+            selectedCommutes naturality dataCoherent
         obtain ⟨mappedTailSource, mappedTailResult, mappedTailEvidence,
             mappedTailSites, mappedTailSourceEq,
             mappedTailArgumentEq,
@@ -1214,7 +1179,7 @@ mutual
             ⟨mappedTailEndpointIso⟩⟩ :=
           targetItemsReindex tailEvidence tailSites current commonRename
             sourceRename targetRename keepCommutes targetKeepCommutes
-            selectedCommutes siteNatural
+            selectedCommutes naturality dataCoherent
         let mappedEvidence :=
           _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             mappedItemEvidence mappedTailEvidence
@@ -1293,35 +1258,9 @@ mutual
           mappedFrame.targetKeep (commonRename wire))
       (selectedCommutes : sourceRename frame.selected =
         mappedFrame.selected)
-      (siteNatural : ∀
-        {siteCommon siteMappedCommon siteSourceWires siteMappedSourceWires
-          siteTargetWires siteMappedTargetWires : List Sig}
-        {siteFrame : Transform.Frame arguments siteCommon siteSourceWires
-          siteTargetWires}
-        {siteMappedFrame : Transform.Frame arguments siteMappedCommon
-          siteMappedSourceWires siteMappedTargetWires}
-        {siteData : baseOperation.Data siteFrame}
-        {siteMappedData : baseOperation.Data siteMappedFrame}
-        (siteCommonRename : WireRenaming siteCommon siteMappedCommon)
-        (siteTargetRename : WireRenaming siteTargetWires
-          siteMappedTargetWires)
-        (_siteTargetKeepCommutes : ∀ {wireSignature}
-          (wire : Var siteCommon wireSignature),
-          siteTargetRename (siteFrame.targetKeep wire) =
-            siteMappedFrame.targetKeep (siteCommonRename wire))
-        (ports : Vars siteCommon arguments)
-        (site : (recordingOperation baseOperation external).SiteData
-          siteFrame siteData ports),
-        ∃ mappedSite : (recordingOperation baseOperation external).SiteData
-            siteMappedFrame siteMappedData
-            (ports.map fun wire => siteCommonRename wire),
-          Nonempty (RegionIso (WireEquiv.refl siteMappedTargetWires)
-            (((recordingOperation baseOperation external).site
-              siteFrame siteData ports site).renameWires
-              siteTargetRename)
-            ((recordingOperation baseOperation external).site
-              siteMappedFrame siteMappedData
-              (ports.map fun wire => siteCommonRename wire) mappedSite))) :
+      (naturality : DataNaturality baseOperation)
+      (dataCoherent : naturality.Coherent frame mappedFrame data mappedData
+        commonRename targetRename) :
       ∃ mappedSource : Item mappedSourceWires,
         ∃ mappedResult : Region mappedCommon,
           ∃ mappedEvidence :
@@ -1484,12 +1423,11 @@ mutual
           exact EqualityNormalization.instantiate_renameWires
             pattern application commonRename
         obtain ⟨mappedSite, ⟨mappedEndpointIso⟩⟩ :=
-          siteNatural commonRename targetRename targetKeepCommutes
-            application siteData
+          naturality.site dataCoherent targetKeepCommutes application siteData.1
         let coherentMappedSite :
             (recordingOperation baseOperation external).SiteData
               mappedFrame mappedData mappedApplication :=
-          ⟨mappedSite.1, siteData.2.map fun wire => commonRename wire⟩
+          ⟨mappedSite, siteData.2.map fun wire => commonRename wire⟩
         let mappedSites : ItemSites
             (recordingOperation baseOperation external) mappedData
             mappedEvidence :=
@@ -1585,7 +1523,7 @@ mutual
             ⟨mappedChildIso⟩, ⟨mappedChildEndpointIso⟩⟩ :=
           targetRegionReindex childEvidence childSites current commonRename
             sourceRename targetRename keepCommutes targetKeepCommutes
-            selectedCommutes siteNatural
+            selectedCommutes naturality dataCoherent
         let mappedEvidence :=
           _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
             mappedChildEvidence

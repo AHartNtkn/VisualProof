@@ -70,35 +70,37 @@ theorem accumulateAtomFormal
       common (.rel (positionalAtomWires atomArguments) :: common) common :=
     Transform.Frame.replace [] [] common []
       (positionalAtomWires atomArguments)
-  have folded : TargetItems
-      (targetPattern := positionalAtomPattern atomArguments)
-      (targetOperation := Leaf.Formal.operation [] atomArguments)
-      evidence sites (positionalAtomSelection head ports) initialFrame
-        PUnit.unit
-        (fun retained _formalSource formalResult formalEvidence formalSites
-            _coherence =>
-          ∃ staged : Region common,
-            HostedStrict result staged ∧
-              ScopePreservation result staged ∧
-                Nonempty (RegionIso (WireEquiv.refl common) staged
-                  (Region.adjoinAt retained .nil formalResult))) :=
+  have folded :=
     accumulateHostedTargetWith evidence sites
       (positionalAtomSelection head ports)
       (outer := []) (before := []) (after := common)
+      (targetInserted := [])
+      (targetPattern := positionalAtomPattern atomArguments)
+      (targetBaseOperation := Leaf.Formal.operation [] atomArguments)
       PUnit.unit ScopePreservation ScopePreservation.refl
       (fun locals before after scope =>
         adjoinAt_preserves_scope locals .nil before after scope)
       ScopePreservation.conjoin ScopePreservation.cut
-      formalRecordingSiteNatural
+      (fun _ _ => False)
+      (fun _ _ impossible _ => False.elim impossible)
+      (fun _ _ _ => True)
+      (fun _ _ _ _ _ => True.intro)
+      (formalDataNaturality atomArguments)
       (fun {itemCommon itemSourceWires itemTargetWires} {itemFrame}
-          {itemOperation} {itemData} application siteData
+          {itemData} application siteData
           {selectedTargetSourceWires selectedTargetWires} selectedFrame
           selectedData => by
         cases selectedData
-        exact atomSelectedTargetItem body_eq application siteData selectedFrame)
+        obtain ⟨retained, formalSource, formalResult, formalEvidence,
+            formalSites, coherence, staged, hosted, scope, presentation⟩ :=
+          atomSelectedTargetItem body_eq application siteData selectedFrame
+        exact ⟨retained, formalSource, formalResult, formalEvidence,
+          formalSites, coherence, staged, hosted, scope, presentation, by
+            intro bridge _alignment
+            exact False.elim bridge.data_selects⟩)
   obtain ⟨retained, rawFormalSource, rawFormalResult, rawFormalEvidence,
       rawFormalSites, rawCoherence, rawStaged, rawHosted, rawScope,
-      ⟨rawPresentation⟩⟩ := folded
+      ⟨rawPresentation⟩, _rawEndpoint⟩ := folded
   let canonicalFrame := Leaf.Formal.rootFrame common [] retained []
     atomArguments
   let move := WireEquiv.rotate [] common
@@ -381,7 +383,7 @@ theorem accumulateAtomFormal
     targetItemsReindex rawFormalEvidence rawFormalSites
       (positionalAtomSelection head ports) commonRename
       sourceRename commonRename keepCommutes targetKeepCommutes
-      selectedCommutes formalRecordingSiteNatural
+      selectedCommutes (formalDataNaturality atomArguments) True.intro
   have formalCoherence : formalSource =
       (argumentItemsEdit formalSites (positionalAtomSelection head ports)
         (normalizationOperation (positionalAtomWires atomArguments))
@@ -661,34 +663,36 @@ theorem accumulateIdentity
       common (.rel (List.replicate arity signature) :: common) common :=
     Transform.Frame.replace [] [] common []
       (List.replicate arity signature)
-  have folded : TargetItems
-      (targetPattern := positionalIdentityPattern signature arity)
-      (targetOperation := Leaf.Identity.operation signature arity)
-      evidence sites (Leaf.Identity.Vars.fromFn ports) initialFrame PUnit.unit
-        (fun retained _formalSource formalResult formalEvidence formalSites
-            _coherence =>
-          ∃ staged : Region common,
-            HostedStrict result staged ∧
-              ScopePreservation result staged ∧
-                Nonempty (RegionIso (WireEquiv.refl common) staged
-                  (Region.adjoinAt retained .nil formalResult))) :=
+  have folded :=
     accumulateHostedTargetWith evidence sites
       (Leaf.Identity.Vars.fromFn ports)
       (outer := []) (before := []) (after := common)
+      (targetInserted := [])
+      (targetPattern := positionalIdentityPattern signature arity)
+      (targetBaseOperation := Leaf.Identity.operation signature arity)
       PUnit.unit ScopePreservation ScopePreservation.refl
       (fun locals before after scope =>
         adjoinAt_preserves_scope locals .nil before after scope)
       ScopePreservation.conjoin ScopePreservation.cut
-      identityRecordingSiteNatural
+      (fun _ _ => False)
+      (fun _ _ impossible _ => False.elim impossible)
+      (fun _ _ _ => True)
+      (fun _ _ _ _ _ => True.intro)
+      (identityDataNaturality signature arity)
       (fun {itemCommon itemSourceWires itemTargetWires} {itemFrame}
-          {itemOperation} {itemData} application siteData
+          {itemData} application siteData
           {selectedTargetSourceWires selectedTargetWires} selectedFrame
           selectedData => by
-        exact identitySelectedTargetItem body_eq application siteData
-          selectedFrame)
+        obtain ⟨retained, formalSource, formalResult, formalEvidence,
+            formalSites, coherence, staged, hosted, scope, presentation⟩ :=
+          identitySelectedTargetItem body_eq application siteData selectedFrame
+        exact ⟨retained, formalSource, formalResult, formalEvidence,
+          formalSites, coherence, staged, hosted, scope, presentation, by
+            intro bridge _alignment
+            exact False.elim bridge.data_selects⟩)
   obtain ⟨retained, rawFormalSource, rawFormalResult, rawFormalEvidence,
       rawFormalSites, rawCoherence, rawStaged, rawHosted, rawScope,
-      ⟨rawPresentation⟩⟩ := folded
+      ⟨rawPresentation⟩, _rawEndpoint⟩ := folded
   let canonicalFrame := Leaf.Identity.rootFrame common [] retained signature
     arity
   let move := WireEquiv.rotate [] common
@@ -966,7 +970,7 @@ theorem accumulateIdentity
     targetItemsReindex rawFormalEvidence rawFormalSites
       (Leaf.Identity.Vars.fromFn ports) commonRename
       sourceRename commonRename keepCommutes targetKeepCommutes
-      selectedCommutes identityRecordingSiteNatural
+      selectedCommutes (identityDataNaturality signature arity) True.intro
   have formalCoherence : formalSource =
       (argumentItemsEdit formalSites (Leaf.Identity.Vars.fromFn ports)
         (normalizationOperation (List.replicate arity signature))
