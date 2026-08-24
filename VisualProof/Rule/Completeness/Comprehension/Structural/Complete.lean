@@ -1446,7 +1446,7 @@ theorem supportPatternDerives
     | cons wire wires => sorry
   · intro wires arguments head ports wiresEq
     subst wires
-    sorry
+    exact Fin.elim0 head.index
   · intro wires signature arity ports wiresEq
     subst wires
     have arityEq : arity = 0 := by
