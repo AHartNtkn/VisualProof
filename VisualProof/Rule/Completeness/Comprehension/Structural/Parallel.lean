@@ -511,10 +511,11 @@ theorem supportParallelRootedTwoConjoinOfBoth
         ⟨combinedNonempty, noCommon⟩).2⟩
 
 theorem SupportParallelIncidenceScope.conjoin
+    {sourceSignature targetSignature : Sig}
     {sourceFirst sourceSecond : Region sourceWires}
     {targetFirst targetSecond : Region targetWires}
-    (sourceWire : Var sourceWires signature)
-    (targetWire : Var targetWires signature)
+    (sourceWire : Var sourceWires sourceSignature)
+    (targetWire : Var targetWires targetSignature)
     (first : SupportParallelIncidenceScope
       (sourceFirst.incidencePaths sourceWire.index.val)
       (targetFirst.incidencePaths targetWire.index.val))
@@ -588,9 +589,10 @@ theorem SupportParallelIncidenceScope.conjoin
           (second.nonempty.mp sourceSecondNonempty)
 
 theorem SupportParallelIncidenceScope.cut
+    {sourceSignature targetSignature : Sig}
     {source : Region sourceWires} {target : Region targetWires}
-    (sourceWire : Var sourceWires signature)
-    (targetWire : Var targetWires signature)
+    (sourceWire : Var sourceWires sourceSignature)
+    (targetWire : Var targetWires targetSignature)
     (scope : SupportParallelIncidenceScope
       (source.incidencePaths sourceWire.index.val)
       (target.incidencePaths targetWire.index.val)) :
@@ -636,14 +638,15 @@ theorem supportParallelNonemptyOfLengthEq
   rw [← List.length_pos_iff, ← List.length_pos_iff, lengthEq]
 
 theorem SupportParallelIncidenceScope.iso
+    {sourceSignature targetSignature : Sig}
     {sourceBefore sourceAfter : Region sourceWires}
     {targetBefore targetAfter : Region targetWires}
     (sourceIso : RegionIso (WireEquiv.refl sourceWires)
       sourceBefore sourceAfter)
     (targetIso : RegionIso (WireEquiv.refl targetWires)
       targetBefore targetAfter)
-    (sourceWire : Var sourceWires signature)
-    (targetWire : Var targetWires signature)
+    (sourceWire : Var sourceWires sourceSignature)
+    (targetWire : Var targetWires targetSignature)
     (scope : SupportParallelIncidenceScope
       (sourceAfter.incidencePaths sourceWire.index.val)
       (targetBefore.incidencePaths targetWire.index.val)) :

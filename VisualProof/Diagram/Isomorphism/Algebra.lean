@@ -1314,6 +1314,15 @@ theorem Region.singleton_renameWires
         ⟨fun wire => wire.appendLeft []⟩ := by
           rw [Item.renameWires_comp]
 
+/-- Adjoining blank material preserves the retained host presentation. -/
+noncomputable def RegionIso.adjoinAtBlank
+    (locals : List Sig) (items : ItemSeq (outer ++ locals)) :
+    RegionIso (WireEquiv.refl outer)
+      (Region.adjoinAt locals items (Region.blank (outer ++ locals)))
+      (Region.mk locals items) := by
+  simpa [Region.blank, Region.adjoinAt, Region.conjoin] using
+    (RegionIso.conjoinBlank (Region.mk locals items))
+
 noncomputable def RegionIso.adjoinAtSingleton
     (locals : List Sig) (items : ItemSeq (outer ++ locals))
     (item : Item (outer ++ locals)) :

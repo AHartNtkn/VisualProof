@@ -164,7 +164,7 @@ def TargetAmbientBridge.append
 target edit.  The selected-site premise is nonrecursive; this theorem owns the
 only structural recursion over the authoritative sites. -/
 theorem accumulateTarget
-    {targetArguments patternWires outer before after targetInserted
+    {targetArguments targetExternal patternWires outer before after targetInserted
       originalSourceWires originalTargetWires : List Sig}
     {targetPattern : OpenDiagram targetArguments}
     {targetBaseOperation : Transform.Operation targetArguments}
@@ -179,7 +179,7 @@ theorem accumulateTarget
       VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (sites : ItemsSites operation data evidence)
-    (targetValues : Vars pattern.external targetArguments)
+    (targetValues : Vars targetExternal targetArguments)
     (targetData : targetBaseOperation.Data
       (Transform.Frame.replace outer before after targetInserted
         targetArguments))
@@ -194,7 +194,7 @@ theorem accumulateTarget
           localPattern localFrame.sourceKeep localFrame.selected
           localSource localResult)
       (localSites : RegionSites operation localData localEvidence)
-      (values : Vars pattern.external targetArguments)
+      (values : Vars targetExternal targetArguments)
       {formalSourceWires formalTargetWires : List Sig}
       (formalFrame : Transform.Frame targetArguments common
         formalSourceWires formalTargetWires)
@@ -208,7 +208,7 @@ theorem accumulateTarget
           targetPattern formalFrame.sourceKeep formalFrame.selected
           formalSource formalResult)
       (formalSites : RegionSites
-        (recordingOperation targetBaseOperation pattern.external)
+        (recordingOperation targetBaseOperation targetExternal)
         formalData formalEvidence),
       formalSource =
         (argumentRegionEdit formalSites values
@@ -225,7 +225,7 @@ theorem accumulateTarget
           localPattern localFrame.sourceKeep localFrame.selected
           localSource localResult)
       (localSites : ItemsSites operation localData localEvidence)
-      (values : Vars pattern.external targetArguments)
+      (values : Vars targetExternal targetArguments)
       {formalSourceWires formalTargetWires : List Sig}
       (formalFrame : Transform.Frame targetArguments common
         formalSourceWires formalTargetWires)
@@ -240,7 +240,7 @@ theorem accumulateTarget
           targetPattern (formalFrame.append retained).sourceKeep
           (formalFrame.append retained).selected formalSource formalResult)
       (formalSites : ItemsSites
-        (recordingOperation targetBaseOperation pattern.external)
+        (recordingOperation targetBaseOperation targetExternal)
         (targetBaseOperation.appendData formalFrame formalData retained)
         formalEvidence),
       formalSource =
@@ -259,7 +259,7 @@ theorem accumulateTarget
           localPattern localFrame.sourceKeep localFrame.selected
           localSource localResult)
       (localSites : ItemSites operation localData localEvidence)
-      (values : Vars pattern.external targetArguments)
+      (values : Vars targetExternal targetArguments)
       {formalSourceWires formalTargetWires : List Sig}
       (formalFrame : Transform.Frame targetArguments common
         formalSourceWires formalTargetWires)
@@ -274,7 +274,7 @@ theorem accumulateTarget
           targetPattern (formalFrame.append retained).sourceKeep
           (formalFrame.append retained).selected formalSource formalResult)
       (formalSites : ItemsSites
-        (recordingOperation targetBaseOperation pattern.external)
+        (recordingOperation targetBaseOperation targetExternal)
         (targetBaseOperation.appendData formalFrame formalData retained)
         formalEvidence),
       formalSource =
@@ -575,7 +575,7 @@ structural side condition.  The side condition is threaded through the same
 authoritative target traversal, so specializations never need to reconstruct
 or repeat the target witnesses. -/
 theorem accumulateHostedTargetWith
-    {targetArguments patternWires outer before after targetInserted originalSourceWires
+    {targetArguments targetExternal patternWires outer before after targetInserted originalSourceWires
       originalTargetWires : List Sig}
     {targetPattern : OpenDiagram targetArguments}
     {targetBaseOperation : Transform.Operation targetArguments}
@@ -590,7 +590,7 @@ theorem accumulateHostedTargetWith
       VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (sites : ItemsSites operation data evidence)
-    (targetValues : Vars pattern.external targetArguments)
+    (targetValues : Vars targetExternal targetArguments)
     (targetData : targetBaseOperation.Data
       (Transform.Frame.replace outer before after targetInserted targetArguments))
     (Side : {wires : List Sig} → Region wires → Region wires → Prop)
@@ -734,7 +734,7 @@ theorem accumulateHostedTargetWith
                     (.mk retained (formalSource.renameWires
                       (bridge.sourceToTarget.appendRight retained)))))) := by
   let common := outer ++ (before ++ after)
-  let targetOperation := recordingOperation targetBaseOperation pattern.external
+  let targetOperation := recordingOperation targetBaseOperation targetExternal
   let authoritativePattern := pattern
   let targetFrame := Transform.Frame.replace outer before after targetInserted targetArguments
   have foldedFamilyWithPattern :
@@ -980,7 +980,7 @@ theorem accumulateHostedTargetWith
           ⟨mappedResultIso⟩, ⟨mappedEndpointIso⟩⟩ :=
         targetItemsReindex (mappedData := combinedData)
           (baseOperation := targetBaseOperation)
-          (external := authoritativePattern.external)
+          (external := targetExternal)
           childFormalEvidence childFormalSites values
           commonRename sourceRename targetSourceRename keepCommutes
           targetKeepCommutes selectedCommutes targetNaturality
@@ -1349,7 +1349,7 @@ theorem accumulateHostedTargetWith
           ⟨mappedItemEndpointPresentation⟩⟩ :=
         targetItemsReindex (mappedData := combinedData)
           (baseOperation := targetBaseOperation)
-          (external := authoritativePattern.external)
+          (external := targetExternal)
           itemFormalEvidence itemFormalSites values
           itemCommonRename itemSourceRename itemTargetRename itemKeepCommutes
           itemTargetKeepCommutes itemSelectedCommutes targetNaturality
@@ -1361,7 +1361,7 @@ theorem accumulateHostedTargetWith
           ⟨mappedTailEndpointPresentation⟩⟩ :=
         targetItemsReindex (mappedData := combinedData)
           (baseOperation := targetBaseOperation)
-          (external := authoritativePattern.external)
+          (external := targetExternal)
           tailFormalEvidence tailFormalSites values
           tailCommonRename tailSourceRename tailTargetRename tailKeepCommutes
           tailTargetKeepCommutes tailSelectedCommutes targetNaturality
@@ -1942,7 +1942,7 @@ theorem accumulateHostedTargetWith
           ⟨mappedChildEndpointPresentation⟩⟩ :=
         targetRegionReindex (mappedData := childData)
           (baseOperation := targetBaseOperation)
-          (external := authoritativePattern.external)
+          (external := targetExternal)
           childFormalEvidence childFormalSites values
           commonRename sourceRename targetAppend keepCommutes
           targetKeepCommutes selectedCommutes targetNaturality

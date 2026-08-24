@@ -424,6 +424,70 @@ theorem HostedStrict.atOccurrence
   simpa only [EqualityNormalization.StrictEquates, presentedOccurrence,
     EqualityNormalization.presentationOccurrence] using presented
 
+/-- Introducing one unary identity pin is a strict hosted equivalence. -/
+theorem HostedStrict.unaryPin (signature : Sig) :
+    HostedStrict (Region.blank [signature])
+      (Region.singleton
+        (.identity signature 1 (fun _ => Var.here))) := by
+  intro outer hostLocals rename hostItems boundary source occurrence
+    targetCanonical targetExternalTwoEnded
+  let pin := Item.identity signature 1 (fun _ => rename Var.here)
+  let plain := Vacuity.Pin.plain hostLocals hostItems
+  let present := Vacuity.Pin.present hostLocals hostItems signature
+    (rename Var.here)
+  let hostedBlank := Region.adjoinAt hostLocals hostItems
+    ((Region.blank [signature]).renameWires rename)
+  let hostedPin := Region.adjoinAt hostLocals hostItems
+    ((Region.singleton
+      (.identity signature 1 (fun _ => Var.here))).renameWires rename)
+  change Occurrence hostedBlank source at occurrence
+  change (occurrence.context.fill hostedPin).Canonical at targetCanonical
+  change OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
+    (occurrence.context.fill hostedPin) at targetExternalTwoEnded
+  let sourcePresentation : RegionIso (WireEquiv.refl outer)
+      hostedBlank plain := by
+    simpa [hostedBlank, plain, Region.blank, Region.renameWires,
+      Vacuity.Pin.plain] using
+      (RegionIso.adjoinAtBlank hostLocals hostItems)
+  let targetPresentation : RegionIso (WireEquiv.refl outer)
+      present hostedPin := by
+    simpa [present, hostedPin, pin, Vacuity.Pin.present,
+      Region.singleton_renameWires, Item.renameWires] using
+      (RegionIso.adjoinAtSingleton hostLocals hostItems pin).symm
+  have plainCanonical : plain.Canonical := by
+    exact sourcePresentation.canonical_iff.mp
+      (occurrence.context.holeCanonical hostedBlank
+        occurrence.sourceCanonical)
+  have plainNonempty : ∀ {wireSignature} (wire : Var outer wireSignature),
+      hostedBlank.incidencePaths wire.index.val ≠ [] ↔
+        plain.incidencePaths wire.index.val ≠ [] := by
+    intro wireSignature wire
+    have lengthEq := sourcePresentation.incidencePaths_length_eq wire
+    exact ⟨fun nonempty => by
+      rw [← List.length_pos_iff] at nonempty ⊢
+      rwa [← lengthEq], fun nonempty => by
+      rw [← List.length_pos_iff] at nonempty ⊢
+      rwa [lengthEq]⟩
+  let plainOccurrence : Occurrence plain source :=
+    EqualityNormalization.presentationOccurrence occurrence plainCanonical
+      plainNonempty sourcePresentation
+  obtain ⟨presentCanonical, presentExternalTwoEnded, steps⟩ :=
+    pinStep plainOccurrence signature (rename Var.here)
+  have core : EqualityNormalization.StrictEquates plainOccurrence present
+      presentCanonical presentExternalTwoEnded := by
+    exact ⟨.single steps.1, .single steps.2⟩
+  let targetIso : OpenDiagramIso
+      (plainOccurrence.interface.withBody
+        (plainOccurrence.context.fill present) presentCanonical
+          presentExternalTwoEnded)
+      (occurrence.interface.withBody
+        (occurrence.context.fill hostedPin) targetCanonical
+          targetExternalTwoEnded) :=
+    OpenDiagram.withBody_iso presentCanonical targetCanonical
+      presentExternalTwoEnded targetExternalTwoEnded
+      (DiagramContext.fillIso occurrence.context targetPresentation)
+  exact EqualityNormalization.StrictEquates.targetIso core targetIso
+
 /-- Lift a hosted strict transformation beneath one locally bound region. -/
 theorem HostedStrict.adjoinAt
     {common : List Sig} (locals : List Sig)
