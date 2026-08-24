@@ -25,7 +25,7 @@ theorem accumulateAtomFormalAt
     {source : ItemSeq originalSourceWires}
     {result : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (sites : ItemsSites operation data evidence) :
     ∃ retained : List Sig,
@@ -36,7 +36,7 @@ theorem accumulateAtomFormalAt
         ∃ formalResult : Region
             (outer ++ (localBefore ++ (localAfter ++ retained))),
           ∃ formalEvidence :
-              _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+              VisualProof.Rule.Comprehension.Instantiation.ItemsResult
                 (positionalAtomPattern atomArguments)
                 (Leaf.Formal.rootFrame
                   outer localBefore (localAfter ++ retained) [] atomArguments).sourceKeep
@@ -468,7 +468,7 @@ theorem accumulateAtomFormal
     {data : operation.Data originalFrame}
     {source : ItemSeq originalSourceWires} {result : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (sites : ItemsSites operation data evidence)
     {boundary : List Sig} {host : OpenDiagram boundary}
@@ -478,7 +478,7 @@ theorem accumulateAtomFormal
           (common ++ (.rel (positionalAtomWires atomArguments) :: retained)),
         ∃ formalResult : Region (common ++ retained),
           ∃ formalEvidence :
-              _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+              VisualProof.Rule.Comprehension.Instantiation.ItemsResult
                 (positionalAtomPattern atomArguments)
                 (Leaf.Formal.rootFrame common [] retained []
                   atomArguments).sourceKeep
@@ -587,7 +587,7 @@ theorem accumulateIdentity
     {data : operation.Data originalFrame}
     {source : ItemSeq originalSourceWires} {result : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (sites : ItemsSites operation data evidence)
@@ -598,7 +598,7 @@ theorem accumulateIdentity
           (common ++ (.rel (List.replicate arity signature) :: retained)),
         ∃ formalResult : Region (common ++ retained),
           ∃ formalEvidence :
-              _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+              VisualProof.Rule.Comprehension.Instantiation.ItemsResult
                 (positionalIdentityPattern signature arity)
                 (Leaf.Identity.rootFrame common [] retained signature arity).sourceKeep
                 (Leaf.Identity.rootFrame common [] retained signature arity).selected
@@ -1185,7 +1185,7 @@ theorem argumentNormalizationTelescope
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1386,7 +1386,7 @@ theorem argumentNormalizationTelescopeAll
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1453,7 +1453,7 @@ theorem atomFormal
     {data : operation.Data originalFrame}
     {source : ItemSeq originalSourceWires} {result : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (sites : ItemsSites operation data evidence)
     {boundary : List Sig}
@@ -1759,7 +1759,7 @@ theorem identityLeaf
     {data : operation.Data originalFrame}
     {source : ItemSeq originalSourceWires} {result : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (sites : ItemsSites operation data evidence)

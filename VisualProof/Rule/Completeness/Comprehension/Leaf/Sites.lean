@@ -22,7 +22,7 @@ theorem accumulateSelectedIdentity
     {boundary : List Sig} {host : OpenDiagram boundary}
     (occurrence : Occurrence
       (Region.adjoinAt hostLocals outerHostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern application)) host) :
     let common := outer ++ hostLocals
     let retainedLocals := EqualityNormalization.locals pattern
@@ -79,7 +79,7 @@ theorem accumulateSelectedIdentity
       (fun position => atomBodyWire pattern common (ports position))
   let direct := positionalIdentityApplication signature arity retained
   let positional :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       (positionalIdentityPattern signature arity) retained
   let formalResult := identityFormalPrefixResult signature arity hostItems
     retained
@@ -102,7 +102,7 @@ theorem accumulateSelectedIdentity
     signature arity retained
   have materialScope : ScopePreservation direct positional := {
     canonical := fun _ =>
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+      VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
         (positionalIdentityPattern signature arity) retained
     incidenceNonempty := fun wire =>
       (materialScopeForward.incidenceNonempty wire).symm
@@ -119,7 +119,7 @@ theorem accumulateSelectedIdentity
   have nestedPositionalCanonical := nestedScope.canonical nestedDirectCanonical
   have originalNestedScope : ScopePreservation
       (Region.adjoinAt hostLocals outerHostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern application)) nestedPositional :=
     {
       canonical := fun canonical =>
@@ -127,7 +127,7 @@ theorem accumulateSelectedIdentity
       incidenceNonempty := fun wire => by
         have sourceIsoNonempty :
             (Region.adjoinAt hostLocals outerHostItems
-              (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+              (VisualProof.Rule.Comprehension.Instantiation.instantiate
                 pattern application)).incidencePaths wire.index.val ≠ [] ↔
               nestedDirect.incidencePaths wire.index.val ≠ [] := by
           have lengthEq := hostedSourceIso.incidencePaths_length_eq wire
@@ -143,7 +143,7 @@ theorem accumulateSelectedIdentity
   let originalEndpoint := occurrence.interface.withBody
     (occurrence.context.fill
       (Region.adjoinAt hostLocals outerHostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern application))) occurrence.sourceCanonical
       occurrence.sourceExternalTwoEnded
   have nestedPositionalExternalTwoEnded : OpenDiagram.ExternalTwoEnded
@@ -160,7 +160,7 @@ theorem accumulateSelectedIdentity
     (positionalIdentityApplication signature arity flatRetained)
   let flatPositional := Region.adjoinAt (hostLocals ++ retainedLocals)
     flatHostItems
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    (VisualProof.Rule.Comprehension.Instantiation.instantiate
       (positionalIdentityPattern signature arity) flatRetained)
   let directAssoc : RegionIso (WireEquiv.refl outer) flatDirect nestedDirect := by
     let associated := RegionIso.adjoinAtAssoc hostLocals outerHostItems
@@ -178,7 +178,7 @@ theorem accumulateSelectedIdentity
     let associated := RegionIso.adjoinAtAssoc hostLocals outerHostItems
       retainedLocals hostItems positional
     have renamedEq : positional.renameWires assoc.toRenaming =
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalIdentityPattern signature arity) flatRetained := by
       simpa only [positional, flatRetained] using
         EqualityNormalization.instantiate_renameWires
@@ -193,7 +193,7 @@ theorem accumulateSelectedIdentity
   have flatDirectNonempty : ∀ {wireSignature}
       (wire : Var outer wireSignature),
       (Region.adjoinAt hostLocals outerHostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application)).incidencePaths wire.index.val ≠ [] ↔
         flatDirect.incidencePaths wire.index.val ≠ [] := by
     intro wireSignature wire
@@ -312,7 +312,7 @@ theorem accumulateSelectedIdentity
     outputLocalIso
   let originalOutputIso : RegionIso (WireEquiv.refl outer)
       (Region.adjoinAt hostLocals outerHostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern application))
       (Region.adjoinAt hostLocals outerHostItems
         (Region.adjoinAt retainedLocals .nil output.endpoint)) :=
@@ -337,7 +337,7 @@ theorem accumulateSelectedIdentity
       (occurrence.interface.withBody
         (occurrence.context.fill
           (Region.adjoinAt hostLocals outerHostItems
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (VisualProof.Rule.Comprehension.Instantiation.instantiate
               pattern application)))
         occurrence.sourceCanonical occurrence.sourceExternalTwoEnded)
       (occurrence.interface.withBody
@@ -391,7 +391,7 @@ theorem accumulateSelectedAtomFormal
     {boundary : List Sig} {host : OpenDiagram boundary}
     (occurrence : Occurrence
       (Region.adjoinAt hostLocals outerHostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern application)) host) :
     let common := outer ++ hostLocals
     let retainedLocals := EqualityNormalization.locals pattern
@@ -406,7 +406,7 @@ theorem accumulateSelectedAtomFormal
       retainedPorts
     let formalResult := atomFormalPrefixResult hostItems formal retainedPorts
     let formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           (positionalAtomPattern atomArguments) frame.sourceKeep frame.selected
           formalSource formalResult :=
       atomFormalPrefixEvidence frame hostItems formal retainedPorts
@@ -460,7 +460,7 @@ theorem accumulateSelectedAtomFormal
   let direct : Region (common ++ retainedLocals) :=
     Region.singleton (.atom formal retainedPorts)
   let positional : Region (common ++ retainedLocals) :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       (positionalAtomPattern atomArguments) (.cons formal retainedPorts)
   let formalSource := atomFormalPrefixSource frame hostItems formal
     retainedPorts
@@ -490,17 +490,17 @@ theorem accumulateSelectedAtomFormal
           atomExposureMaterialRename tail application)
   let rawSourceIso := atomExposureSourceIso body_eq application
   let directSourceIso : RegionIso (WireEquiv.refl common)
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern application)
       (Region.adjoinAt retainedLocals hostItems direct) :=
     rawSourceIso.symm.trans (RegionIso.ofEq rawSourceEq)
   have originalHostedCanonical :
       (Region.adjoinAt hostLocals outerHostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern application)).Canonical :=
     occurrence.context.holeCanonical _ occurrence.sourceCanonical
   have originalLocalCanonical :
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern application).Canonical :=
     Region.Canonical.material_of_adjoinAt hostLocals outerHostItems _
       originalHostedCanonical
@@ -515,7 +515,7 @@ theorem accumulateSelectedAtomFormal
     hostedDirectIso.canonical_iff.mp originalHostedCanonical
   have directSameNonempty : ∀ {signature} (wire : Var outer signature),
       (Region.adjoinAt hostLocals outerHostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application)).incidencePaths wire.index.val ≠ [] ↔
         (Region.adjoinAt hostLocals outerHostItems
           (Region.adjoinAt retainedLocals hostItems direct)).incidencePaths
@@ -541,7 +541,7 @@ theorem accumulateSelectedAtomFormal
   have combinedSourceSameNonempty : ∀ {signature}
       (wire : Var outer signature),
       (Region.adjoinAt hostLocals outerHostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application)).incidencePaths wire.index.val ≠ [] ↔
         combinedRaw.source.incidencePaths wire.index.val ≠ [] := by
     intro signature wire
@@ -564,7 +564,7 @@ theorem accumulateSelectedAtomFormal
         Region.adjoinAt retainedLocals hostItems positional := by
     unfold Erasure.Exposure.exposedRegion
     change Region.adjoinAt retainedLocals hostItems
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (Erasure.Exposure.supportPattern
           (Region.singleton (positionalAtomItem atomArguments))
           (positionalAtomCanonical atomArguments))
@@ -601,7 +601,7 @@ theorem accumulateSelectedAtomFormal
     exact ⟨fun nonempty => by
       have originalNonempty :
           (Region.adjoinAt hostLocals outerHostItems
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (VisualProof.Rule.Comprehension.Instantiation.instantiate
               pattern application)).incidencePaths wire.index.val ≠ [] := by
         rw [← List.length_pos_iff] at nonempty ⊢
         rwa [← sourceLength]
@@ -656,7 +656,7 @@ theorem accumulateSelectedAtomFormal
             (combinedRaw.hostItems.append
               (EqualityNormalization.contextPins outer
                 combinedRaw.hostLocals))
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (VisualProof.Rule.Comprehension.Instantiation.instantiate
               (Erasure.Exposure.supportPattern combinedRaw.material
                 (positionalAtomCanonical atomArguments))
               (Erasure.Exposure.applicationPorts combinedRaw)) := by
@@ -678,7 +678,7 @@ theorem accumulateSelectedAtomFormal
     (hostItems := combinedRaw.hostItems)
     (before := combinedRaw.material.renameWires combinedRaw.wireMap)
     (after :=
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      VisualProof.Rule.Comprehension.Instantiation.instantiate
         (Erasure.Exposure.supportPattern combinedRaw.material
           (positionalAtomCanonical atomArguments))
         (Erasure.Exposure.applicationPorts combinedRaw))
@@ -762,7 +762,7 @@ theorem accumulateSelectedAtomFormal
     outputLocalIso
   let originalOutputIso : RegionIso (WireEquiv.refl outer)
       (Region.adjoinAt hostLocals outerHostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern application))
       (Region.adjoinAt hostLocals outerHostItems
         (Region.adjoinAt retainedLocals .nil output.endpoint)) :=
@@ -773,7 +773,7 @@ theorem accumulateSelectedAtomFormal
     originalOutputIso.canonical_iff.mp originalHostedCanonical
   have outputSameNonempty : ∀ {signature} (wire : Var outer signature),
       (Region.adjoinAt hostLocals outerHostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application)).incidencePaths wire.index.val ≠ [] ↔
         (Region.adjoinAt hostLocals outerHostItems
           (Region.adjoinAt retainedLocals .nil output.endpoint)).incidencePaths
@@ -787,7 +787,7 @@ theorem accumulateSelectedAtomFormal
       rwa [lengthEq]⟩
   have outputReplacement := occurrence.context.replaceCanonical
     (Region.adjoinAt hostLocals outerHostItems
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern application))
     (Region.adjoinAt hostLocals outerHostItems
       (Region.adjoinAt retainedLocals .nil output.endpoint))
@@ -800,7 +800,7 @@ theorem accumulateSelectedAtomFormal
     let originalEndpoint := occurrence.interface.withBody
       (occurrence.context.fill
         (Region.adjoinAt hostLocals outerHostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application)))
       occurrence.sourceCanonical occurrence.sourceExternalTwoEnded
     intro signature wire
@@ -952,7 +952,7 @@ mutual
       {mappedData : baseOperation.Data mappedFrame}
       {source : Region sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep
           frame.selected source result)
       (sites : RegionSites (recordingOperation baseOperation external)
@@ -975,7 +975,7 @@ mutual
       ∃ mappedSource : Region mappedSourceWires,
         ∃ mappedResult : Region mappedCommon,
           ∃ mappedEvidence :
-              _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+              VisualProof.Rule.Comprehension.Instantiation.RegionResult
                 pattern
                 mappedFrame.sourceKeep mappedFrame.selected
                 mappedSource mappedResult,
@@ -1048,7 +1048,7 @@ mutual
                 WireRenaming.appendRight_comp_apply, targetMaps])
             appendedSelected naturality (naturality.append dataCoherent locals)
         let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+          VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
             mappedChildEvidence
         let mappedSites : RegionSites
             (recordingOperation baseOperation external) mappedData
@@ -1104,7 +1104,7 @@ mutual
       {mappedData : baseOperation.Data mappedFrame}
       {source : ItemSeq sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep
           frame.selected source result)
       (sites : ItemsSites (recordingOperation baseOperation external)
@@ -1127,7 +1127,7 @@ mutual
       ∃ mappedSource : ItemSeq mappedSourceWires,
         ∃ mappedResult : Region mappedCommon,
           ∃ mappedEvidence :
-              _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+              VisualProof.Rule.Comprehension.Instantiation.ItemsResult
                 pattern
                 mappedFrame.sourceKeep mappedFrame.selected
                 mappedSource mappedResult,
@@ -1153,7 +1153,7 @@ mutual
     match sites with
     | .nil _ => by
         let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
             (pattern := pattern)
             (retain := mappedFrame.sourceKeep)
             (selected := mappedFrame.selected)
@@ -1181,7 +1181,7 @@ mutual
             sourceRename targetRename keepCommutes targetKeepCommutes
             selectedCommutes naturality dataCoherent
         let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             mappedItemEvidence mappedTailEvidence
         let mappedSites : ItemsSites
             (recordingOperation baseOperation external) mappedData
@@ -1241,7 +1241,7 @@ mutual
       {mappedData : baseOperation.Data mappedFrame}
       {source : Item sourceWires} {result : Region common}
       (originalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep
           frame.selected source result)
       (sites : ItemSites (recordingOperation baseOperation external)
@@ -1264,7 +1264,7 @@ mutual
       ∃ mappedSource : Item mappedSourceWires,
         ∃ mappedResult : Region mappedCommon,
           ∃ mappedEvidence :
-              _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+              VisualProof.Rule.Comprehension.Instantiation.ItemResult
                 pattern
                 mappedFrame.sourceKeep mappedFrame.selected
                 mappedSource mappedResult,
@@ -1322,7 +1322,7 @@ mutual
             (Item.atom (mappedFrame.sourceKeep (commonRename itemHead)))
             mappedPortWires
         let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
             (pattern := pattern)
             (retain := mappedFrame.sourceKeep)
             (selected := mappedFrame.selected)
@@ -1381,7 +1381,7 @@ mutual
     | .selectedAtom application siteData => by
         let mappedApplication := application.map fun wire => commonRename wire
         let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
             (pattern := pattern)
             (retain := mappedFrame.sourceKeep)
             (selected := mappedFrame.selected) mappedApplication
@@ -1415,10 +1415,10 @@ mutual
           simp only [Item.renameWires, selectedCommutes]
           exact congrArg (Item.atom mappedFrame.selected) mappedPortWires
         have mappedResult :
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (VisualProof.Rule.Comprehension.Instantiation.instantiate
               pattern application).renameWires
                 commonRename =
-              _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+              VisualProof.Rule.Comprehension.Instantiation.instantiate
                 pattern mappedApplication := by
           exact EqualityNormalization.instantiate_renameWires
             pattern application commonRename
@@ -1477,7 +1477,7 @@ mutual
           funext position
           exact keepCommutes (identityPorts position)
         let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
             (pattern := pattern)
             (retain := mappedFrame.sourceKeep)
             (selected := mappedFrame.selected) signature arity mappedPorts
@@ -1525,7 +1525,7 @@ mutual
             sourceRename targetRename keepCommutes targetKeepCommutes
             selectedCommutes naturality dataCoherent
         let mappedEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
             mappedChildEvidence
         let mappedSites : ItemSites
             (recordingOperation baseOperation external) mappedData
@@ -1581,13 +1581,13 @@ theorem targetItemsAppend
     {firstSource secondSource : ItemSeq sourceWires}
     {firstResult secondResult : Region common}
     (firstEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected
         firstSource firstResult)
     (firstSites : ItemsSites
       (recordingOperation baseOperation external) data firstEvidence)
     (secondEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected
         secondSource secondResult)
     (secondSites : ItemsSites
@@ -1595,7 +1595,7 @@ theorem targetItemsAppend
     (current : Vars external arguments) :
     ∃ combinedResult : Region common,
       ∃ combinedEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             pattern frame.sourceKeep
             frame.selected (firstSource.append secondSource) combinedResult,
         ∃ combinedSites : ItemsSites
@@ -1637,7 +1637,7 @@ theorem targetItemsAppend
         targetItemsAppend tailEvidence tailSites secondEvidence secondSites
           current
       let combinedEvidence :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
           itemEvidence combinedTailEvidence
       let combinedSites : ItemsSites
           (recordingOperation baseOperation external) data combinedEvidence :=

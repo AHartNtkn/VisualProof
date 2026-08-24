@@ -372,11 +372,11 @@ theorem identityExposureDescriptionWithHost_exposed
         (identityExposureDescriptionWithHost signature arity hostLocals
           hostItems application) materialCanonical =
       Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalIdentityPattern signature arity) application) := by
   unfold Erasure.Exposure.exposedRegion
   change Region.adjoinAt hostLocals hostItems
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (Erasure.Exposure.supportPattern
           (positionalIdentityMaterial signature arity) materialCanonical)
         ((Erasure.Exposure.identityBoundary
@@ -418,18 +418,18 @@ theorem equatesPositionalIdentityApplication
     (targetCanonical :
       (occurrence.context.fill
         (Region.adjoinAt hostLocals hostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             (positionalIdentityPattern signature arity)
             application))).Canonical)
     (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
       occurrence.interface.boundaryWire
       (occurrence.context.fill
         (Region.adjoinAt hostLocals hostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             (positionalIdentityPattern signature arity) application)))) :
     EqualityNormalization.StrictEquates occurrence
       (Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalIdentityPattern signature arity) application))
       targetCanonical targetExternalTwoEnded := by
   by_cases nonempty : outer ++ hostLocals ≠ []
@@ -518,14 +518,14 @@ theorem equatesPositionalIdentityApplication
     have exposedEq :
         Erasure.Exposure.exposedRegion description materialCanonical =
           Region.adjoinAt [] hostItems
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (VisualProof.Rule.Comprehension.Instantiation.instantiate
               (positionalIdentityPattern signature arity) application) := by
       simpa only [description] using
         identityExposureDescriptionWithHost_exposed signature arity []
           hostItems application materialCanonical
     have equivalent : Equates occurrence
         (Region.adjoinAt [] hostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             (positionalIdentityPattern signature arity) application))
         targetCanonical targetExternalTwoEnded := by
       simpa only [exposureOccurrence, sourceEq, exposedEq] using
@@ -576,7 +576,7 @@ theorem positionalIdentityInstantiation_scope
     (signature : Sig) (arity : Nat)
     (application : Vars wires (List.replicate arity signature)) :
     ScopePreservation
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (positionalIdentityPattern signature arity) application)
       (positionalIdentityApplication signature arity application) := by
   constructor
@@ -762,12 +762,12 @@ theorem positionalAtomInstantiation_scope
     (ports : Vars wires atomArguments) :
     ScopePreservation
       (Region.singleton (.atom head ports))
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (positionalAtomPattern atomArguments) (.cons head ports)) := by
   constructor
   · intro _
     exact
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+      VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
         (positionalAtomPattern atomArguments) (.cons head ports)
   · intro signature wire
     rw [← List.length_pos_iff, selectedAtomIncidencePaths_length]
@@ -816,7 +816,7 @@ def atomSiteHostItems
     (application : Vars common patternArguments) :
     ItemSeq (common ++ EqualityNormalization.locals pattern) :=
   (tail.renameWires (atomBodyWire pattern common)).append
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems
+    (VisualProof.Rule.Comprehension.Instantiation.equalityItems
       (application.map fun wire =>
         EqualityNormalization.actualEmbedding pattern common wire)
       (pattern.boundaryWire.map fun wire =>
@@ -881,7 +881,7 @@ theorem atomSiteHostItems_renameWires
   unfold atomSiteHostItems
   rw [ItemSeq.renameWires_append, ItemSeq.renameWires_comp,
     atomBodyWire_natural pattern rename,
-    _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems_renameWires,
+    VisualProof.Rule.Comprehension.Instantiation.equalityItems_renameWires,
     actualMap, patternMap]
 
 theorem atomInstantiationItems_eq
@@ -935,7 +935,7 @@ theorem atomInstantiation_eq
     (body_eq :
       pattern.body = Region.ofItems (.cons (.atom head ports) tail))
     (application : Vars common patternArguments) :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern application =
       Region.mk (EqualityNormalization.locals pattern)
         (.cons
@@ -991,7 +991,7 @@ theorem identityInstantiation_eq
     (body_eq :
       pattern.body = Region.ofItems (.cons (.identity signature arity ports) tail))
     (application : Vars common patternArguments) :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern application =
       Region.mk (EqualityNormalization.locals pattern)
         (.cons
@@ -1015,7 +1015,7 @@ noncomputable def identitySelectedSourceIso
       Leaf.Identity.Vars.fromFn
         (fun position => atomBodyWire pattern common (ports position))
     RegionIso (WireEquiv.refl common)
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern application)
       (Region.adjoinAt (EqualityNormalization.locals pattern)
         (atomSiteHostItems pattern tail application)
@@ -1170,7 +1170,7 @@ mutual
       (pattern : OpenDiagram arguments)
       (frame : Transform.Frame arguments common sourceWires targetWires)
       (region : Region common) :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.RegionResult pattern
         frame.sourceKeep frame.selected
         (region.renameWires frame.sourceKeep)
         (retainedRegionPresentation region) := by
@@ -1183,7 +1183,7 @@ mutual
           rfl
         rw [← sourceKeepEq]
         exact
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+          VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
             (retainedItemsResult pattern (frame.append locals) items)
   termination_by sizeOf region
 
@@ -1191,16 +1191,16 @@ mutual
       (pattern : OpenDiagram arguments)
       (frame : Transform.Frame arguments common sourceWires targetWires)
       (items : ItemSeq common) :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         frame.sourceKeep frame.selected
         (items.renameWires frame.sourceKeep)
         (retainedItemsPresentation items) := by
     cases items with
     | nil =>
-        exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+        exact VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
     | cons item tail =>
         exact
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             (retainedItemResult pattern frame item)
             (retainedItemsResult pattern frame tail)
   termination_by sizeOf items
@@ -1209,19 +1209,19 @@ mutual
       (pattern : OpenDiagram arguments)
       (frame : Transform.Frame arguments common sourceWires targetWires)
       (item : Item common) :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemResult pattern
         frame.sourceKeep frame.selected
         (item.renameWires frame.sourceKeep)
         (retainedItemPresentation item) := by
     cases item with
     | atom head ports =>
-        exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+        exact VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
           head ports
     | identity signature arity ports =>
-        exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+        exact VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
           signature arity ports
     | cut body =>
-        exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+        exact VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
           (retainedRegionResult pattern frame body)
   termination_by sizeOf item
 end
@@ -1369,7 +1369,7 @@ def atomFormalPrefixResult
     (retained : Vars common atomArguments) : Region common :=
   match hostItems with
   | .nil =>
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (positionalAtomPattern atomArguments) (.cons formal retained)).conjoin
         (Region.blank common)
   | .cons item tail =>
@@ -1404,26 +1404,26 @@ def atomFormalPrefixEvidence
     (hostItems : ItemSeq common)
     (formal : Var common (.rel atomArguments))
     (retained : Vars common atomArguments) :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+    VisualProof.Rule.Comprehension.Instantiation.ItemsResult
       (positionalAtomPattern atomArguments) frame.sourceKeep frame.selected
       (atomFormalPrefixSource frame hostItems formal retained)
       (atomFormalPrefixResult hostItems formal retained) := by
   cases hostItems with
   | nil =>
-      exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+      exact VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
           (.cons formal retained))
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
   | cons item tail =>
       simp only [atomFormalPrefixSource, ItemSeq.renameWires,
         ItemSeq.append, atomFormalPrefixResult]
-      change _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      change VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         (positionalAtomPattern atomArguments) frame.sourceKeep frame.selected
         (.cons (item.renameWires frame.sourceKeep)
           (atomFormalPrefixSource frame tail formal retained))
         ((retainedItemPresentation item).conjoin
           (atomFormalPrefixResult tail formal retained))
-      exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+      exact VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
         (retainedItemResult (positionalAtomPattern atomArguments) frame item)
         (atomFormalPrefixEvidence frame tail formal retained)
   termination_by sizeOf hostItems
@@ -1443,10 +1443,10 @@ def atomFormalPrefixSites
             (.cons formal retained) :=
         ⟨formal, ⟨retained, rfl⟩⟩
       let tailEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             (positionalAtomPattern atomArguments) frame.sourceKeep
             frame.selected .nil (Region.blank common) :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
       ItemsSites.cons
         (ItemSites.selectedAtom
           (pattern := positionalAtomPattern atomArguments)
@@ -1481,10 +1481,10 @@ def atomFormalPrefixRecordingSites
         ⟨formal, ⟨retained, rfl⟩⟩
       let siteData := ⟨formalSite, application⟩
       let tailEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             (positionalAtomPattern atomArguments) frame.sourceKeep
             frame.selected .nil (Region.blank common) :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
       ItemsSites.cons
         (ItemSites.selectedAtom
           (pattern := positionalAtomPattern atomArguments)
@@ -1566,7 +1566,7 @@ def identityFormalPrefixResult
     Region common :=
   match hostItems with
   | .nil =>
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (positionalIdentityPattern signature arity) application).conjoin
         (Region.blank common)
   | .cons item tail =>
@@ -1603,28 +1603,28 @@ def identityFormalPrefixEvidence
       common sourceWires targetWires)
     (hostItems : ItemSeq common)
     (application : Vars common (List.replicate arity signature)) :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+    VisualProof.Rule.Comprehension.Instantiation.ItemsResult
       (positionalIdentityPattern signature arity)
       frame.sourceKeep frame.selected
       (identityFormalPrefixSource frame hostItems application)
       (identityFormalPrefixResult signature arity hostItems application) := by
   cases hostItems with
   | nil =>
-      exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+      exact VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
           application)
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
   | cons item tail =>
       simp only [identityFormalPrefixSource, ItemSeq.renameWires,
         ItemSeq.append, identityFormalPrefixResult]
-      change _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      change VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         (positionalIdentityPattern signature arity) frame.sourceKeep
         frame.selected
         (.cons (item.renameWires frame.sourceKeep)
           (identityFormalPrefixSource frame tail application))
         ((retainedItemPresentation item).conjoin
           (identityFormalPrefixResult signature arity tail application))
-      exact _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+      exact VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
         (retainedItemResult (positionalIdentityPattern signature arity)
           frame item)
         (identityFormalPrefixEvidence frame tail application)
@@ -1648,10 +1648,10 @@ def identityFormalPrefixSites
             frame PUnit.unit application :=
         ⟨identityPorts, identityPortsEq⟩
       let tailEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             (positionalIdentityPattern signature arity) frame.sourceKeep
             frame.selected .nil (Region.blank common) :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
       ItemsSites.cons
         (ItemSites.selectedAtom
           (pattern := positionalIdentityPattern signature arity)
@@ -1686,10 +1686,10 @@ def identityFormalPrefixRecordingSites
             frame PUnit.unit retained :=
         ⟨identityPorts, identityPortsEq⟩
       let tailEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             (positionalIdentityPattern signature arity) frame.sourceKeep
             frame.selected .nil (Region.blank common) :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
       ItemsSites.cons
         (ItemSites.selectedAtom
           (pattern := positionalIdentityPattern signature arity)
@@ -1785,7 +1785,7 @@ noncomputable def atomExposureSourceIso
     RegionIso (WireEquiv.refl common)
       (atomExposureDescription (head := head) (ports := ports)
         tail application).source
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern application) := by
   let selected : Item
       (common ++ EqualityNormalization.locals pattern) :=
@@ -1881,7 +1881,7 @@ noncomputable def atomExposureDescriptionWithHostExposedIso
   let combined := atomExposureDescriptionWithHost
     (head := head) (ports := ports) tail hostLocals hostItems application
   let innerMaterial :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       (Erasure.Exposure.supportPattern inner.material
         (positionalAtomCanonical atomArguments))
       (Erasure.Exposure.applicationPorts inner)
@@ -1900,7 +1900,7 @@ noncomputable def atomExposureDescriptionWithHostExposedIso
       (Region.adjoinMaterialWire outer hostLocals
         (EqualityNormalization.locals pattern))).symm
   have materialEq :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      VisualProof.Rule.Comprehension.Instantiation.instantiate
           (Erasure.Exposure.supportPattern combined.material
             (positionalAtomCanonical atomArguments))
           (Erasure.Exposure.applicationPorts combined) =
@@ -1919,7 +1919,7 @@ noncomputable def atomExposureDescriptionWithHostExposedIso
       Erasure.Exposure.exposedRegion combined
           (positionalAtomCanonical atomArguments) = flat := by
     change Region.adjoinAt combined.hostLocals combined.hostItems
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (Erasure.Exposure.supportPattern combined.material
           (positionalAtomCanonical atomArguments))
         (Erasure.Exposure.applicationPorts combined)) = flat
@@ -1947,7 +1947,7 @@ noncomputable def atomExposureDescriptionWithHostSourceIso
       (atomExposureDescriptionWithHost
         (head := head) (ports := ports) tail hostLocals hostItems application).source
       (Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern application)) := by
   let inner := atomExposureDescription (head := head) (ports := ports)
     tail application
@@ -1978,19 +1978,19 @@ noncomputable def atomFormalPrefixResultIso
     RegionIso (WireEquiv.refl common)
       (atomFormalPrefixResult hostItems formal retained)
       ((Region.ofItems hostItems).conjoin
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalAtomPattern atomArguments)
           (.cons formal retained))) :=
   match hostItems with
   | .nil => by
       let inner :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalAtomPattern atomArguments) (.cons formal retained)
       exact (RegionIso.conjoinBlank inner).trans
         (RegionIso.blankConjoin inner).symm
   | .cons item tail => by
       let inner :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalAtomPattern atomArguments) (.cons formal retained)
       let children := RegionIso.conjoinCongr
         (retainedItemPresentationIso item)
@@ -2024,7 +2024,7 @@ noncomputable def atomFormalSelectedResultIso
       (Region.adjoinAt locals .nil
         (atomFormalPrefixResult hostItems formal retained))
       (Region.adjoinAt locals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalAtomPattern atomArguments)
           (.cons formal retained))) := by
   dsimp only
@@ -2035,7 +2035,7 @@ noncomputable def atomFormalSelectedResultIso
       (common ++ EqualityNormalization.locals pattern) atomArguments :=
     ports.map fun wire => atomBodyWire pattern common wire
   let inner :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       (positionalAtomPattern atomArguments) (.cons formal retained)
   let prefixIso := RegionIso.adjoinAt
     (EqualityNormalization.locals pattern) .nil
@@ -2051,18 +2051,18 @@ noncomputable def identityFormalPrefixResultIso
     RegionIso (WireEquiv.refl common)
       (identityFormalPrefixResult signature arity hostItems application)
       ((Region.ofItems hostItems).conjoin
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalIdentityPattern signature arity) application)) :=
   match hostItems with
   | .nil => by
       let inner :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalIdentityPattern signature arity) application
       exact (RegionIso.conjoinBlank inner).trans
         (RegionIso.blankConjoin inner).symm
   | .cons item tail => by
       let inner :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalIdentityPattern signature arity) application
       let children := RegionIso.conjoinCongr
         (retainedItemPresentationIso item)
@@ -2095,7 +2095,7 @@ noncomputable def identityFormalSelectedResultIso
       (Region.adjoinAt locals .nil
         (identityFormalPrefixResult signature arity hostItems retained))
       (Region.adjoinAt locals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalIdentityPattern signature arity) retained)) := by
   dsimp only
   let hostItems := atomSiteHostItems pattern tail application
@@ -2105,7 +2105,7 @@ noncomputable def identityFormalSelectedResultIso
     Leaf.Identity.Vars.fromFn
       (fun position => atomBodyWire pattern common (ports position))
   let inner :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       (positionalIdentityPattern signature arity) retained
   let prefixIso := RegionIso.adjoinAt
     (EqualityNormalization.locals pattern) .nil

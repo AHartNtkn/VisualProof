@@ -48,7 +48,7 @@ theorem complete
     (pattern : OpenDiagram arguments)
     {quantified specialized : Region outer}
     (instantiates :
-      _root_.VisualProof.Rule.Comprehension.Instantiates pattern before after
+      VisualProof.Rule.Comprehension.Instantiates pattern before after
         quantified specialized)
     (request : Telescope.Request specialized quantified) :
     request.Result := by
@@ -123,17 +123,17 @@ theorem complete
         continuation := request.continuation
       }
       let material :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern (EqualityNormalization.formalPorts arguments)
       have materialCanonical : material.Canonical := by
-        exact _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+        exact VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
           pattern (EqualityNormalization.formalPorts arguments)
       have supportEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             (Erasure.Exposure.supportPattern material materialCanonical)
-            (_root_.VisualProof.Rule.Comprehension.retain outer before after
+            (VisualProof.Rule.Comprehension.retain outer before after
               arguments)
-            (_root_.VisualProof.Rule.Comprehension.selected outer before after
+            (VisualProof.Rule.Comprehension.selected outer before after
               arguments)
             items normalized := by
         rw [EqualityNormalization.supportPattern_eq_identityBoundary pattern

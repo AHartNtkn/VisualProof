@@ -13,10 +13,10 @@ def normalizationFrame (outer before after arguments : List Sig) :
     Transform.Frame arguments (outer ++ (before ++ after))
       (outer ++ (before ++ .rel arguments :: after))
       (outer ++ (before ++ after)) where
-  sourceKeep := _root_.VisualProof.Rule.Comprehension.retain outer before after
+  sourceKeep := VisualProof.Rule.Comprehension.retain outer before after
     arguments
   targetKeep := WireRenaming.id
-  selected := _root_.VisualProof.Rule.Comprehension.selected outer before after
+  selected := VisualProof.Rule.Comprehension.selected outer before after
     arguments
 
 mutual
@@ -29,7 +29,7 @@ mutual
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {source : Region sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result) :
       Nonempty (RegionSites (normalizationOperation arguments) PUnit.unit
         evidence) := by
@@ -48,7 +48,7 @@ mutual
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {source : ItemSeq sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result) :
       Nonempty (ItemsSites (normalizationOperation arguments) PUnit.unit
         evidence) := by
@@ -67,7 +67,7 @@ mutual
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {source : Item sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result) :
       Nonempty (ItemSites (normalizationOperation arguments) PUnit.unit
         evidence) := by
@@ -94,7 +94,7 @@ noncomputable def normalizationSites
     {frame : Transform.Frame arguments common sourceWires targetWires}
     {source : ItemSeq sourceWires} {result : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected source result) :
     ItemsSites (normalizationOperation arguments) PUnit.unit evidence :=
   Classical.choice (normalizationItemsSites_nonempty evidence)

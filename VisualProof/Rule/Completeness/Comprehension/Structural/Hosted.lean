@@ -1283,13 +1283,13 @@ substitution used by the structural accumulator. -/
 theorem supportCutHosted
     (body : Region materialWires) (bodyCanonical : body.Canonical) :
     HostedStrict
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (Erasure.Exposure.supportPattern
           (Region.singleton (.cut body))
           ((Region.singleton_cut_canonical_iff body).mpr bodyCanonical))
         (EqualityNormalization.formalPorts materialWires))
       (Region.singleton (.cut
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (Erasure.Exposure.supportPattern body bodyCanonical)
           (EqualityNormalization.formalPorts materialWires)))) := by
   intro outer hostLocals rename hostItems boundary source occurrence
@@ -1304,10 +1304,10 @@ theorem supportCutHosted
     outerCanonical
   let childPattern := Erasure.Exposure.supportPattern body bodyCanonical
   let before :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       outerPattern (EqualityNormalization.formalPorts materialWires)
   let after := Region.singleton (.cut
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    (VisualProof.Rule.Comprehension.Instantiation.instantiate
       childPattern (EqualityNormalization.formalPorts materialWires)))
   let pinnedItems := hostItems.append
     (EqualityNormalization.contextPins outer hostLocals)
@@ -1367,7 +1367,7 @@ theorem supportCutHosted
     simp only [Erasure.Exposure.exposedRegion, outerDescription,
       Erasure.Exposure.applicationPorts]
     change Region.adjoinAt hostLocals pinnedItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (Erasure.Exposure.supportPattern outerMaterial materialCanonical)
           ((Erasure.Exposure.identityBoundary materialWires).map
             (fun wire => rename wire))) = _
@@ -1507,7 +1507,7 @@ theorem supportCutHosted
     simpa only [childOccurrence, nestedContext, DiagramContext.fill_comp,
       innerErased] using presented wire
   let childAfter :=
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    (VisualProof.Rule.Comprehension.Instantiation.instantiate
       childPattern (EqualityNormalization.formalPorts materialWires)).renameWires
         rename
   let childExposed :=
@@ -1525,7 +1525,7 @@ theorem supportCutHosted
     childDescription childSourceEq erasedChildCanonical'
       erasedChildExternalTwoEnded' childExposedEq
   let rawChildExposed :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       childPattern
       ((Erasure.Exposure.identityBoundary materialWires).map
         (fun wire => childWireMap wire))
@@ -1643,13 +1643,13 @@ theorem supportCutInstantiatedHosted
     (body : Region materialWires) (bodyCanonical : body.Canonical)
     (application : Vars wires materialWires) :
     HostedStrict
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (Erasure.Exposure.supportPattern
           (Region.singleton (.cut body))
           ((Region.singleton_cut_canonical_iff body).mpr bodyCanonical))
         application)
       (Region.singleton (.cut
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (Erasure.Exposure.supportPattern body bodyCanonical)
           application))) := by
   let baseRename := EqualityNormalization.formalSubstitution application

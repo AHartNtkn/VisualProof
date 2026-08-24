@@ -54,7 +54,7 @@ theorem formalPorts_surjective (wire : Fin arguments.length) :
 theorem equalityItems_left_mem_nil
     (left right : Vars wires signatures)
     (position : Fin signatures.length) (itemIndex : Nat) :
-    [] ∈ (_root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems
+    [] ∈ (VisualProof.Rule.Comprehension.Instantiation.equalityItems
       left right).incidencePaths (left.get position).index.val itemIndex := by
   induction left generalizing itemIndex with
   | nil => cases right; exact Fin.elim0 position
@@ -65,14 +65,14 @@ theorem equalityItems_left_mem_nil
           refine Fin.cases (fun itemIndex => ?_)
             (fun rest itemIndex => ?_) position
           · change [] ∈
-              (_root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems
+              (VisualProof.Rule.Comprehension.Instantiation.equalityItems
                 (.cons leftHead leftTail)
                 (.cons rightHead rightTail)).incidencePaths
                   leftHead.index.val itemIndex
             simp only [
-              _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems,
+              VisualProof.Rule.Comprehension.Instantiation.equalityItems,
               ItemSeq.incidencePaths, Item.incidencePaths,
-              _root_.VisualProof.Rule.Comprehension.Instantiation.equalityPorts,
+              VisualProof.Rule.Comprehension.Instantiation.equalityPorts,
               List.mem_append, List.mem_replicate]
             apply Or.inl
             constructor
@@ -81,7 +81,7 @@ theorem equalityItems_left_mem_nil
               exact absent (by simp)
             · trivial
           · simp only [
-              _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems,
+              VisualProof.Rule.Comprehension.Instantiation.equalityItems,
               ItemSeq.incidencePaths, List.mem_append]
             exact Or.inr (induction rightTail rest (itemIndex + 1))
 
@@ -129,7 +129,7 @@ def items (pattern : OpenDiagram arguments)
     (ports : Vars targetWires arguments) :
     ItemSeq (targetWires ++ locals pattern) :=
   (pattern.body.items.renameWires (bodyEmbedding pattern targetWires)).append
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems
+    (VisualProof.Rule.Comprehension.Instantiation.equalityItems
       (ports.map fun wire => actualEmbedding pattern targetWires wire)
       (pattern.boundaryWire.map
         fun wire => patternEmbedding pattern targetWires wire))
@@ -234,7 +234,7 @@ theorem Vars.map_comp4
 theorem instantiate_eq_presentation
     (pattern : OpenDiagram arguments)
     (ports : Vars targetWires arguments) :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       pattern ports = .mk (locals pattern) (items pattern ports) := by
   cases pattern with
   | mk external boundaryWire boundarySurjective body canonical
@@ -242,14 +242,14 @@ theorem instantiate_eq_presentation
     cases body with
     | mk bodyLocals bodyItems =>
       simp only [
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate,
-        _root_.VisualProof.Rule.Comprehension.Instantiation.Equalities_eq_ofItems,
+        VisualProof.Rule.Comprehension.Instantiation.instantiate,
+        VisualProof.Rule.Comprehension.Instantiation.Equalities_eq_ofItems,
         items, bodyEmbedding, actualEmbedding, patternEmbedding,
         equalityEmbedding, locals,
         Region.locals, Region.items, Region.renameWires, Region.conjoin,
         Region.adjoinAt, Region.ofItems, ItemSeq.renameWires_append,
         ItemSeq.renameWires_comp,
-        _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems_renameWires]
+        VisualProof.Rule.Comprehension.Instantiation.equalityItems_renameWires]
       simp only [ItemSeq.renameWires, ItemSeq.nil_append,
         Vars.map_comp4, WireRenaming.comp]
 
@@ -257,9 +257,9 @@ theorem instantiate_renameWires
     (pattern : OpenDiagram arguments)
     (ports : Vars sourceWires arguments)
     (rename : WireRenaming sourceWires targetWires) :
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    (VisualProof.Rule.Comprehension.Instantiation.instantiate
       pattern ports).renameWires rename =
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate pattern
+      VisualProof.Rule.Comprehension.Instantiation.instantiate pattern
         (ports.map fun wire => rename wire) := by
   have actualMap :
       (ports.map fun wire => actualEmbedding pattern sourceWires wire).map
@@ -303,7 +303,7 @@ theorem instantiate_renameWires
   rw [instantiate_eq_presentation, instantiate_eq_presentation]
   simp only [Region.renameWires, items, ItemSeq.renameWires_append,
     ItemSeq.renameWires_comp,
-    _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems_renameWires]
+    VisualProof.Rule.Comprehension.Instantiation.equalityItems_renameWires]
   rw [bodyEmbedding_natural, actualMap, patternMap]
 
 /-- Every actual port of an instantiation has a root-level equality
@@ -312,7 +312,7 @@ theorem instantiate_port_incidence_mem_nil
     (pattern : OpenDiagram arguments)
     (ports : Vars targetWires arguments)
     (position : Fin arguments.length) :
-    [] ∈ (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    [] ∈ (VisualProof.Rule.Comprehension.Instantiation.instantiate
       pattern ports).incidencePaths (ports.get position).index.val := by
   rw [instantiate_eq_presentation]
   simp only [Region.incidencePaths, items, ItemSeq.incidencePaths_append]
@@ -337,7 +337,7 @@ theorem instantiate_port_incidence_nonempty
     (pattern : OpenDiagram arguments)
     (ports : Vars targetWires arguments)
     (position : Fin arguments.length) :
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    (VisualProof.Rule.Comprehension.Instantiation.instantiate
       pattern ports).incidencePaths (ports.get position).index.val ≠ [] :=
   List.ne_nil_of_mem (instantiate_port_incidence_mem_nil pattern ports position)
 
@@ -376,7 +376,7 @@ theorem instantiate_incidencePaths_length
     (pattern : OpenDiagram arguments)
     (ports : Vars targetWires arguments)
     (wire : Var targetWires signature) :
-    ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    ((VisualProof.Rule.Comprehension.Instantiation.instantiate
       pattern ports).incidencePaths wire.index.val).length =
       ports.countIndex wire.index.val := by
   have bodyEmpty :
@@ -405,7 +405,7 @@ theorem instantiate_incidencePaths_length
   rw [instantiate_eq_presentation]
   simp only [Region.incidencePaths, items, ItemSeq.incidencePaths_append,
     List.length_append,
-    _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems_incidencePaths_length,
+    VisualProof.Rule.Comprehension.Instantiation.equalityItems_incidencePaths_length,
     bodyEmpty,
     List.length_nil, Nat.zero_add, Vars.countIndex_map_actual, rightZero,
     Nat.add_zero]
@@ -414,7 +414,7 @@ theorem instantiate_incidence_nonempty_iff
     (pattern : OpenDiagram arguments)
     (ports : Vars targetWires arguments)
     (wire : Var targetWires signature) :
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    (VisualProof.Rule.Comprehension.Instantiation.instantiate
       pattern ports).incidencePaths wire.index.val ≠ [] ↔
       0 < ports.countIndex wire.index.val := by
   rw [← List.length_pos_iff, instantiate_incidencePaths_length]
@@ -427,10 +427,10 @@ def identityBoundary (pattern : OpenDiagram arguments) :
   external := arguments
   boundaryWire := formalPorts arguments
   boundarySurjective := formalPorts_surjective
-  body := _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+  body := VisualProof.Rule.Comprehension.Instantiation.instantiate
     pattern (formalPorts arguments)
   canonical :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+    VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
       pattern (formalPorts arguments)
   externalTwoEnded := by
     intro signature wire
@@ -441,7 +441,7 @@ def identityBoundary (pattern : OpenDiagram arguments) :
       rw [maps] at positive
       exact positive
     have bodyPositive : 0 <
-        ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        ((VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern (formalPorts arguments)).incidencePaths
             wire.index.val).length := by
       have nonempty := instantiate_port_incidence_nonempty pattern
@@ -547,7 +547,7 @@ theorem supportPins_eq_nil
 theorem normalized_supportPins_eq_nil
     (pattern : OpenDiagram arguments) :
     Erasure.Exposure.supportPins
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern (formalPorts arguments))
       arguments (Erasure.Exposure.identityBoundary arguments) = .nil := by
   apply supportPins_eq_nil
@@ -589,9 +589,9 @@ theorem OpenDiagram.eq_of_data
 theorem normalized_supportBody_eq
     (pattern : OpenDiagram arguments) :
     Erasure.Exposure.supportBody
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern (formalPorts arguments)) =
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern (formalPorts arguments) := by
   apply supportBody_eq_of_supportPins_nil
   exact normalized_supportPins_eq_nil pattern
@@ -599,10 +599,10 @@ theorem normalized_supportBody_eq
 theorem supportPattern_eq_identityBoundary
     (pattern : OpenDiagram arguments)
     (materialCanonical :
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern (formalPorts arguments)).Canonical) :
     Erasure.Exposure.supportPattern
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern (formalPorts arguments)) materialCanonical =
       identityBoundary pattern := by
   apply OpenDiagram.eq_of_data
@@ -618,7 +618,7 @@ def exposureDescriptionWithHost
   materialWires := arguments
   hostLocals := hostLocals
   hostItems := hostItems
-  material := _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+  material := VisualProof.Rule.Comprehension.Instantiation.instantiate
     pattern (formalPorts arguments)
   wireMap := formalSubstitution ports
 
@@ -628,7 +628,7 @@ theorem exposureDescriptionWithHost_source
     (ports : Vars (outer ++ hostLocals) arguments) :
     (exposureDescriptionWithHost pattern hostLocals hostItems ports).source =
       Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern ports) := by
   simp only [Rule.Erasure.Description.source,
     exposureDescriptionWithHost, Region.spliceAt]
@@ -655,13 +655,13 @@ theorem exposureDescriptionWithHost_exposedRegion
         (exposureDescriptionWithHost pattern hostLocals hostItems ports)
         materialCanonical =
       Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (identityBoundary pattern) ports) := by
   simp only [Erasure.Exposure.exposedRegion]
   change Region.adjoinAt hostLocals hostItems
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (Erasure.Exposure.supportPattern
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern (formalPorts arguments)) materialCanonical)
         (Erasure.Exposure.applicationPorts
           (exposureDescriptionWithHost pattern hostLocals hostItems ports))) =
@@ -690,9 +690,9 @@ theorem instantiate_incidence_mem_nil_of_nonempty
     (ports : Vars targetWires arguments)
     (wire : Var targetWires signature)
     (nonempty :
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern ports).incidencePaths wire.index.val ≠ []) :
-    [] ∈ (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    [] ∈ (VisualProof.Rule.Comprehension.Instantiation.instantiate
       pattern ports).incidencePaths wire.index.val := by
   have positive := (instantiate_incidence_nonempty_iff pattern ports wire).mp
     nonempty
@@ -707,7 +707,7 @@ theorem instantiate_rootedTwo_iff
     (ports : Vars targetWires arguments)
     (wire : Var targetWires signature) :
     RegionPath.RootedTwo
-        ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        ((VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern ports).incidencePaths wire.index.val) ↔
       2 ≤ ports.countIndex wire.index.val := by
   constructor
@@ -717,7 +717,7 @@ theorem instantiate_rootedTwo_iff
     exact lengthBound
   · intro countBound
     have nonempty :
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern ports).incidencePaths wire.index.val ≠ [] :=
       (instantiate_incidence_nonempty_iff pattern ports wire).mpr (by omega)
     constructor
@@ -735,18 +735,18 @@ mutual
       {data : operation.Data frame}
       {source : Region sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : RegionSites operation data evidence) :
       { normalized : Region common //
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           (identityBoundary pattern) frame.sourceKeep frame.selected source
             normalized } :=
     match sites with
     | .mk childSites =>
         let childOutput := normalizedItems pattern _ childSites
         ⟨Region.adjoinAt _ .nil childOutput.1,
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+          VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
             childOutput.2⟩
   termination_by structural sites
 
@@ -758,22 +758,22 @@ mutual
       {data : operation.Data frame}
       {source : ItemSeq sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : ItemsSites operation data evidence) :
       { normalized : Region common //
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           (identityBoundary pattern) frame.sourceKeep frame.selected source
             normalized } :=
     match sites with
     | .nil _ =>
         ⟨Region.blank common,
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil⟩
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil⟩
     | .cons itemSites tailSites =>
         let itemOutput := normalizedItem pattern _ itemSites
         let tailOutput := normalizedItems pattern _ tailSites
         ⟨itemOutput.1.conjoin tailOutput.1,
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             itemOutput.2 tailOutput.2⟩
   termination_by structural sites
 
@@ -785,31 +785,31 @@ mutual
       {data : operation.Data frame}
       {source : Item sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : ItemSites operation data evidence) :
       { normalized : Region common //
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           (identityBoundary pattern) frame.sourceKeep frame.selected source
             normalized } :=
     match sites with
     | .atom head ports =>
         ⟨Region.singleton (.atom head ports),
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
             head ports⟩
     | .selectedAtom ports _ =>
-        ⟨_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        ⟨VisualProof.Rule.Comprehension.Instantiation.instantiate
             (identityBoundary pattern) ports,
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
             ports⟩
     | .identity signature arity ports =>
         ⟨Region.singleton (.identity signature arity ports),
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
             signature arity ports⟩
     | .cut childSites =>
         let childOutput := normalizedRegion pattern _ childSites
         ⟨Region.singleton (.cut childOutput.1),
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
             childOutput.2⟩
   termination_by structural sites
 end
@@ -824,7 +824,7 @@ mutual
       {data : operation.Data frame}
       {source : Region sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : RegionSites operation data evidence) : Bool :=
     match sites with
@@ -839,7 +839,7 @@ mutual
       {data : operation.Data frame}
       {source : ItemSeq sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : ItemsSites operation data evidence) : Bool :=
     match sites with
@@ -856,7 +856,7 @@ mutual
       {data : operation.Data frame}
       {source : Item sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : ItemSites operation data evidence) : Bool :=
     match sites with
@@ -876,7 +876,7 @@ mutual
       {data : operation.Data frame}
       {source : Region sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : RegionSites operation data evidence)
       (none : regionHasSelection sites = false) :
@@ -899,7 +899,7 @@ mutual
       {data : operation.Data frame}
       {source : ItemSeq sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : ItemsSites operation data evidence)
       (none : itemsHaveSelection sites = false) :
@@ -936,7 +936,7 @@ mutual
       {data : operation.Data frame}
       {source : Item sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : ItemSites operation data evidence)
       (none : itemHasSelection sites = false) :
@@ -965,7 +965,7 @@ mutual
       {data : operation.Data frame}
       {source : Region sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : RegionSites operation data evidence) :
       ScopePreservation result (normalizedRegion pattern evidence sites).1 :=
@@ -1032,7 +1032,7 @@ mutual
       {data : operation.Data frame}
       {source : ItemSeq sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : ItemsSites operation data evidence) :
       ScopePreservation result (normalizedItems pattern evidence sites).1 :=
@@ -1074,7 +1074,7 @@ mutual
       {data : operation.Data frame}
       {source : Item sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : ItemSites operation data evidence) :
       ScopePreservation result (normalizedItem pattern evidence sites).1 :=
@@ -1089,14 +1089,14 @@ mutual
         }
     | .selectedAtom ports _ => by
         change ScopePreservation
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern ports)
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             (identityBoundary pattern) ports)
         constructor
         · intro _
           exact
-            _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+            VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
               (identityBoundary pattern) ports
         · intro signature wire
           rw [instantiate_incidence_nonempty_iff,
@@ -1228,9 +1228,9 @@ noncomputable def instantiateRenameIso
     (ports : Vars sourceWires arguments)
     (rename : WireRenaming sourceWires targetWires) :
     RegionIso (WireEquiv.refl targetWires)
-      ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      ((VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern ports).renameWires rename)
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate pattern
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate pattern
         (ports.map fun wire => rename wire)) := by
   rw [instantiate_renameWires]
   exact RegionIso.refl _

@@ -24,7 +24,7 @@ mutual
       {recordedSource : Region recordedSourceWires}
       {recordedResult : Region common}
       {recordedEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           recordedPattern recordedFrame.sourceKeep recordedFrame.selected
           recordedSource recordedResult}
       (recordedSites : RegionSites
@@ -64,7 +64,7 @@ mutual
       {recordedSource : ItemSeq recordedSourceWires}
       {recordedResult : Region common}
       {recordedEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           recordedPattern recordedFrame.sourceKeep recordedFrame.selected
           recordedSource recordedResult}
       (recordedSites : ItemsSites
@@ -107,7 +107,7 @@ mutual
       {recordedSource : Item recordedSourceWires}
       {recordedResult : Region common}
       {recordedEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           recordedPattern recordedFrame.sourceKeep recordedFrame.selected
           recordedSource recordedResult}
       (recordedSites : ItemSites
@@ -157,7 +157,7 @@ mutual
       {recordedSource : Region recordedSourceWires}
       {recordedResult : Region common}
       {recordedEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           recordedPattern recordedFrame.sourceKeep recordedFrame.selected
           recordedSource recordedResult}
       (recordedSites : RegionSites
@@ -199,7 +199,7 @@ mutual
       {recordedSource : ItemSeq recordedSourceWires}
       {recordedResult : Region common}
       {recordedEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           recordedPattern recordedFrame.sourceKeep recordedFrame.selected
           recordedSource recordedResult}
       (recordedSites : ItemsSites
@@ -245,7 +245,7 @@ mutual
       {recordedSource : Item recordedSourceWires}
       {recordedResult : Region common}
       {recordedEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           recordedPattern recordedFrame.sourceKeep recordedFrame.selected
           recordedSource recordedResult}
       (recordedSites : ItemSites
@@ -319,7 +319,7 @@ mutual
       {recordedSource : Region recordedSourceWires}
       {recordedResult : Region common}
       {recordedEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           recordedPattern recordedFrame.sourceKeep recordedFrame.selected
           recordedSource recordedResult}
       (recordedSites : RegionSites
@@ -404,7 +404,7 @@ mutual
       {recordedSource : ItemSeq recordedSourceWires}
       {recordedResult : Region common}
       {recordedEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           recordedPattern recordedFrame.sourceKeep recordedFrame.selected
           recordedSource recordedResult}
       (recordedSites : ItemsSites
@@ -488,7 +488,7 @@ mutual
       {recordedSource : Item recordedSourceWires}
       {recordedResult : Region common}
       {recordedEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           recordedPattern recordedFrame.sourceKeep recordedFrame.selected
           recordedSource recordedResult}
       (recordedSites : ItemSites
@@ -591,7 +591,7 @@ mutual
       {recordedSource : Region recordedSourceWires}
       {recordedResult : Region common}
       {recordedEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           recordedPattern recordedFrame.sourceKeep recordedFrame.selected
           recordedSource recordedResult}
       (recordedSites : RegionSites
@@ -682,7 +682,7 @@ mutual
       {recordedSource : ItemSeq recordedSourceWires}
       {recordedResult : Region common}
       {recordedEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           recordedPattern recordedFrame.sourceKeep recordedFrame.selected
           recordedSource recordedResult}
       (recordedSites : ItemsSites
@@ -781,7 +781,7 @@ mutual
       {recordedSource : Item recordedSourceWires}
       {recordedResult : Region common}
       {recordedEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           recordedPattern recordedFrame.sourceKeep recordedFrame.selected
           recordedSource recordedResult}
       (recordedSites : ItemSites
@@ -868,7 +868,7 @@ noncomputable def argumentProjectionEndpointIso
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (outer ++ (localBefore ++ localAfter))}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -951,7 +951,7 @@ noncomputable def argumentPermutationEndpointIso
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (outer ++ (localBefore ++ localAfter))}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1042,7 +1042,7 @@ noncomputable def argumentDuplicateEndpointIso
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (outer ++ (localBefore ++ localAfter))}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1140,7 +1140,7 @@ theorem argumentProjectionStage
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (outer ++ (localBefore ++ localAfter))}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1246,7 +1246,7 @@ theorem argumentPermutationStage
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (outer ++ (localBefore ++ localAfter))}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1365,7 +1365,7 @@ theorem argumentDuplicateContractStage
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (outer ++ (localBefore ++ localAfter))}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1501,7 +1501,7 @@ noncomputable def argumentNormalizationPresentation
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1555,7 +1555,7 @@ def argumentNormalizedRegion
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1587,7 +1587,7 @@ theorem argumentProjectionNormalized
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1678,7 +1678,7 @@ theorem argumentPrependValidity
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1784,7 +1784,7 @@ theorem argumentExtendedValidity
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1829,7 +1829,7 @@ theorem argumentPermutationNormalized
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -1923,7 +1923,7 @@ theorem argumentDuplicateNormalized
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -2027,7 +2027,7 @@ theorem argumentMoveDuplicateNormalized
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -2279,7 +2279,7 @@ theorem argumentVarsContractTelescope
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -2448,7 +2448,7 @@ theorem argumentAppendValidity
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites
@@ -2561,7 +2561,7 @@ theorem argumentVarsProjectionCompiles
     {recordedSource : ItemSeq recordedSourceWires}
     {recordedResult : Region (common ++ retained)}
     {recordedEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         recordedPattern recordedFrame.sourceKeep recordedFrame.selected
         recordedSource recordedResult}
     (recordedSites : ItemsSites

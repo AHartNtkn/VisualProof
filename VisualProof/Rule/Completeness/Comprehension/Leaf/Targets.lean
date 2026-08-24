@@ -19,7 +19,7 @@ def TargetRegion
     {data : operation.Data originalFrame}
     {source : Region originalSourceWires} {result : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.RegionResult pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (_sites : RegionSites operation data evidence)
     (targetValues : Vars targetExternal targetArguments)
@@ -29,7 +29,7 @@ def TargetRegion
     (K : ∀ (formalSource : Region sourceWires)
         (formalResult : Region common)
         (formalEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          VisualProof.Rule.Comprehension.Instantiation.RegionResult
             targetPattern targetFrame.sourceKeep targetFrame.selected
             formalSource formalResult)
         (formalSites : RegionSites
@@ -42,7 +42,7 @@ def TargetRegion
   ∃ formalSource : Region sourceWires,
     ∃ formalResult : Region common,
       ∃ formalEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          VisualProof.Rule.Comprehension.Instantiation.RegionResult
             targetPattern targetFrame.sourceKeep targetFrame.selected
             formalSource formalResult,
         ∃ formalSites : RegionSites
@@ -66,7 +66,7 @@ def TargetItems
     {data : operation.Data originalFrame}
     {source : ItemSeq originalSourceWires} {result : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (_sites : ItemsSites operation data evidence)
     (targetValues : Vars targetExternal targetArguments)
@@ -77,7 +77,7 @@ def TargetItems
         (formalSource : ItemSeq (sourceWires ++ retained))
         (formalResult : Region (common ++ retained))
         (formalEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             targetPattern (targetFrame.append retained).sourceKeep
             (targetFrame.append retained).selected formalSource formalResult)
         (formalSites : ItemsSites
@@ -93,7 +93,7 @@ def TargetItems
     ∃ formalSource : ItemSeq (sourceWires ++ retained),
       ∃ formalResult : Region (common ++ retained),
         ∃ formalEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+            VisualProof.Rule.Comprehension.Instantiation.ItemsResult
               targetPattern
               (targetFrame.append retained).sourceKeep
               (targetFrame.append retained).selected
@@ -122,7 +122,7 @@ def TargetItem
     {data : operation.Data originalFrame}
     {source : Item originalSourceWires} {result : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemResult pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (_sites : ItemSites operation data evidence)
     (targetValues : Vars targetExternal targetArguments)
@@ -133,7 +133,7 @@ def TargetItem
         (formalSource : ItemSeq (sourceWires ++ retained))
         (formalResult : Region (common ++ retained))
         (formalEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             targetPattern (targetFrame.append retained).sourceKeep
             (targetFrame.append retained).selected formalSource formalResult)
         (formalSites : ItemsSites
@@ -149,7 +149,7 @@ def TargetItem
     ∃ formalSource : ItemSeq (sourceWires ++ retained),
       ∃ formalResult : Region (common ++ retained),
         ∃ formalEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+            VisualProof.Rule.Comprehension.Instantiation.ItemsResult
               targetPattern
               (targetFrame.append retained).sourceKeep
               (targetFrame.append retained).selected
@@ -189,7 +189,7 @@ theorem atomSelectedTargetItem
     TargetItem
       (targetPattern := positionalAtomPattern atomArguments)
       (targetOperation := Leaf.Formal.operation [] atomArguments)
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+      (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
         (pattern := pattern) (retain := itemFrame.sourceKeep)
         (selected := itemFrame.selected) application)
       (ItemSites.selectedAtom (operation := itemOperation)
@@ -199,10 +199,10 @@ theorem atomSelectedTargetItem
           _coherence =>
         ∃ staged : Region itemCommon,
           HostedStrict
-              (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+              (VisualProof.Rule.Comprehension.Instantiation.instantiate
                 pattern application) staged ∧
             ScopePreservation
-                (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+                (VisualProof.Rule.Comprehension.Instantiation.instantiate
                   pattern application) staged ∧
               Nonempty (RegionIso (WireEquiv.refl itemCommon) staged
                 (Region.adjoinAt retained .nil formalResult))) := by
@@ -236,16 +236,16 @@ theorem atomSelectedTargetItem
         · rfl
       let staged := Region.adjoinAt retainedLocals .nil formalResult
       have hosted : HostedStrict
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application) staged := by
         intro outer hostLocals rename outerHostItems boundary source
           hostedOccurrence targetCanonical targetExternalTwoEnded
         let mappedApplication := application.map fun wire => rename wire
         let sourceBefore :=
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application).renameWires rename
         let sourceAfter :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern mappedApplication
         let sourceHostBefore := Region.adjoinAt hostLocals outerHostItems
           sourceBefore
@@ -388,16 +388,16 @@ theorem atomSelectedTargetItem
       let outputStaged := Region.adjoinAt retainedLocals .nil
         (output.endpoint.renameWires (targetRename.appendRight retainedLocals))
       have outputHosted : HostedStrict
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application) outputStaged := by
         intro outer hostLocals rename outerHostItems boundary source
           hostedOccurrence targetCanonical targetExternalTwoEnded
         let mappedApplication := application.map fun wire => rename wire
         let sourceBefore :=
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application).renameWires rename
         let sourceAfter :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern mappedApplication
         let sourceHostBefore := Region.adjoinAt hostLocals outerHostItems
           sourceBefore
@@ -626,7 +626,7 @@ theorem atomSelectedTargetItem
       let direct : Region (itemCommon ++ retainedLocals) :=
         Region.singleton (.atom formal retainedPorts)
       let positional : Region (itemCommon ++ retainedLocals) :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalAtomPattern atomArguments) (.cons formal retainedPorts)
       let raw := atomExposureDescription (head := head) (ports := ports)
         tail application
@@ -641,7 +641,7 @@ theorem atomSelectedTargetItem
               atomExposureMaterialRename tail application)
       let rawSourceIso := atomExposureSourceIso body_eq application
       let directSourceIso : RegionIso (WireEquiv.refl itemCommon)
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application)
           (Region.adjoinAt retainedLocals hostItems direct) :=
         rawSourceIso.symm.trans (RegionIso.ofEq rawSourceEq)
@@ -653,7 +653,7 @@ theorem atomSelectedTargetItem
       let formalIso := atomFormalSelectedResultIso
         (pattern := pattern) (head := head) (ports := ports) tail application
       have selectedScope : ScopePreservation
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application) staged := by
         exact ScopePreservation.trans (ScopePreservation.ofIso directSourceIso)
           (ScopePreservation.trans exposureScope (ScopePreservation.ofIso formalIso.symm))
@@ -672,11 +672,11 @@ theorem atomSelectedTargetItem
           (RegionIso.ofEq
             (adjoinAt_hostedMaterial retainedLocals hostItems direct).symm)
       let originalOutputIso : RegionIso (WireEquiv.refl itemCommon)
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application) outputStaged :=
         directSourceIso.trans outputLocalIso.symm
       have outputScope : ScopePreservation
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application) outputStaged :=
         ScopePreservation.ofIso originalOutputIso
       -/
@@ -703,7 +703,7 @@ theorem identitySelectedTargetItem
     TargetItem
       (targetPattern := positionalIdentityPattern signature arity)
       (targetOperation := Leaf.Identity.operation signature arity)
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+      (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
         (pattern := pattern) (retain := itemFrame.sourceKeep)
         (selected := itemFrame.selected) application)
       (ItemSites.selectedAtom (operation := itemOperation)
@@ -713,10 +713,10 @@ theorem identitySelectedTargetItem
           _coherence =>
         ∃ staged : Region itemCommon,
           HostedStrict
-              (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+              (VisualProof.Rule.Comprehension.Instantiation.instantiate
                 pattern application) staged ∧
             ScopePreservation
-                (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+                (VisualProof.Rule.Comprehension.Instantiation.instantiate
                   pattern application) staged ∧
               Nonempty (RegionIso (WireEquiv.refl itemCommon) staged
                 (Region.adjoinAt retained .nil formalResult))) := by
@@ -749,16 +749,16 @@ theorem identitySelectedTargetItem
     · rw [Leaf.Identity.Vars.fromFn_map]
   let staged := Region.adjoinAt retainedLocals .nil formalResult
   have hosted : HostedStrict
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern application) staged := by
     intro outer hostLocals rename outerHostItems boundary source
       hostedOccurrence targetCanonical targetExternalTwoEnded
     let mappedApplication := application.map fun wire => rename wire
     let sourceBefore :=
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern application).renameWires rename
     let sourceAfter :=
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern mappedApplication
     let sourceHostBefore := Region.adjoinAt hostLocals outerHostItems
       sourceBefore
@@ -869,24 +869,24 @@ theorem identitySelectedTargetItem
   let outputStaged := Region.adjoinAt retainedLocals .nil
     (output.endpoint.renameWires (targetRename.appendRight retainedLocals))
   have outputHosted : HostedStrict
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern application) outputStaged := by
     intro outer hostLocals rename outerHostItems boundary source
       hostedOccurrence targetCanonical targetExternalTwoEnded
     let mappedApplication := application.map fun wire => rename wire
     let sourceAfter :=
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern mappedApplication
     let sourceHostAfter := Region.adjoinAt hostLocals outerHostItems sourceAfter
     have sourceHostEq :
         Region.adjoinAt hostLocals outerHostItems
-            ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            ((VisualProof.Rule.Comprehension.Instantiation.instantiate
               pattern application).renameWires rename) = sourceHostAfter := by
       simp only [sourceHostAfter, sourceAfter, mappedApplication,
         EqualityNormalization.instantiate_renameWires]
     change Occurrence
       (Region.adjoinAt hostLocals outerHostItems
-        ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        ((VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern application).renameWires rename)) source at hostedOccurrence
     have sourceAfterCanonical : sourceHostAfter.Canonical := by
       rw [← sourceHostEq]
@@ -894,7 +894,7 @@ theorem identitySelectedTargetItem
         hostedOccurrence.sourceCanonical
     have sourceNonempty : ∀ {wireSignature} (wire : Var outer wireSignature),
         (Region.adjoinAt hostLocals outerHostItems
-          ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          ((VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern application).renameWires rename)).incidencePaths
               wire.index.val ≠ [] ↔
           sourceHostAfter.incidencePaths wire.index.val ≠ [] := by
@@ -1031,10 +1031,10 @@ theorem identitySelectedTargetItem
     signature arity retained
   have materialScope : ScopePreservation
       (positionalIdentityApplication signature arity retained)
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (positionalIdentityPattern signature arity) retained) := {
     canonical := fun _ =>
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+      VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
         (positionalIdentityPattern signature arity) retained
     incidenceNonempty := fun wire =>
       (materialScopeForward.incidenceNonempty wire).symm
@@ -1045,13 +1045,13 @@ theorem identitySelectedTargetItem
   }
   let direct := positionalIdentityApplication signature arity retained
   let positional :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       (positionalIdentityPattern signature arity) retained
   have stagedScope : ScopePreservation
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern application) staged := by
     let directScope : ScopePreservation
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern application)
         (Region.adjoinAt retainedLocals hostItems direct) :=
       ScopePreservation.ofIso sourceIso
@@ -1077,7 +1077,7 @@ theorem identitySelectedTargetItem
         (adjoinAt_hostedMaterial retainedLocals hostItems direct).symm)
   let originalOutputIso := sourceIso.trans outputLocalIso.symm
   have outputScope : ScopePreservation
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern application) outputStaged :=
     ScopePreservation.ofIso originalOutputIso
   -/
@@ -1097,7 +1097,7 @@ mutual
       {data : operation.Data frame}
       {source : Region sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : RegionSites operation data evidence)
       (targetKeepEq : frame.targetKeep = WireRenaming.id)
@@ -1110,11 +1110,11 @@ mutual
         (ports : Vars siteCommon arguments)
         (site : operation.SiteData siteFrame siteData ports),
         HostedStrict
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern ports)
           (operation.site siteFrame siteData ports site) ∧
         ScopePreservation
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern ports)
           (operation.site siteFrame siteData ports site)) :
       HostedStrict result (regionEdit data evidence sites).endpoint ∧
@@ -1143,7 +1143,7 @@ mutual
       {data : operation.Data frame}
       {source : ItemSeq sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : ItemsSites operation data evidence)
       (targetKeepEq : frame.targetKeep = WireRenaming.id)
@@ -1156,11 +1156,11 @@ mutual
         (ports : Vars siteCommon arguments)
         (site : operation.SiteData siteFrame siteData ports),
         HostedStrict
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern ports)
           (operation.site siteFrame siteData ports site) ∧
         ScopePreservation
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern ports)
           (operation.site siteFrame siteData ports site)) :
       HostedStrict result (itemsEdit data evidence sites).endpoint ∧
@@ -1186,7 +1186,7 @@ mutual
       {data : operation.Data frame}
       {source : Item sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : ItemSites operation data evidence)
       (targetKeepEq : frame.targetKeep = WireRenaming.id)
@@ -1199,11 +1199,11 @@ mutual
         (ports : Vars siteCommon arguments)
         (site : operation.SiteData siteFrame siteData ports),
         HostedStrict
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern ports)
           (operation.site siteFrame siteData ports site) ∧
         ScopePreservation
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern ports)
           (operation.site siteFrame siteData ports site)) :
       HostedStrict result (itemEdit data evidence sites).endpoint ∧
@@ -1254,7 +1254,7 @@ mutual
       {data : operation.Data frame}
       {source : Region sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : RegionSites operation data evidence)
       (targetKeepEq : frame.targetKeep = WireRenaming.id)
@@ -1268,7 +1268,7 @@ mutual
         (site : operation.SiteData siteFrame siteData ports),
         HostedScope
           (operation.site siteFrame siteData ports site)
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern ports)) :
       HostedScope (regionEdit data evidence sites).endpoint result := by
     intro target rename
@@ -1299,7 +1299,7 @@ mutual
       {data : operation.Data frame}
       {source : ItemSeq sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : ItemsSites operation data evidence)
       (targetKeepEq : frame.targetKeep = WireRenaming.id)
@@ -1313,7 +1313,7 @@ mutual
         (site : operation.SiteData siteFrame siteData ports),
         HostedScope
           (operation.site siteFrame siteData ports site)
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern ports)) :
       HostedScope (itemsEdit data evidence sites).endpoint result := by
     intro target rename
@@ -1339,7 +1339,7 @@ mutual
       {data : operation.Data frame}
       {source : Item sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result)
       (sites : ItemSites operation data evidence)
       (targetKeepEq : frame.targetKeep = WireRenaming.id)
@@ -1353,7 +1353,7 @@ mutual
         (site : operation.SiteData siteFrame siteData ports),
         HostedScope
           (operation.site siteFrame siteData ports site)
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern ports)) :
       HostedScope (itemEdit data evidence sites).endpoint result := by
     intro target rename
@@ -1404,13 +1404,13 @@ theorem positionalIdentityLeafEndpoint
       (Leaf.Identity.operation signature arity) originalArguments).SiteData
         frame PUnit.unit application) :
     HostedStrict
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalIdentityPattern signature arity) application)
         ((recordingOperation
           (Leaf.Identity.operation signature arity) originalArguments).site
             frame PUnit.unit application site) ∧
       ScopePreservation
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalIdentityPattern signature arity) application)
         ((recordingOperation
           (Leaf.Identity.operation signature arity) originalArguments).site
@@ -1437,12 +1437,12 @@ theorem positionalIdentityLeafEndpoint
   let mappedApplication :=
     (Leaf.Identity.Vars.fromFn identityPorts).map fun wire => rename wire
   let positional :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       (positionalIdentityPattern signature arity) mappedApplication
   let direct := positionalIdentityApplication signature arity
     mappedApplication
   let sourceBefore := Region.adjoinAt hostLocals hostItems
-    ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    ((VisualProof.Rule.Comprehension.Instantiation.instantiate
       (positionalIdentityPattern signature arity)
       (Leaf.Identity.Vars.fromFn identityPorts)).renameWires rename)
   let sourceAfter := Region.adjoinAt hostLocals hostItems positional
@@ -1515,17 +1515,17 @@ theorem equatesPositionalAtomApplication
     (targetCanonical :
       (occurrence.context.fill
         (Region.adjoinAt hostLocals hostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             (positionalAtomPattern atomArguments) (.cons formal retained)))).Canonical)
     (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
       occurrence.interface.boundaryWire
       (occurrence.context.fill
         (Region.adjoinAt hostLocals hostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             (positionalAtomPattern atomArguments) (.cons formal retained))))) :
     EqualityNormalization.StrictEquates occurrence
       (Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalAtomPattern atomArguments) (.cons formal retained)))
       targetCanonical targetExternalTwoEnded := by
   let description : Rule.Erasure.Description outer := {
@@ -1588,13 +1588,13 @@ theorem positionalAtomLeafEndpoint
       (Leaf.Formal.operation [] atomArguments) originalArguments).SiteData
         frame PUnit.unit application) :
     HostedStrict
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalAtomPattern atomArguments) application)
         ((recordingOperation
           (Leaf.Formal.operation [] atomArguments) originalArguments).site
             frame PUnit.unit application site) ∧
       ScopePreservation
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalAtomPattern atomArguments) application)
         ((recordingOperation
           (Leaf.Formal.operation [] atomArguments) originalArguments).site
@@ -1603,7 +1603,7 @@ theorem positionalAtomLeafEndpoint
         ((recordingOperation
           (Leaf.Formal.operation [] atomArguments) originalArguments).site
             frame PUnit.unit application site)
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalAtomPattern atomArguments) application) := by
   rcases site with ⟨⟨formal, ⟨retained, applicationEq⟩⟩,
     recordedApplication⟩
@@ -1623,12 +1623,12 @@ theorem positionalAtomLeafEndpoint
   rw [targetEq]
   have directScope : ScopePreservation
       (Region.singleton (.atom formal retained))
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (positionalAtomPattern atomArguments) (.cons formal retained)) := by
     simpa only [List.nil_append] using
       positionalAtomInstantiation_scope formal retained
   have reverseScope : ScopePreservation
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (positionalAtomPattern atomArguments) (.cons formal retained))
       (Region.singleton (.atom formal retained)) := by
     constructor
@@ -1665,7 +1665,7 @@ theorem positionalAtomLeafEndpoint
             Nat.ne_of_gt (by omega), rfl⟩
   have directHostedScope : HostedScope
       (Region.singleton (.atom formal retained))
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (positionalAtomPattern atomArguments) (.cons formal retained)) := by
     intro target rename
     let mappedFormal := rename formal
@@ -1676,10 +1676,10 @@ theorem positionalAtomLeafEndpoint
       simp [mappedFormal, mappedRetained, Region.singleton_renameWires,
         Item.renameWires]
     have instantiatedEq :
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalAtomPattern atomArguments) (.cons formal retained)
           ).renameWires rename =
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalAtomPattern atomArguments)
           (.cons mappedFormal mappedRetained) := by
       simpa only [mappedFormal, mappedRetained, Theory.Vars.map] using
@@ -1697,11 +1697,11 @@ theorem positionalAtomLeafEndpoint
       (positionalAtomWires atomArguments) :=
     .cons mappedFormal mappedRetained
   let sourceBefore := Region.adjoinAt hostLocals hostItems
-    ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    ((VisualProof.Rule.Comprehension.Instantiation.instantiate
       (positionalAtomPattern atomArguments) (.cons formal retained)
       ).renameWires rename)
   let sourceAfter := Region.adjoinAt hostLocals hostItems
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    (VisualProof.Rule.Comprehension.Instantiation.instantiate
       (positionalAtomPattern atomArguments) mappedApplication)
   change Occurrence sourceBefore source at occurrence
   have sourceEq : sourceBefore = sourceAfter := by

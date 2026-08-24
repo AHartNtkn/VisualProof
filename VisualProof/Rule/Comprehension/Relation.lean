@@ -208,7 +208,7 @@ private theorem Vars.countIndex_appendRight
 theorem equalityItems_incidencePaths_length
     (left right : Vars wires signatures)
     (wireIndex itemIndex : Nat) :
-    ((_root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems
+    ((VisualProof.Rule.Comprehension.Instantiation.equalityItems
       left right).incidencePaths wireIndex itemIndex).length =
       left.countIndex wireIndex + right.countIndex wireIndex := by
   induction left generalizing itemIndex with
@@ -217,9 +217,9 @@ theorem equalityItems_incidencePaths_length
       cases right with
       | cons rightHead rightTail =>
           simp only [
-            _root_.VisualProof.Rule.Comprehension.Instantiation.equalityItems,
+            VisualProof.Rule.Comprehension.Instantiation.equalityItems,
             ItemSeq.incidencePaths, Item.incidencePaths,
-            _root_.VisualProof.Rule.Comprehension.Instantiation.equalityPorts,
+            VisualProof.Rule.Comprehension.Instantiation.equalityPorts,
             Vars.countIndex, List.length_append, List.length_replicate]
           rw [induction rightTail]
           by_cases leftEqual : leftHead.index.val = wireIndex <;>

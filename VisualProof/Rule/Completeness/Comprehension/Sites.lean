@@ -45,7 +45,7 @@ selected application. -/
       {frame : Transform.Frame arguments common sourceWires targetWires} →
       (data : operation.Data frame) →
       {source : Region sourceWires} → {result : Region common} →
-      _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+      VisualProof.Rule.Comprehension.Instantiation.RegionResult
         pattern frame.sourceKeep frame.selected source result → Type
     | mk
         {common sourceWires targetWires : List Sig}
@@ -56,13 +56,13 @@ selected application. -/
         {items : ItemSeq (sourceWires ++ locals)}
         {result : Region (common ++ locals)}
         {evidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             pattern (frame.sourceKeep.appendRight locals)
             (frame.selected.appendLeft locals) items result}
         (sites : ItemsSites operation
           (operation.appendData frame data locals) evidence) :
         RegionSites operation data
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+          (VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
             evidence)
 
   /-- Demand-driven selected-site evidence for an actual item sequence. -/
@@ -72,7 +72,7 @@ selected application. -/
       {frame : Transform.Frame arguments common sourceWires targetWires} →
       (data : operation.Data frame) →
       {source : ItemSeq sourceWires} → {result : Region common} →
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected source result → Type
     | nil
         {common sourceWires targetWires : List Sig}
@@ -80,7 +80,7 @@ selected application. -/
         {frame : Transform.Frame arguments common sourceWires targetWires}
         {data : operation.Data frame}
         (evidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             pattern frame.sourceKeep frame.selected
             (.nil : ItemSeq sourceWires) (Region.blank common)) :
         ItemsSites operation data evidence
@@ -92,15 +92,15 @@ selected application. -/
         {item : Item sourceWires} {tail : ItemSeq sourceWires}
         {itemResult tailResult : Region common}
         {itemEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult
             pattern frame.sourceKeep frame.selected item itemResult}
         {tailEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             pattern frame.sourceKeep frame.selected tail tailResult}
         (itemSites : ItemSites operation data itemEvidence)
         (tailSites : ItemsSites operation data tailEvidence) :
         ItemsSites operation data
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          (VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             itemEvidence tailEvidence)
 
   /-- Demand-driven selected-site evidence for one actual item. Nonselected
@@ -111,7 +111,7 @@ atoms and identities need no operation site data. -/
       {frame : Transform.Frame arguments common sourceWires targetWires} →
       (data : operation.Data frame) →
       {source : Item sourceWires} → {result : Region common} →
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemResult
         pattern frame.sourceKeep frame.selected source result → Type
     | atom
         {common sourceWires targetWires atomArguments : List Sig}
@@ -121,7 +121,7 @@ atoms and identities need no operation site data. -/
         (head : Var common (.rel atomArguments))
         (ports : Vars common atomArguments) :
         ItemSites operation data
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+          (VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
             head ports)
     | selectedAtom
         {common sourceWires targetWires : List Sig}
@@ -131,7 +131,7 @@ atoms and identities need no operation site data. -/
         (ports : Vars common arguments)
         (siteData : operation.SiteData frame data ports) :
         ItemSites operation data
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+          (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
             ports)
     | identity
         {common sourceWires targetWires : List Sig}
@@ -141,7 +141,7 @@ atoms and identities need no operation site data. -/
         (signature : Sig) (arity : Nat)
         (ports : Fin arity → Var common signature) :
         ItemSites operation data
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+          (VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
             signature arity ports)
     | cut
         {common sourceWires targetWires : List Sig}
@@ -150,11 +150,11 @@ atoms and identities need no operation site data. -/
         {data : operation.Data frame}
         {body : Region sourceWires} {result : Region common}
         {evidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          VisualProof.Rule.Comprehension.Instantiation.RegionResult
             pattern frame.sourceKeep frame.selected body result}
         (sites : RegionSites operation data evidence) :
         ItemSites operation data
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+          (VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
             evidence)
 end
 
@@ -175,7 +175,7 @@ existing transform edit at its exact `run` endpoint. -/
       (data : operation.Data frame)
       {source : Region sourceWires}
       {result : Region common}
-      (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+      (evidence : VisualProof.Rule.Comprehension.Instantiation.RegionResult
         pattern frame.sourceKeep frame.selected source result)
       (sites : RegionSites operation data evidence) :
       ExactEdit
@@ -203,7 +203,7 @@ existing transform edit at its exact `run` endpoint. -/
       (data : operation.Data frame)
       {source : ItemSeq sourceWires}
       {result : Region common}
-      (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      (evidence : VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected source result)
       (sites : ItemsSites operation data evidence) :
       ExactEdit
@@ -233,7 +233,7 @@ operation-specific site data. -/
       (data : operation.Data frame)
       {source : Item sourceWires}
       {result : Region common}
-      (evidence : _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+      (evidence : VisualProof.Rule.Comprehension.Instantiation.ItemResult
         pattern frame.sourceKeep frame.selected source result)
       (sites : ItemSites operation data evidence) :
       ExactEdit
@@ -280,7 +280,7 @@ mutual
       {pattern : OpenDiagram targetArguments}
       {source : Region sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : RegionSites
         (recordingOperation targetOperation originalArguments) data evidence) :
@@ -296,7 +296,7 @@ mutual
       {pattern : OpenDiagram targetArguments}
       {source : ItemSeq sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : ItemsSites
         (recordingOperation targetOperation originalArguments) data evidence) :
@@ -315,7 +315,7 @@ mutual
       {pattern : OpenDiagram targetArguments}
       {source : Item sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : ItemSites
         (recordingOperation targetOperation originalArguments) data evidence) :
@@ -339,7 +339,7 @@ mutual
       {data : operation.Data frame} {pattern : OpenDiagram arguments}
       {source : Region sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : RegionSites operation data evidence) :
       (regionEdit data evidence sites).edit.NoSelectedPin :=
@@ -353,7 +353,7 @@ mutual
       {data : operation.Data frame} {pattern : OpenDiagram arguments}
       {source : ItemSeq sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : ItemsSites operation data evidence) :
       (itemsEdit data evidence sites).edit.NoSelectedPin :=
@@ -370,7 +370,7 @@ mutual
       {data : operation.Data frame} {pattern : OpenDiagram arguments}
       {source : Item sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : ItemSites operation data evidence) :
       (itemEdit data evidence sites).edit.NoSelectedPin :=
@@ -389,7 +389,7 @@ mutual
       {data : operation.Data frame} {pattern : OpenDiagram arguments}
       {source : Region sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : RegionSites operation data evidence) : List RegionPath :=
     match sites with
@@ -402,7 +402,7 @@ mutual
       {data : operation.Data frame} {pattern : OpenDiagram arguments}
       {source : ItemSeq sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : ItemsSites operation data evidence) (itemIndex : Nat) :
       List RegionPath :=
@@ -419,7 +419,7 @@ mutual
       {data : operation.Data frame} {pattern : OpenDiagram arguments}
       {source : Item sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : ItemSites operation data evidence) (itemIndex : Nat) :
       List RegionPath :=
@@ -439,7 +439,7 @@ mutual
       {data : operation.Data frame} {pattern : OpenDiagram arguments}
       {source : Region sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : RegionSites operation data evidence)
       (invariant : Transform.RetainedIndexInvariant frame) :
@@ -457,7 +457,7 @@ mutual
       {data : operation.Data frame} {pattern : OpenDiagram arguments}
       {source : ItemSeq sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : ItemsSites operation data evidence)
       (invariant : Transform.RetainedIndexInvariant frame) (itemIndex : Nat) :
@@ -477,7 +477,7 @@ mutual
       {data : operation.Data frame} {pattern : OpenDiagram arguments}
       {source : Item sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : ItemSites operation data evidence)
       (invariant : Transform.RetainedIndexInvariant frame) (itemIndex : Nat) :
@@ -583,7 +583,7 @@ mutual
       {pattern : OpenDiagram targetArguments}
       {source : Region sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : RegionSites
         (recordingOperation targetOperation originalArguments) data evidence) :
@@ -605,7 +605,7 @@ mutual
       {pattern : OpenDiagram targetArguments}
       {source : ItemSeq sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : ItemsSites
         (recordingOperation targetOperation originalArguments) data evidence) :
@@ -631,7 +631,7 @@ mutual
       {pattern : OpenDiagram targetArguments}
       {source : Item sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result}
       (sites : ItemSites
         (recordingOperation targetOperation originalArguments) data evidence) :
@@ -661,7 +661,7 @@ theorem itemsCut
     {result : Region (outer ++ (before ++ after))}
     {instantiated : Region outer}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         (Content.Cut.rootFrame outer before after arguments).sourceKeep
         (Content.Cut.rootFrame outer before after arguments).selected
         source result)
@@ -742,7 +742,7 @@ theorem itemsArity
     {result : Region (outer ++ (before ++ after))}
     {instantiated : Region outer}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         (Arity.rootFrame outer before after arguments added).sourceKeep
         (Arity.rootFrame outer before after arguments added).selected
         source result)
@@ -825,7 +825,7 @@ theorem itemsParallel
     {result : Region (outer ++ (before ++ after))}
     {instantiated : Region outer}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         (Content.Parallel.rootFrame outer before after arguments).sourceKeep
         (Content.Parallel.rootFrame outer before after arguments).selected
         source result)
@@ -916,7 +916,7 @@ theorem itemsFormal
     {result : Region (outer ++ (localBefore ++ localAfter))}
     {instantiated : Region outer}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         (Leaf.Formal.rootFrame outer localBefore localAfter before after).sourceKeep
         (Leaf.Formal.rootFrame outer localBefore localAfter before after).selected
         source result)
@@ -1013,7 +1013,7 @@ theorem itemsIdentity
     {result : Region (outer ++ (localBefore ++ localAfter))}
     {instantiated : Region outer}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         (Leaf.Identity.rootFrame outer localBefore localAfter signature
           arity).sourceKeep
         (Leaf.Identity.rootFrame outer localBefore localAfter signature

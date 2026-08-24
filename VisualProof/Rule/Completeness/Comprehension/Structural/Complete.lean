@@ -17,7 +17,7 @@ mutual
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {source : Region sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result)
       (data : Content.Parallel.operation arguments |>.Data frame) :
       Nonempty (RegionSites (Content.Parallel.operation arguments) data
@@ -35,7 +35,7 @@ mutual
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {source : ItemSeq sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result)
       (data : Content.Parallel.operation arguments |>.Data frame) :
       Nonempty (ItemsSites (Content.Parallel.operation arguments) data
@@ -54,7 +54,7 @@ mutual
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {source : Item sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result)
       (data : Content.Parallel.operation arguments |>.Data frame) :
       Nonempty (ItemSites (Content.Parallel.operation arguments) data
@@ -81,7 +81,7 @@ theorem identityZeroItemsSites_nonempty
     {frame : Transform.Frame [] common sourceWires targetWires}
     {source : ItemSeq sourceWires} {result : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         (positionalIdentityPattern signature 0)
         frame.sourceKeep frame.selected source result) :
     Nonempty (ItemsSites (Leaf.Identity.operation signature 0)
@@ -102,7 +102,7 @@ where
       {frame : Transform.Frame [] common sourceWires targetWires}
       {source : Region sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           (positionalIdentityPattern signature 0)
           frame.sourceKeep frame.selected source result) :
       Nonempty (RegionSites (Leaf.Identity.operation signature 0)
@@ -120,7 +120,7 @@ where
       {frame : Transform.Frame [] common sourceWires targetWires}
       {source : Item sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           (positionalIdentityPattern signature 0)
           frame.sourceKeep frame.selected source result) :
       Nonempty (ItemSites (Leaf.Identity.operation signature 0)
@@ -294,7 +294,7 @@ mutual
       {data : (Content.Cut.operation arguments).Data frame}
       {source : Region sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected source result) :
       Nonempty (RegionSites (Content.Cut.operation arguments) data evidence) := by
     cases evidence with
@@ -312,7 +312,7 @@ mutual
       {data : (Content.Cut.operation arguments).Data frame}
       {source : ItemSeq sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected source result) :
       Nonempty (ItemsSites (Content.Cut.operation arguments) data evidence) := by
     cases evidence with
@@ -330,7 +330,7 @@ mutual
       {data : (Content.Cut.operation arguments).Data frame}
       {source : Item sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected source result) :
       Nonempty (ItemSites (Content.Cut.operation arguments) data evidence) := by
     cases evidence with
@@ -631,7 +631,7 @@ theorem cutRootScope
     {source : ItemSeq (outer ++ (before ++ .rel [] :: after))}
     {result : Region (outer ++ (before ++ after))}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern (Content.Cut.rootFrame outer before after []).sourceKeep
         (Content.Cut.rootFrame outer before after []).selected source result)
     (sites : ItemsSites (Content.Cut.operation [])
@@ -1025,7 +1025,7 @@ theorem cutSelectedTargetItem
       (targetExternal := [])
       (targetPattern := Erasure.Exposure.supportPattern body bodyCanonical)
       (targetOperation := Content.Cut.operation [])
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+      (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
         (pattern := fullPattern) (retain := itemFrame.sourceKeep)
         (selected := itemFrame.selected) application)
       (ItemSites.selectedAtom (operation := Content.Cut.operation [])
@@ -1035,10 +1035,10 @@ theorem cutSelectedTargetItem
           _coherence =>
         ∃ staged : Region itemCommon,
           HostedStrict
-              (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+              (VisualProof.Rule.Comprehension.Instantiation.instantiate
                 fullPattern application) staged ∧
               ScopePreservation
-                (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+                (VisualProof.Rule.Comprehension.Instantiation.instantiate
                   fullPattern application) staged ∧
               Nonempty (RegionIso (WireEquiv.refl itemCommon) staged
                 (Region.adjoinAt retained .nil formalResult)) ∧
@@ -1048,7 +1048,7 @@ theorem cutSelectedTargetItem
                   cutDataAligned itemData formalData),
                 Nonempty (RegionIso (WireEquiv.refl formalTargetWires)
                   ((itemEdit itemData
-                    (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+                    (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
                       (pattern := fullPattern) (retain := itemFrame.sourceKeep)
                       (selected := itemFrame.selected) application)
                     (ItemSites.selectedAtom (operation := Content.Cut.operation [])
@@ -1069,28 +1069,28 @@ theorem cutSelectedTargetItem
   let childApplication : Vars ((itemCommon ++ []) ++ []) [] :=
     rootApplication.map fun wire => wire.appendLeft []
   let childItemEvidence :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+    VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
       (pattern := childPattern) (retain := childFrame.sourceKeep)
       (selected := childFrame.selected) childApplication
   let childTailEvidence :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+    VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
       (pattern := childPattern) (retain := childFrame.sourceKeep)
       (selected := childFrame.selected)
   let childItemsEvidence :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+    VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
       childItemEvidence childTailEvidence
   let childRegionEvidence :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+    VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
       childItemsEvidence
   let cutItemEvidence :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+    VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
       childRegionEvidence
   let cutTailEvidence :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+    VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
       (pattern := childPattern) (retain := rootFrame.sourceKeep)
       (selected := rootFrame.selected)
   let formalEvidence :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+    VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
       cutItemEvidence cutTailEvidence
   let recordedCut := recordingOperation (Content.Cut.operation []) []
   let childItemSites : ItemSites recordedCut childData childItemEvidence :=
@@ -1112,16 +1112,16 @@ theorem cutSelectedTargetItem
   · cases application
     rfl
   · let staged := Region.singleton (.cut
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           childPattern application))
     refine ⟨staged, ?_, ?_, ?_⟩
     · exact supportCutInstantiatedHosted body bodyCanonical application
     · have stagedCanonical : staged.Canonical := by
         exact (Region.singleton_cut_canonical_iff _).mpr
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
             childPattern application)
       have sourceEmpty : ∀ {signature} (wire : Var itemCommon signature),
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             (Erasure.Exposure.supportPattern (Region.singleton (.cut body))
               ((Region.singleton_cut_canonical_iff body).mpr bodyCanonical))
             application).incidencePaths wire.index.val = [] := by
@@ -1134,7 +1134,7 @@ theorem cutSelectedTargetItem
           staged.incidencePaths wire.index.val = [] := by
         intro signature wire
         have childEmpty :
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (VisualProof.Rule.Comprehension.Instantiation.instantiate
               childPattern application).incidencePaths wire.index.val = [] := by
           apply List.eq_nil_of_length_eq_zero
           rw [EqualityNormalization.instantiate_incidencePaths_length]
@@ -1149,13 +1149,13 @@ theorem cutSelectedTargetItem
       let commonRename : WireRenaming itemCommon (itemCommon ++ []) :=
         commonEquiv.symm.toRenaming
       let childBase :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
           childPattern application
       let rootResult :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
           childPattern rootApplication
       let childResult :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
           childPattern childApplication
       let childEquiv := WireEquiv.appendNil (itemCommon ++ [])
       let childRename : WireRenaming (itemCommon ++ [])
@@ -1271,7 +1271,7 @@ theorem cutSelectedTargetItem
           Region.singleton (.atom formalData .nil)
         have sourceEq :
             (itemEdit itemData
-              (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+              (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
                 (pattern := Erasure.Exposure.supportPattern
                   (Region.singleton (.cut body))
                   ((Region.singleton_cut_canonical_iff body).mpr
@@ -1309,7 +1309,7 @@ theorem cutSelectedTargetItem
         refine ⟨?_⟩
         change RegionIso (WireEquiv.refl formalTargetWires)
           ((itemEdit itemData
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+            (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
               (pattern := Erasure.Exposure.supportPattern
                 (Region.singleton (.cut body))
                 ((Region.singleton_cut_canonical_iff body).mpr
@@ -1345,11 +1345,11 @@ theorem supportPatternDerives
     {result : Region
       (structuralOuter ++ (structuralBefore ++ structuralAfter))}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         (Erasure.Exposure.supportPattern material materialCanonical)
-        (_root_.VisualProof.Rule.Comprehension.retain structuralOuter
+        (VisualProof.Rule.Comprehension.retain structuralOuter
           structuralBefore structuralAfter materialWires)
-        (_root_.VisualProof.Rule.Comprehension.selected structuralOuter
+        (VisualProof.Rule.Comprehension.selected structuralOuter
           structuralBefore structuralAfter materialWires)
         items result)
     (request : Telescope.Request
@@ -1367,11 +1367,11 @@ theorem supportPatternDerives
       {result : Region
         (structuralOuter ++ (structuralBefore ++ structuralAfter))}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           (Erasure.Exposure.supportPattern material materialCanonical)
-          (_root_.VisualProof.Rule.Comprehension.retain structuralOuter
+          (VisualProof.Rule.Comprehension.retain structuralOuter
             structuralBefore structuralAfter materialWires)
-          (_root_.VisualProof.Rule.Comprehension.selected structuralOuter
+          (VisualProof.Rule.Comprehension.selected structuralOuter
             structuralBefore structuralAfter materialWires)
           items result)
       (request : Telescope.Request

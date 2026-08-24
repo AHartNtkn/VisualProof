@@ -24,7 +24,7 @@ region. -/
 noncomputable def blankPatternInstantiationIso
     (application : Vars wires []) :
     RegionIso (WireEquiv.refl wires)
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         blankPattern application) (Region.blank wires) := by
   cases application
   let inner := RegionIso.blankConjoin (Region.blank (wires ++ []))
@@ -32,7 +32,7 @@ noncomputable def blankPatternInstantiationIso
   let collapsed := hosted.trans
     (RegionIso.adjoinAtNil (Region.blank (wires ++ []))).symm
   simpa [
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate,
+    VisualProof.Rule.Comprehension.Instantiation.instantiate,
     blankPattern, Region.blank, Region.renameWires] using collapsed
 
 mutual
@@ -42,7 +42,7 @@ mutual
       {frame : Transform.Frame [] common sourceWires targetWires}
       {source : Region sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           blankPattern frame.sourceKeep frame.selected source result) :
       Nonempty (RegionSites (Content.Ends.operation []) PUnit.unit evidence) := by
     cases evidence with
@@ -56,7 +56,7 @@ mutual
       {frame : Transform.Frame [] common sourceWires targetWires}
       {source : ItemSeq sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           blankPattern frame.sourceKeep frame.selected source result) :
       Nonempty (ItemsSites (Content.Ends.operation []) PUnit.unit evidence) := by
     cases evidence with
@@ -71,7 +71,7 @@ mutual
       {frame : Transform.Frame [] common sourceWires targetWires}
       {source : Item sourceWires} {result : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           blankPattern frame.sourceKeep frame.selected source result) :
       Nonempty (ItemSites (Content.Ends.operation []) PUnit.unit evidence) := by
     cases evidence with
@@ -90,7 +90,7 @@ noncomputable def endsItemsSites
     {frame : Transform.Frame [] common sourceWires targetWires}
     {source : ItemSeq sourceWires} {result : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         blankPattern frame.sourceKeep frame.selected source result) :
     ItemsSites (Content.Ends.operation []) PUnit.unit evidence :=
   Classical.choice (endsItemsSites_nonempty evidence)
@@ -102,7 +102,7 @@ mutual
       {frame : Transform.Frame [] common sourceWires common}
       {source : Region sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           blankPattern frame.sourceKeep frame.selected source result}
       (sites : RegionSites (Content.Ends.operation []) PUnit.unit evidence)
       (targetKeepEq : frame.targetKeep = WireRenaming.id) :
@@ -129,7 +129,7 @@ mutual
       {frame : Transform.Frame [] common sourceWires common}
       {source : ItemSeq sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           blankPattern frame.sourceKeep frame.selected source result}
       (sites : ItemsSites (Content.Ends.operation []) PUnit.unit evidence)
       (targetKeepEq : frame.targetKeep = WireRenaming.id) :
@@ -150,7 +150,7 @@ mutual
       {frame : Transform.Frame [] common sourceWires common}
       {source : Item sourceWires} {result : Region common}
       {evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           blankPattern frame.sourceKeep frame.selected source result}
       (sites : ItemSites (Content.Ends.operation []) PUnit.unit evidence)
       (targetKeepEq : frame.targetKeep = WireRenaming.id) :
@@ -195,7 +195,7 @@ theorem itemsEnds
     {source : ItemSeq (outer ++ (before ++ .rel [] :: after))}
     {result : Region (outer ++ (before ++ after))}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         blankPattern
         (Content.Ends.rootFrame outer before after []).sourceKeep
         (Content.Ends.rootFrame outer before after []).selected source result)

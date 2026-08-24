@@ -15,7 +15,7 @@ theorem supportInstantiationHosted
     (materialCanonical : material.Canonical)
     (application : Vars common materialWires) :
     HostedStrict
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (Erasure.Exposure.supportPattern material materialCanonical)
         application)
       (material.renameWires
@@ -26,7 +26,7 @@ theorem supportInstantiationHosted
   let substitution := EqualityNormalization.formalSubstitution
     mappedApplication
   let instantiated :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       (Erasure.Exposure.supportPattern material materialCanonical)
       mappedApplication
   let renamedMaterial := material.renameWires substitution
@@ -34,7 +34,7 @@ theorem supportInstantiationHosted
   let exposed := Region.adjoinAt hostLocals hostItems instantiated
   have sourceEq :
       Region.adjoinAt hostLocals hostItems
-          ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          ((VisualProof.Rule.Comprehension.Instantiation.instantiate
             (Erasure.Exposure.supportPattern material materialCanonical)
             application).renameWires rename) = exposed := by
     simp only [exposed, instantiated, mappedApplication,
@@ -53,7 +53,7 @@ theorem supportInstantiationHosted
       application rename wire).symm
   change Occurrence
     (Region.adjoinAt hostLocals hostItems
-      ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      ((VisualProof.Rule.Comprehension.Instantiation.instantiate
         (Erasure.Exposure.supportPattern material materialCanonical)
         application).renameWires rename)) source at occurrence
   have exposedCanonical : (occurrence.context.fill exposed).Canonical := by
@@ -110,7 +110,7 @@ theorem supportInstantiationHosted
       change Region.adjoinAt hostLocals
           (hostItems.append
             (EqualityNormalization.contextPins outer hostLocals))
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             (Erasure.Exposure.supportPattern material materialCanonical)
             ((Erasure.Exposure.identityBoundary materialWires).map
               (fun wire => substitution wire))) = _
@@ -1086,20 +1086,20 @@ structure SupportParallelRegionFactors
     (frames : SupportParallelFrames parallel heads)
     {source : Region sourceWires} {originalResult : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+      VisualProof.Rule.Comprehension.Instantiation.RegionResult
         fullPattern parallel.sourceKeep parallel.selected source originalResult)
     (sites : RegionSites (Content.Parallel.operation []) heads evidence) where
   splitSource : Region splitWires
   headResult : Region sourceWires
   headEvidence :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+    VisualProof.Rule.Comprehension.Instantiation.RegionResult
       headPattern frames.head.sourceKeep frames.head.selected splitSource headResult
   headSites : RegionSites
     (recordingOperation (normalizationOperation []) []) PUnit.unit headEvidence
   tailSource : Region sourceWires
   tailResult : Region common
   tailEvidence :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+    VisualProof.Rule.Comprehension.Instantiation.RegionResult
       tailPattern frames.tail.sourceKeep frames.tail.selected tailSource tailResult
   tailSites : RegionSites
     (recordingOperation (normalizationOperation []) []) PUnit.unit tailEvidence
@@ -1122,20 +1122,20 @@ structure SupportParallelItemsFactors
     (frames : SupportParallelFrames parallel heads)
     {source : ItemSeq sourceWires} {originalResult : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         fullPattern parallel.sourceKeep parallel.selected source originalResult)
     (sites : ItemsSites (Content.Parallel.operation []) heads evidence) where
   splitSource : ItemSeq splitWires
   headResult : Region sourceWires
   headEvidence :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+    VisualProof.Rule.Comprehension.Instantiation.ItemsResult
       headPattern frames.head.sourceKeep frames.head.selected splitSource headResult
   headSites : ItemsSites
     (recordingOperation (normalizationOperation []) []) PUnit.unit headEvidence
   tailSource : ItemSeq sourceWires
   tailResult : Region common
   tailEvidence :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+    VisualProof.Rule.Comprehension.Instantiation.ItemsResult
       tailPattern frames.tail.sourceKeep frames.tail.selected tailSource tailResult
   tailSites : ItemsSites
     (recordingOperation (normalizationOperation []) []) PUnit.unit tailEvidence
@@ -1160,20 +1160,20 @@ structure SupportParallelItemFactors
     (frames : SupportParallelFrames parallel heads)
     {source : Item sourceWires} {originalResult : Region common}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemResult
         fullPattern parallel.sourceKeep parallel.selected source originalResult)
     (sites : ItemSites (Content.Parallel.operation []) heads evidence) where
   splitSource : ItemSeq splitWires
   headResult : Region sourceWires
   headEvidence :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+    VisualProof.Rule.Comprehension.Instantiation.ItemsResult
       headPattern frames.head.sourceKeep frames.head.selected splitSource headResult
   headSites : ItemsSites
     (recordingOperation (normalizationOperation []) []) PUnit.unit headEvidence
   tailSource : ItemSeq sourceWires
   tailResult : Region common
   tailEvidence :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+    VisualProof.Rule.Comprehension.Instantiation.ItemsResult
       tailPattern frames.tail.sourceKeep frames.tail.selected tailSource tailResult
   tailSites : ItemsSites
     (recordingOperation (normalizationOperation []) []) PUnit.unit tailEvidence
@@ -1202,7 +1202,7 @@ abbrev SupportParallelSelectedCase
       (Content.Parallel.operation []).SiteData parallel heads application),
     Nonempty (SupportParallelItemFactors headPattern tailPattern fullPattern
       frames
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+      (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
         (pattern := fullPattern) application)
       (@ItemSites.selectedAtom [] (Content.Parallel.operation []) fullPattern
         common sourceWires splitWires sitePattern parallel heads application
@@ -1215,20 +1215,20 @@ structure RecordingItemsAppend
     {firstSource secondSource : ItemSeq sourceWires}
     {firstResult secondResult : Region common}
     {firstEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected firstSource firstResult}
     (firstSites : ItemsSites
       (recordingOperation (normalizationOperation []) []) PUnit.unit
       firstEvidence)
     {secondEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected secondSource secondResult}
     (secondSites : ItemsSites
       (recordingOperation (normalizationOperation []) []) PUnit.unit
       secondEvidence) where
   result : Region common
   evidence :
-    _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+    VisualProof.Rule.Comprehension.Instantiation.ItemsResult
       pattern frame.sourceKeep frame.selected
       (firstSource.append secondSource) result
   sites : ItemsSites
@@ -1243,13 +1243,13 @@ noncomputable def recordingItemsAppend
     {firstSource secondSource : ItemSeq sourceWires}
     {firstResult secondResult : Region common}
     {firstEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected firstSource firstResult}
     (firstSites : ItemsSites
       (recordingOperation (normalizationOperation []) []) PUnit.unit
       firstEvidence)
     {secondEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected secondSource secondResult}
     (secondSites : ItemsSites
       (recordingOperation (normalizationOperation []) []) PUnit.unit
@@ -1270,7 +1270,7 @@ noncomputable def recordingItemsAppend
       {
         result := itemResult.conjoin tailAppend.result
         evidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             itemEvidence tailAppend.evidence
         sites := .cons itemSites tailAppend.sites
         resultIso := (RegionIso.conjoinAssoc itemResult tailResult
@@ -1291,7 +1291,7 @@ mutual
       (frames : SupportParallelFrames parallel heads)
       {source : Region sourceWires} {originalResult : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           fullPattern parallel.sourceKeep parallel.selected source originalResult)
       (sites : RegionSites (Content.Parallel.operation []) heads evidence) :
       Nonempty (SupportParallelRegionFactors headPattern tailPattern fullPattern
@@ -1303,10 +1303,10 @@ mutual
           tailPattern fullPattern selectedCase (frames.append locals)
           childEvidence childSites
         let headEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+          VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
             child.headEvidence
         let tailEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+          VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
             child.tailEvidence
         let headSites : RegionSites
             (recordingOperation (normalizationOperation []) []) PUnit.unit
@@ -1400,7 +1400,7 @@ mutual
       (frames : SupportParallelFrames parallel heads)
       {source : ItemSeq sourceWires} {originalResult : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           fullPattern parallel.sourceKeep parallel.selected source originalResult)
       (sites : ItemsSites (Content.Parallel.operation []) heads evidence) :
       Nonempty (SupportParallelItemsFactors headPattern tailPattern fullPattern
@@ -1408,11 +1408,11 @@ mutual
     match sites with
     | .nil nilEvidence => by
         let headEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
             (pattern := headPattern) (retain := frames.head.sourceKeep)
             (selected := frames.head.selected)
         let tailEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
             (pattern := tailPattern) (retain := frames.tail.sourceKeep)
             (selected := frames.tail.selected)
         let headSites : ItemsSites
@@ -1534,7 +1534,7 @@ mutual
       (frames : SupportParallelFrames parallel heads)
       {source : Item sourceWires} {originalResult : Region common}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           fullPattern parallel.sourceKeep parallel.selected source originalResult)
       (sites : ItemSites (Content.Parallel.operation []) heads evidence) :
       Nonempty (SupportParallelItemFactors headPattern tailPattern fullPattern
@@ -1564,20 +1564,20 @@ mutual
           intro signature wire
           exact frames.tail_keep wire
         let rawHeadItemEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
             (pattern := headPattern) (retain := frames.head.sourceKeep)
             (selected := frames.head.selected) headCommon headPorts
         have headItemEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+            VisualProof.Rule.Comprehension.Instantiation.ItemResult
               headPattern frames.head.sourceKeep frames.head.selected splitItem
               (Region.singleton (.atom headCommon headPorts)) := by
           simpa [splitItem, headMap, portsMap] using rawHeadItemEvidence
         let rawTailItemEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
             (pattern := tailPattern) (retain := frames.tail.sourceKeep)
             (selected := frames.tail.selected) head ports
         have tailItemEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+            VisualProof.Rule.Comprehension.Instantiation.ItemResult
               tailPattern frames.tail.sourceKeep frames.tail.selected tailItem
               (Region.singleton (.atom head ports)) := by
           simpa [tailItem, tailHeadMap, tailPortsMap] using rawTailItemEvidence
@@ -1598,18 +1598,18 @@ mutual
               (pattern := tailPattern) (frame := frames.tail)
               (data := PUnit.unit) head ports)
         let headNil :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
             (pattern := headPattern) (retain := frames.head.sourceKeep)
             (selected := frames.head.selected)
         let tailNil :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
             (pattern := tailPattern) (retain := frames.tail.sourceKeep)
             (selected := frames.tail.selected)
         let headEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             headItemEvidence headNil
         let tailEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             tailItemEvidence tailNil
         let headSites : ItemsSites
             (recordingOperation (normalizationOperation []) []) PUnit.unit
@@ -1671,20 +1671,20 @@ mutual
           funext position
           exact frames.tail_keep (ports position)
         let rawHeadItemEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
             (pattern := headPattern) (retain := frames.head.sourceKeep)
             (selected := frames.head.selected) signature arity headPorts
         have headItemEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+            VisualProof.Rule.Comprehension.Instantiation.ItemResult
               headPattern frames.head.sourceKeep frames.head.selected splitItem
               (Region.singleton (.identity signature arity headPorts)) := by
           simpa [splitItem, headPortsMap] using rawHeadItemEvidence
         let rawTailItemEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
             (pattern := tailPattern) (retain := frames.tail.sourceKeep)
             (selected := frames.tail.selected) signature arity ports
         have tailItemEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+            VisualProof.Rule.Comprehension.Instantiation.ItemResult
               tailPattern frames.tail.sourceKeep frames.tail.selected tailItem
               (Region.singleton (.identity signature arity ports)) := by
           simpa [tailItem, tailPortsMap] using rawTailItemEvidence
@@ -1705,18 +1705,18 @@ mutual
               (pattern := tailPattern) (frame := frames.tail)
               (data := PUnit.unit) signature arity ports)
         let headNil :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
             (pattern := headPattern) (retain := frames.head.sourceKeep)
             (selected := frames.head.selected)
         let tailNil :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
             (pattern := tailPattern) (retain := frames.tail.sourceKeep)
             (selected := frames.tail.selected)
         let headEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             headItemEvidence headNil
         let tailEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             tailItemEvidence tailNil
         let headSites : ItemsSites
             (recordingOperation (normalizationOperation []) []) PUnit.unit
@@ -1766,24 +1766,24 @@ mutual
           headPattern tailPattern fullPattern selectedCase frames _ childSites
         let splitItem := Item.cut child.splitSource
         let headItemEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
             child.headEvidence
         let tailItemEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
             child.tailEvidence
         let headNil :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
             (pattern := headPattern) (retain := frames.head.sourceKeep)
             (selected := frames.head.selected)
         let tailNil :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.nil
             (pattern := tailPattern) (retain := frames.tail.sourceKeep)
             (selected := frames.tail.selected)
         let headEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             headItemEvidence headNil
         let tailEvidence :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             tailItemEvidence tailNil
         let headItemSites : ItemSites
             (recordingOperation (normalizationOperation []) []) PUnit.unit
@@ -1848,7 +1848,7 @@ theorem supportParallelRootTailScope
       (outer ++ (before ++ .rel [] :: after))}
     {originalResult : Region (outer ++ (before ++ after))}
     {evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         fullPattern
         (Content.Parallel.rootFrame outer before after []).sourceKeep
         (Content.Parallel.rootFrame outer before after []).selected source
@@ -1877,7 +1877,7 @@ theorem supportParallelRootSplitScope
       (outer ++ (before ++ .rel [] :: after))}
     {originalResult : Region (outer ++ (before ++ after))}
     {evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         fullPattern
         (Content.Parallel.rootFrame outer before after []).sourceKeep
         (Content.Parallel.rootFrame outer before after []).selected source
@@ -2130,7 +2130,7 @@ theorem supportParallelSelectedFactors_nonempty
     let fullPattern := Erasure.Exposure.supportPattern
       (Region.ofItems (.cons materialHead materialTail)) fullCanonical
     Nonempty (SupportParallelItemFactors headPattern tailPattern fullPattern frames
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+      (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
         (pattern := fullPattern) application)
       (@ItemSites.selectedAtom [] (Content.Parallel.operation []) fullPattern
         common sourceWires splitWires sitePattern parallel heads application
@@ -2155,16 +2155,16 @@ theorem supportParallelSelectedFactors_nonempty
     .cons (materialHeadAtCommon.renameWires frames.tail.sourceKeep)
       (.cons (.atom frames.tail.selected headApplication) .nil)
   let headResult : Region sourceWires :=
-    (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    (VisualProof.Rule.Comprehension.Instantiation.instantiate
       headPattern headApplication).conjoin
       ((Region.singleton (.atom frames.tail.selected headApplication)).conjoin
         (Region.blank _))
   let tailResult : Region common :=
     (retainedItemPresentation materialHeadAtCommon).conjoin
-      ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      ((VisualProof.Rule.Comprehension.Instantiation.instantiate
         tailPattern application).conjoin (Region.blank _))
   let headEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         headPattern frames.head.sourceKeep frames.head.selected splitSource
           headResult := by
     exact .cons (.selectedAtom headApplication)
@@ -2173,14 +2173,14 @@ theorem supportParallelSelectedFactors_nonempty
       (recordingOperation (normalizationOperation []) []) PUnit.unit
         headEvidence := by
     let nilEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           headPattern frames.head.sourceKeep frames.head.selected .nil
             (Region.blank _) := .nil
     let nilSites : ItemsSites
         (recordingOperation (normalizationOperation []) []) PUnit.unit
           nilEvidence := .nil nilEvidence
     let atomEvidence :=
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+      VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
         (pattern := headPattern) (retain := frames.head.sourceKeep)
         (selected := frames.head.selected) frames.tail.selected headApplication
     let atomSites : ItemSites
@@ -2188,7 +2188,7 @@ theorem supportParallelSelectedFactors_nonempty
           atomEvidence := .atom (pattern := headPattern) frames.tail.selected
             headApplication
     let selectedEvidence :=
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+      VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
         (pattern := headPattern) (retain := frames.head.sourceKeep)
         (selected := frames.head.selected) headApplication
     let selectedSites : ItemSites
@@ -2197,7 +2197,7 @@ theorem supportParallelSelectedFactors_nonempty
             headApplication (PUnit.unit, headApplication)
     exact .cons selectedSites (.cons atomSites nilSites)
   let tailEvidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         tailPattern frames.tail.sourceKeep frames.tail.selected tailSource
           tailResult := by
     exact .cons (retainedItemResult tailPattern frames.tail materialHeadAtCommon)
@@ -2206,14 +2206,14 @@ theorem supportParallelSelectedFactors_nonempty
       (recordingOperation (normalizationOperation []) []) PUnit.unit
         tailEvidence := by
     let nilEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           tailPattern frames.tail.sourceKeep frames.tail.selected .nil
             (Region.blank _) := .nil
     let nilSites : ItemsSites
         (recordingOperation (normalizationOperation []) []) PUnit.unit
           nilEvidence := .nil nilEvidence
     let selectedEvidence :=
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+      VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
         (pattern := tailPattern) (retain := frames.tail.sourceKeep)
         (selected := frames.tail.selected) application
     let selectedSites : ItemSites
@@ -2245,7 +2245,7 @@ theorem supportParallelSelectedFactors_nonempty
     exact Region.singleton_conjoin_ofItems firstItem (.cons secondItem .nil)
   let splitIso : Nonempty (RegionIso (WireEquiv.refl splitWires)
       (itemEdit (operation := Content.Parallel.operation []) heads
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
           (pattern := fullPattern) application)
         (@ItemSites.selectedAtom [] (Content.Parallel.operation []) fullPattern
           common sourceWires splitWires sitePattern parallel heads application
@@ -2375,7 +2375,7 @@ theorem supportParallelSelectedFactors_nonempty
         (.cons (.atom frames.tail.selected headApplication) .nil)
     exact HostedStrict.iso (RegionIso.refl headResult) (RegionIso.ofEq targetEq)
       (HostedStrict.conjoin
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           headPattern headApplication)
         ((Region.singleton (.atom frames.tail.selected headApplication)).conjoin
           (Region.blank _))
@@ -2419,7 +2419,7 @@ theorem supportParallelSelectedFactors_nonempty
         (materialHeadAtCommon.renameWires frames.tail.sourceKeep)
         (.cons (.atom frames.tail.selected headApplication) .nil)
     let instantiated :=
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      VisualProof.Rule.Comprehension.Instantiation.instantiate
         headPattern headApplication
     let exposed := (Region.singleton materialHead).renameWires
       (EqualityNormalization.formalSubstitution headApplication)
@@ -2482,7 +2482,7 @@ theorem supportParallelSelectedFactors_nonempty
         (materialHeadAtCommon.renameWires frames.tail.sourceKeep)
         (.cons (.atom frames.tail.selected headApplication) .nil)
     let instantiated :=
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      VisualProof.Rule.Comprehension.Instantiation.instantiate
         headPattern headApplication
     let exposed := (Region.singleton materialHead).renameWires
       (EqualityNormalization.formalSubstitution headApplication)
@@ -2503,7 +2503,7 @@ theorem supportParallelSelectedFactors_nonempty
       · intro materialSignature materialWire
         cases materialWire
     have instantiatedCanonical : instantiated.Canonical :=
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+      VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
         headPattern headApplication
     have reverseSupportScope : ScopePreservation exposed instantiated :=
       ScopePreservation.of_incidence_empty
@@ -2528,7 +2528,7 @@ theorem supportParallelSelectedFactors_nonempty
       rw [← materialPresentation, Region.renameWires_conjoin,
         Region.singleton_renameWires]
     have fullHosted : HostedStrict
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           fullPattern application) fullExposed :=
       supportInstantiationHosted
         (Region.ofItems (.cons materialHead materialTail)) fullCanonical
@@ -2538,11 +2538,11 @@ theorem supportParallelSelectedFactors_nonempty
         (Region.singleton materialHeadAtCommon) :=
       HostedStrict.ofIso (retainedItemPresentationIso materialHeadAtCommon)
     have tailHosted : HostedStrict
-        ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        ((VisualProof.Rule.Comprehension.Instantiation.instantiate
           tailPattern application).conjoin (Region.blank _)) tailExposed :=
       HostedStrict.iso
         (RegionIso.conjoinBlank
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             tailPattern application))
         (RegionIso.refl tailExposed)
         (supportInstantiationHosted
@@ -2551,7 +2551,7 @@ theorem supportParallelSelectedFactors_nonempty
         ((Region.singleton materialHeadAtCommon).conjoin tailExposed) :=
       HostedStrict.conjoin
         (retainedItemPresentation materialHeadAtCommon)
-        ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        ((VisualProof.Rule.Comprehension.Instantiation.instantiate
           tailPattern application).conjoin (Region.blank _))
         (Region.singleton materialHeadAtCommon) tailExposed
         headHosted tailHosted
@@ -2561,7 +2561,7 @@ theorem supportParallelSelectedFactors_nonempty
     exact HostedStrict.trans fullHosted tailToFull.symm (by
       intro outer hostLocals rename hostItems
       let tailInstantiated :=
-        _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
           tailPattern application
       have tailInstantiatedRenamedEmpty : ∀ {signature}
           (wire : Var (outer ++ hostLocals) signature),
@@ -2654,10 +2654,10 @@ theorem supportParallelSelectedFactors_nonempty
         (tailResult.renameWires rename) (fullExposed.renameWires rename)
           materialScope)
   · let fullInstantiated :=
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      VisualProof.Rule.Comprehension.Instantiation.instantiate
         fullPattern application
     let tailInstantiated :=
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      VisualProof.Rule.Comprehension.Instantiation.instantiate
         tailPattern application
     let fullExposed :=
       (Region.ofItems (.cons materialHead materialTail)).renameWires
@@ -2711,7 +2711,7 @@ theorem supportParallelSelectedFactors_nonempty
         (EqualityNormalization.formalSubstitution application)).mpr
           fullCanonical
     have tailInstantiatedCanonical : tailInstantiated.Canonical :=
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+      VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
         tailPattern application
     have fullSupportScope : ScopePreservation fullInstantiated fullExposed :=
       ScopePreservation.of_incidence_empty fullExposedCanonical

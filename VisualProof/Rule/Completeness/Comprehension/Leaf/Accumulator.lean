@@ -176,7 +176,7 @@ theorem accumulateTarget
     {source : ItemSeq originalSourceWires}
     {result : Region (outer ++ (before ++ after))}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (sites : ItemsSites operation data evidence)
     (targetValues : Vars pattern.external targetArguments)
@@ -190,7 +190,7 @@ theorem accumulateTarget
       {localData : operation.Data localFrame}
       {localSource : Region sourceWires} {localResult : Region common}
       (localEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           localPattern localFrame.sourceKeep localFrame.selected
           localSource localResult)
       (localSites : RegionSites operation localData localEvidence)
@@ -204,7 +204,7 @@ theorem accumulateTarget
       (formalSource : Region formalSourceWires)
       (formalResult : Region common)
       (formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           targetPattern formalFrame.sourceKeep formalFrame.selected
           formalSource formalResult)
       (formalSites : RegionSites
@@ -221,7 +221,7 @@ theorem accumulateTarget
       {localData : operation.Data localFrame}
       {localSource : ItemSeq sourceWires} {localResult : Region common}
       (localEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           localPattern localFrame.sourceKeep localFrame.selected
           localSource localResult)
       (localSites : ItemsSites operation localData localEvidence)
@@ -236,7 +236,7 @@ theorem accumulateTarget
         (formalSource : ItemSeq (formalSourceWires ++ retained))
       (formalResult : Region (common ++ retained))
       (formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           targetPattern (formalFrame.append retained).sourceKeep
           (formalFrame.append retained).selected formalSource formalResult)
       (formalSites : ItemsSites
@@ -255,7 +255,7 @@ theorem accumulateTarget
       {localData : operation.Data localFrame}
       {localSource : Item sourceWires} {localResult : Region common}
       (localEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           localPattern localFrame.sourceKeep localFrame.selected
           localSource localResult)
       (localSites : ItemSites operation localData localEvidence)
@@ -270,7 +270,7 @@ theorem accumulateTarget
         (formalSource : ItemSeq (formalSourceWires ++ retained))
       (formalResult : Region (common ++ retained))
       (formalEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           targetPattern (formalFrame.append retained).sourceKeep
           (formalFrame.append retained).selected formalSource formalResult)
       (formalSites : ItemsSites
@@ -288,7 +288,7 @@ theorem accumulateTarget
       {localFrame : Transform.Frame patternWires common sourceWires targetWires}
       {localData : operation.Data localFrame}
       (localEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           localPattern localFrame.sourceKeep localFrame.selected
           (.nil : ItemSeq sourceWires) (Region.blank common))
       {formalSourceWires formalTargetWires : List Sig}
@@ -313,7 +313,7 @@ theorem accumulateTarget
       {items : ItemSeq (sourceWires ++ locals)}
       {childResult : Region (common ++ locals)}
       {childEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           localPattern (localFrame.sourceKeep.appendRight locals)
           (localFrame.selected.appendLeft locals) items childResult}
       (childSites : ItemsSites operation
@@ -335,11 +335,11 @@ theorem accumulateTarget
             (fun region =>
               closeTarget (Region.adjoinAt locals .nil region))) →
       TargetRegion
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+        (VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
           childEvidence)
         (.mk childSites) targetValues formalFrame formalData
         (KRegion
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+          (VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
             childEvidence)
           (.mk childSites) targetValues formalFrame formalData closeCommon
             closeTarget))
@@ -351,10 +351,10 @@ theorem accumulateTarget
       {item : Item sourceWires} {tail : ItemSeq sourceWires}
       {itemResult tailResult : Region common}
       {itemEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           localPattern localFrame.sourceKeep localFrame.selected item itemResult}
       {tailEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           localPattern localFrame.sourceKeep localFrame.selected tail tailResult}
       (itemSites : ItemSites operation localData itemEvidence)
       (tailSites : ItemsSites operation localData tailEvidence)
@@ -371,11 +371,11 @@ theorem accumulateTarget
           (KItems tailEvidence tailSites targetValues formalFrame formalData
             closeCommon closeTarget) →
       TargetItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+        (VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
           itemEvidence tailEvidence)
         (.cons itemSites tailSites) targetValues formalFrame formalData
         (KItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+          (VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             itemEvidence tailEvidence)
           (.cons itemSites tailSites) targetValues formalFrame formalData
             closeCommon closeTarget))
@@ -393,7 +393,7 @@ theorem accumulateTarget
       (closeCommon : Region common → Region outer) →
       (closeTarget : Region formalTargetWires → Region outer) →
       TargetItem
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
           (pattern := evidencePattern) (retain := localFrame.sourceKeep)
           (selected := localFrame.selected) head ports)
         (@ItemSites.atom patternWires operation evidencePattern common
@@ -401,7 +401,7 @@ theorem accumulateTarget
           localData head ports)
         targetValues formalFrame formalData
         (KItem
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
+          (VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
             (pattern := evidencePattern) (retain := localFrame.sourceKeep)
             (selected := localFrame.selected) head ports)
           (@ItemSites.atom patternWires operation evidencePattern common
@@ -422,7 +422,7 @@ theorem accumulateTarget
       (closeCommon : Region common → Region outer) →
       (closeTarget : Region formalTargetWires → Region outer) →
       TargetItem
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
           (pattern := evidencePattern) (retain := localFrame.sourceKeep)
           (selected := localFrame.selected) application)
         (@ItemSites.selectedAtom patternWires operation evidencePattern common
@@ -430,7 +430,7 @@ theorem accumulateTarget
           application siteData)
         targetValues formalFrame formalData
         (KItem
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+          (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
             (pattern := evidencePattern) (retain := localFrame.sourceKeep)
             (selected := localFrame.selected) application)
           (@ItemSites.selectedAtom patternWires operation evidencePattern common
@@ -451,7 +451,7 @@ theorem accumulateTarget
       (closeCommon : Region common → Region outer) →
       (closeTarget : Region formalTargetWires → Region outer) →
       TargetItem
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
           (pattern := evidencePattern) (retain := localFrame.sourceKeep)
           (selected := localFrame.selected) signature arity ports)
         (@ItemSites.identity patternWires operation evidencePattern common
@@ -459,7 +459,7 @@ theorem accumulateTarget
           arity ports)
         targetValues formalFrame formalData
         (KItem
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
+          (VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
             (pattern := evidencePattern) (retain := localFrame.sourceKeep)
             (selected := localFrame.selected) signature arity ports)
           (@ItemSites.identity patternWires operation evidencePattern common
@@ -473,7 +473,7 @@ theorem accumulateTarget
       {localData : operation.Data localFrame}
       {body : Region sourceWires} {childResult : Region common}
       {childEvidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           localPattern localFrame.sourceKeep localFrame.selected body childResult}
       (childSites : RegionSites operation localData childEvidence)
       {formalSourceWires formalTargetWires : List Sig}
@@ -486,11 +486,11 @@ theorem accumulateTarget
           (KRegion childEvidence childSites targetValues formalFrame formalData
             closeCommon closeTarget) →
       TargetItem
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
           childEvidence)
         (.cut childSites) targetValues formalFrame formalData
         (KItem
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
+          (VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
             childEvidence)
           (.cut childSites) targetValues formalFrame formalData closeCommon
             closeTarget)) :
@@ -587,7 +587,7 @@ theorem accumulateHostedTargetWith
     {source : ItemSeq originalSourceWires}
     {result : Region (outer ++ (before ++ after))}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (sites : ItemsSites operation data evidence)
     (targetValues : Vars pattern.external targetArguments)
@@ -660,7 +660,7 @@ theorem accumulateHostedTargetWith
       TargetItem
         (targetPattern := targetPattern)
         (targetOperation := targetBaseOperation)
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
           (pattern := pattern) (retain := itemFrame.sourceKeep)
           (selected := itemFrame.selected) application)
         (ItemSites.selectedAtom (operation := operation)
@@ -670,10 +670,10 @@ theorem accumulateHostedTargetWith
             _coherence =>
           ∃ staged : Region itemCommon,
             HostedStrict
-                (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+                (VisualProof.Rule.Comprehension.Instantiation.instantiate
                   pattern application) staged ∧
               Side
-                  (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+                  (VisualProof.Rule.Comprehension.Instantiation.instantiate
                     pattern application) staged ∧
                 Nonempty (RegionIso (WireEquiv.refl itemCommon) staged
                   (Region.adjoinAt retained .nil formalResult)) ∧
@@ -690,7 +690,7 @@ theorem accumulateHostedTargetWith
                     Nonempty (RegionIso
                       (WireEquiv.refl selectedTargetWires)
                       ((itemEdit itemData
-                        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+                        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
                           (pattern := pattern) (retain := itemFrame.sourceKeep)
                           (selected := itemFrame.selected) application)
                         (ItemSites.selectedAtom (operation := operation)
@@ -848,7 +848,7 @@ theorem accumulateHostedTargetWith
         unfold TargetItems
         let appendedData := targetOperation.appendData formalFrame formalData []
         let formalEvidence :
-            _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+            VisualProof.Rule.Comprehension.Instantiation.ItemsResult
               targetPattern
               (formalFrame.append []).sourceKeep
               (formalFrame.append []).selected
@@ -991,10 +991,10 @@ theorem accumulateHostedTargetWith
       let formalResult : Region regionCommon :=
         Region.adjoinAt combinedRetained .nil mappedResult
       let formalEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+          VisualProof.Rule.Comprehension.Instantiation.RegionResult
             targetPattern formalFrame.sourceKeep
             formalFrame.selected formalSource formalResult := by
-        apply _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
+        apply VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
         exact mappedEvidence
       let formalSites : RegionSites
           targetOperation formalData
@@ -1601,12 +1601,12 @@ theorem accumulateHostedTargetWith
         .atom (childFrame.sourceKeep mappedHead)
           (mappedPorts.map fun wire => childFrame.sourceKeep wire)
       let formalItemEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult
             targetPattern childFrame.sourceKeep
             childFrame.selected formalItemSource formalItemResult :=
         .atom mappedHead mappedPorts
       let tailEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             targetPattern childFrame.sourceKeep
             childFrame.selected (.nil : ItemSeq (formalSourceWires ++ []))
             (Region.blank (itemCommon ++ [])) := .nil
@@ -1615,7 +1615,7 @@ theorem accumulateHostedTargetWith
       let formalResult : Region (itemCommon ++ []) :=
         formalItemResult.conjoin (Region.blank (itemCommon ++ []))
       let formalEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             targetPattern childFrame.sourceKeep
             childFrame.selected formalSource formalResult :=
         .cons formalItemEvidence tailEvidence
@@ -1765,12 +1765,12 @@ theorem accumulateHostedTargetWith
         .identity identitySignature identityArity
           (fun position => childFrame.sourceKeep (mappedPorts position))
       let formalItemEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult
             targetPattern childFrame.sourceKeep
             childFrame.selected formalItemSource formalItemResult :=
         .identity identitySignature identityArity mappedPorts
       let tailEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             targetPattern childFrame.sourceKeep
             childFrame.selected (.nil : ItemSeq (formalSourceWires ++ []))
             (Region.blank (itemCommon ++ [])) := .nil
@@ -1779,7 +1779,7 @@ theorem accumulateHostedTargetWith
       let formalResult : Region (itemCommon ++ []) :=
         formalItemResult.conjoin (Region.blank (itemCommon ++ []))
       let formalEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             targetPattern childFrame.sourceKeep
             childFrame.selected formalSource formalResult :=
         .cons formalItemEvidence tailEvidence
@@ -1965,12 +1965,12 @@ theorem accumulateHostedTargetWith
       let formalItemResult : Region (itemCommon ++ []) :=
         Region.singleton (.cut mappedChildResult)
       let formalItemEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult
             targetPattern childFrame.sourceKeep
             childFrame.selected formalItemSource formalItemResult :=
         .cut mappedChildEvidence
       let tailEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             targetPattern childFrame.sourceKeep
             childFrame.selected (.nil : ItemSeq (formalSourceWires ++ []))
             (Region.blank (itemCommon ++ [])) := .nil
@@ -1979,7 +1979,7 @@ theorem accumulateHostedTargetWith
       let formalResult : Region (itemCommon ++ []) :=
         formalItemResult.conjoin (Region.blank (itemCommon ++ []))
       let formalEvidence :
-          _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
             targetPattern childFrame.sourceKeep
             childFrame.selected formalSource formalResult :=
         .cons formalItemEvidence tailEvidence
@@ -2400,7 +2400,7 @@ theorem accumulateHostedTarget
     {source : ItemSeq originalSourceWires}
     {result : Region (outer ++ (before ++ after))}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
         originalFrame.sourceKeep originalFrame.selected source result)
     (sites : ItemsSites operation data evidence)
     (targetValues : Vars pattern.external targetArguments)
@@ -2423,7 +2423,7 @@ theorem accumulateHostedTarget
       TargetItem
         (targetPattern := targetPattern)
         (targetOperation := targetBaseOperation)
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
           (pattern := pattern) (retain := itemFrame.sourceKeep)
           (selected := itemFrame.selected) application)
         (ItemSites.selectedAtom (operation := itemOperation)
@@ -2433,7 +2433,7 @@ theorem accumulateHostedTarget
             _coherence =>
           ∃ staged : Region itemCommon,
             HostedStrict
-                (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+                (VisualProof.Rule.Comprehension.Instantiation.instantiate
                   pattern application) staged ∧
               Nonempty (RegionIso (WireEquiv.refl itemCommon) staged
                 (Region.adjoinAt retained .nil formalResult)))) :
@@ -2465,7 +2465,7 @@ theorem accumulateHostedTarget
       TargetItem
         (targetPattern := targetPattern)
         (targetOperation := targetBaseOperation)
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
           (pattern := pattern) (retain := itemFrame.sourceKeep)
           (selected := itemFrame.selected) application)
         (ItemSites.selectedAtom (operation := itemOperation)
@@ -2475,7 +2475,7 @@ theorem accumulateHostedTarget
             _coherence =>
           ∃ staged : Region itemCommon,
             HostedStrict
-                (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+                (VisualProof.Rule.Comprehension.Instantiation.instantiate
                   pattern application) staged ∧
               True ∧
                 Nonempty (RegionIso (WireEquiv.refl itemCommon) staged
@@ -2488,7 +2488,7 @@ theorem accumulateHostedTarget
                     Nonempty (RegionIso
                       (WireEquiv.refl selectedTargetWires)
                       ((itemEdit itemData
-                        (_root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+                        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
                           (pattern := pattern) (retain := itemFrame.sourceKeep)
                           (selected := itemFrame.selected) application)
                         (ItemSites.selectedAtom (operation := itemOperation)

@@ -12,14 +12,14 @@ theorem identityBoundaryMaterial_scope
     (pattern : OpenDiagram arguments)
     (ports : Vars wires arguments) :
     ScopePreservation
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         pattern ports)
-      (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
         (identityBoundary pattern) ports) := by
   constructor
   · intro _
     exact
-      _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+      VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
         (identityBoundary pattern) ports
   · intro signature wire
     rw [instantiate_incidence_nonempty_iff,
@@ -41,29 +41,29 @@ theorem equatesIdentityBoundary
     {source : OpenDiagram boundary}
     (occurrence : Occurrence
       (Region.adjoinAt hostLocals hostItems
-        (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern ports)) source) :
     ∃ targetCanonical :
         (occurrence.context.fill
           (Region.adjoinAt hostLocals hostItems
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (VisualProof.Rule.Comprehension.Instantiation.instantiate
               (identityBoundary pattern) ports))).Canonical,
       ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
           occurrence.interface.boundaryWire
           (occurrence.context.fill
             (Region.adjoinAt hostLocals hostItems
-              (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+              (VisualProof.Rule.Comprehension.Instantiation.instantiate
                 (identityBoundary pattern) ports))),
         Equates occurrence
           (Region.adjoinAt hostLocals hostItems
-            (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (VisualProof.Rule.Comprehension.Instantiation.instantiate
               (identityBoundary pattern) ports))
           targetCanonical targetExternalTwoEnded := by
   let sourceMaterial :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       pattern ports
   let targetMaterial :=
-    _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
       (identityBoundary pattern) ports
   let sourceRegion := Region.adjoinAt hostLocals hostItems sourceMaterial
   let targetRegion := Region.adjoinAt hostLocals hostItems targetMaterial
@@ -180,7 +180,7 @@ mutual
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.RegionResult
+        VisualProof.Rule.Comprehension.Instantiation.RegionResult
           pattern frame.sourceKeep frame.selected sourceRegion result)
       (sites : RegionSites operation data evidence)
       (hasSelection : regionHasSelection sites = true) :
@@ -306,7 +306,7 @@ mutual
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected sourceItems result)
       (sites : ItemsSites operation data evidence)
       (hasSelection : itemsHaveSelection sites = true)
@@ -470,7 +470,7 @@ mutual
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           pattern frame.sourceKeep frame.selected sourceItems result)
       (sites : ItemsSites operation data evidence)
       (hasSelection : itemsHaveSelection sites = true) :
@@ -909,7 +909,7 @@ mutual
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected sourceItem result)
       (sites : ItemSites operation data evidence)
       (hasSelection : itemHasSelection sites = true)
@@ -1062,7 +1062,7 @@ mutual
       {frame : Transform.Frame arguments common sourceWires targetWires}
       {data : operation.Data frame}
       (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemResult
+        VisualProof.Rule.Comprehension.Instantiation.ItemResult
           pattern frame.sourceKeep frame.selected sourceItem result)
       (sites : ItemSites operation data evidence)
       (hasSelection : itemHasSelection sites = true) :
@@ -1096,10 +1096,10 @@ mutual
           targetCanonical targetExternalTwoEnded
         let mappedPorts := ports.map fun wire => rename wire
         let sourceBefore :=
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern ports).renameWires rename
         let sourceAfter :=
-          _root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          VisualProof.Rule.Comprehension.Instantiation.instantiate
             pattern mappedPorts
         let sourceHostBefore := Region.adjoinAt hostLocals hostItems
           sourceBefore
@@ -1122,10 +1122,10 @@ mutual
             (RegionIso.adjoinAt hostLocals hostItems
               (instantiateRenameIso pattern ports rename))
         let targetBefore := Region.adjoinAt hostLocals hostItems
-          ((_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          ((VisualProof.Rule.Comprehension.Instantiation.instantiate
             (identityBoundary pattern) ports).renameWires rename)
         let targetAfter := Region.adjoinAt hostLocals hostItems
-          (_root_.VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
             (identityBoundary pattern) mappedPorts)
         change (occurrence.context.fill targetBefore).Canonical at targetCanonical
         change OpenDiagram.ExternalTwoEnded occurrence.interface.boundaryWire
@@ -1339,14 +1339,14 @@ theorem normalizeItemsEquates
     {source : ItemSeq sourceWires}
     {result : Region (outer ++ hostLocals)}
     (evidence :
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
         pattern frame.sourceKeep frame.selected source result)
     (sites : ItemsSites operation data evidence)
     {boundary : List Sig} {host : OpenDiagram boundary}
     (occurrence : Occurrence
       (Region.adjoinAt hostLocals .nil result) host) :
     ∃ normalized : Region (outer ++ hostLocals),
-      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
           (identityBoundary pattern) frame.sourceKeep frame.selected source
             normalized ∧
         ∃ targetCanonical :
