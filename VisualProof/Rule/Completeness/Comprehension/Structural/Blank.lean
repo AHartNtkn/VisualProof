@@ -1,4 +1,4 @@
-import VisualProof.Rule.Completeness.Comprehension.Sites
+import VisualProof.Rule.Completeness.Comprehension.Structural.Support
 
 namespace VisualProof.Rule.Completeness.Comprehension
 
@@ -296,5 +296,23 @@ theorem itemsEnds
   exact branch.derive
 
 end Structural.Blank
+
+namespace Structural
+
+/-- The empty item-sequence constructor is derivable by Ends. -/
+theorem supportBlankDerives
+    {wires : List Sig} (wiresEq : wires = []) :
+    SupportDerives (Region.ofItems (ItemSeq.nil : ItemSeq wires)) := by
+  subst wires
+  intro materialCanonical structuralOuter structuralBefore structuralAfter
+    items result evidence structuralRequest
+  have patternEq :
+      Erasure.Exposure.supportPattern (Region.ofItems ItemSeq.nil)
+          materialCanonical = Structural.Blank.blankPattern := by
+    apply EqualityNormalization.OpenDiagram.eq_of_data <;> rfl
+  rw [patternEq] at evidence
+  exact Structural.Blank.itemsEnds evidence structuralRequest
+
+end Structural
 
 end VisualProof.Rule.Completeness.Comprehension
