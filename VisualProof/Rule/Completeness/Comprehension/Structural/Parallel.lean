@@ -394,17 +394,17 @@ def supportParallelFramesRoot
       Transform.Frame.keep, Transform.Frame.localKeep,
       Transform.Frame.insertedHead, Var.appendRight, Var.index]
 
-private structure SupportParallelIncidenceScope
+structure SupportParallelIncidenceScope
     (sourcePaths targetPaths : List RegionPath) : Prop where
   nonempty : sourcePaths ≠ [] ↔ targetPaths ≠ []
   rooted : RegionPath.RootedTwo sourcePaths →
     RegionPath.RootedTwo targetPaths
 
-private theorem SupportParallelIncidenceScope.refl
+theorem SupportParallelIncidenceScope.refl
     (paths : List RegionPath) : SupportParallelIncidenceScope paths paths :=
   ⟨Iff.rfl, fun rooted => rooted⟩
 
-private theorem supportParallelStartsWithOfMemIncidencePathsLt
+theorem supportParallelStartsWithOfMemIncidencePathsLt
     (items : ItemSeq wires) (wireIndex itemIndex : Nat)
     {path : RegionPath} {index : Nat}
     (member : path ∈ items.incidencePaths wireIndex itemIndex)
@@ -454,7 +454,7 @@ private theorem supportParallelStartsWithOfMemIncidencePathsLt
         omega)
     items wireIndex itemIndex member starts
 
-private theorem supportParallelRootedTwoConjoinOfBoth
+theorem supportParallelRootedTwoConjoinOfBoth
     (first second : Region wires) (wire : Var wires signature)
     (firstNonempty : first.incidencePaths wire.index.val ≠ [])
     (secondNonempty : second.incidencePaths wire.index.val ≠ []) :
@@ -510,7 +510,7 @@ private theorem supportParallelRootedTwoConjoinOfBoth
       (firstPaths ++ shiftedSecond)).mpr
         ⟨combinedNonempty, noCommon⟩).2⟩
 
-private theorem SupportParallelIncidenceScope.conjoin
+theorem SupportParallelIncidenceScope.conjoin
     {sourceFirst sourceSecond : Region sourceWires}
     {targetFirst targetSecond : Region targetWires}
     (sourceWire : Var sourceWires signature)
@@ -587,7 +587,7 @@ private theorem SupportParallelIncidenceScope.conjoin
           targetWire (first.nonempty.mp sourceFirstNonempty)
           (second.nonempty.mp sourceSecondNonempty)
 
-private theorem SupportParallelIncidenceScope.cut
+theorem SupportParallelIncidenceScope.cut
     {source : Region sourceWires} {target : Region targetWires}
     (sourceWire : Var sourceWires signature)
     (targetWire : Var targetWires signature)
@@ -630,12 +630,12 @@ private theorem SupportParallelIncidenceScope.cut
     simpa only [List.nil_append, List.append_nil] using
       replaced.mp (by simpa using sourceRooted)
 
-private theorem supportParallelNonemptyOfLengthEq
+theorem supportParallelNonemptyOfLengthEq
     {first second : List α} (lengthEq : first.length = second.length) :
     first ≠ [] ↔ second ≠ [] := by
   rw [← List.length_pos_iff, ← List.length_pos_iff, lengthEq]
 
-private theorem SupportParallelIncidenceScope.iso
+theorem SupportParallelIncidenceScope.iso
     {sourceBefore sourceAfter : Region sourceWires}
     {targetBefore targetAfter : Region targetWires}
     (sourceIso : RegionIso (WireEquiv.refl sourceWires)
@@ -661,7 +661,7 @@ private theorem SupportParallelIncidenceScope.iso
       (scope.rooted
         ((sourceIso.rootedTwo_incidencePaths_iff sourceWire).mp sourceRooted))
 
-private structure SupportParallelSplitScope
+structure SupportParallelSplitScope
     {common sourceWires splitWires : List Sig}
     (parallel : Transform.Frame [] common sourceWires splitWires)
     (heads : Content.Parallel.Heads splitWires [])
@@ -678,7 +678,7 @@ private structure SupportParallelSplitScope
     (source.incidencePaths parallel.selected.index.val)
     (split.incidencePaths heads.2.index.val)
 
-private theorem SupportParallelSplitScope.iso
+theorem SupportParallelSplitScope.iso
     {parallel : Transform.Frame [] common sourceWires splitWires}
     {heads : Content.Parallel.Heads splitWires []}
     {sourceBefore sourceAfter : Region sourceWires}
@@ -702,7 +702,7 @@ private theorem SupportParallelSplitScope.iso
   · exact SupportParallelIncidenceScope.iso sourceIso splitIso
       parallel.selected heads.2 scope.second
 
-private theorem SupportParallelSplitScope.conjoin
+theorem SupportParallelSplitScope.conjoin
     {parallel : Transform.Frame [] common sourceWires splitWires}
     {heads : Content.Parallel.Heads splitWires []}
     {sourceFirst sourceSecond : Region sourceWires}
@@ -725,7 +725,7 @@ private theorem SupportParallelSplitScope.conjoin
   · exact SupportParallelIncidenceScope.conjoin parallel.selected heads.2
       first.second second.second
 
-private theorem SupportParallelSplitScope.cut
+theorem SupportParallelSplitScope.cut
     {parallel : Transform.Frame [] common sourceWires splitWires}
     {heads : Content.Parallel.Heads splitWires []}
     {source : Region sourceWires} {split : Region splitWires}
@@ -746,7 +746,7 @@ private theorem SupportParallelSplitScope.cut
   · exact SupportParallelIncidenceScope.cut parallel.selected heads.2
       scope.second
 
-private theorem SupportParallelSplitScope.blank
+theorem SupportParallelSplitScope.blank
     (parallel : Transform.Frame [] common sourceWires splitWires)
     (heads : Content.Parallel.Heads splitWires []) :
     SupportParallelSplitScope parallel heads
@@ -762,7 +762,7 @@ private theorem SupportParallelSplitScope.blank
   · constructor <;>
       simp [Region.blank, Region.incidencePaths, ItemSeq.incidencePaths]
 
-private theorem SupportParallelSplitScope.adjoin
+theorem SupportParallelSplitScope.adjoin
     {parallel : Transform.Frame [] common sourceWires splitWires}
     {heads : Content.Parallel.Heads splitWires []}
     (locals : List Sig)
@@ -830,7 +830,7 @@ private theorem SupportParallelSplitScope.adjoin
       splitPaths]
     simpa [Transform.Frame.append, Content.Parallel.operation] using scope.second
 
-private theorem SupportParallelSplitScope.atom
+theorem SupportParallelSplitScope.atom
     {parallel : Transform.Frame [] common sourceWires splitWires}
     {heads : Content.Parallel.Heads splitWires []}
     (frames : SupportParallelFrames parallel heads)
@@ -944,7 +944,7 @@ private theorem SupportParallelSplitScope.atom
     rw [sourceEmpty, splitEmpty]
     exact SupportParallelIncidenceScope.refl _
 
-private theorem SupportParallelSplitScope.identity
+theorem SupportParallelSplitScope.identity
     {parallel : Transform.Frame [] common sourceWires splitWires}
     {heads : Content.Parallel.Heads splitWires []}
     (frames : SupportParallelFrames parallel heads)
@@ -1039,7 +1039,7 @@ private theorem SupportParallelSplitScope.identity
     rw [sourceEmpty, splitEmpty]
     exact SupportParallelIncidenceScope.refl _
 
-private theorem SupportParallelSplitScope.selected
+theorem SupportParallelSplitScope.selected
     {parallel : Transform.Frame [] common sourceWires splitWires}
     {heads : Content.Parallel.Heads splitWires []}
     (frames : SupportParallelFrames parallel heads) :

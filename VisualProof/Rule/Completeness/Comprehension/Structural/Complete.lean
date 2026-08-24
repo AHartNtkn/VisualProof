@@ -11,7 +11,7 @@ open WirePrimitive
 namespace Structural
 
 mutual
-  private theorem parallelRegionSites_nonempty
+  theorem parallelRegionSites_nonempty
       {arguments common sourceWires targetWires : List Sig}
       {pattern : OpenDiagram arguments}
       {frame : Transform.Frame arguments common sourceWires targetWires}
@@ -29,7 +29,7 @@ mutual
         exact ⟨.mk childSites⟩
   termination_by sizeOf source
 
-  private theorem parallelItemsSites_nonempty
+  theorem parallelItemsSites_nonempty
       {arguments common sourceWires targetWires : List Sig}
       {pattern : OpenDiagram arguments}
       {frame : Transform.Frame arguments common sourceWires targetWires}
@@ -48,7 +48,7 @@ mutual
         exact ⟨.cons itemSites tailSites⟩
   termination_by sizeOf source
 
-  private theorem parallelItemSites_nonempty
+  theorem parallelItemSites_nonempty
       {arguments common sourceWires targetWires : List Sig}
       {pattern : OpenDiagram arguments}
       {frame : Transform.Frame arguments common sourceWires targetWires}
@@ -71,7 +71,7 @@ mutual
   termination_by sizeOf source
 end
 
-private theorem filledValidityOfScope
+theorem filledValidityOfScope
     {boundary wires : List Sig}
     (interface : OpenDiagram boundary)
     (context : DiagramContext interface.external wires)
@@ -92,7 +92,7 @@ private theorem filledValidityOfScope
   exact ⟨replacement.1,
     beforeEndpoint.externalTwoEnded_of_nonempty_iff _ replacement.2⟩
 
-private theorem telescopeTrans
+theorem telescopeTrans
     {boundary wires : List Sig}
     {polarity : Polarity}
     {interface : OpenDiagram boundary}
@@ -119,7 +119,7 @@ private theorem telescopeTrans
   | positive => exact ⟨head.1, head.2.trans tail.2⟩
   | negative => exact ⟨head.1, tail.2.trans head.2⟩
 
-private theorem polaritySource_property
+theorem polaritySource_property
     (polarity : Polarity) (property : α → Prop) (before after : α)
     (beforeProperty : property before) (afterProperty : property after) :
     property (polaritySource polarity before after) := by
@@ -127,7 +127,7 @@ private theorem polaritySource_property
   · exact beforeProperty
   · exact afterProperty
 
-private theorem telescopeIso
+theorem telescopeIso
     {boundary wires : List Sig} {polarity : Polarity}
     {interface : OpenDiagram boundary}
     {context : DiagramContext interface.external wires}
@@ -166,7 +166,7 @@ private theorem telescopeIso
       exact ⟨telescope.1, EqualityNormalization.reflTransGen_iso
         afterOpenIso telescope.2 beforeOpenIso⟩
 
-private theorem telescopeOfHosted
+theorem telescopeOfHosted
     {common outer hostLocals boundary : List Sig}
     {before after : Region common}
     (transformation : HostedStrict before after)
