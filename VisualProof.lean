@@ -1,3 +1,3 @@
 import VisualProof.Rule.Soundness
 import VisualProof.Rule.Executable
-import VisualProof.Rule.Completeness.Comprehension.Complete
+import VisualProof.Rule.Completeness
