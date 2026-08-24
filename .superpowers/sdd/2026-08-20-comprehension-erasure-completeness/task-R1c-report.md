@@ -16,8 +16,8 @@ exact Fin.elim0 head.index
 ## Validation
 
 - `lake build VisualProof.Rule.Completeness.Comprehension.Structural.Complete` — passed; existing unrelated `sorry` warning remains at line 1337.
-- `sed -n '/intro wires arguments head ports wiresEq/,/intro wires signature arity ports wiresEq/p' VisualProof/Rule/Completeness/Comprehension/Structural/Complete.lean | rg -n '\\bsorry\\b'` — no matches.
-- `rg -n '\\bprivate\\b' VisualProof/Rule/Completeness` — no matches.
+- `sed -n '/intro wires arguments head ports wiresEq/,/intro wires signature arity ports wiresEq/p' VisualProof/Rule/Completeness/Comprehension/Structural/Complete.lean | rg -n '\bsorry\b'` — no matches.
+- `rg -n '\bprivate\b' VisualProof/Rule/Completeness` — no matches.
 - `wc -l VisualProof/Rule/Completeness/Comprehension/Structural/Complete.lean` — 2,587 lines.
 - `git diff --check` — passed.
 
@@ -28,3 +28,8 @@ exact Fin.elim0 head.index
 ## Concerns
 
 The focused build still reports the pre-existing `sorry` warning at `supportPatternDerives` line 1337; this checkpoint does not alter that separate branch.
+
+## Fix round 1/5
+
+Corrected the recorded scan commands to match the brief exactly. Reran both scans:
+the branch `sorry` scan and completeness `private` scan produced no output.
