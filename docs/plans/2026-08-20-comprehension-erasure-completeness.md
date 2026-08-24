@@ -24,7 +24,7 @@ theorem Erasure.complete
   `Occurrence`, its polarity, its exact target region, and proofs that the
   filled target is canonical and externally two-ended. Do not define a
   derivability relation over bare regions.
-- State the comprehension compiler telescope-parametrically from its first
+- State the comprehension derivation telescope-parametrically from its first
   leaf theorem. The telescope is a predicate over actual `Region` expressions
   and pending binders, not a new diagram datatype.
 - State every constructor theorem parametrically in polarity. Instantiate the
@@ -45,7 +45,8 @@ theorem Erasure.complete
 ```text
 VisualProof/Rule/Completeness/Reachability.lean
 VisualProof/Rule/Completeness/Comprehension/Telescope.lean
-VisualProof/Rule/Completeness/Comprehension/Compiler.lean
+VisualProof/Rule/Completeness/Comprehension/Leaf/*.lean
+VisualProof/Rule/Completeness/Comprehension/Structural/*.lean
 VisualProof/Rule/Completeness/Comprehension.lean
 VisualProof/Rule/Completeness/Erasure/Exposure.lean
 VisualProof/Rule/Completeness/Erasure.lean
@@ -89,8 +90,8 @@ Do not add context nesting or polarity-composition lemmas in this task.
 ```bash
 lake env lean VisualProof/Rule/Completeness/Reachability.lean
 lake env lean VisualProof/Rule/Completeness/Comprehension/Telescope.lean
-rg -n "sorry" VisualProof/Rule/Completeness
 lake build
+rg -n '\bsorry\b' VisualProof --glob '*.lean'
 ```
 
 **Commit:** `feat(lean): establish completeness reachability kernel`
@@ -142,13 +143,13 @@ images, unused external wires, nested cuts, and arbitrary material locals.
 
 ```bash
 lake env lean VisualProof/Rule/Completeness/Erasure/Exposure.lean
-rg -n "sorry" VisualProof/Rule/Completeness/Erasure/Exposure.lean
 lake build
+rg -n '\bsorry\b' VisualProof --glob '*.lean'
 ```
 
 **Commit:** `feat(lean): expose erasure material as comprehension instance`
 
-## Task 3: Define the telescope-parametric comprehension compiler
+## Task 3: Define telescope-parametric comprehension derivation
 
 **File:** Extend
 `VisualProof/Rule/Completeness/Comprehension/Telescope.lean`.
@@ -159,7 +160,7 @@ lake build
    constructor binders and its final fully instantiated region by extending
    the minimal predicate from Task 1. It must not duplicate `Region`,
    `Instantiation`, or `Transform` syntax.
-2. State the strengthened compiler mutually over existing
+2. State the strengthened derivation mutually over existing
    `Instantiation.RegionResult`, `ItemsResult`, and `ItemResult` evidence.
    The theorem parameters must include:
    - the pending actual-region telescope;
@@ -175,14 +176,15 @@ lake build
 This task exists to prevent leaf theorems from being restated after the first
 compound pattern.
 
-**Validation:** focused elaboration, `sorry` scan, then `lake build`.
+**Validation:** focused elaboration, `lake build`, then
+`rg -n '\bsorry\b' VisualProof --glob '*.lean'`.
 
-**Commit:** `feat(lean): define comprehension telescope compiler`
+**Commit:** `feat(lean): define comprehension telescope derivation`
 
 ## Task 4: GREEN the comprehension leaf constructors
 
-**File:** Create
-`VisualProof/Rule/Completeness/Comprehension/Compiler.lean`.
+**Files:** Use the constructor owners under
+`VisualProof/Rule/Completeness/Comprehension/Leaf/`.
 
 Prove each theorem in the generalized polarity-parametric telescope form:
 
@@ -196,21 +198,38 @@ For each leaf:
   evidence;
 - construct every intermediate canonicality and two-endedness proof;
 - inject the primitive only at the binder's home occurrence;
-- make the resulting theorem an immediate branch of the mutual compiler.
+- make the resulting theorem an immediate caller-owned input to the structural
+  recursion.
 
 Before proving new validity lemmas, inspect the corresponding
 `Executable/WirePrimitive` proof for arguments about the same transform
 output. Move any generally reusable structural statement to its owning
 Diagram or relational rule module before importing it into completeness.
 
-**Validation:** focused elaboration after every GREEN theorem, then full build.
+**Validation:** focused elaboration after every GREEN theorem, full
+`lake build`, then `rg -n '\bsorry\b' VisualProof --glob '*.lean'`.
 
 **Commit:** `feat(lean): compile comprehension leaf patterns`
 
 ## Task 5: GREEN the structural pattern constructors
 
-**File:** Extend
-`VisualProof/Rule/Completeness/Comprehension/Compiler.lean`.
+**Files:** Use the constructor owners under
+`VisualProof/Rule/Completeness/Comprehension/Structural/`:
+
+- `Identity.lean`;
+- `Cut.lean`;
+- `Blank.lean`;
+- `ParallelDerives.lean`;
+- `Arity.lean`;
+- `Boundary.lean`;
+- `Atom.lean` for the impossible closed-atom case;
+- `Support.lean` for shared validity and telescope lemmas; and
+- `Complete.lean` only for the `Region.rec` dispatcher.
+
+Every semantic constructor theorem is called immediately by the dispatcher.
+Completed constructors have ordinary proofs; only the currently unfinished
+Arity and boundary-wire production theorems may own `sorry` during this
+checkpoint.
 
 Prove in order:
 
@@ -226,7 +245,8 @@ pending telescope endpoints. Do not patch endpoint mismatches with casts or a
 parallel representation; strengthen the relevant induction principle over
 the existing syntax.
 
-**Validation:** focused elaboration after each constructor, then full build.
+**Validation:** focused elaboration after each constructor, full `lake build`,
+then `rg -n '\bsorry\b' VisualProof --glob '*.lean'`.
 
 **Commit:** `feat(lean): compile structural comprehension patterns`
 
@@ -235,7 +255,8 @@ the existing syntax.
 **Files:**
 
 - Extend `VisualProof/Rule/Completeness/Reachability.lean`.
-- Extend `VisualProof/Rule/Completeness/Comprehension/Compiler.lean`.
+- Extend the appropriate constructor or shared support module under
+  `VisualProof/Rule/Completeness/Comprehension/`.
 
 **Work:**
 
@@ -247,12 +268,13 @@ the existing syntax.
 3. Record in theorem hypotheses that every deep rule is symmetric. Do not add
    a polarity-XOR dispatch unless a directed deep rule is actually discovered.
 4. Compile `Instantiation.Equalities` at arbitrary selected sites under cuts.
-5. Fold this plumbing into the telescope compiler's boundary phase.
+5. Fold this plumbing into the telescope derivation's boundary phase.
 
 **Tripwire:** If a directed rule is required below the binder home, stop and
 reassess the architecture before adding polarity-composition machinery.
 
-**Validation:** focused elaboration, `sorry` scan, then full build.
+**Validation:** focused elaboration, full `lake build`, then
+`rg -n '\bsorry\b' VisualProof --glob '*.lean'`.
 
 **Commit:** `feat(lean): compile comprehension equality plumbing`
 
@@ -266,7 +288,7 @@ plan, with `sorry` as its sole incomplete proof in the dependency closure.
 **GREEN proof:**
 
 1. Unpack the `Contextual` comprehension witness.
-2. Invoke the polarity-parametric telescope compiler once.
+2. Invoke the polarity-parametric telescope derivation once.
 3. Compose optional preparation and cleanup around its nonempty core.
 4. Transport the packaged source and target isomorphisms.
 
@@ -274,8 +296,8 @@ plan, with `sorry` as its sole incomplete proof in the dependency closure.
 
 ```bash
 lake env lean VisualProof/Rule/Completeness/Comprehension.lean
-rg -n "sorry" VisualProof/Rule/Completeness
 lake build
+rg -n '\bsorry\b' VisualProof --glob '*.lean'
 ```
 
 **Commit:** `feat(lean): prove comprehension step completeness`
@@ -302,7 +324,8 @@ lake build
 6. Prove the quantified relation wire has exactly two depth-zero rooted
    incidences.
 
-**Validation:** focused elaboration, `sorry` scan, then full build.
+**Validation:** focused elaboration, full `lake build`, then
+`rg -n '\bsorry\b' VisualProof --glob '*.lean'`.
 
 **Commit:** `feat(lean): construct two-site erasure comprehension`
 
@@ -341,7 +364,8 @@ argument from `Rule.Step`.
 The mandatory comprehension segment supplies the nonempty core even when the
 material is blank; no artificial no-op cycle is needed.
 
-**Validation:** focused elaboration, `sorry` scan, then full build.
+**Validation:** focused elaboration, full `lake build`, then
+`rg -n '\bsorry\b' VisualProof --glob '*.lean'`.
 
 **Commit:** `feat(lean): prove erasure step completeness`
 
@@ -355,8 +379,8 @@ material is blank; no artificial no-op cycle is needed.
 **Validation:**
 
 ```bash
-rg -n "sorry" VisualProof/Rule/Completeness VisualProof/Rule/Completeness.lean
 lake build
+rg -n '\bsorry\b' VisualProof --glob '*.lean'
 git status --short
 ```
 
@@ -367,7 +391,7 @@ authoritative.
 
 ## Named risks and responses
 
-1. **Telescope endpoint alignment.** Addressed by stating the compiler in its
+1. **Telescope endpoint alignment.** Addressed by stating the derivation in its
    strengthened telescope-parametric form before proving atom and identity
    leaves.
 2. **Exposure bookkeeping under noninjective `wireMap`.** Addressed by the

@@ -63,7 +63,8 @@ and fails if any file has more than 3,000 physical lines.
 - the three former monoliths contain imports only;
 - every moved declaration occurs once;
 - `lake build` succeeds;
-- placeholder/axiom audit succeeds;
+- `lake build` succeeds and the immediately following
+  `rg -n '\bsorry\b' VisualProof --glob '*.lean'` scan is empty;
 - proof-step correspondence and TypeScript typecheck succeed;
 - active splice root soundness continues in the dedicated soundness module.
 

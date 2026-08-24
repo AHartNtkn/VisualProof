@@ -17,7 +17,7 @@ instances of the relation.
 
 **Tech Stack:** Lean 4.30.0, Lake, recursive
 `OpenDiagram`/`Region`/`ItemSeq` syntax, source-indexed occurrences and
-contexts, and the public Lean compiler and axiom audits.
+contexts, and the public Lean compiler with build-plus-source validation.
 
 ## Authority Roster
 

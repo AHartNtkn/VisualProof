@@ -542,8 +542,10 @@ The authoritative checks are:
 
 1. `lake build` from repository root.
 2. A repository scan rejecting `sorry`, `admit`, `decreasing_by sorry`, and project `axiom` declarations.
-3. `#print axioms` auditing the public soundness, theory, and matcher theorems.
-4. An explicit allowlist documenting Lean's classical and quotient foundations: `Classical.choice`, `propext`, and `Quot.sound` when they actually occur. No custom axiom is permitted.
+3. Immediately after `lake build`, run
+   `rg -n '\bsorry\b' VisualProof --glob '*.lean'`; every match must be an
+   explicitly owned unfinished production theorem.
+4. No custom axiom is permitted.
 5. Exact set equality between Lean `StepTag` names and TypeScript `ProofStep` discriminants.
 6. Named theorems in their owning modules covering well-formedness rejection, boundary aliasing, scope, every rule family, matcher positive/negative cases, open binders, and bare wires; executable checks are retained only for decidable computation or cross-language integration not already expressed by those theorems.
 7. Differential Lean/TypeScript fixtures for the concrete correspondence boundary.

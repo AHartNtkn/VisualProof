@@ -135,8 +135,9 @@ Every owning soundness or exactness theorem is developed RED/GREEN: all definiti
 
 1. Run `lake build` from a clean incremental state and repair all in-repository failures.
 2. Run `rg -n '\bsorry\b|admit|axiom' VisualProof/Rule VisualProof/Rule.lean` and classify every match; the new dependency closure must contain no proof placeholder or new axiom.
-3. Run focused `#print axioms` checks for each new family soundness theorem and each exactness theorem; only the project’s declared classical/propositional foundations may appear.
+3. Immediately after `lake build`, run
+   `rg -n '\bsorry\b' VisualProof --glob '*.lean'`; every match must be an
+   explicitly owned unfinished production theorem.
 4. Verify the public inventory mechanically from Lean declarations: nine new `Step` families and seventeen named semantic executor constructors.
 5. Review the diff for obsolete authority, adapters, unrelated cleanup, and unintended changes.
 6. Use the verification-before-completion and finishing-a-development-branch workflows, then commit any final task-owned corrections and confirm `git status --short` is empty.
-

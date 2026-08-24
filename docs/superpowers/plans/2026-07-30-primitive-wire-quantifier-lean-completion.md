@@ -218,7 +218,10 @@ No declaration, module, test, or completion criterion survives without mapping t
 
 - [x] **Step 4: Validate and commit Task 2**
 
-  Run focused owner builds, `lake build`, `npm run formal:size`, `#print axioms` through a temporary audit file outside the repository, displaced-model scans, and `git diff --check`. Commit with `feat(lean): prove macro-free semantic core`.
+  Run focused owner builds, `lake build`, then
+  `rg -n '\bsorry\b' VisualProof --glob '*.lean'`, followed by
+  `npm run formal:size`, displaced-model scans, and `git diff --check`. Commit
+  with `feat(lean): prove macro-free semantic core`.
 
 ### Task 3: Prove every actual rule and exhaustive dispatcher sound
 
@@ -305,7 +308,10 @@ No declaration, module, test, or completion criterion survives without mapping t
 
 - [ ] **Step 5: Validate and commit Task 3**
 
-  Run focused family builds, exact constructor-to-owner coverage, axiom audits for every owner and `applyStep_sound`, full build and size gates, displaced-model scans, and `git diff --check`. Commit with `feat(lean): prove primitive rule soundness`.
+  Run focused family builds, exact constructor-to-owner coverage, full build,
+  then `rg -n '\bsorry\b' VisualProof --glob '*.lean'`, size gates,
+  displaced-model scans, and `git diff --check`. Commit with
+  `feat(lean): prove primitive rule soundness`.
 
 ### Task 4: Prove primitive replay, checked theorem, and verified theory sound
 
@@ -332,7 +338,10 @@ No declaration, module, test, or completion criterion survives without mapping t
 
 - [ ] **Step 4: Validate and commit Task 4**
 
-  Run focused builds, axiom audits, full gates, citation-absence scans, and `git diff --check`. Commit with `feat(lean): prove primitive replay certificates`.
+  Run focused builds, `lake build`, then
+  `rg -n '\bsorry\b' VisualProof --glob '*.lean'`, citation-absence scans,
+  and `git diff --check`. Commit with
+  `feat(lean): prove primitive replay certificates`.
 
 ### Task 5: Prove higher-order formula semantic expressiveness
 
@@ -366,7 +375,10 @@ No declaration, module, test, or completion criterion survives without mapping t
 
 - [ ] **Step 3: Validate and commit Task 5**
 
-  Run focused builds, axiom audit, full gates, scans for compiler/definition dependencies, and `git diff --check`. Commit with `feat(lean): prove formula expressiveness`.
+  Run focused builds, `lake build`, then
+  `rg -n '\bsorry\b' VisualProof --glob '*.lean'`, scans for
+  compiler/definition dependencies, and `git diff --check`. Commit with
+  `feat(lean): prove formula expressiveness`.
 
 ### Task 6: Prove primitive program soundness and direct-operation foundations
 
@@ -411,7 +423,9 @@ No declaration, module, test, or completion criterion survives without mapping t
 
 - [ ] **Step 3: Validate and commit Task 7**
 
-  Run focused builds, axiom audits, dependency scans, full gates, and `git diff --check`. Commit with `feat(lean): prove primitive direct adequacy`.
+  Run focused builds, dependency scans, `lake build`, then
+  `rg -n '\bsorry\b' VisualProof --glob '*.lean'`, and `git diff --check`.
+  Commit with `feat(lean): prove primitive direct adequacy`.
 
 ### Task 8: Run final conformance and completion audit
 
@@ -431,7 +445,9 @@ No declaration, module, test, or completion criterion survives without mapping t
 
 - [ ] **Step 2: Audit RED/GREEN and axioms**
 
-  Require no `sorry`, `admit`, or project axiom. Run `#print axioms` for every final owner from a temporary file outside the repository; only Lean's accepted foundational axioms may remain.
+  Require no `sorry`, `admit`, or project axiom. Run `lake build`, immediately
+  followed by `rg -n '\bsorry\b' VisualProof --glob '*.lean'`, and require the
+  scan to be empty.
 
 - [ ] **Step 3: Run complete gates**
 

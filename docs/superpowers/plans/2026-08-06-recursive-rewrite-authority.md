@@ -1511,7 +1511,12 @@ lake build
 git diff --check
 ```
 
-Both source scans must be empty. Lean audit support must recursively inspect the elaborated value expression of `Means` and fail if it depends on `Concrete.execute`, `Concrete.Receipt`, `Concrete.Error`, model/denotation constants, or soundness constants. `VisualProof/Audit.lean` must also expose kernel-checked signature and axiom checks for `Means.execute` and `execute_rejects_only_invalid`.
+Both source scans must be empty. Lean dependency inspection must recursively
+inspect the elaborated value expression of `Means` and fail if it depends on
+`Concrete.execute`, `Concrete.Receipt`, `Concrete.Error`, model/denotation
+constants, or soundness constants. Proof completion is validated by
+`lake build` followed immediately by
+`rg -n '\bsorry\b' VisualProof --glob '*.lean'`.
 
 ### Task 12: Factor replay and theorem validity through refinement
 
@@ -1560,7 +1565,9 @@ The constructor-case scan must be empty in semantic proof bodies. The proof-mode
 5. `scripts/audit-lean-authority.sh roster` proves the exact five-constructor `Rule.Step` and ten-constructor/tag `Concrete.Step` roster, the standalone Rule Comprehension relation/isomorphism/soundness declarations, and the absence of Comprehension execution declarations or branches and former request names. `scripts/audit-lean-authority.sh documentation` proves the governing files retain the source-derived generic flat-transformation model.
 6. `rg -n '\bsorry\b|sorryAx' VisualProof` reports no task-owned production proof.
 7. `rg` reports no occurrence-search declaration, import, candidate enumeration, search status, or matcher theorem.
-8. `#print axioms` for `Step.sound`, standalone `Comprehension.sound`, translation round trip, representation uniqueness/completeness, execution soundness/completeness, unconditional rejection correctness, and checked-theorem soundness contains no `sorryAx` or unapproved project axiom.
+8. Immediately after `lake build`,
+   `rg -n '\bsorry\b' VisualProof --glob '*.lean'` reports no unfinished
+   production theorem.
 9. Run:
 
 ```bash

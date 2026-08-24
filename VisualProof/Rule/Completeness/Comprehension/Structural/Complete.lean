@@ -1,4 +1,5 @@
 import VisualProof.Rule.Completeness.Comprehension.Structural.Arity
+import VisualProof.Rule.Completeness.Comprehension.Structural.Atom
 import VisualProof.Rule.Completeness.Comprehension.Structural.Blank
 import VisualProof.Rule.Completeness.Comprehension.Structural.Boundary
 import VisualProof.Rule.Completeness.Comprehension.Structural.Cut
@@ -43,7 +44,7 @@ theorem supportPatternDerives
       wires = [] → SupportDerives (Region.singleton item))
     (motive_3 := fun wires materialItems =>
       wires = [] → SupportDerives (Region.ofItems materialItems))
-    ?_ ?_ supportIdentityDerives supportCutDerives supportBlankDerives
+    ?_ supportAtomDerives supportIdentityDerives supportCutDerives supportBlankDerives
       supportParallelDerives material) materialCanonical evidence request
   · intro outer locals materialItems materialItemsIH materialCanonical
       structuralOuter structuralBefore structuralAfter items result evidence
@@ -62,10 +63,6 @@ theorem supportPatternDerives
           supportBoundaryWireDerives
             (material := Region.mk locals materialItems) materialCanonical
             evidence structuralRequest
-  · intro wires arguments head ports wiresEq
-    subst wires
-    exact Fin.elim0 head.index
-
 end Structural
 
 end VisualProof.Rule.Completeness.Comprehension

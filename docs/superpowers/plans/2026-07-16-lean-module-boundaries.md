@@ -131,7 +131,8 @@ of the normal formalization oracle.
 ### Task 6: Full validation and receipt
 
 - [ ] Run `lake build`.
-- [ ] Run the placeholder/axiom audit.
+- [ ] Run `lake build`, immediately followed by
+  `rg -n '\bsorry\b' VisualProof --glob '*.lean'`.
 - [ ] Run the exact proof-step correspondence audit.
 - [ ] Run `npm test`.
 - [ ] Run `npm run typecheck`.

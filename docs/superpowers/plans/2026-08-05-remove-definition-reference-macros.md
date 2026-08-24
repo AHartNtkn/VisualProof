@@ -9,7 +9,8 @@ are empty, and the retained public rule inventory has thirteen constructors.
 
 **Architecture:** Reconstruct the type graph at its intrinsic root so `Region`, `Item`, checked diagrams, rules, and proofs are no longer parameterized by a definition signature. Preserve the existing bound-relation, structural, comprehension, theorem-application, replay, and soundness proof kernels by mechanically retyping them against the smaller syntax. Give generic theorem replacement its own production owner and expose exactly the remaining rule inventory through `applyStep_sound`.
 
-**Tech Stack:** Lean 4.30, Lake, repository `VisualProof` library, kernel axiom audit.
+**Tech Stack:** Lean 4.30, Lake, repository `VisualProof` library, build plus
+source completion scan.
 
 ## Global Constraints
 
@@ -417,22 +418,16 @@ git add VisualProof/Proof
 
 Export `VisualProof.Theory.Relation` and `VisualProof.Rule.Theorem`. Do not export definition, definition semantics, named-reference, or reference-pattern modules. Make `serializedName`, injectivity, length, and no-duplicates proofs cover exactly the thirteen current tags.
 
-- [x] **Step 2: Align the trust audit**
+- [x] **Step 2: Align source validation**
 
-Audit retained principal theorems only:
+Validate the retained production surface with one build and one source scan:
 
-```lean
-#print axioms VisualProof.Diagram.iso_denotation
-#print axioms VisualProof.Diagram.Region.denote_spliceAt
-#print axioms VisualProof.Diagram.denoteItem_identity
-#print axioms VisualProof.Rule.applyComprehensionInstantiate_sound
-#print axioms VisualProof.Rule.applyTheorem_sound
-#print axioms VisualProof.Rule.applyStep_sound
-#print axioms VisualProof.Proof.checkedTheorem_sound
-#print axioms VisualProof.Proof.verifiedTheory_sound
-#print axioms VisualProof.Diagram.Matcher.findOccurrences_sound
-#print axioms VisualProof.Diagram.Matcher.findOccurrences_completeFor
+```bash
+lake build
+rg -n '\bsorry\b' VisualProof --glob '*.lean'
 ```
+
+The scan must be empty for this completed phase.
 
 - [x] **Step 3: Run decisive conformance scans**
 

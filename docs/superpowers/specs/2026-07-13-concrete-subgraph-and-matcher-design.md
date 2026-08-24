@@ -388,7 +388,9 @@ The slice is complete only when:
   repeated boundary aliases, distinct boundary identities sharing an attachment,
   unseeded bare boundaries, external binders, and transitive host-wire coalescence;
 - clean focused and full Lean builds pass;
-- `#print axioms` shows only accepted Lean quotient/propositional principles; and
+- `lake build` succeeds and the immediately following
+  `rg -n '\bsorry\b' VisualProof --glob '*.lean'` scan reports no unfinished
+  production theorem; and
 - source scans find no `sorry`, `admit`, custom axiom, alternate graph authority,
   second validator/interpreter, canonical-string shortcut, tombstone IDs, or
   generated Lake artifacts.

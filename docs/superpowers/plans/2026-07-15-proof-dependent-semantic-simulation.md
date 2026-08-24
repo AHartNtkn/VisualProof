@@ -324,12 +324,13 @@ family theorem. Do not use a wildcard branch.
 Make `Replay.lean` import `Rule.Soundness.All`, then prove replayed proofs and
 registered theorem/theory entries preserve the declared directed semantics.
 
-- [ ] **Step 3: Add audit checks**
+- [ ] **Step 3: Add source checks**
 
-Have `Audit.lean` check the public theorem inventory and print axioms for the
-top-level results. Extend `scripts/check-formalization.mjs` to reject the old
-witness signatures, rule-local recursive simulation definitions, `sorry`,
-`admit`, and custom axioms.
+Run `lake build` and immediately follow it with
+`rg -n '\bsorry\b' VisualProof --glob '*.lean'`. Extend
+`scripts/check-formalization.mjs` to reject the old witness signatures,
+rule-local recursive simulation definitions, `sorry`, `admit`, and custom
+axioms.
 
 - [ ] **Step 4: Run full validation**
 

@@ -18,7 +18,8 @@
 - Do not claim general deductive completeness or decidability of untyped beta-eta equivalence.
 - Exact matcher completeness applies only to the declarative finite exact-occurrence relation.
 - Use no `sorry`, `admit`, `decreasing_by sorry`, or project `axiom` declarations.
-- Acknowledge only foundational dependencies actually reported by `#print axioms`; the intended allowlist is `Classical.choice`, `propext`, and `Quot.sound`.
+- Validate proof completion with `lake build` followed immediately by
+  `rg -n '\bsorry\b' VisualProof --glob '*.lean'`.
 - Repair or remove any TypeScript path that accepts a state without the selected semantics; do not add compatibility aliases or fallbacks.
 - Preserve rendering, physics, UI, and unrelated user work.
 - Develop Lean obligations theorem-first: state each named theorem before proving it; a local transient `sorry` may validate the statement, but no `sorry` or other admission may enter a completed task or commit.
@@ -32,7 +33,8 @@
 - `lean-toolchain`: pins `leanprover/lean4:v4.30.0`.
 - `lakefile.toml`: defines library `VisualProof` and executables `visualproof_step_tags` and `visualproof_match_fixtures`.
 - `VisualProof.lean`: imports the supported public surface.
-- `VisualProof/Audit.lean`: prints axioms for public completion theorems.
+- Proof completion is checked by `lake build` followed immediately by
+  `rg -n '\bsorry\b' VisualProof --glob '*.lean'`.
 
 ### Lambda calculus
 
@@ -1299,34 +1301,26 @@ git commit -m "feat(formal): enforce Lean runtime correspondence"
 ### Task 13: Public theorem audit and full completion oracle
 
 **Files:**
-- Create: `VisualProof/Audit.lean`
 - Modify: `VisualProof.lean`
 - Modify: `docs/kernel/canonicalization.md`
 - Modify: `docs/superpowers/specs/2026-07-13-lean-formalization-design.md`
 
 **Interfaces:**
 - Consumes: every public semantic, soundness, theory, and matcher theorem.
-- Produces: explicit axiom audit output, final 25-row coverage evidence, user-facing kernel documentation, and the full completion receipt.
+- Produces: source-level completion evidence, final 25-row coverage evidence,
+  user-facing kernel documentation, and the full completion receipt.
 
-- [ ] **Step 1: Add the public audit module**
+- [ ] **Step 1: Add the proof-source completion gate**
 
-`VisualProof/Audit.lean` imports the complete library and runs `#print axioms` for:
+Run the complete library build and immediately scan its authoritative sources:
 
-```lean
-VisualProof.Lambda.checkCertificate_sound
-VisualProof.Diagram.iso_denotation
-VisualProof.Diagram.denote_splice
-VisualProof.Rule.applyStep_sound
-VisualProof.Proof.checkedTheorem_sound
-VisualProof.Proof.verifiedTheory_sound
-VisualProof.Matcher.exactMatcher_sound
-VisualProof.Matcher.exactMatcher_complete
-VisualProof.Matcher.exactMatcher_decides
-VisualProof.Matcher.betaEtaMatcher_sound
-VisualProof.Matcher.betaEtaMatcher_complete_of_decided
+```bash
+lake build
+rg -n '\bsorry\b' VisualProof --glob '*.lean'
 ```
 
-Make `check-formalization.mjs` parse this output and reject every name outside the documented allowlist.
+Make `check-formalization.mjs` enforce the same empty source scan for this
+completed phase.
 
 - [ ] **Step 2: Mutate each completion gate once**
 

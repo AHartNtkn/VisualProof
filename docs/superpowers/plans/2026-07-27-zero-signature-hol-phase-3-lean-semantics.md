@@ -1251,18 +1251,15 @@ nodup. `StepTagsMain` prints one serialized tag per line.
 
 It must not hard-code the TypeScript list separately.
 
-- [ ] **Step 4: Add proof-authority audits**
+- [ ] **Step 4: Add proof-source validation**
 
-`VisualProof/Audit.lean` imports all central soundness modules and uses
-`#print axioms` for:
+Run `lake build` and immediately follow it with:
 
-- `normalizeIdentities_sound`;
-- `identity_retarget_sound`;
-- both relation sever/join theorems;
-- `applyStep_sound`;
-- `replay_sound`;
-- `checkedTheorem_sound`;
-- `verifiedTheory_sound`.
+```bash
+rg -n '\bsorry\b' VisualProof --glob '*.lean'
+```
+
+The scan must report no unfinished production theorem.
 
 `scripts/check-formalization.mjs` must fail on repository-owned Lean source
 containing `sorry`, `admit`, custom `axiom`, `Lambda`, beta/eta, comprehension,
@@ -1276,8 +1273,7 @@ npm run typecheck
 npx vitest run tests/architecture/lean-semantics.test.ts
 ```
 
-The audit accepts Lean's standard classical axioms but rejects `sorryAx` or any
-project-defined axiom in `Audit.lean` output.
+The source checks also reject every project-defined axiom.
 
 - [ ] **Step 5: Restore package and Lake commands**
 

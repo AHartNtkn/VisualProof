@@ -297,7 +297,11 @@ Define a root-only graph with one empty wire and prove it checks. Wrap it with b
 
 Run: `lake build`
 
-Expected: all modules elaborate. Run `#print axioms` on `checkWellFormed_iff` and the valid nested theorem; only standard Lean proof foundations may appear. Run forbidden-token, alternate-authority, generated-artifact, and diff scans. Request an independent review against the approved design and foundation v8.
+Expected: all modules elaborate. Immediately after `lake build`, run
+`rg -n '\bsorry\b' VisualProof --glob '*.lean'` and require no unfinished
+production theorem. Run forbidden-token, alternate-authority,
+generated-artifact, and diff scans. Request an independent review against the
+approved design and foundation v8.
 
 - [ ] **Step 5: Commit**
 
