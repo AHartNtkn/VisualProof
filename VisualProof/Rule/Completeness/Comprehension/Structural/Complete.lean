@@ -71,10 +71,32 @@ mutual
   termination_by sizeOf source
 end
 
-mutual
-  /-- Exact nullary IdentityLeaf sites exist for every authoritative region
-  result of the positional nullary identity pattern. -/
-  theorem identityZeroRegionSites_nonempty
+/-- Exact nullary IdentityLeaf sites exist for every authoritative item
+sequence result of the positional nullary identity pattern. The region and
+item traversals are local implementation details of this production-consumed
+result. -/
+theorem identityZeroItemsSites_nonempty
+    {signature : Sig}
+    {common sourceWires targetWires : List Sig}
+    {frame : Transform.Frame [] common sourceWires targetWires}
+    {source : ItemSeq sourceWires} {result : Region common}
+    (evidence :
+      _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        (positionalIdentityPattern signature 0)
+        frame.sourceKeep frame.selected source result) :
+    Nonempty (ItemsSites (Leaf.Identity.operation signature 0)
+      PUnit.unit evidence) := by
+  cases evidence with
+  | nil => exact ⟨.nil _⟩
+  | cons itemEvidence tailEvidence =>
+      obtain ⟨itemSites⟩ := itemSites
+        (signature := signature) (frame := frame) itemEvidence
+      obtain ⟨tailSites⟩ := identityZeroItemsSites_nonempty
+        (signature := signature) (frame := frame) tailEvidence
+      exact ⟨.cons itemSites tailSites⟩
+termination_by sizeOf source
+where
+  regionSites
       {signature : Sig}
       {common sourceWires targetWires : List Sig}
       {frame : Transform.Frame [] common sourceWires targetWires}
@@ -92,32 +114,7 @@ mutual
         exact ⟨.mk childSites⟩
   termination_by sizeOf source
 
-  /-- Exact nullary IdentityLeaf sites exist for every authoritative item
-  sequence result of the positional nullary identity pattern. -/
-  theorem identityZeroItemsSites_nonempty
-      {signature : Sig}
-      {common sourceWires targetWires : List Sig}
-      {frame : Transform.Frame [] common sourceWires targetWires}
-      {source : ItemSeq sourceWires} {result : Region common}
-      (evidence :
-        _root_.VisualProof.Rule.Comprehension.Instantiation.ItemsResult
-          (positionalIdentityPattern signature 0)
-          frame.sourceKeep frame.selected source result) :
-      Nonempty (ItemsSites (Leaf.Identity.operation signature 0)
-        PUnit.unit evidence) := by
-    cases evidence with
-    | nil => exact ⟨.nil _⟩
-    | cons itemEvidence tailEvidence =>
-        obtain ⟨itemSites⟩ := identityZeroItemSites_nonempty
-          (signature := signature) (frame := frame) itemEvidence
-        obtain ⟨tailSites⟩ := identityZeroItemsSites_nonempty
-          (signature := signature) (frame := frame) tailEvidence
-        exact ⟨.cons itemSites tailSites⟩
-  termination_by sizeOf source
-
-  /-- Exact nullary IdentityLeaf site data is forced by the empty argument
-  vector. -/
-  theorem identityZeroItemSites_nonempty
+  itemSites
       {signature : Sig}
       {common sourceWires targetWires : List Sig}
       {frame : Transform.Frame [] common sourceWires targetWires}
@@ -149,11 +146,10 @@ mutual
           (pattern := positionalIdentityPattern signature 0)
           (frame := frame) itemSignature itemArity ports⟩
     | cut childEvidence =>
-        obtain ⟨childSites⟩ := identityZeroRegionSites_nonempty
+        obtain ⟨childSites⟩ := regionSites
           (signature := signature) (frame := frame) childEvidence
         exact ⟨.cut childSites⟩
   termination_by sizeOf source
-end
 
 /-- Scope information preserved by the nullary cut-wrap edit.  The nullary
 specialization is essential: a selected application has no retained ports, so
