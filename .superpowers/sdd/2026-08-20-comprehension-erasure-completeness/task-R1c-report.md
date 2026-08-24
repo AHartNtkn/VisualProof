@@ -23,7 +23,7 @@ exact Fin.elim0 head.index
 
 ## Commit hash
 
-Recorded after commit.
+`24d6867fe1fb5c687dc97a0f222a82a2f5b2825d` (production checkpoint commit).
 
 ## Concerns
 
