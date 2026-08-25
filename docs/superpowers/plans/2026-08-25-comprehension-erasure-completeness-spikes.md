@@ -119,10 +119,10 @@
 - Consumes: `Exposure.equates`, Iteration, `Comprehension.complete`, guarded Ends absorption, and iso transport.
 - Produces: verified duplication, two-site instantiation, guarded absorption, and ultimately Erasure completeness.
 
-- [ ] Prove the exact Iteration freshening/pin-residue theorem needed by the exposed block.
-- [ ] Prove one Iteration step reaches an endpoint isomorphic to two suitable instantiation blocks.
-- [ ] Construct the two-site `Instantiates` witness and its quantified-region canonicality.
-- [ ] Construct the positive `Ends.Absorb.ItemsGuard` and absorption step at binder-home depth.
-- [ ] Compose exposure, Iteration, Comprehension, Ends, and endpoint isomorphism into `Relation.TransGen Step`.
-- [ ] Run narrow checks, `lake build`, and the repository command-line axiom check.
-- [ ] Record the result and commit Erasure completeness GREEN.
+- [x] Prove the exact Iteration freshening/pin-residue theorem needed by the exposed block.
+- [x] Prove one Iteration step reaches an endpoint isomorphic to two suitable instantiation blocks.
+- [x] Construct the two-site `Instantiates` witness and its quantified-region canonicality.
+- [x] Construct the positive `Ends.Absorb.ItemsGuard` and absorption step at binder-home depth.
+- [x] Compose exposure, Iteration, Comprehension, Ends, and endpoint isomorphism into `Relation.TransGen Step`.
+- [x] Run narrow checks, `lake build`, and the repository command-line axiom check.
+- [x] Record the result and commit Erasure completeness GREEN.

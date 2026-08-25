@@ -423,13 +423,6 @@ theorem hostFirst_canonical
     description.hostItems (relationMaterial description)
     erasedCanonical (relationMaterial_canonical description)
 
-theorem quantified_canonical
-    (description : Rule.Erasure.Description outer)
-    (erasedCanonical : description.target.Canonical) :
-    (quantified description).Canonical :=
-  (quantifiedHostFirstIso description).canonical_iff.mpr
-    (hostFirst_canonical description erasedCanonical)
-
 def retainedResult
     (description : Rule.Erasure.Description outer)
     (materialCanonical : description.material.Canonical) :=
