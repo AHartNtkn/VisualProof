@@ -1,7 +1,7 @@
 import VisualProof.Rule.Completeness.Comprehension.Leaf.Accumulator
+import VisualProof.Rule.Completeness.Comprehension.Leaf.IdentitySupport
 import VisualProof.Rule.Completeness.Comprehension.Normalization.ArgumentsAt
 import VisualProof.Rule.Completeness.Comprehension.Normalization.Sites
-
 namespace VisualProof.Rule.Completeness.Comprehension
 
 open Diagram
@@ -382,7 +382,8 @@ theorem accumulateAtomFormalAt
   obtain ⟨rawLeafHosted, rawLeafScope⟩ :=
     leafItemsEndpoint rawFormalEvidence rawFormalSites
       initialTargetKeepIdentity
-      (fun siteTargetKeepEq application site => by
+      (fun {siteCommon siteSourceWires} {siteFrame} {siteData}
+          siteTargetKeepEq application site => by
         have endpoint := positionalAtomLeafEndpoint atomArguments
           siteTargetKeepEq application site
         exact ⟨endpoint.1, endpoint.2.1⟩)
@@ -390,7 +391,8 @@ theorem accumulateAtomFormalAt
     intro target rename
     exact leafItemsReverseHostedScope rawFormalEvidence rawFormalSites
       initialTargetKeepIdentity
-      (fun siteTargetKeepEq application site => by
+      (fun {siteCommon siteSourceWires} {siteFrame} {siteData}
+          siteTargetKeepEq application site => by
         intro siteTarget siteRename
         exact (positionalAtomLeafEndpoint atomArguments
           siteTargetKeepEq application site).2.2 siteRename)
@@ -604,6 +606,505 @@ theorem accumulateAtomFormal
   exact ⟨retained, formalSource, formalResult, formalEvidence, formalSites,
     formalCoherence, outputReplacement.1, outputExternalTwoEnded, strict⟩
 
+theorem accumulateIdentityAt
+    {patternWires common outer localBefore localAfter
+      originalSourceWires originalTargetWires : List Sig}
+    {pattern : OpenDiagram patternWires}
+    {signature : Sig} {arity : Nat}
+    {ports : Fin arity → Var pattern.external signature}
+    {tail : ItemSeq pattern.external}
+    (body_eq :
+      pattern.body = Region.ofItems (.cons (.identity signature arity ports) tail))
+    (placement_eq : common = outer ++ (localBefore ++ localAfter))
+    {originalFrame : Transform.Frame patternWires
+      common originalSourceWires originalTargetWires}
+    {operation : Transform.Operation patternWires}
+    {data : operation.Data originalFrame}
+    {source : ItemSeq originalSourceWires}
+    {result : Region common}
+    (evidence :
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult pattern
+        originalFrame.sourceKeep originalFrame.selected source result)
+    (sites : ItemsSites operation data evidence) :
+    ∃ retained : List Sig,
+      ∃ formalSource : ItemSeq
+          (outer ++ (localBefore ++
+            .rel (List.replicate arity signature) ::
+              (localAfter ++ retained))),
+        ∃ formalResult : Region
+            (outer ++ (localBefore ++ (localAfter ++ retained))),
+          ∃ formalEvidence :
+              VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+                (positionalIdentityPattern signature arity)
+                (Leaf.Identity.rootFrame
+                  outer localBefore (localAfter ++ retained) signature arity).sourceKeep
+                (Leaf.Identity.rootFrame
+                  outer localBefore (localAfter ++ retained) signature arity).selected
+                formalSource formalResult,
+            ∃ formalSites : ItemsSites
+                (recordingOperation (Leaf.Identity.operation signature arity)
+                  pattern.external) PUnit.unit
+                formalEvidence,
+              ∃ formalCoherence : formalSource =
+                  (argumentItemsEdit formalSites
+                    (Leaf.Identity.Vars.fromFn ports)
+                    (normalizationOperation (List.replicate arity signature))
+                    (Leaf.Identity.rootFrame
+                      outer localBefore (localAfter ++ retained) signature arity)
+                    PUnit.unit
+                    (fun _ _ _ => PUnit.unit)).1,
+                let output := itemsEdit
+                  (operation := recordingOperation
+                    (Leaf.Identity.operation signature arity) pattern.external)
+                  PUnit.unit formalEvidence formalSites
+                let outputWiresEq :
+                    (common ++ retained) =
+                      (outer ++ (localBefore ++
+                        (localAfter ++ retained))) := by
+                  rw [placement_eq]
+                  simp only [List.append_assoc]
+                let outputAtCommon : Region
+                    (common ++ retained) :=
+                  output.endpoint.renameWires
+                    (WireEquiv.ofEq outputWiresEq).symm.toRenaming
+                HostedStrict result
+                    (Region.adjoinAt retained .nil outputAtCommon) ∧
+                  ScopePreservation result
+                    (Region.adjoinAt retained .nil outputAtCommon) := by
+  subst common
+  let common := outer ++ (localBefore ++ localAfter)
+  let initialFrame : Transform.Frame (List.replicate arity signature)
+      common
+      (outer ++ (localBefore ++
+        .rel (List.replicate arity signature) :: localAfter))
+      common :=
+    Transform.Frame.replace outer localBefore localAfter []
+      (List.replicate arity signature)
+  have folded :=
+    accumulateHostedTargetWith evidence sites
+      (Leaf.Identity.Vars.fromFn ports)
+      (outer := outer) (before := localBefore) (after := localAfter)
+      (targetInserted := [])
+      (targetPattern := positionalIdentityPattern signature arity)
+      (targetBaseOperation := Leaf.Identity.operation signature arity)
+      PUnit.unit pattern.boundaryWire ScopePreservation ScopePreservation.refl
+      (fun locals before after scope =>
+        adjoinAt_preserves_scope locals .nil before after scope)
+      ScopePreservation.conjoin ScopePreservation.cut
+      (fun _ _ => True) (by intros; trivial) (by intros; trivial)
+      (by intros; trivial) (by intros; trivial) (by intros; trivial)
+      (fun _ _ => False)
+      (fun _ _ impossible _ => False.elim impossible)
+      (fun _ _ _ => True)
+      (fun _ _ _ _ _ => True.intro)
+      (identityDataNaturality signature arity)
+      (fun _ => True) True.intro (by intros; trivial)
+      (fun {itemCommon itemSourceWires itemTargetWires} {itemFrame}
+          {itemData} application siteData
+          {selectedTargetSourceWires selectedTargetWires} selectedFrame
+          selectedData => by
+        obtain ⟨retained, formalSource, formalResult, formalEvidence,
+            formalSites, coherence, staged, hosted, scope, presentation⟩ :=
+          identitySelectedTargetItem body_eq application siteData selectedFrame
+        exact ⟨retained, formalSource, formalResult, formalEvidence,
+          formalSites, coherence, staged, hosted, scope, presentation, by
+            intro bridge _alignment
+            exact False.elim bridge.data_selects, True.intro, True.intro⟩)
+  obtain ⟨retained, rawFormalSource, rawFormalResult, rawFormalEvidence,
+      rawFormalSites, rawCoherence, rawStaged, rawHosted, rawScope,
+      ⟨rawPresentation⟩, _rawEndpoint, _rawSourceSide, _rawRetained⟩ := folded
+  let canonicalFrame := Leaf.Identity.rootFrame outer localBefore
+    (localAfter ++ retained) signature arity
+  have sourceWiresEq :
+      ((outer ++ (localBefore ++
+        .rel (List.replicate arity signature) :: localAfter)) ++ retained) =
+      (outer ++ (localBefore ++
+        .rel (List.replicate arity signature) ::
+          (localAfter ++ retained))) := by
+    simp only [List.append_assoc, List.cons_append]
+  let sourceEquiv : WireEquiv
+      ((outer ++ (localBefore ++
+        .rel (List.replicate arity signature) :: localAfter)) ++ retained)
+      (outer ++ (localBefore ++
+        .rel (List.replicate arity signature) ::
+          (localAfter ++ retained))) :=
+    WireEquiv.ofEq sourceWiresEq
+  have commonWiresEq :
+      (common ++ retained) =
+      (outer ++ (localBefore ++ (localAfter ++ retained))) := by
+    simp only [common, List.append_assoc]
+  let commonEquiv : WireEquiv
+      (common ++ retained)
+      (outer ++ (localBefore ++ (localAfter ++ retained))) :=
+    WireEquiv.ofEq commonWiresEq
+  let sourceRename := sourceEquiv.toRenaming
+  let commonRename := commonEquiv.toRenaming
+  have sourceRename_index {wireSignature}
+      (wire : Var
+        ((outer ++ (localBefore ++
+          .rel (List.replicate arity signature) :: localAfter)) ++ retained)
+        wireSignature) :
+      (sourceRename wire).index.val = wire.index.val := by
+    exact WireEquiv.ofEq_index_val sourceWiresEq wire
+  have commonRename_index {wireSignature}
+      (wire : Var (common ++ retained) wireSignature) :
+      (commonRename wire).index.val = wire.index.val := by
+    exact WireEquiv.ofEq_index_val commonWiresEq wire
+  have keepCommutes : ∀ {wireSignature}
+      (wire : Var (common ++ retained) wireSignature),
+      sourceRename ((initialFrame.append retained).sourceKeep wire) =
+        canonicalFrame.sourceKeep (commonRename wire) := by
+    intro wireSignature wire
+    refine Var.appendCases (left := common) (right := retained)
+      (motive := fun wire =>
+        sourceRename ((initialFrame.append retained).sourceKeep wire) =
+          canonicalFrame.sourceKeep (commonRename wire)) ?_ ?_ wire
+    · intro inheritedSignature inherited
+      refine Var.appendCases (left := outer)
+        (right := localBefore ++ localAfter)
+        (motive := fun inherited =>
+          sourceRename ((initialFrame.append retained).sourceKeep
+              (inherited.appendLeft retained)) =
+            canonicalFrame.sourceKeep
+              (commonRename (inherited.appendLeft retained))) ?_ ?_ inherited
+      · intro outerSignature outerWire
+        have commonStep : commonRename
+            ((outerWire.appendLeft (localBefore ++ localAfter)).appendLeft
+              retained) =
+            outerWire.appendLeft
+              (localBefore ++ (localAfter ++ retained)) := by
+          apply Var.eq_of_index_eq
+          apply Fin.ext
+          rw [commonRename_index]
+          simp
+        rw [commonStep]
+        apply Var.eq_of_index_eq
+        apply Fin.ext
+        rw [sourceRename_index]
+        simp [initialFrame, canonicalFrame,
+          Leaf.Identity.rootFrame, Transform.Frame.replace,
+          Transform.Frame.append, Transform.Frame.keep,
+          Transform.Frame.localKeep, WireRenaming.appendRight]
+      · intro localSignature localWire
+        refine Var.appendCases (left := localBefore) (right := localAfter)
+          (motive := fun localWire =>
+            sourceRename ((initialFrame.append retained).sourceKeep
+                ((Var.appendRight outer localWire).appendLeft retained)) =
+              canonicalFrame.sourceKeep (commonRename
+                ((Var.appendRight outer localWire).appendLeft retained)))
+          ?_ ?_ localWire
+        · intro beforeSignature beforeWire
+          have commonStep : commonRename
+              ((Var.appendRight outer
+                (beforeWire.appendLeft localAfter)).appendLeft retained) =
+              Var.appendRight outer
+                (beforeWire.appendLeft (localAfter ++ retained)) := by
+            apply Var.eq_of_index_eq
+            apply Fin.ext
+            rw [commonRename_index]
+            simp
+          rw [commonStep]
+          apply Var.eq_of_index_eq
+          apply Fin.ext
+          rw [sourceRename_index]
+          simp [initialFrame, canonicalFrame,
+            Leaf.Identity.rootFrame, Transform.Frame.replace,
+            Transform.Frame.append, Transform.Frame.keep,
+            Transform.Frame.localKeep, WireRenaming.appendRight]
+        · intro afterSignature afterWire
+          have commonStep : commonRename
+              ((Var.appendRight outer
+                (Var.appendRight localBefore afterWire)).appendLeft retained) =
+              Var.appendRight outer
+                (Var.appendRight localBefore
+                  (afterWire.appendLeft retained)) := by
+            apply Var.eq_of_index_eq
+            apply Fin.ext
+            rw [commonRename_index]
+            simp
+          rw [commonStep]
+          apply Var.eq_of_index_eq
+          apply Fin.ext
+          rw [sourceRename_index]
+          simp [initialFrame, canonicalFrame,
+            Leaf.Identity.rootFrame, Transform.Frame.replace,
+            Transform.Frame.append, Transform.Frame.keep,
+            Transform.Frame.localKeep, WireRenaming.appendRight,
+            Var.appendRight, Var.index]
+    · intro retainedSignature retainedWire
+      have commonStep : commonRename
+          (Var.appendRight common retainedWire) =
+          Var.appendRight outer
+            (Var.appendRight localBefore
+              (Var.appendRight localAfter retainedWire)) := by
+        apply Var.eq_of_index_eq
+        apply Fin.ext
+        rw [commonRename_index]
+        simp [common]
+        omega
+      rw [commonStep]
+      apply Var.eq_of_index_eq
+      apply Fin.ext
+      rw [sourceRename_index]
+      simp [initialFrame, canonicalFrame,
+        Leaf.Identity.rootFrame, Transform.Frame.replace,
+        Transform.Frame.append, Transform.Frame.keep,
+        Transform.Frame.localKeep, WireRenaming.appendRight,
+        Var.appendRight, Var.index]
+      omega
+  have initialTargetKeepIdentity :
+      (initialFrame.append retained).targetKeep = WireRenaming.id := by
+    have baseTargetKeepIdentity :
+        initialFrame.targetKeep = WireRenaming.id := by
+      apply WireRenaming.ext
+      intro wireSignature wire
+      apply Var.appendCases (left := outer)
+        (right := localBefore ++ localAfter)
+        (motive := fun wire => initialFrame.targetKeep wire = wire)
+      · intro inheritedSignature inherited
+        simp [initialFrame, Transform.Frame.replace, Transform.Frame.keep,
+          Transform.Frame.localKeep, WireRenaming.id]
+      · intro localSignature localWire
+        apply Var.appendCases (left := localBefore) (right := localAfter)
+          (motive := fun localWire =>
+            initialFrame.targetKeep (Var.appendRight outer localWire) =
+              Var.appendRight outer localWire)
+        · intro beforeSignature beforeWire
+          simp [initialFrame, Transform.Frame.replace, Transform.Frame.keep,
+            Transform.Frame.localKeep, WireRenaming.id]
+        · intro afterSignature afterWire
+          simp [initialFrame, Transform.Frame.replace, Transform.Frame.keep,
+            Transform.Frame.localKeep, WireRenaming.id, Var.appendRight]
+    apply WireRenaming.ext
+    intro wireSignature wire
+    change initialFrame.targetKeep.appendRight retained wire = wire
+    rw [baseTargetKeepIdentity]
+    exact WireRenaming.appendRight_id_apply retained wire
+  have canonicalTargetKeepIdentity :
+      canonicalFrame.targetKeep = WireRenaming.id := by
+    apply WireRenaming.ext
+    intro wireSignature wire
+    apply Var.appendCases (left := outer)
+      (right := localBefore ++ (localAfter ++ retained))
+      (motive := fun wire => canonicalFrame.targetKeep wire = wire)
+    · intro inheritedSignature inherited
+      simp [canonicalFrame, Leaf.Identity.rootFrame,
+        Transform.Frame.replace, Transform.Frame.keep,
+        Transform.Frame.localKeep, WireRenaming.id]
+    · intro localSignature localWire
+      apply Var.appendCases (left := localBefore)
+        (right := localAfter ++ retained)
+        (motive := fun localWire =>
+          canonicalFrame.targetKeep (Var.appendRight outer localWire) =
+            Var.appendRight outer localWire)
+      · intro beforeSignature beforeWire
+        simp [canonicalFrame, Leaf.Identity.rootFrame,
+          Transform.Frame.replace, Transform.Frame.keep,
+          Transform.Frame.localKeep, WireRenaming.id]
+      · intro afterSignature afterWire
+        simp [canonicalFrame, Leaf.Identity.rootFrame,
+          Transform.Frame.replace, Transform.Frame.keep,
+          Transform.Frame.localKeep, WireRenaming.id, Var.appendRight]
+  have targetKeepCommutes : ∀ {wireSignature}
+      (wire : Var (common ++ retained) wireSignature),
+      commonRename ((initialFrame.append retained).targetKeep wire) =
+        canonicalFrame.targetKeep (commonRename wire) := by
+    intro wireSignature wire
+    rw [initialTargetKeepIdentity, canonicalTargetKeepIdentity]
+    rfl
+  have selectedCommutes :
+      sourceRename (initialFrame.append retained).selected =
+        canonicalFrame.selected := by
+    apply Var.eq_of_index_eq
+    apply Fin.ext
+    rw [sourceRename_index]
+    simp [initialFrame, canonicalFrame,
+      Leaf.Identity.rootFrame, Transform.Frame.replace,
+      Transform.Frame.append, Transform.Frame.insertedHead, Var.index]
+  let argumentFrame : Transform.Frame (List.replicate arity signature)
+      (common ++ retained)
+      ((outer ++ (localBefore ++
+        .rel (List.replicate arity signature) :: localAfter)) ++ retained)
+      ((outer ++ (localBefore ++
+        .rel (List.replicate arity signature) :: localAfter)) ++ retained) := {
+    sourceKeep := (initialFrame.append retained).sourceKeep
+    targetKeep := (initialFrame.append retained).sourceKeep
+    selected := (initialFrame.append retained).selected
+  }
+  let mappedArgumentFrame : Transform.Frame
+      (List.replicate arity signature)
+      (outer ++ (localBefore ++ (localAfter ++ retained)))
+      (outer ++ (localBefore ++
+        .rel (List.replicate arity signature) ::
+          (localAfter ++ retained)))
+      (outer ++ (localBefore ++
+        .rel (List.replicate arity signature) ::
+          (localAfter ++ retained))) := {
+    sourceKeep := canonicalFrame.sourceKeep
+    targetKeep := canonicalFrame.sourceKeep
+    selected := canonicalFrame.selected
+  }
+  obtain ⟨formalSource, formalResult, formalEvidence, formalSites,
+      formalSourceEq, formalArgumentEq, _formalArgumentDuplicate,
+      ⟨formalPresentation⟩,
+      ⟨formalEndpointPresentation⟩⟩ :=
+    targetItemsReindex rawFormalEvidence rawFormalSites
+      (Leaf.Identity.Vars.fromFn ports)
+      (Leaf.Identity.Vars.fromFn ports)
+      argumentFrame mappedArgumentFrame
+      commonRename sourceRename commonRename sourceRename
+      keepCommutes targetKeepCommutes selectedCommutes
+      keepCommutes selectedCommutes
+      (identityDataNaturality signature arity) True.intro
+  have formalCoherence : formalSource =
+      (argumentItemsEdit formalSites (Leaf.Identity.Vars.fromFn ports)
+        (normalizationOperation (List.replicate arity signature))
+        canonicalFrame PUnit.unit (fun _ _ _ => PUnit.unit)).1 := by
+    calc
+      formalSource = rawFormalSource.renameWires sourceRename :=
+        formalSourceEq.symm
+      _ = (argumentItemsEdit rawFormalSites
+            (Leaf.Identity.Vars.fromFn ports)
+            (normalizationOperation (List.replicate arity signature))
+            (initialFrame.append retained) PUnit.unit
+            (fun _ _ _ => PUnit.unit)).1.renameWires sourceRename :=
+        congrArg (fun items => items.renameWires sourceRename) rawCoherence
+      _ = _ := formalArgumentEq
+  let rawOutput := itemsEdit
+    (operation := recordingOperation
+      (Leaf.Identity.operation signature arity) pattern.external)
+    PUnit.unit rawFormalEvidence rawFormalSites
+  obtain ⟨rawLeafHosted, rawLeafScope⟩ :=
+    leafItemsEndpoint rawFormalEvidence rawFormalSites
+      initialTargetKeepIdentity
+      (fun siteTargetKeepEq application site =>
+        positionalIdentityLeafEndpoint signature arity
+          siteTargetKeepEq application site)
+  have rawLeafReverse : HostedScope rawOutput.endpoint rawFormalResult := by
+    intro target rename
+    exact leafItemsReverseHostedScope rawFormalEvidence rawFormalSites
+      initialTargetKeepIdentity
+      (fun {siteCommon siteSourceWires} {siteFrame} {siteData}
+          siteTargetKeepEq application site => by
+        intro siteTarget siteRename
+        rcases site with ⟨⟨identityPorts, applicationEq⟩,
+          recordedApplication⟩
+        subst application
+        have targetEq :
+            (recordingOperation
+              (Leaf.Identity.operation signature arity) pattern.external).site
+                siteFrame siteData (Leaf.Identity.Vars.fromFn identityPorts)
+                ⟨⟨identityPorts, rfl⟩, recordedApplication⟩ =
+              positionalIdentityApplication signature arity
+                (Leaf.Identity.Vars.fromFn identityPorts) := by
+          change Region.singleton (.identity signature arity
+              (fun position => siteFrame.targetKeep
+                (identityPorts position))) = _
+          rw [siteTargetKeepEq]
+          simp [positionalIdentityApplication, WireRenaming.id,
+            Leaf.Identity.Vars.toFn_fromFn]
+        rw [targetEq]
+        simpa [positionalIdentityApplication,
+          EqualityNormalization.instantiate_renameWires,
+          Region.singleton_renameWires, Item.renameWires,
+          Leaf.Identity.Vars.fromFn_map,
+          Leaf.Identity.Vars.toFn_map,
+          Leaf.Identity.Vars.toFn_fromFn] using
+          positionalIdentityApplication_scope signature arity
+            ((Leaf.Identity.Vars.fromFn identityPorts).map
+              fun wire => siteRename wire))
+      rename
+  let rawFormalRoot := Region.adjoinAt retained .nil rawFormalResult
+  let rawOutputRoot := Region.adjoinAt retained .nil rawOutput.endpoint
+  have liftedRawLeafHosted : HostedStrict rawFormalRoot rawOutputRoot := by
+    simpa only [rawFormalRoot, rawOutputRoot] using
+      HostedStrict.adjoinAt retained rawFormalResult rawOutput.endpoint
+        rawLeafHosted
+  have liftedRawLeafScope :
+      ScopePreservation rawFormalRoot rawOutputRoot := by
+    simpa only [rawFormalRoot, rawOutputRoot] using
+      adjoinAt_preserves_scope retained .nil rawFormalResult
+        rawOutput.endpoint rawLeafScope
+  have liftedRawLeafReverse : HostedScope rawOutputRoot rawFormalRoot := by
+    intro target rename
+    exact HostedScope.adjoinAt retained rawOutput.endpoint rawFormalResult
+      (fun childRename => rawLeafReverse childRename) rename
+  have stagedToFormal : HostedStrict rawStaged rawFormalRoot := by
+    simpa only [rawFormalRoot] using HostedStrict.ofIso rawPresentation
+  have stagedReverse : HostedScope rawFormalRoot rawStaged := by
+    intro target rename
+    simpa only [rawFormalRoot] using
+      HostedScope.ofIso rawPresentation.symm rename
+  have resultToFormal : HostedStrict result rawFormalRoot := by
+    exact HostedStrict.trans rawHosted stagedToFormal
+      (fun outer hostLocals rename hostItems =>
+        HostedScope.adjoinHost
+          (fun scopeRename => stagedReverse scopeRename)
+          outer hostLocals rename hostItems)
+  have resultToRawOutput : HostedStrict result rawOutputRoot := by
+    exact HostedStrict.trans resultToFormal liftedRawLeafHosted
+      (fun outer hostLocals rename hostItems =>
+        HostedScope.adjoinHost
+          (fun scopeRename => liftedRawLeafReverse scopeRename)
+          outer hostLocals rename hostItems)
+  have resultToRawOutputScope :
+      ScopePreservation result rawOutputRoot := by
+    exact rawScope.trans
+      ((ScopePreservation.ofIso rawPresentation).trans
+        liftedRawLeafScope)
+  let output := itemsEdit
+    (operation := recordingOperation
+      (Leaf.Identity.operation signature arity) pattern.external)
+    PUnit.unit formalEvidence formalSites
+  let outputWiresEq :
+      ((outer ++ (localBefore ++ localAfter)) ++ retained) =
+        (outer ++ (localBefore ++ (localAfter ++ retained))) := by
+    simp only [List.append_assoc]
+  let outputAtCommon : Region
+      ((outer ++ (localBefore ++ localAfter)) ++ retained) :=
+    output.endpoint.renameWires
+      (WireEquiv.ofEq outputWiresEq).symm.toRenaming
+  let rawForward : RegionIso commonEquiv rawOutput.endpoint
+      (rawOutput.endpoint.renameWires commonRename) := by
+    simpa only [Region.renameWires_id] using
+      RegionIso.renameWires rawOutput.endpoint WireRenaming.id commonRename
+        commonEquiv (fun _ => rfl)
+  let outputBack : RegionIso commonEquiv.symm output.endpoint
+      outputAtCommon := by
+    simpa only [outputAtCommon, outputWiresEq, commonEquiv,
+      Region.renameWires_id] using
+      RegionIso.renameWires output.endpoint WireRenaming.id
+        commonEquiv.symm.toRenaming commonEquiv.symm (fun _ => rfl)
+  let combined :=
+    (rawForward.trans formalEndpointPresentation).trans outputBack
+  have ambientEq :
+      ((commonEquiv.trans (WireEquiv.refl
+        (outer ++ (localBefore ++ (localAfter ++ retained))))).trans
+          commonEquiv.symm) =
+        WireEquiv.refl (common ++ retained) := by
+    apply WireEquiv.ext
+    intro signature wire
+    exact commonEquiv.left_inv wire
+  let outputPresentation : RegionIso (WireEquiv.refl (common ++ retained))
+      rawOutput.endpoint outputAtCommon :=
+    combined.castAmbient ambientEq
+  let rootPresentation : RegionIso (WireEquiv.refl common)
+      rawOutputRoot (Region.adjoinAt retained .nil outputAtCommon) := by
+    simpa only [rawOutputRoot] using
+      RegionIso.adjoinAt retained .nil outputPresentation
+  have finalHosted : HostedStrict result
+      (Region.adjoinAt retained .nil outputAtCommon) :=
+    HostedStrict.iso (RegionIso.refl result) rootPresentation
+      resultToRawOutput
+  have finalScope : ScopePreservation result
+      (Region.adjoinAt retained .nil outputAtCommon) :=
+    resultToRawOutputScope.trans (ScopePreservation.ofIso rootPresentation)
+  refine ⟨retained, formalSource, formalResult, formalEvidence, formalSites,
+    formalCoherence, ?_⟩
+  simpa only [outputAtCommon, outputWiresEq, common] using
+    And.intro finalHosted finalScope
+
+
 /-- Accumulate every selected application of an authoritative identity-headed
 pattern into one literal IdentityLeaf edit consumed at the binder home. -/
 theorem accumulateIdentity
@@ -663,354 +1164,13 @@ theorem accumulateIdentity
                   EqualityNormalization.StrictEquates occurrence
                     (Region.adjoinAt retained .nil output.endpoint)
                     outputCanonical outputExternalTwoEnded := by
-  let initialFrame : Transform.Frame (List.replicate arity signature)
-      common (.rel (List.replicate arity signature) :: common) common :=
-    Transform.Frame.replace [] [] common []
-      (List.replicate arity signature)
-  have folded :=
-    accumulateHostedTargetWith evidence sites
-      (Leaf.Identity.Vars.fromFn ports)
-      (outer := []) (before := []) (after := common)
-      (targetInserted := [])
-      (targetPattern := positionalIdentityPattern signature arity)
-      (targetBaseOperation := Leaf.Identity.operation signature arity)
-      PUnit.unit pattern.boundaryWire ScopePreservation ScopePreservation.refl
-      (fun locals before after scope =>
-        adjoinAt_preserves_scope locals .nil before after scope)
-      ScopePreservation.conjoin ScopePreservation.cut
-      (fun _ _ => True) (by intros; trivial) (by intros; trivial)
-      (by intros; trivial) (by intros; trivial) (by intros; trivial)
-      (fun _ _ => False)
-      (fun _ _ impossible _ => False.elim impossible)
-      (fun _ _ _ => True)
-      (fun _ _ _ _ _ => True.intro)
-      (identityDataNaturality signature arity)
-      (fun _ => True) True.intro (by intros; trivial)
-      (fun {itemCommon itemSourceWires itemTargetWires} {itemFrame}
-          {itemData} application siteData
-          {selectedTargetSourceWires selectedTargetWires} selectedFrame
-          selectedData => by
-        obtain ⟨retained, formalSource, formalResult, formalEvidence,
-            formalSites, coherence, staged, hosted, scope, presentation⟩ :=
-          identitySelectedTargetItem body_eq application siteData selectedFrame
-        exact ⟨retained, formalSource, formalResult, formalEvidence,
-          formalSites, coherence, staged, hosted, scope, presentation, by
-            intro bridge _alignment
-            exact False.elim bridge.data_selects, True.intro, True.intro⟩)
-  obtain ⟨retained, rawFormalSource, rawFormalResult, rawFormalEvidence,
-      rawFormalSites, rawCoherence, rawStaged, rawHosted, rawScope,
-      ⟨rawPresentation⟩, _rawEndpoint, _rawSourceSide, _rawRetained⟩ := folded
-  let canonicalFrame := Leaf.Identity.rootFrame common [] retained signature
-    arity
-  let move := WireEquiv.rotate [] common
-    [.rel (List.replicate arity signature)]
-  let forward := move.append (WireEquiv.refl retained)
-  let reassociate : WireEquiv
-      ((common ++ [.rel (List.replicate arity signature)]) ++ retained)
-      (common ++ ([] ++ .rel (List.replicate arity signature) :: retained)) :=
-    WireEquiv.ofEq (by simp)
-  let sourceEquiv := forward.symm.trans reassociate
-  let sourceRename := sourceEquiv.toRenaming
-  let commonRename : WireRenaming (common ++ retained)
-      (common ++ retained) := WireRenaming.id
-  have sourceRename_common {wireSignature}
-      (wire : Var common wireSignature) :
-      sourceRename
-          ((Var.appendRight
-              [.rel (List.replicate arity signature)] wire).appendLeft
-            retained) =
-        wire.appendLeft
-          (.rel (List.replicate arity signature) :: retained) := by
-    let targetWire :=
-      (wire.appendLeft [.rel (List.replicate arity signature)]).appendLeft
-        retained
-    have forwardEq : forward targetWire =
-        (Var.appendRight [.rel (List.replicate arity signature)] wire).appendLeft
-          retained := by
-      calc
-        forward targetWire =
-            (move
-              (wire.appendLeft
-                [.rel (List.replicate arity signature)])).appendLeft
-              retained :=
-          WireEquiv.append_apply_left move (WireEquiv.refl retained)
-            (wire.appendLeft [.rel (List.replicate arity signature)])
-        _ = (Var.appendRight
-              [.rel (List.replicate arity signature)] wire).appendLeft
-            retained := by
-          change
-            ((WireEquiv.rotate [] common
-                [.rel (List.replicate arity signature)])
-              ((Var.appendRight [] wire).appendLeft
-                [.rel (List.replicate arity signature)])).appendLeft
-              retained = _
-          rw [WireEquiv.rotate_apply_middle]
-          rfl
-    calc
-      sourceRename
-          ((Var.appendRight
-              [.rel (List.replicate arity signature)] wire).appendLeft
-            retained) =
-          reassociate
-            (forward.symm
-              ((Var.appendRight
-                  [.rel (List.replicate arity signature)] wire).appendLeft
-                retained)) := rfl
-      _ = reassociate (forward.symm (forward targetWire)) := by
-        rw [forwardEq]
-      _ = reassociate targetWire := by
-        have inverseEq : forward.symm (forward targetWire) = targetWire :=
-          forward.left_inv targetWire
-        rw [inverseEq]
-      _ = wire.appendLeft
-          (.rel (List.replicate arity signature) :: retained) := by
-        apply Var.eq_of_index_eq
-        apply Fin.ext
-        rw [WireEquiv.ofEq_index_val]
-        simp [targetWire]
-  have sourceRename_retained {wireSignature}
-      (wire : Var retained wireSignature) :
-      sourceRename (Var.appendRight
-          (.rel (List.replicate arity signature) :: common) wire) =
-        Var.appendRight common (.there wire) := by
-    let targetWire := Var.appendRight
-      (common ++ [.rel (List.replicate arity signature)]) wire
-    have forwardEq : forward targetWire = Var.appendRight
-        (.rel (List.replicate arity signature) :: common) wire := by
-      change
-        (move.append (WireEquiv.refl retained))
-            (Var.appendRight
-              ([] ++ common ++
-                [.rel (List.replicate arity signature)]) wire) = _
-      rw [WireEquiv.append_apply_right]
-      rfl
-    calc
-      sourceRename
-          (Var.appendRight
-            (.rel (List.replicate arity signature) :: common) wire) =
-          reassociate
-            (forward.symm
-              (Var.appendRight
-                (.rel (List.replicate arity signature) :: common) wire)) :=
-        rfl
-      _ = reassociate (forward.symm (forward targetWire)) := by
-        rw [forwardEq]
-      _ = reassociate targetWire := by
-        have inverseEq : forward.symm (forward targetWire) = targetWire :=
-          forward.left_inv targetWire
-        rw [inverseEq]
-      _ = Var.appendRight common (.there wire) := by
-        apply Var.eq_of_index_eq
-        apply Fin.ext
-        rw [WireEquiv.ofEq_index_val]
-        change targetWire.index.val =
-          (Var.appendRight common (.there wire)).index.val
-        calc
-          targetWire.index.val =
-              (common ++
-                [Sig.rel (List.replicate arity signature)]).length +
-                wire.index.val :=
-            Var.index_appendRight
-              (common ++
-                [Sig.rel (List.replicate arity signature)]) wire
-          _ = common.length + (Var.there wire).index.val := by
-            simp only [List.length_append, List.length_cons,
-              List.length_nil, Nat.add_zero, Var.index, Fin.val_succ]
-            omega
-          _ = (Var.appendRight common (.there wire)).index.val :=
-            (Var.index_appendRight common (.there wire)).symm
-  have sourceRename_selected :
-      sourceRename ((.here : Var
-          (.rel (List.replicate arity signature) :: common)
-          (.rel (List.replicate arity signature))).appendLeft retained) =
-        Var.appendRight common
-          ((.here : Var [.rel (List.replicate arity signature)]
-            (.rel (List.replicate arity signature))).appendLeft retained) := by
-    let targetWire := (Var.appendRight common (.here : Var
-      [.rel (List.replicate arity signature)]
-      (.rel (List.replicate arity signature)))).appendLeft retained
-    have forwardEq : forward targetWire =
-        ((.here : Var
-          (.rel (List.replicate arity signature) :: common)
-          (.rel (List.replicate arity signature))).appendLeft retained) := by
-      calc
-        forward targetWire =
-            (move
-              (Var.appendRight common
-                (.here : Var [.rel (List.replicate arity signature)]
-                  (.rel (List.replicate arity signature))))).appendLeft
-              retained :=
-          WireEquiv.append_apply_left move (WireEquiv.refl retained)
-            (Var.appendRight common
-              (.here : Var [.rel (List.replicate arity signature)]
-                (.rel (List.replicate arity signature))))
-        _ = ((.here : Var
-              (.rel (List.replicate arity signature) :: common)
-              (.rel (List.replicate arity signature))).appendLeft
-            retained) := by
-          change
-            ((WireEquiv.rotate [] common
-                [.rel (List.replicate arity signature)])
-              (Var.appendRight ([] ++ common)
-                (.here : Var [.rel (List.replicate arity signature)]
-                  (.rel (List.replicate arity signature))))).appendLeft
-              retained = _
-          rw [WireEquiv.rotate_apply_suffix]
-          rfl
-    calc
-      sourceRename
-          ((.here : Var
-            (.rel (List.replicate arity signature) :: common)
-            (.rel (List.replicate arity signature))).appendLeft retained) =
-          reassociate
-            (forward.symm
-              ((.here : Var
-                (.rel (List.replicate arity signature) :: common)
-                (.rel (List.replicate arity signature))).appendLeft
-                  retained)) := rfl
-      _ = reassociate (forward.symm (forward targetWire)) := by
-        rw [forwardEq]
-      _ = reassociate targetWire := by
-        have inverseEq : forward.symm (forward targetWire) = targetWire :=
-          forward.left_inv targetWire
-        rw [inverseEq]
-      _ = Var.appendRight common
-          ((.here : Var [.rel (List.replicate arity signature)]
-            (.rel (List.replicate arity signature))).appendLeft retained) := by
-        apply Var.eq_of_index_eq
-        apply Fin.ext
-        rw [WireEquiv.ofEq_index_val]
-        let binder := (.here :
-          Var [.rel (List.replicate arity signature)]
-            (.rel (List.replicate arity signature)))
-        change targetWire.index.val =
-          (Var.appendRight common (binder.appendLeft retained)).index.val
-        calc
-          targetWire.index.val =
-              (Var.appendRight common binder).index.val :=
-            Var.index_appendLeft (Var.appendRight common binder) retained
-          _ = common.length + binder.index.val :=
-            Var.index_appendRight common binder
-          _ = common.length + (binder.appendLeft retained).index.val := by
-            rw [Var.index_appendLeft]
-          _ = (Var.appendRight common
-                (binder.appendLeft retained)).index.val :=
-            (Var.index_appendRight common
-              (binder.appendLeft retained)).symm
-  have keepCommutes : ∀ {wireSignature}
-      (wire : Var (common ++ retained) wireSignature),
-      sourceRename ((initialFrame.append retained).sourceKeep wire) =
-        canonicalFrame.sourceKeep (commonRename wire) := by
-    intro wireSignature wire
-    apply Var.appendCases (left := common) (right := retained)
-      (motive := fun wire =>
-        sourceRename ((initialFrame.append retained).sourceKeep wire) =
-          canonicalFrame.sourceKeep (commonRename wire))
-    · intro inheritedSignature inherited
-      rw [show (initialFrame.append retained).sourceKeep
-          (inherited.appendLeft retained) =
-          (Var.appendRight
-            [.rel (List.replicate arity signature)] inherited).appendLeft
-            retained by
-        simp [initialFrame, Transform.Frame.replace,
-          Transform.Frame.append, Transform.Frame.keep,
-          Transform.Frame.localKeep, WireRenaming.appendRight,
-          Var.appendMap, Var.appendRight]]
-      rw [sourceRename_common]
-      simp [commonRename, canonicalFrame,
-        Leaf.Identity.rootFrame, Transform.Frame.replace,
-        Transform.Frame.append, Transform.Frame.keep,
-        Transform.Frame.localKeep, WireRenaming.appendRight,
-        WireRenaming.id, Var.appendMap, Var.appendRight]
-    · intro retainedSignature retainedWire
-      rw [show (initialFrame.append retained).sourceKeep
-          (Var.appendRight common retainedWire) =
-          Var.appendRight
-            (.rel (List.replicate arity signature) :: common)
-            retainedWire by
-        simp [initialFrame, Transform.Frame.replace,
-          Transform.Frame.append, Transform.Frame.keep,
-          Transform.Frame.localKeep, WireRenaming.appendRight,
-          Var.appendMap, Var.appendRight]]
-      rw [sourceRename_retained]
-      simp [commonRename, canonicalFrame,
-        Leaf.Identity.rootFrame, Transform.Frame.replace,
-        Transform.Frame.append, Transform.Frame.keep,
-        Transform.Frame.localKeep, WireRenaming.appendRight,
-        WireRenaming.id, Var.appendMap, Var.appendRight]
-  have targetKeepCommutes : ∀ {wireSignature}
-      (wire : Var (common ++ retained) wireSignature),
-      commonRename ((initialFrame.append retained).targetKeep wire) =
-        canonicalFrame.targetKeep (commonRename wire) := by
-    intro wireSignature wire
-    apply Var.appendCases (left := common) (right := retained)
-      (motive := fun wire =>
-        commonRename ((initialFrame.append retained).targetKeep wire) =
-          canonicalFrame.targetKeep (commonRename wire))
-    · intro inheritedSignature inherited
-      simp [commonRename, initialFrame, canonicalFrame,
-        Leaf.Identity.rootFrame, Transform.Frame.replace,
-        Transform.Frame.append, Transform.Frame.keep,
-        Transform.Frame.localKeep, WireRenaming.appendRight,
-        WireRenaming.id, Var.appendMap, Var.appendRight]
-    · intro retainedSignature retainedWire
-      simp [commonRename, initialFrame, canonicalFrame,
-        Leaf.Identity.rootFrame, Transform.Frame.replace,
-        Transform.Frame.append, Transform.Frame.keep,
-        Transform.Frame.localKeep, WireRenaming.appendRight,
-        WireRenaming.id, Var.appendMap, Var.appendRight]
-  have selectedCommutes :
-      sourceRename (initialFrame.append retained).selected =
-        canonicalFrame.selected := by
-    rw [show (initialFrame.append retained).selected =
-        ((.here : Var
-          (.rel (List.replicate arity signature) :: common)
-          (.rel (List.replicate arity signature))).appendLeft retained) by rfl]
-    rw [sourceRename_selected]
-    simp [canonicalFrame,
-      Leaf.Identity.rootFrame, Transform.Frame.replace,
-      Transform.Frame.append, Transform.Frame.insertedHead,
-      Var.appendLeft, Var.appendRight]
-  let argumentFrame : Transform.Frame (List.replicate arity signature)
-      (common ++ retained) (.rel (List.replicate arity signature) ::
-        common ++ retained) (.rel (List.replicate arity signature) ::
-          common ++ retained) := {
-    sourceKeep := (initialFrame.append retained).sourceKeep
-    targetKeep := (initialFrame.append retained).sourceKeep
-    selected := (initialFrame.append retained).selected
-  }
-  let mappedArgumentFrame : Transform.Frame
-      (List.replicate arity signature) (common ++ retained)
-      (common ++ (.rel (List.replicate arity signature) :: retained))
-      (common ++ (.rel (List.replicate arity signature) :: retained)) := {
-    sourceKeep := canonicalFrame.sourceKeep
-    targetKeep := canonicalFrame.sourceKeep
-    selected := canonicalFrame.selected
-  }
-  obtain ⟨formalSource, formalResult, formalEvidence, formalSites,
-      formalSourceEq, formalArgumentEq, _formalArgumentDuplicate,
-      ⟨formalPresentation⟩,
-      ⟨formalEndpointPresentation⟩⟩ :=
-    targetItemsReindex rawFormalEvidence rawFormalSites
-      (Leaf.Identity.Vars.fromFn ports) (Leaf.Identity.Vars.fromFn ports)
-      argumentFrame mappedArgumentFrame
-      commonRename sourceRename commonRename sourceRename
-      keepCommutes targetKeepCommutes selectedCommutes keepCommutes
-      selectedCommutes (identityDataNaturality signature arity) True.intro
-  have formalCoherence : formalSource =
-      (argumentItemsEdit formalSites (Leaf.Identity.Vars.fromFn ports)
-        (normalizationOperation (List.replicate arity signature))
-        canonicalFrame PUnit.unit (fun _ _ _ => PUnit.unit)).1 := by
-    calc
-      formalSource = rawFormalSource.renameWires sourceRename :=
-        formalSourceEq.symm
-      _ = (argumentItemsEdit rawFormalSites
-            (Leaf.Identity.Vars.fromFn ports)
-            (normalizationOperation (List.replicate arity signature))
-            (initialFrame.append retained) PUnit.unit
-            (fun _ _ _ => PUnit.unit)).1.renameWires sourceRename :=
-        congrArg (fun items => items.renameWires sourceRename) rawCoherence
-      _ = _ := formalArgumentEq
+  refine Exists.elim
+    (accumulateIdentityAt
+      (outer := common) (localBefore := []) (localAfter := []) body_eq
+      (by simp) evidence sites) ?_
+  intro retained folded
+  rcases folded with ⟨formalSource, formalResult, formalEvidence,
+    formalSites, formalCoherence, coreHosted, coreScope⟩
   let recordedOutput := itemsEdit
     (operation := recordingOperation
       (Leaf.Identity.operation signature arity) pattern.external)
@@ -1021,215 +1181,62 @@ theorem accumulateIdentity
     PUnit.unit formalEvidence primitiveSites
   have recordedEndpointEq : recordedOutput.endpoint = output.endpoint :=
     recordingItemsEditEndpoint_eq formalSites
+  let coreOutputWiresEq :
+      (common ++ retained) = common ++ ([] ++ ([] ++ retained)) := by
+    simp only [List.nil_append]
+  let coreOutput := recordedOutput.endpoint.renameWires
+    (WireEquiv.ofEq coreOutputWiresEq).symm.toRenaming
+  let coreExactOutput := Region.adjoinAt retained .nil coreOutput
+  have coreScope' : ScopePreservation result coreExactOutput := by
+    simpa only [coreExactOutput, coreOutput, recordedOutput] using coreScope
+  have coreHosted' : HostedStrict result coreExactOutput := by
+    simpa only [coreExactOutput, coreOutput, recordedOutput] using coreHosted
+  have coreEquivEq : (WireEquiv.ofEq coreOutputWiresEq).symm =
+      WireEquiv.refl (common ++ retained) := by
+    apply WireEquiv.ext
+    intro wireSignature wire
+    apply Var.eq_of_index_eq
+    apply Fin.ext
+    exact WireEquiv.ofEq_index_val coreOutputWiresEq
+      ((WireEquiv.ofEq coreOutputWiresEq).symm wire)
+  have coreOutputEq : coreOutput = recordedOutput.endpoint := by
+    change recordedOutput.endpoint.renameWires
+      (WireEquiv.ofEq coreOutputWiresEq).symm.toRenaming =
+        recordedOutput.endpoint
+    rw [coreEquivEq]
+    exact Region.renameWires_id recordedOutput.endpoint
+  let recordedPresentation : RegionIso (WireEquiv.refl common)
+      coreExactOutput
+      (Region.adjoinAt retained .nil recordedOutput.endpoint) :=
+    RegionIso.adjoinAt retained .nil (RegionIso.ofEq coreOutputEq)
+  let primitivePresentation : RegionIso (WireEquiv.refl common)
+      (Region.adjoinAt retained .nil recordedOutput.endpoint)
+      (Region.adjoinAt retained .nil output.endpoint) :=
+    RegionIso.adjoinAt retained .nil
+      (RegionIso.ofEq recordedEndpointEq)
+  let outputPresentation := recordedPresentation.trans primitivePresentation
   let exactOutput := Region.adjoinAt retained .nil output.endpoint
-  let rawResultRename : RegionIso (WireEquiv.refl (common ++ retained))
-      rawFormalResult (rawFormalResult.renameWires commonRename) := by
-    simpa only [commonRename] using
-      RegionIso.ofEq (Region.renameWires_id rawFormalResult).symm
-  have targetKeepIdentity : canonicalFrame.targetKeep = WireRenaming.id := by
-    simpa only [canonicalFrame] using
-      formalRootFrame_targetKeep common retained
-        (List.replicate arity signature)
-  obtain ⟨recordedLeafHosted, recordedLeafScope⟩ :=
-    leafItemsEndpoint formalEvidence formalSites targetKeepIdentity
-      (fun siteTargetKeepEq application site =>
-        positionalIdentityLeafEndpoint signature arity siteTargetKeepEq
-          application site)
-  have leafHosted : HostedStrict formalResult output.endpoint := by
-    rw [← recordedEndpointEq]
-    exact recordedLeafHosted
-  have leafScope : ScopePreservation formalResult output.endpoint := by
-    rw [← recordedEndpointEq]
-    exact recordedLeafScope
-  let formalStart := Region.adjoinAt retained .nil formalResult
-  let formalPresentationIso : RegionIso (WireEquiv.refl common)
-      rawStaged formalStart :=
-    (rawPresentation.trans
-      (RegionIso.adjoinAt retained .nil rawResultRename)).trans
-      (RegionIso.adjoinAt retained .nil formalPresentation)
-  have liftedLeafHosted : HostedStrict formalStart exactOutput := by
-    simpa only [formalStart, exactOutput] using
-      HostedStrict.adjoinAt retained formalResult output.endpoint leafHosted
-  have liftedLeafScope : ScopePreservation formalStart exactOutput := by
-    simpa only [formalStart, exactOutput] using
-      adjoinAt_preserves_scope retained .nil formalResult output.endpoint
-        leafScope
-  let emptyEquiv := WireEquiv.appendNil common
-  let emptyRename : WireRenaming common (common ++ []) :=
-    emptyEquiv.symm.toRenaming
-  let emptyHostIso (region : Region common) :
-      RegionIso (WireEquiv.refl common) region
-        (Region.adjoinAt [] .nil (region.renameWires emptyRename)) := by
-    let directToCollapsed := RegionIso.renameWires region WireRenaming.id
-      (WireRenaming.comp emptyEquiv.toRenaming emptyRename)
-      (WireEquiv.refl common) (by
-        intro signature wire
-        exact (emptyEquiv.right_inv wire).symm)
-    let collapsedFromHosted :=
-      (RegionIso.renameWiresComp region emptyRename
-        emptyEquiv.toRenaming).symm
-    let chained := (directToCollapsed.trans collapsedFromHosted).trans
-      (RegionIso.adjoinAtNil (region.renameWires emptyRename))
-    have ambientEq :
-        (((WireEquiv.refl common).trans
-          (WireEquiv.refl common).symm).trans
-            (WireEquiv.refl common)) = WireEquiv.refl common := by
-      apply WireEquiv.ext
-      intro signature wire
-      rfl
-    simpa only [Region.renameWires_id] using chained.castAmbient ambientEq
-  let sourceHosted := Region.adjoinAt [] .nil
-    (result.renameWires emptyRename)
-  let targetHosted := Region.adjoinAt [] .nil
-    (rawStaged.renameWires emptyRename)
-  let sourceHostedIso : RegionIso (WireEquiv.refl common)
-      result sourceHosted := emptyHostIso result
-  let targetHostedIso : RegionIso (WireEquiv.refl common)
-      rawStaged targetHosted := emptyHostIso rawStaged
-  have sourceHostedCanonical : sourceHosted.Canonical :=
-    sourceHostedIso.canonical_iff.mp
+  have outputScope : ScopePreservation result exactOutput :=
+    coreScope'.trans (ScopePreservation.ofIso outputPresentation)
+  have outputHosted : HostedStrict result exactOutput :=
+    HostedStrict.iso (RegionIso.refl result) outputPresentation coreHosted'
+  have materialOutputCanonical : exactOutput.Canonical :=
+    outputScope.canonical
       (occurrence.context.holeCanonical result occurrence.sourceCanonical)
-  have sourceHostedNonempty : ∀ {signature} (wire : Var common signature),
-      result.incidencePaths wire.index.val ≠ [] ↔
-        sourceHosted.incidencePaths wire.index.val ≠ [] := by
-    intro signature wire
-    have lengthEq := sourceHostedIso.incidencePaths_length_eq wire
-    exact ⟨fun nonempty => by
-      rw [← List.length_pos_iff] at nonempty ⊢
-      rwa [← lengthEq], fun nonempty => by
-      rw [← List.length_pos_iff] at nonempty ⊢
-      rwa [lengthEq]⟩
-  let rootOccurrence : Occurrence sourceHosted host :=
-    EqualityNormalization.presentationOccurrence occurrence
-      sourceHostedCanonical sourceHostedNonempty sourceHostedIso
-  have hostedScope : ScopePreservation sourceHosted targetHosted :=
-    ScopePreservation.trans (ScopePreservation.ofIso sourceHostedIso.symm)
-      (ScopePreservation.trans rawScope
-        (ScopePreservation.ofIso targetHostedIso))
-  have targetHostedCanonical : targetHosted.Canonical :=
-    hostedScope.canonical sourceHostedCanonical
-  have targetHostedReplacement := rootOccurrence.context.replaceCanonical
-    sourceHosted targetHosted rootOccurrence.sourceCanonical
-      targetHostedCanonical hostedScope.incidenceNonempty
-  let sourceHostedEndpoint := rootOccurrence.interface.withBody
-    (rootOccurrence.context.fill sourceHosted) rootOccurrence.sourceCanonical
-      rootOccurrence.sourceExternalTwoEnded
-  have targetHostedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      rootOccurrence.interface.boundaryWire
-      (rootOccurrence.context.fill targetHosted) :=
-    sourceHostedEndpoint.externalTwoEnded_of_nonempty_iff _
-      targetHostedReplacement.2
-  have hostedStrict := rawHosted common [] emptyRename .nil
-    rootOccurrence targetHostedReplacement.1 targetHostedExternalTwoEnded
-  let formalHosted := Region.adjoinAt [] .nil
-    ((formalStart : Region common).renameWires emptyRename)
-  let exactHosted := Region.adjoinAt [] .nil
-    (exactOutput.renameWires emptyRename)
-  let formalHostedIso : RegionIso (WireEquiv.refl common)
-      targetHosted formalHosted :=
-    (targetHostedIso.symm.trans formalPresentationIso).trans
-      (emptyHostIso formalStart)
-  have formalHostedCanonical : formalHosted.Canonical :=
-    formalHostedIso.canonical_iff.mp targetHostedCanonical
-  have formalHostedNonempty : ∀ {signature} (wire : Var common signature),
-      targetHosted.incidencePaths wire.index.val ≠ [] ↔
-        formalHosted.incidencePaths wire.index.val ≠ [] := by
-    intro signature wire
-    have lengthEq := formalHostedIso.incidencePaths_length_eq wire
-    exact ⟨fun nonempty => by
-      rw [← List.length_pos_iff] at nonempty ⊢
-      rwa [← lengthEq], fun nonempty => by
-      rw [← List.length_pos_iff] at nonempty ⊢
-      rwa [lengthEq]⟩
-  have formalReplacement := rootOccurrence.context.replaceCanonical
-    targetHosted formalHosted targetHostedReplacement.1
-      formalHostedCanonical formalHostedNonempty
-  let targetHostedEndpoint := rootOccurrence.interface.withBody
-    (rootOccurrence.context.fill targetHosted) targetHostedReplacement.1
-      targetHostedExternalTwoEnded
-  have formalHostedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      rootOccurrence.interface.boundaryWire
-      (rootOccurrence.context.fill formalHosted) :=
-    targetHostedEndpoint.externalTwoEnded_of_nonempty_iff _
-      formalReplacement.2
-  let targetHostedOccurrence : Occurrence targetHosted targetHostedEndpoint :=
-    exactOccurrence rootOccurrence.interface rootOccurrence.context
-      targetHosted targetHostedReplacement.1 targetHostedExternalTwoEnded
-  let formalOccurrence : Occurrence formalHosted targetHostedEndpoint :=
-    EqualityNormalization.presentationOccurrence targetHostedOccurrence
-      formalHostedCanonical formalHostedNonempty formalHostedIso
-  let formalEmptyIso := emptyHostIso formalStart
-  let exactEmptyIso := emptyHostIso exactOutput
-  have hostedLeafScope : ScopePreservation formalHosted exactHosted :=
-    ScopePreservation.trans (ScopePreservation.ofIso formalEmptyIso.symm)
-      (ScopePreservation.trans liftedLeafScope
-        (ScopePreservation.ofIso exactEmptyIso))
-  have exactHostedCanonical : exactHosted.Canonical :=
-    hostedLeafScope.canonical formalHostedCanonical
-  have exactHostedReplacement := formalOccurrence.context.replaceCanonical
-    formalHosted exactHosted formalOccurrence.sourceCanonical
-      exactHostedCanonical hostedLeafScope.incidenceNonempty
-  let formalHostedEndpoint := formalOccurrence.interface.withBody
-    (formalOccurrence.context.fill formalHosted)
-      formalOccurrence.sourceCanonical formalOccurrence.sourceExternalTwoEnded
-  have exactHostedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      formalOccurrence.interface.boundaryWire
-      (formalOccurrence.context.fill exactHosted) :=
-    formalHostedEndpoint.externalTwoEnded_of_nonempty_iff _
-      exactHostedReplacement.2
-  have leafStrict := liftedLeafHosted common [] emptyRename .nil
-    formalOccurrence exactHostedReplacement.1
-      exactHostedExternalTwoEnded
-  have exactLocalCanonical : exactOutput.Canonical :=
-    exactEmptyIso.canonical_iff.mpr exactHostedCanonical
-  have exactNonempty : ∀ {signature} (wire : Var common signature),
-      exactHosted.incidencePaths wire.index.val ≠ [] ↔
-        exactOutput.incidencePaths wire.index.val ≠ [] := by
-    intro signature wire
-    have lengthEq := exactEmptyIso.incidencePaths_length_eq wire
-    exact ⟨fun nonempty => by
-      rw [← List.length_pos_iff] at nonempty ⊢
-      rwa [lengthEq], fun nonempty => by
-      rw [← List.length_pos_iff] at nonempty ⊢
-      rwa [← lengthEq]⟩
-  have exactReplacement := formalOccurrence.context.replaceCanonical
-    exactHosted exactOutput exactHostedReplacement.1 exactLocalCanonical
-      exactNonempty
-  let exactHostedEndpoint := formalOccurrence.interface.withBody
-    (formalOccurrence.context.fill exactHosted) exactHostedReplacement.1
-      exactHostedExternalTwoEnded
-  have exactExternalTwoEnded : OpenDiagram.ExternalTwoEnded
-      rootOccurrence.interface.boundaryWire
-      (rootOccurrence.context.fill exactOutput) :=
-    exactHostedEndpoint.externalTwoEnded_of_nonempty_iff _
-      exactReplacement.2
-  let exactTargetIso : OpenDiagramIso
-      (formalOccurrence.interface.withBody
-        (formalOccurrence.context.fill exactHosted)
-        exactHostedReplacement.1 exactHostedExternalTwoEnded)
-      (rootOccurrence.interface.withBody
-        (rootOccurrence.context.fill exactOutput)
-        exactReplacement.1 exactExternalTwoEnded) :=
-    OpenDiagram.withBody_iso exactHostedReplacement.1 exactReplacement.1
-      exactHostedExternalTwoEnded exactExternalTwoEnded
-      (DiagramContext.fillIso rootOccurrence.context exactEmptyIso.symm)
-  have presentedLeafStrict : EqualityNormalization.StrictEquates
-      formalOccurrence exactOutput exactReplacement.1 exactExternalTwoEnded :=
-    EqualityNormalization.StrictEquates.targetIso leafStrict exactTargetIso
-  have presentedStrict : EqualityNormalization.StrictEquates rootOccurrence
-      exactOutput exactReplacement.1 exactExternalTwoEnded :=
-    ⟨hostedStrict.1.trans presentedLeafStrict.1,
-      presentedLeafStrict.2.trans hostedStrict.2⟩
-  have strict : EqualityNormalization.StrictEquates occurrence exactOutput
-      exactReplacement.1 exactExternalTwoEnded := by
-    simpa only [EqualityNormalization.StrictEquates, rootOccurrence,
-      EqualityNormalization.presentationOccurrence] using presentedStrict
+  have outputReplacement := occurrence.context.replaceCanonical result
+    exactOutput occurrence.sourceCanonical materialOutputCanonical
+      outputScope.incidenceNonempty
+  let sourceEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill result) occurrence.sourceCanonical
+      occurrence.sourceExternalTwoEnded
+  have outputExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill exactOutput) :=
+    sourceEndpoint.externalTwoEnded_of_nonempty_iff _ outputReplacement.2
+  have strict := HostedStrict.atOccurrence outputHosted occurrence
+    outputReplacement.1 outputExternalTwoEnded
   exact ⟨retained, formalSource, formalResult, formalEvidence, formalSites,
-    formalCoherence, exactReplacement.1, exactExternalTwoEnded, strict⟩
-
-/-- The direct singleton-atom branch: accumulate every authoritative selected
-site into one literal Formal edit, prepare its exact deterministic endpoint,
-and run the single directed FormalApplication primitive at the binder home. -/
+    formalCoherence, outputReplacement.1, outputExternalTwoEnded, strict⟩
 theorem atomFormal
     {patternWires atomArguments common originalSourceWires
       originalTargetWires : List Sig}
@@ -1679,14 +1686,10 @@ theorem identityLeaf
     positionalPending rawPreparedFilledCanonical positionalLocalValidity.1 (by
       intro wireSignature wire
       have paths := positionalLocalValidity.2 wire
-      exact ⟨fun nonempty => by
-          dsimp only [positionalPending]
-          rw [← paths]
-          exact nonempty,
-        fun nonempty => by
-          dsimp only [positionalPending] at nonempty ⊢
-          rw [paths]
-          exact nonempty⟩)
+      have paths' : rawPrepared.incidencePaths wire.index.val =
+          positionalPending.incidencePaths wire.index.val := by
+        simpa only [rawPrepared, positionalPending, List.nil_append] using paths
+      simpa only [paths'])
   have positionalFilledCanonical :
       (context.fill positionalPending).Canonical := positionalReplacement.1
   have positionalFilledExternal : OpenDiagram.ExternalTwoEnded
@@ -2384,5 +2387,589 @@ theorem supportAtomFormalAt
     flatFormalEvidence primitiveSites formalRequest (by
       simpa only [prepared, oldLocals, output] using preparation)
 
+
+theorem supportIdentityFormalAt
+    {wires structuralOuter structuralBefore structuralAfter :
+      List Sig}
+    (signature : Sig) (arity : Nat)
+    (ports : Fin arity → Var wires signature)
+    {items : ItemSeq
+      (structuralOuter ++
+        (structuralBefore ++ .rel wires :: structuralAfter))}
+    {result : Region
+      (structuralOuter ++ (structuralBefore ++ structuralAfter))}
+    (evidence :
+      VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+        (Erasure.Exposure.supportPattern
+          (supportIdentityMaterial signature arity ports)
+          (supportIdentityMaterial_canonical signature arity ports))
+        (VisualProof.Rule.Comprehension.retain structuralOuter
+          structuralBefore structuralAfter wires)
+        (VisualProof.Rule.Comprehension.selected structuralOuter
+          structuralBefore structuralAfter wires)
+        items result)
+    (sites : ItemsSites (operation := normalizationOperation wires)
+      (frame := normalizationFrame structuralOuter structuralBefore
+        structuralAfter wires) PUnit.unit evidence)
+    (request : Telescope.Request
+      (Region.adjoinAt (structuralBefore ++ structuralAfter) .nil result)
+      (.mk (structuralBefore ++ .rel wires :: structuralAfter) items)) :
+    request.Result := by
+  let targetFrame := Leaf.Identity.rootFrame structuralOuter structuralBefore
+    structuralAfter signature arity
+  obtain ⟨retained, formalSource, formalResult, formalEvidence, formalSites,
+      formalCoherence, staged, hosted, stagedScope, ⟨stagedPresentation⟩,
+      _endpointPresentation, sourceCleanup, retainedEq⟩ :=
+    accumulateHostedTargetWith
+      (outer := structuralOuter) (before := structuralBefore)
+      (after := structuralAfter) (targetInserted := []) evidence sites
+      (Leaf.Identity.Vars.fromFn ports) PUnit.unit
+      (EqualityNormalization.formalPorts wires)
+      ScopePreservation ScopePreservation.refl
+      (fun locals before after scope =>
+        adjoinAt_preserves_scope locals .nil before after scope)
+      ScopePreservation.conjoin ScopePreservation.cut
+      (fun before after => HostedStrict before after ∧
+        HostedScope before after)
+      (fun region => ⟨HostedStrict.refl region,
+        fun rename => ScopePreservation.refl _⟩)
+      (fun locals before after transformation =>
+        ⟨HostedStrict.adjoinAt locals before after transformation.1,
+          HostedScope.adjoinAt locals before after transformation.2⟩)
+      (fun first second =>
+        ⟨HostedStrict.conjoin _ _ _ _ first.1 second.1, by
+          intro target rename
+          simpa only [Region.renameWires_conjoin] using
+            ScopePreservation.conjoin (first.2 rename) (second.2 rename)⟩)
+      (fun transformation =>
+        ⟨HostedStrict.cut _ _ transformation.1, by
+          intro target rename
+          simpa only [Region.singleton_renameWires, Item.renameWires] using
+            ScopePreservation.cut (transformation.2 rename)⟩)
+      (fun sourceIso targetIso transformation =>
+        ⟨HostedStrict.iso sourceIso targetIso transformation.1, by
+          intro target rename
+          exact ((HostedScope.ofIso sourceIso) rename).trans
+            ((transformation.2 rename).trans
+              ((HostedScope.ofIso targetIso) rename))⟩)
+      (fun _ _ => False)
+      (fun _ _ impossible _ => False.elim impossible)
+      (fun _ _ _ => True)
+      (fun _ _ _ _ _ => True.intro)
+      (identityDataNaturality signature arity)
+      (fun retained => retained = []) rfl
+      (fun first second firstEq secondEq => by
+        simp only [firstEq, secondEq, List.nil_append])
+      (fun {itemCommon itemSourceWires itemTargetWires} {itemFrame}
+          {itemData} application siteData
+          {selectedTargetSourceWires selectedTargetWires} selectedFrame _ => by
+        obtain ⟨selectedRetained, selectedSource, selectedResult,
+            selectedEvidence, selectedSites, selectedCoherence, selectedStaged,
+            selectedHosted, selectedScope, selectedPresentation,
+            selectedRetainedEq, selectedCleanup⟩ :=
+          supportIdentitySelectedTargetItem signature arity ports application siteData
+            selectedFrame
+        exact ⟨selectedRetained, selectedSource, selectedResult,
+          selectedEvidence, selectedSites, selectedCoherence, selectedStaged,
+          selectedHosted, selectedScope, selectedPresentation, by
+            intro bridge _alignment
+            exact False.elim bridge.data_selects,
+          selectedCleanup, selectedRetainedEq⟩)
+  subst retained
+  let common := structuralOuter ++ (structuralBefore ++ structuralAfter)
+  let positionalSourceWires := structuralOuter ++
+    (structuralBefore ++ .rel (List.replicate arity signature) ::
+      structuralAfter)
+  let authoritativeSourceWires := structuralOuter ++
+    (structuralBefore ++ .rel wires :: structuralAfter)
+  let commonRename : WireRenaming (common ++ []) common :=
+    (WireEquiv.appendNil common).toRenaming
+  let positionalSourceRename : WireRenaming
+      (positionalSourceWires ++ []) positionalSourceWires :=
+    (WireEquiv.appendNil positionalSourceWires).toRenaming
+  let authoritativeSourceRename : WireRenaming
+      (authoritativeSourceWires ++ []) authoritativeSourceWires :=
+    (WireEquiv.appendNil authoritativeSourceWires).toRenaming
+  let authoritativeFrame : Transform.Frame wires common
+      authoritativeSourceWires authoritativeSourceWires :=
+    Transform.Frame.replace structuralOuter structuralBefore structuralAfter
+      [.rel wires] wires
+  have sourceKeepCommutes : ∀ {signature} (wire : Var (common ++ []) signature),
+      positionalSourceRename ((targetFrame.append []).sourceKeep wire) =
+        targetFrame.sourceKeep (commonRename wire) := by
+    intro signature wire
+    let baseWire := commonRename wire
+    have liftEq : baseWire.appendLeft [] = wire := by
+      calc
+        baseWire.appendLeft [] =
+            (WireEquiv.appendNil common).symm baseWire :=
+          (WireEquiv.appendNil_symm_apply common baseWire).symm
+        _ = wire := (WireEquiv.appendNil common).left_inv wire
+    calc
+      positionalSourceRename ((targetFrame.append []).sourceKeep wire) =
+          positionalSourceRename
+            ((targetFrame.append []).sourceKeep
+              (baseWire.appendLeft [])) :=
+        congrArg (fun value => positionalSourceRename
+          ((targetFrame.append []).sourceKeep value)) liftEq.symm
+      _ = positionalSourceRename
+          ((targetFrame.sourceKeep baseWire).appendLeft []) := by
+        simp only [Transform.Frame.append, WireRenaming.appendRight,
+          Var.appendMap_left]
+      _ = targetFrame.sourceKeep baseWire := by
+        simpa only [positionalSourceRename] using
+          WireEquiv.appendNil_apply positionalSourceWires
+            (targetFrame.sourceKeep baseWire)
+      _ = targetFrame.sourceKeep (commonRename wire) := rfl
+  have targetKeepCommutes : ∀ {signature} (wire : Var (common ++ []) signature),
+      commonRename ((targetFrame.append []).targetKeep wire) =
+        targetFrame.targetKeep (commonRename wire) := by
+    intro signature wire
+    let baseWire := commonRename wire
+    have liftEq : baseWire.appendLeft [] = wire := by
+      calc
+        baseWire.appendLeft [] =
+            (WireEquiv.appendNil common).symm baseWire :=
+          (WireEquiv.appendNil_symm_apply common baseWire).symm
+        _ = wire := (WireEquiv.appendNil common).left_inv wire
+    calc
+      commonRename ((targetFrame.append []).targetKeep wire) =
+          commonRename ((targetFrame.append []).targetKeep
+            (baseWire.appendLeft [])) :=
+        congrArg (fun value => commonRename
+          ((targetFrame.append []).targetKeep value)) liftEq.symm
+      _ = commonRename ((targetFrame.targetKeep baseWire).appendLeft []) := by
+        simp only [Transform.Frame.append, WireRenaming.appendRight,
+          Var.appendMap_left]
+      _ = targetFrame.targetKeep baseWire := by
+        simpa only [commonRename] using WireEquiv.appendNil_apply common
+          (targetFrame.targetKeep baseWire)
+      _ = targetFrame.targetKeep (commonRename wire) := rfl
+  have selectedCommutes :
+      positionalSourceRename (targetFrame.append []).selected =
+        targetFrame.selected := by
+    simpa only [positionalSourceRename, Transform.Frame.append]
+      using WireEquiv.appendNil_apply positionalSourceWires
+        targetFrame.selected
+  have argumentKeepCommutes : ∀ {signature}
+      (wire : Var (common ++ []) signature),
+      authoritativeSourceRename
+          ((authoritativeFrame.append []).sourceKeep wire) =
+        authoritativeFrame.sourceKeep (commonRename wire) := by
+    intro signature wire
+    let baseWire := commonRename wire
+    have liftEq : baseWire.appendLeft [] = wire := by
+      calc
+        baseWire.appendLeft [] =
+            (WireEquiv.appendNil common).symm baseWire :=
+          (WireEquiv.appendNil_symm_apply common baseWire).symm
+        _ = wire := (WireEquiv.appendNil common).left_inv wire
+    calc
+      authoritativeSourceRename
+          ((authoritativeFrame.append []).sourceKeep wire) =
+          authoritativeSourceRename
+            ((authoritativeFrame.append []).sourceKeep
+              (baseWire.appendLeft [])) :=
+        congrArg (fun value => authoritativeSourceRename
+          ((authoritativeFrame.append []).sourceKeep value)) liftEq.symm
+      _ = authoritativeSourceRename
+          ((authoritativeFrame.sourceKeep baseWire).appendLeft []) := by
+        simp only [Transform.Frame.append, WireRenaming.appendRight,
+          Var.appendMap_left]
+      _ = authoritativeFrame.sourceKeep baseWire := by
+        simpa only [authoritativeSourceRename] using
+          WireEquiv.appendNil_apply authoritativeSourceWires
+            (authoritativeFrame.sourceKeep baseWire)
+      _ = authoritativeFrame.sourceKeep (commonRename wire) := rfl
+  have argumentSelectedCommutes :
+      authoritativeSourceRename (authoritativeFrame.append []).selected =
+        authoritativeFrame.selected := by
+    simpa only [authoritativeSourceRename, Transform.Frame.append]
+      using WireEquiv.appendNil_apply authoritativeSourceWires
+        authoritativeFrame.selected
+  obtain ⟨flatFormalSource, flatFormalResult, flatFormalEvidence,
+      flatFormalSites, flatSourceEq, flatPositionalEq, flatAuthoritativeEq,
+      ⟨flatResultIso⟩, ⟨flatEndpointIso⟩⟩ :=
+    targetItemsReindex
+      (baseOperation := Leaf.Identity.operation signature arity)
+      (external := wires) (mappedFrame := targetFrame)
+      (mappedData := PUnit.unit) formalEvidence formalSites
+      (Leaf.Identity.Vars.fromFn ports)
+      (EqualityNormalization.formalPorts wires)
+      (authoritativeFrame.append []) authoritativeFrame
+      commonRename positionalSourceRename commonRename
+      authoritativeSourceRename sourceKeepCommutes targetKeepCommutes
+      selectedCommutes argumentKeepCommutes argumentSelectedCommutes
+      (identityDataNaturality signature arity) True.intro
+  let oldLocals := structuralBefore ++ structuralAfter
+  let pendingLocals := structuralBefore ++ .rel wires :: structuralAfter
+  let pending : Region structuralOuter := .mk pendingLocals items
+  let authoritativeItems :=
+    (argumentItemsEdit flatFormalSites
+      (EqualityNormalization.formalPorts wires)
+      (normalizationOperation wires) authoritativeFrame PUnit.unit
+      (fun _ _ _ => PUnit.unit)).1
+  let authoritativePending := argumentNormalizedRegionAt
+    (outer := structuralOuter) (localBefore := structuralBefore)
+    (localAfter := structuralAfter) flatFormalSites
+    (EqualityNormalization.formalPorts wires)
+  let rawAuthoritativeItems :=
+    (argumentItemsEdit formalSites
+      (EqualityNormalization.formalPorts wires)
+      (normalizationOperation wires) (authoritativeFrame.append [])
+      PUnit.unit (fun _ _ _ => PUnit.unit)).1
+  let rawAuthoritative := Region.ofItems rawAuthoritativeItems
+  let flatAuthoritative := Region.ofItems authoritativeItems
+  have renamedAuthoritativeEq :
+      rawAuthoritative.renameWires authoritativeSourceRename =
+        flatAuthoritative := by
+    simpa only [rawAuthoritative, flatAuthoritative, authoritativeItems,
+      rawAuthoritativeItems, Region.ofItems_renameWires] using
+        congrArg Region.ofItems flatAuthoritativeEq
+  let cleanupPresentation : RegionIso
+      (WireEquiv.refl authoritativeSourceWires)
+      (Region.adjoinAt [] .nil rawAuthoritative)
+      flatAuthoritative :=
+    (RegionIso.adjoinAtNil rawAuthoritative).symm.trans
+      (RegionIso.ofEq renamedAuthoritativeEq)
+  have sourceCleanupFlat :
+      HostedStrict (Region.ofItems items) flatAuthoritative ∧
+        HostedScope (Region.ofItems items) flatAuthoritative := by
+    refine ⟨HostedStrict.iso (RegionIso.refl _) cleanupPresentation
+        sourceCleanup.1, ?_⟩
+    intro target rename
+    exact (sourceCleanup.2 rename).trans
+      ((HostedScope.ofIso cleanupPresentation) rename)
+  have cleanupHosted : HostedStrict pending authoritativePending := by
+    have lifted := HostedStrict.adjoinAt pendingLocals
+      (Region.ofItems items) flatAuthoritative sourceCleanupFlat.1
+    exact HostedStrict.iso
+      (RegionIso.adjoinAtOfItems pendingLocals items).symm
+      (by
+        simpa only [authoritativePending, argumentNormalizedRegionAt,
+          authoritativeItems] using
+            RegionIso.adjoinAtOfItems pendingLocals authoritativeItems)
+      lifted
+  have cleanupHostedScope : HostedScope pending authoritativePending := by
+    have lifted : HostedScope
+        (Region.adjoinAt pendingLocals .nil (Region.ofItems items))
+        (Region.adjoinAt pendingLocals .nil flatAuthoritative) := by
+      intro target rename
+      exact HostedScope.adjoinAt pendingLocals
+        (Region.ofItems items) flatAuthoritative sourceCleanupFlat.2 rename
+    intro target rename
+    exact ((HostedScope.ofIso
+        (RegionIso.adjoinAtOfItems pendingLocals items).symm) rename).trans
+      ((lifted rename).trans
+        ((HostedScope.ofIso (by
+          simpa only [authoritativePending, argumentNormalizedRegionAt,
+            authoritativeItems] using
+              RegionIso.adjoinAtOfItems pendingLocals authoritativeItems))
+          rename))
+  have cleanupScope : ScopePreservation pending authoritativePending := by
+    simpa only [Region.renameWires_id] using
+      cleanupHostedScope WireRenaming.id
+  have pendingCanonical :
+      (request.occurrence.context.fill pending).Canonical := by
+    simpa only [pending, pendingLocals] using request.pendingCanonical
+  have pendingExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      request.occurrence.interface.boundaryWire
+      (request.occurrence.context.fill pending) := by
+    intro signature wire
+    simpa only [pending, pendingLocals] using
+      request.pendingExternalTwoEnded wire
+  have authoritativeValidity := filledValidityOfScope
+    request.occurrence.interface request.occurrence.context pending
+    authoritativePending pendingCanonical pendingExternalTwoEnded cleanupScope
+  have cleanupTelescope : Telescope request.polarity
+      request.occurrence.interface request.occurrence.context
+      authoritativePending pending authoritativeValidity.1
+      authoritativeValidity.2 pendingCanonical pendingExternalTwoEnded :=
+    telescopeOfHostedExact cleanupHosted.symm request.polarity
+      request.occurrence.interface request.occurrence.context
+      authoritativeValidity.1 authoritativeValidity.2 pendingCanonical
+      pendingExternalTwoEnded request.continuation.1
+  have authoritativeContinuation : Telescope request.polarity
+      request.occurrence.interface request.occurrence.context
+      authoritativePending request.endpoint authoritativeValidity.1
+      authoritativeValidity.2 request.endpointCanonical
+      request.endpointExternalTwoEnded :=
+    telescopeTrans cleanupTelescope (by simpa only [pending, pendingLocals] using
+      request.continuation)
+  let positionalValues := Leaf.Identity.Vars.fromFn ports
+  have flatFormalCoherence : flatFormalSource =
+      (argumentItemsEdit flatFormalSites positionalValues
+        (normalizationOperation (List.replicate arity signature))
+        targetFrame PUnit.unit (fun _ _ _ => PUnit.unit)).1 := by
+    have mappedCoherence : formalSource.renameWires positionalSourceRename =
+        (argumentItemsEdit formalSites positionalValues
+          (normalizationOperation (List.replicate arity signature))
+          (targetFrame.append []) PUnit.unit
+          (fun _ _ _ => PUnit.unit)).1.renameWires
+            positionalSourceRename :=
+      congrArg (fun source => source.renameWires positionalSourceRename)
+        formalCoherence
+    exact flatSourceEq.symm.trans (mappedCoherence.trans flatPositionalEq)
+  let positionalPending : Region structuralOuter :=
+    .mk (structuralBefore ++
+      .rel (List.replicate arity signature) :: structuralAfter)
+      flatFormalSource
+  have positionalEq : positionalPending =
+      argumentNormalizedRegionAt
+        (outer := structuralOuter) (localBefore := structuralBefore)
+        (localAfter := structuralAfter) flatFormalSites positionalValues := by
+    let positionalFrame : Transform.Frame
+        (List.replicate arity signature)
+        (structuralOuter ++ (structuralBefore ++ structuralAfter))
+        (structuralOuter ++ (structuralBefore ++
+          .rel (List.replicate arity signature) :: structuralAfter))
+        (structuralOuter ++ (structuralBefore ++
+          .rel (List.replicate arity signature) :: structuralAfter)) :=
+      Transform.Frame.replace structuralOuter structuralBefore
+        structuralAfter [.rel (List.replicate arity signature)]
+        (List.replicate arity signature)
+    have sourceIndependent := argumentItemsEdit_source_independent
+      flatFormalSites positionalValues
+      (normalizationOperation (List.replicate arity signature))
+      targetFrame PUnit.unit (fun _ _ _ => PUnit.unit)
+      (normalizationOperation (List.replicate arity signature))
+      positionalFrame PUnit.unit (fun _ _ _ => PUnit.unit)
+      (by
+        intro wireSignature wire
+        rfl)
+      (by rfl)
+    have normalizedCoherence : flatFormalSource =
+        (argumentItemsEdit flatFormalSites positionalValues
+          (normalizationOperation (List.replicate arity signature))
+          positionalFrame PUnit.unit (fun _ _ _ => PUnit.unit)).1 :=
+      flatFormalCoherence.trans sourceIndependent
+    exact congrArg
+      (Region.mk (structuralBefore ++
+        .rel (List.replicate arity signature) :: structuralAfter))
+      normalizedCoherence
+  let recordedOutput := itemsEdit
+    (operation := recordingOperation
+      (Leaf.Identity.operation signature arity) wires)
+    PUnit.unit flatFormalEvidence flatFormalSites
+  let primitiveSites := recordingItemsSitesTarget flatFormalSites
+  let output := itemsEdit
+    (operation := Leaf.Identity.operation signature arity)
+    PUnit.unit flatFormalEvidence primitiveSites
+  have outputEndpointEq : recordedOutput.endpoint = output.endpoint :=
+    recordingItemsEditEndpoint_eq flatFormalSites
+  have targetKeepIdentity : targetFrame.targetKeep = WireRenaming.id := by
+    apply WireRenaming.ext
+    intro signature wire
+    apply Var.appendCases (left := structuralOuter)
+      (right := structuralBefore ++ structuralAfter)
+      (motive := fun wire => targetFrame.targetKeep wire = wire)
+    · intro outerSignature outerWire
+      simp [targetFrame, Leaf.Identity.rootFrame, Transform.Frame.replace,
+        Transform.Frame.keep, Transform.Frame.localKeep, WireRenaming.id]
+    · intro localSignature localWire
+      apply Var.appendCases (left := structuralBefore)
+        (right := structuralAfter)
+        (motive := fun localWire =>
+          targetFrame.targetKeep
+              (Var.appendRight structuralOuter localWire) =
+            Var.appendRight structuralOuter localWire)
+      · intro beforeSignature beforeWire
+        simp [targetFrame, Leaf.Identity.rootFrame, Transform.Frame.replace,
+          Transform.Frame.keep, Transform.Frame.localKeep, WireRenaming.id]
+      · intro afterSignature afterWire
+        simp [targetFrame, Leaf.Identity.rootFrame, Transform.Frame.replace,
+          Transform.Frame.keep, Transform.Frame.localKeep, WireRenaming.id,
+          Var.appendRight]
+  obtain ⟨recordedLeafHosted, recordedLeafScope⟩ :=
+    leafItemsEndpoint flatFormalEvidence flatFormalSites targetKeepIdentity
+      (fun siteTargetKeepEq application site => by
+        have endpoint := positionalIdentityLeafEndpoint signature arity
+          siteTargetKeepEq application site
+        exact ⟨endpoint.1, endpoint.2⟩)
+  have recordedLeafReverse : HostedScope recordedOutput.endpoint
+      flatFormalResult := by
+    intro target rename
+    exact leafItemsReverseHostedScope flatFormalEvidence flatFormalSites
+      targetKeepIdentity
+      (fun siteTargetKeepEq application site =>
+        positionalIdentityLeafEndpoint_reverseHostedScope signature arity
+          siteTargetKeepEq application site)
+      rename
+  have leafHosted : HostedStrict flatFormalResult output.endpoint := by
+    rw [← outputEndpointEq]
+    exact recordedLeafHosted
+  have leafScope : ScopePreservation flatFormalResult output.endpoint := by
+    rw [← outputEndpointEq]
+    exact recordedLeafScope
+  have leafReverse : HostedScope output.endpoint flatFormalResult := by
+    intro target rename
+    rw [← outputEndpointEq]
+    exact recordedLeafReverse rename
+  let stagedToFlatFormal : RegionIso (WireEquiv.refl common) staged
+      flatFormalResult :=
+    stagedPresentation.trans
+      ((RegionIso.adjoinAtNil formalResult).symm.trans flatResultIso)
+  have resultToFormal : HostedStrict result flatFormalResult :=
+    HostedStrict.iso (RegionIso.refl result) stagedToFlatFormal hosted
+  have resultToOutput : HostedStrict result output.endpoint :=
+    HostedStrict.trans resultToFormal leafHosted
+      (fun outer hostLocals rename hostItems =>
+        HostedScope.adjoinHost leafReverse outer hostLocals rename hostItems)
+  have resultToOutputScope : ScopePreservation result output.endpoint :=
+    stagedScope.trans
+      ((ScopePreservation.ofIso stagedToFlatFormal).trans leafScope)
+  let instantiated := Region.adjoinAt oldLocals .nil result
+  let prepared := Region.adjoinAt oldLocals .nil output.endpoint
+  have instantiatedToPrepared : HostedStrict instantiated prepared := by
+    simpa only [instantiated, prepared] using
+      HostedStrict.adjoinAt oldLocals result output.endpoint resultToOutput
+  have instantiatedToPreparedScope : ScopePreservation instantiated prepared :=
+    adjoinAt_preserves_scope oldLocals .nil result output.endpoint
+      resultToOutputScope
+  have instantiatedCanonical :
+      (request.occurrence.context.fill instantiated).Canonical := by
+    simpa only [instantiated, oldLocals] using request.instantiatedCanonical
+  have instantiatedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      request.occurrence.interface.boundaryWire
+      (request.occurrence.context.fill instantiated) := by
+    intro signature wire
+    simpa only [instantiated, oldLocals] using
+      request.instantiatedExternalTwoEnded wire
+  have preparedValidity := filledValidityOfScope
+    request.occurrence.interface request.occurrence.context instantiated
+    prepared instantiatedCanonical instantiatedExternalTwoEnded
+    instantiatedToPreparedScope
+  have preparationTelescope : Telescope request.polarity
+      request.occurrence.interface request.occurrence.context
+      instantiated prepared instantiatedCanonical instantiatedExternalTwoEnded
+      preparedValidity.1 preparedValidity.2 :=
+    telescopeOfHostedExact instantiatedToPrepared request.polarity
+      request.occurrence.interface request.occurrence.context
+      instantiatedCanonical instantiatedExternalTwoEnded preparedValidity.1
+      preparedValidity.2 request.continuation.1
+  have authoritativeLocalCanonical : authoritativePending.Canonical :=
+    request.occurrence.context.holeCanonical authoritativePending
+      authoritativeValidity.1
+  have authoritativeInvariant :
+      Transform.RetainedIndexInvariant authoritativeFrame :=
+    Transform.RetainedIndexInvariant.replace _ _ _ _ _
+  have authoritativePaths := argumentItemsEdit_selectedPaths flatFormalSites
+    (EqualityNormalization.formalPorts wires)
+    (normalizationOperation wires) authoritativeFrame PUnit.unit
+    (fun _ _ _ => PUnit.unit) authoritativeInvariant 0
+  have formalInvariant : Transform.RetainedIndexInvariant targetFrame :=
+    Transform.RetainedIndexInvariant.replace _ _ _ _ _
+  have formalPaths := flatFormalSites.source_selectedPaths formalInvariant 0
+  let selectedLocalIndex : Fin pendingLocals.length :=
+    ⟨structuralBefore.length, by
+      simp [pendingLocals]⟩
+  have authoritativeRoot :=
+    authoritativeLocalCanonical.1 selectedLocalIndex
+  have selectedRooted : RegionPath.RootedTwo
+      (flatFormalSource.incidencePaths
+        (structuralOuter.length + structuralBefore.length) 0) := by
+    have pathEq : flatFormalSource.incidencePaths
+          (structuralOuter.length + structuralBefore.length) 0 =
+        authoritativePending.items.incidencePaths
+          (structuralOuter.length + structuralBefore.length) 0 := by
+      calc
+        flatFormalSource.incidencePaths
+            (structuralOuter.length + structuralBefore.length) 0 =
+            flatFormalSites.selectedPaths 0 := by
+          simpa [targetFrame, Leaf.Identity.rootFrame,
+            Transform.Frame.replace, Transform.Frame.insertedHead]
+            using formalPaths
+        _ = authoritativePending.items.incidencePaths
+            (structuralOuter.length + structuralBefore.length) 0 := by
+          symm
+          simpa [authoritativePending, argumentNormalizedRegionAt,
+            authoritativeItems, authoritativeFrame,
+            Transform.Frame.replace, Transform.Frame.insertedHead,
+            normalizationFrame] using authoritativePaths
+    rw [pathEq]
+    simpa [authoritativePending, selectedLocalIndex, pendingLocals] using
+      authoritativeRoot
+  have primitiveNoPin : output.edit.NoSelectedPin :=
+    itemsEdit_noSelectedPin primitiveSites
+  let rawPrepared := Region.adjoinAt oldLocals .nil output.edit.run
+  have rawPreparedCanonical : rawPrepared.Canonical := by
+    dsimp only [rawPrepared]
+    rw [output.run_eq]
+    exact request.occurrence.context.holeCanonical prepared preparedValidity.1
+  have positionalLocalValidity := Leaf.Identity.target_source_validity
+    output.edit primitiveNoPin rawPreparedCanonical selectedRooted
+  have rawPreparedFilledCanonical :
+      (request.occurrence.context.fill rawPrepared).Canonical := by
+    dsimp only [rawPrepared]
+    rw [output.run_eq]
+    exact preparedValidity.1
+  have rawPreparedFilledExternal : OpenDiagram.ExternalTwoEnded
+      request.occurrence.interface.boundaryWire
+      (request.occurrence.context.fill rawPrepared) := by
+    intro signature wire
+    dsimp only [rawPrepared]
+    rw [output.run_eq]
+    exact preparedValidity.2 wire
+  let rawToPositionalScope : ScopePreservation rawPrepared positionalPending := {
+    canonical := fun _ => positionalLocalValidity.1
+    incidenceNonempty := fun wire => by
+      have paths : rawPrepared.incidencePaths wire.index.val =
+          positionalPending.incidencePaths wire.index.val := by
+        simpa only [rawPrepared, positionalPending, oldLocals] using
+          positionalLocalValidity.2 wire
+      simpa only [paths]
+    rootedTwo := fun wire rooted => by
+      have paths : rawPrepared.incidencePaths wire.index.val =
+          positionalPending.incidencePaths wire.index.val := by
+        simpa only [rawPrepared, positionalPending, oldLocals] using
+          positionalLocalValidity.2 wire
+      rw [← paths]
+      exact rooted
+  }
+  have positionalValidity := filledValidityOfScope
+    request.occurrence.interface request.occurrence.context rawPrepared
+    positionalPending rawPreparedFilledCanonical rawPreparedFilledExternal
+    rawToPositionalScope
+  have normalizationTelescope : Telescope request.polarity
+      request.occurrence.interface request.occurrence.context
+      positionalPending request.endpoint positionalValidity.1
+      positionalValidity.2 request.endpointCanonical
+      request.endpointExternalTwoEnded :=
+    argumentNormalizationTelescopeAllAt
+      (outer := structuralOuter) (localBefore := structuralBefore)
+      (localAfter := structuralAfter) flatFormalSites positionalValues
+      request.occurrence.interface request.occurrence.context positionalEq
+      positionalValidity.1 positionalValidity.2 authoritativeValidity.1
+      authoritativeValidity.2 request.endpointCanonical
+      request.endpointExternalTwoEnded request.polarity request.continuation.1
+      authoritativeContinuation
+  let formalRequest : Telescope.Request instantiated positionalPending := {
+    boundary := request.boundary
+    source := request.source
+    endpoint := request.endpoint
+    polarity := request.polarity
+    occurrence := request.occurrence
+    instantiatedCanonical := instantiatedCanonical
+    instantiatedExternalTwoEnded := instantiatedExternalTwoEnded
+    pendingCanonical := positionalValidity.1
+    pendingExternalTwoEnded := positionalValidity.2
+    endpointCanonical := request.endpointCanonical
+    endpointExternalTwoEnded := request.endpointExternalTwoEnded
+    continuation := normalizationTelescope
+  }
+  let preparation : formalRequest.Preparation prepared := {
+    prepared := prepared
+    preparedCanonical := preparedValidity.1
+    preparedExternalTwoEnded := preparedValidity.2
+    rawPreparedCanonical := preparedValidity.1
+    rawPreparedExternalTwoEnded := preparedValidity.2
+    preparedIso := RegionIso.refl prepared
+    telescope := by
+      simpa only [formalRequest] using preparationTelescope
+  }
+  exact itemsIdentity (signature := signature) (arity := arity)
+    (localBefore := structuralBefore) (localAfter := structuralAfter)
+    flatFormalEvidence primitiveSites formalRequest (by
+      simpa only [prepared, oldLocals, output] using preparation)
 
 end VisualProof.Rule.Completeness.Comprehension

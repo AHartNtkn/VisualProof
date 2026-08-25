@@ -601,6 +601,28 @@ theorem positionalIdentityInstantiation_scope
         List.mem_replicate]
       exact ⟨by omega, rfl⟩
 
+/-- Re-expanding a positional identity application preserves the structural
+scope facts needed to compose the leaf transformation inside a host. -/
+theorem positionalIdentityApplication_scope
+    (signature : Sig) (arity : Nat)
+    (application : Vars wires (List.replicate arity signature)) :
+    ScopePreservation
+      (positionalIdentityApplication signature arity application)
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (positionalIdentityPattern signature arity) application) := by
+  let forward := positionalIdentityInstantiation_scope signature arity
+    application
+  constructor
+  · intro _
+    exact VisualProof.Rule.Comprehension.Instantiation.instantiate_canonical
+      (positionalIdentityPattern signature arity) application
+  · intro wireSignature wire
+    exact (forward.incidenceNonempty wire).symm
+  · intro wireSignature wire rooted
+    rw [EqualityNormalization.instantiate_rootedTwo_iff]
+    rw [← positionalIdentityApplication_incidencePaths_length]
+    exact rooted.1
+
 def positionalAtomSelection
     (head : Var wires (.rel atomArguments))
     (ports : Vars wires atomArguments) :
@@ -1554,8 +1576,7 @@ theorem atomFormalPrefixSource_eq_argumentItemsEdit
       rw [substitutionEq, valuesEq]
   | cons item tail =>
       simp only [atomFormalPrefixSource, ItemSeq.renameWires,
-        ItemSeq.append, atomFormalPrefixRecordingSites, argumentItemsEdit,
-        argumentItemEdit]
+        ItemSeq.append, atomFormalPrefixRecordingSites, argumentItemsEdit]
       congr 1
       · exact (retainedItemSites_argumentItemEdit_source
           (positionalAtomPattern atomArguments)
@@ -1721,6 +1742,42 @@ def identityFormalPrefixRecordingSites
         (identityFormalPrefixRecordingSites frame tail retained application)
 termination_by sizeOf hostItems
 
+theorem identityFormalPrefixArgumentItemsEdit_source
+    (recordedFrame : Transform.Frame
+      (List.replicate arity signature) common
+      recordedSourceWires recordedTargetWires)
+    (targetFrame : Transform.Frame arguments common sourceWires targetWires)
+    (hostItems : ItemSeq common)
+    (retained : Vars common (List.replicate arity signature))
+    (application : Vars common patternArguments)
+    (current : Vars patternArguments arguments) :
+    (argumentItemsEdit
+      (identityFormalPrefixRecordingSites recordedFrame hostItems retained
+        application)
+      current (normalizationOperation arguments) targetFrame PUnit.unit
+      (fun _ _ _ => PUnit.unit)).1 =
+        (hostItems.renameWires targetFrame.sourceKeep).append
+          (.cons (.atom targetFrame.selected
+            (current.map fun wire =>
+              targetFrame.sourceKeep
+                (EqualityNormalization.formalSubstitution application wire)))
+            .nil) := by
+  cases hostItems with
+  | nil =>
+      simp only [identityFormalPrefixRecordingSites, argumentItemsEdit,
+        argumentItemEdit, ItemSeq.renameWires, ItemSeq.append, Vars.map_map]
+  | cons item tail =>
+      simp only [identityFormalPrefixRecordingSites, argumentItemsEdit,
+        ItemSeq.renameWires, ItemSeq.append]
+      congr 1
+      · exact retainedItemSites_argumentItemEdit_source
+          (positionalIdentityPattern signature arity)
+          (Leaf.Identity.operation signature arity) recordedFrame PUnit.unit
+          targetFrame item current
+      · exact identityFormalPrefixArgumentItemsEdit_source recordedFrame
+          targetFrame tail retained application current
+termination_by sizeOf hostItems
+
 theorem identityFormalPrefixSource_eq_argumentItemsEdit
     (frame : Transform.Frame (List.replicate arity signature)
       common sourceWires targetWires)
@@ -1759,7 +1816,7 @@ theorem identityFormalPrefixSource_eq_argumentItemsEdit
   | cons item tail =>
       simp only [identityFormalPrefixSource, ItemSeq.renameWires,
         ItemSeq.append, identityFormalPrefixRecordingSites,
-        argumentItemsEdit, argumentItemEdit]
+        argumentItemsEdit]
       congr 1
       · exact (retainedItemSites_argumentItemEdit_source
           (positionalIdentityPattern signature arity)

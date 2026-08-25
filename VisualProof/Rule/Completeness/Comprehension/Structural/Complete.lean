@@ -45,7 +45,9 @@ theorem supportPatternDerives
     (motive_3 := fun wires materialItems =>
       wires = [] → SupportDerives (Region.ofItems materialItems))
     ?_ (fun head ports _ => supportAtomDerives head ports)
-      supportIdentityDerives supportCutDerives supportBlankDerives
+      (fun signature arity ports _ =>
+        supportIdentityDerives signature arity ports)
+      supportCutDerives supportBlankDerives
       supportParallelDerives material) materialCanonical evidence request
   · intro outer locals materialItems materialItemsIH materialCanonical
       structuralOuter structuralBefore structuralAfter items result evidence
