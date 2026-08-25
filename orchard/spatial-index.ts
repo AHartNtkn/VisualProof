@@ -7,6 +7,10 @@ export type SpatialBounds = {
 
 type SpatialItem = { readonly id: string; readonly x: number; readonly z: number }
 
+export function fixedCellCoordinate(value: number, cellSize: number): number {
+  return Math.floor(value / cellSize)
+}
+
 export class SpatialIndex<T extends SpatialItem> {
   private readonly items = new Map<string, T>()
   private readonly cells = new Map<string, Set<string>>()
@@ -47,10 +51,10 @@ export class SpatialIndex<T extends SpatialItem> {
     if (bounds.minX > bounds.maxX || bounds.minZ > bounds.maxZ) return []
 
     const candidates = new Set<string>()
-    const minCellX = this.cellCoordinate(bounds.minX)
-    const maxCellX = this.cellCoordinate(bounds.maxX)
-    const minCellZ = this.cellCoordinate(bounds.minZ)
-    const maxCellZ = this.cellCoordinate(bounds.maxZ)
+    const minCellX = fixedCellCoordinate(bounds.minX, this.cellSize)
+    const maxCellX = fixedCellCoordinate(bounds.maxX, this.cellSize)
+    const minCellZ = fixedCellCoordinate(bounds.minZ, this.cellSize)
+    const maxCellZ = fixedCellCoordinate(bounds.maxZ, this.cellSize)
     for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
       for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ++) {
         const ids = this.cells.get(this.cellKey(cellX, cellZ))
@@ -88,11 +92,7 @@ export class SpatialIndex<T extends SpatialItem> {
   }
 
   private cellKeyFor(x: number, z: number): string {
-    return this.cellKey(this.cellCoordinate(x), this.cellCoordinate(z))
-  }
-
-  private cellCoordinate(value: number): number {
-    return Math.floor(value / this.cellSize)
+    return this.cellKey(fixedCellCoordinate(x, this.cellSize), fixedCellCoordinate(z, this.cellSize))
   }
 
   private cellKey(cellX: number, cellZ: number): string {

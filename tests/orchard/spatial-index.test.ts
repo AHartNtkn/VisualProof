@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SpatialIndex } from '../../orchard/spatial-index'
+import { fixedCellCoordinate, SpatialIndex } from '../../orchard/spatial-index'
 
 type Item = { id: string; x: number; z: number }
 
@@ -24,12 +24,11 @@ describe('SpatialIndex', () => {
     expect(index.query({ minX: 10, maxX: 20, minZ: -10, maxZ: 0 }).map(({ id }) => id)).toEqual(['inside'])
   })
 
-  it('keeps negative and positive cells separate with signed floor coordinates', () => {
-    const index = new SpatialIndex<Item>(10)
-    index.insert({ id: 'positive', x: 0.1, z: 0 })
-    index.insert({ id: 'negative', x: -0.1, z: 0 })
-
-    expect(index.query({ minX: -1, maxX: 1, minZ: -1, maxZ: 1 }).map(({ id }) => id)).toEqual(['negative', 'positive'])
+  it('maps signed positions to literal floor cells', () => {
+    expect(fixedCellCoordinate(-0.01, 128)).toBe(-1)
+    expect(fixedCellCoordinate(-128, 128)).toBe(-1)
+    expect(fixedCellCoordinate(-128.01, 128)).toBe(-2)
+    expect(fixedCellCoordinate(0, 128)).toBe(0)
   })
 
   it('returns one result when an ID is reinserted and moved across queried cells', () => {
