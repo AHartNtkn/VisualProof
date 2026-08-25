@@ -9,7 +9,7 @@ test('renders exact separate tree counts and lets the player walk', async ({ pag
   await expect(orchard).toHaveAttribute('data-ready', 'true', { timeout: 30_000 })
   expect(performance.now() - started).toBeLessThan(3000)
   await expect(page).toHaveTitle('Orchard Renderer Stress Test')
-  await expect(orchard).toHaveAttribute('data-world-version', '1')
+  await expect(orchard).toHaveAttribute('data-world-version', '2')
   await expect(orchard).toHaveAttribute('data-saved-tree-count', '2000')
   await expect(orchard).toHaveAttribute('data-tree-count', '3')
   await expect(orchard).toHaveAttribute('data-entity-count', '219')
@@ -38,7 +38,7 @@ test('renders exact separate tree counts and lets the player walk', async ({ pag
   await countScale.dispatchEvent('change')
   await expect(orchard).toHaveAttribute('data-tree-count', '10')
   await expect(countInput).toHaveValue('10')
-  await expect(page.locator('[data-status]')).toContainText('10 independent trees · 750 renderer objects')
+  await expect(page.locator('[data-status]')).toContainText('10 independent trees · 740 renderer objects')
 
   const hundredPreset = page.getByRole('button', { name: '100', exact: true })
   await hundredPreset.click()

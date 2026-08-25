@@ -7,7 +7,7 @@ describe('orchard world save', () => {
     const raw = JSON.parse(readFileSync(new URL('../../orchard/world.json', import.meta.url), 'utf8'))
     const world = parseWorldSave(raw)
 
-    expect(world.version).toBe(1)
+    expect(world.version).toBe(2)
     expect(world.terrain).toEqual({
       size: 4000,
       ground: '#181a1d',
@@ -30,10 +30,13 @@ describe('orchard world save', () => {
     const layout = world.layouts['zero-is-nat-20']!
     expect(layout.label).toBe('zeroIsNat · step 20')
     expect(layout.palette).toEqual({ branch: '#e6e1d6', cutBranch: '#4a5058', baseWire: '#5bd2de' })
-    expect(layout.glow).toEqual({ color: '#ffffff', intensity: 1800, distance: 32, decay: 2, height: 13 })
-    expect(layout.scene.entities).toHaveLength(73)
-    expect(layout.scene.entities.filter(({ kind }) => kind === 'branch')).toHaveLength(17)
-    expect(layout.scene.entities.filter(({ kind }) => kind === 'strand')).toHaveLength(41)
+    expect(layout.widths).toEqual({ branch: 0.10, curve: 0.05 })
+    expect(layout.glow).toEqual({ color: '#ffffff', radius: 32, opacity: 0.65, bloom: 0.8 })
+    expect(layout.lods.full.entities).toHaveLength(73)
+    expect(layout.lods.reduced.entities.every(({ kind }) => kind === 'branch')).toBe(true)
+    expect(layout.lods.marker).toEqual({ color: '#e6e1d6', size: 1.2 })
+    expect(layout.lods.full.entities.filter(({ kind }) => kind === 'branch')).toHaveLength(17)
+    expect(layout.lods.full.entities.filter(({ kind }) => kind === 'strand')).toHaveLength(41)
     for (const tree of world.trees) expect(world.layouts[tree.layout]).toBeDefined()
   })
 })

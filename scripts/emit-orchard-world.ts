@@ -5,13 +5,15 @@ import { mkReplay } from '../src/app/replay'
 import { scene3 } from '../src/view3d/scene'
 import { DARK, relationWireHues } from '../src/view/paint'
 import { orchardPlacements } from '../orchard/placement'
+import { deriveTreeLods } from '../orchard/lod-assets'
 import type { OrchardWorldSave } from '../orchard/world'
 
 const LAYOUT_ID = 'zero-is-nat-20'
 const diagram = mkReplay('zeroIsNat', verifyTheory(buildFregeTheory())).diagramAt(20)
+const full = scene3(diagram)
 const placements = orchardPlacements(2000, 34)
 const save: OrchardWorldSave = {
-  version: 1,
+  version: 2,
   terrain: {
     size: 4000,
     ground: '#181a1d',
@@ -24,10 +26,12 @@ const save: OrchardWorldSave = {
   layouts: {
     [LAYOUT_ID]: {
       label: 'zeroIsNat · step 20',
-      scene: scene3(diagram),
+      bounds: { center: full.center, radius: full.radius },
+      lods: deriveTreeLods(full),
       hues: [...relationWireHues(diagram, DARK.relationHueLightness)],
       palette: { branch: DARK.ink, cutBranch: DARK.frame, baseWire: DARK.wire },
-      glow: { color: '#ffffff', intensity: 1800, distance: 32, decay: 2, height: 13 },
+      widths: { branch: 0.10, curve: 0.05 },
+      glow: { color: '#ffffff', radius: 32, opacity: 0.65, bloom: 0.8 },
     },
   },
   trees: placements.map(({ id, x, z, yaw }) => ({ id, layout: LAYOUT_ID, x, z, yaw })),

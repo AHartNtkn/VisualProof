@@ -194,13 +194,13 @@ export function mountOrchardWorld(
           const index = groups.length
           const saved = world.trees[index]!
           const layout = world.layouts[saved.layout]!
-          const group = makeTreeObject(layout.scene, {
+          const group = makeTreeObject(layout.lods.full, {
             id: saved.id,
             index,
             x: saved.x,
             z: saved.z,
             yaw: saved.yaw,
-          }, materialsByLayout.get(saved.layout)!, layout.glow)
+          }, materialsByLayout.get(saved.layout)!)
           groups.push(group)
           trees.add(group)
         }
@@ -215,7 +215,7 @@ export function mountOrchardWorld(
       let entities = 0
       for (let index = 0; index < count; index++) {
         const saved = world.trees[index]!
-        entities += world.layouts[saved.layout]!.scene.entities.length
+        entities += world.layouts[saved.layout]!.lods.full.entities.length
       }
       return {
         trees: count,

@@ -1,5 +1,6 @@
 import type { WireId } from '../src/kernel/diagram/diagram'
 import type { Entity, Scene3 } from '../src/view3d/scene'
+import type { Vec3 } from '../src/view3d/vec3'
 
 export type SavedTerrain = {
   readonly size: number
@@ -35,10 +36,18 @@ export type SavedTree = {
 
 export type SavedTreeLayout = {
   readonly label: string
-  readonly scene: Scene3
+  readonly bounds: { readonly center: Vec3; readonly radius: number }
+  readonly lods: SavedTreeLods
   readonly hues: readonly (readonly [WireId, string])[]
   readonly palette: SavedTreePalette
-  readonly glow: SavedTreeGlow
+  readonly widths: { readonly branch: number; readonly curve: number }
+  readonly glow: { readonly color: string; readonly radius: number; readonly opacity: number; readonly bloom: number }
+}
+
+export type SavedTreeLods = {
+  readonly full: Scene3
+  readonly reduced: Scene3
+  readonly marker: { readonly color: string; readonly size: number }
 }
 
 export type SavedTreePalette = {
@@ -47,16 +56,8 @@ export type SavedTreePalette = {
   readonly baseWire: string
 }
 
-export type SavedTreeGlow = {
-  readonly color: string
-  readonly intensity: number
-  readonly distance: number
-  readonly decay: number
-  readonly height: number
-}
-
 export type OrchardWorldSave = {
-  readonly version: 1
+  readonly version: 2
   readonly terrain: SavedTerrain
   readonly player: SavedPlayer
   readonly layouts: Readonly<Record<string, SavedTreeLayout>>
@@ -115,8 +116,29 @@ const entity = (value: unknown, field: string): Entity => {
   throw new Error(`invalid orchard save: ${field}.kind`)
 }
 
+const positive = (value: unknown, field: string): number => {
+  const number = finite(value, field)
+  if (number <= 0) throw new Error(`invalid orchard save: ${field}`)
+  return number
+}
+
+const nonnegative = (value: unknown, field: string): number => {
+  const number = finite(value, field)
+  if (number < 0) throw new Error(`invalid orchard save: ${field}`)
+  return number
+}
+
+const scene = (value: unknown, field: string): Scene3 => {
+  if (!isRecord(value) || !Array.isArray(value['entities'])) throw new Error(`invalid orchard save: ${field}`)
+  return {
+    center: vec3(value['center'], `${field}.center`),
+    radius: positive(value['radius'], `${field}.radius`),
+    entities: value['entities'].map((item, index) => entity(item, `${field}.entities[${index}]`)),
+  }
+}
+
 export function parseWorldSave(value: unknown): OrchardWorldSave {
-  if (!isRecord(value) || value['version'] !== 1) throw new Error('invalid orchard save: version')
+  if (!isRecord(value) || value['version'] !== 2) throw new Error('invalid orchard save: version')
   const terrainRaw = value['terrain'], playerRaw = value['player'], layoutsRaw = value['layouts']
   if (!isRecord(terrainRaw)) throw new Error('invalid orchard save: terrain')
   if (!isRecord(playerRaw)) throw new Error('invalid orchard save: player')
@@ -149,33 +171,43 @@ export function parseWorldSave(value: unknown): OrchardWorldSave {
   }
   const layouts: Record<string, SavedTreeLayout> = {}
   for (const [layoutId, raw] of Object.entries(layoutsRaw)) {
-    if (!isRecord(raw) || !isRecord(raw['scene']) || !Array.isArray(raw['scene']['entities']) || !Array.isArray(raw['hues']) || !isRecord(raw['palette']) || !isRecord(raw['glow'])) {
+    if (!isRecord(raw) || !isRecord(raw['bounds']) || !isRecord(raw['lods']) || !Array.isArray(raw['hues']) || !isRecord(raw['palette']) || !isRecord(raw['widths']) || !isRecord(raw['glow'])) {
       throw new Error(`invalid orchard save: layouts.${layoutId}`)
     }
-    const scene: Scene3 = {
-      center: vec3(raw['scene']['center'], `layouts.${layoutId}.scene.center`),
-      radius: finite(raw['scene']['radius'], `layouts.${layoutId}.scene.radius`),
-      entities: raw['scene']['entities'].map((item, index) => entity(item, `layouts.${layoutId}.scene.entities[${index}]`)),
-    }
+    if (!isRecord(raw['lods']['marker'])) throw new Error(`invalid orchard save: layouts.${layoutId}.lods.marker`)
     const hues = raw['hues'].map((entry, index): readonly [WireId, string] => {
       if (!Array.isArray(entry) || entry.length !== 2) throw new Error(`invalid orchard save: layouts.${layoutId}.hues[${index}]`)
       return [text(entry[0], `layouts.${layoutId}.hues[${index}][0]`), text(entry[1], `layouts.${layoutId}.hues[${index}][1]`)]
     })
     layouts[layoutId] = {
       label: text(raw['label'], `layouts.${layoutId}.label`),
-      scene,
+      bounds: {
+        center: vec3(raw['bounds']['center'], `layouts.${layoutId}.bounds.center`),
+        radius: positive(raw['bounds']['radius'], `layouts.${layoutId}.bounds.radius`),
+      },
+      lods: {
+        full: scene(raw['lods']['full'], `layouts.${layoutId}.lods.full`),
+        reduced: scene(raw['lods']['reduced'], `layouts.${layoutId}.lods.reduced`),
+        marker: {
+          color: text(raw['lods']['marker']['color'], `layouts.${layoutId}.lods.marker.color`),
+          size: positive(raw['lods']['marker']['size'], `layouts.${layoutId}.lods.marker.size`),
+        },
+      },
       hues,
       palette: {
         branch: text(raw['palette']['branch'], `layouts.${layoutId}.palette.branch`),
         cutBranch: text(raw['palette']['cutBranch'], `layouts.${layoutId}.palette.cutBranch`),
         baseWire: text(raw['palette']['baseWire'], `layouts.${layoutId}.palette.baseWire`),
       },
+      widths: {
+        branch: positive(raw['widths']['branch'], `layouts.${layoutId}.widths.branch`),
+        curve: positive(raw['widths']['curve'], `layouts.${layoutId}.widths.curve`),
+      },
       glow: {
         color: text(raw['glow']['color'], `layouts.${layoutId}.glow.color`),
-        intensity: finite(raw['glow']['intensity'], `layouts.${layoutId}.glow.intensity`),
-        distance: finite(raw['glow']['distance'], `layouts.${layoutId}.glow.distance`),
-        decay: finite(raw['glow']['decay'], `layouts.${layoutId}.glow.decay`),
-        height: finite(raw['glow']['height'], `layouts.${layoutId}.glow.height`),
+        radius: nonnegative(raw['glow']['radius'], `layouts.${layoutId}.glow.radius`),
+        opacity: nonnegative(raw['glow']['opacity'], `layouts.${layoutId}.glow.opacity`),
+        bloom: nonnegative(raw['glow']['bloom'], `layouts.${layoutId}.glow.bloom`),
       },
     }
   }
@@ -195,7 +227,7 @@ export function parseWorldSave(value: unknown): OrchardWorldSave {
       yaw: finite(raw['yaw'], `trees[${index}].yaw`),
     }
   })
-  return { version: 1, terrain, player, layouts, trees }
+  return { version: 2, terrain, player, layouts, trees }
 }
 
 export async function loadWorldSave(): Promise<OrchardWorldSave> {
