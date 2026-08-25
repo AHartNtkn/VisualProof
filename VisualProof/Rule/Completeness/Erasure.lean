@@ -448,7 +448,9 @@ theorem capEquates
       let selected : ∀ {signature},
           Var (outer ++ description.hostLocals) signature → Bool :=
         fun wire => decide
-          ((description.hostItems.incidencePaths wire.index.val 0).length = 1)
+          (1 ≤ (description.hostItems.incidencePaths wire.index.val 0).length ∧
+            ¬ RegionPath.RootedTwo
+              (description.hostItems.incidencePaths wire.index.val 0))
       let host := description.hostItems.renameWires hostRename
       let materialItems' := materialItems.renameWires materialRename
       let pins := ItemSeq.pinWires (outer ++ description.hostLocals)

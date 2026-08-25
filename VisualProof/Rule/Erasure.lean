@@ -61,12 +61,15 @@ abbrev Description (outer : List Sig) :=
 def Description.source (description : Description outer) : Region outer :=
   UncappedErasure.Description.source description
 
-/-- Unary caps for exactly the wires with one surviving host incidence. -/
+/-- Unary caps for every surviving host wire the erasure would leave
+under-rooted: at least one incidence, but not rooted-two. -/
 def Description.caps (description : Description outer) :
     ItemSeq (outer ++ description.hostLocals) :=
   ItemSeq.pinWires (outer ++ description.hostLocals) WireRenaming.id
     (fun wire => decide
-      ((description.hostItems.incidencePaths wire.index.val 0).length = 1))
+      (1 ≤ (description.hostItems.incidencePaths wire.index.val 0).length ∧
+        ¬ RegionPath.RootedTwo
+          (description.hostItems.incidencePaths wire.index.val 0)))
 
 def Description.target (description : Description outer) : Region outer :=
   .mk description.hostLocals
