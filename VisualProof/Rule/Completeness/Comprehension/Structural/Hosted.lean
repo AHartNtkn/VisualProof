@@ -74,8 +74,32 @@ theorem HostedScope.adjoinAt
     (after.renameWires (rename.appendRight locals)) childScope
   simpa only [Region.renameWires_adjoinAt_nil] using lifted
 
+/-- A canonical local replacement preserving exactly which hole-interface
+wires occur transports validity through the caller's exact diagram context. -/
+theorem filledValidityOfReplacement
+    {boundary wires : List Sig}
+    (interface : OpenDiagram boundary)
+    (context : DiagramContext interface.external wires)
+    (before after : Region wires)
+    (beforeCanonical : (context.fill before).Canonical)
+    (beforeExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill before))
+    (afterCanonical : after.Canonical)
+    (sameNonempty : ∀ {signature} (wire : Var wires signature),
+      before.incidencePaths wire.index.val ≠ [] ↔
+        after.incidencePaths wire.index.val ≠ []) :
+    (context.fill after).Canonical ∧
+      OpenDiagram.ExternalTwoEnded interface.boundaryWire
+        (context.fill after) := by
+  have replacement := context.replaceCanonical before after beforeCanonical
+    afterCanonical sameNonempty
+  let beforeEndpoint := interface.withBody (context.fill before)
+    beforeCanonical beforeExternalTwoEnded
+  exact ⟨replacement.1,
+    beforeEndpoint.externalTwoEnded_of_nonempty_iff _ replacement.2⟩
+
 /-- A scope-preserving local replacement transports canonicality and the
-external two-ended condition through the caller's exact diagram context. -/
+    external two-ended condition through the caller's exact diagram context. -/
 theorem filledValidityOfScope
     {boundary wires : List Sig}
     (interface : OpenDiagram boundary)
