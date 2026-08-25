@@ -38,6 +38,7 @@ test('renders exact separate tree counts and lets the player walk', async ({ pag
   await countScale.dispatchEvent('change')
   await expect(orchard).toHaveAttribute('data-tree-count', '10')
   await expect(countInput).toHaveValue('10')
+  await expect(page.locator('[data-status]')).toContainText('10 independent trees · 750 renderer objects')
 
   const hundredPreset = page.getByRole('button', { name: '100', exact: true })
   await hundredPreset.click()

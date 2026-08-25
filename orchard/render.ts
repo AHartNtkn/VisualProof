@@ -139,10 +139,7 @@ export function mountOrchardWorld(
   scene.fog = new THREE.Fog(world.terrain.sky, world.terrain.fogNear, world.terrain.fogFar)
   const camera = new THREE.PerspectiveCamera(67, 1, 0.08, 1800)
   camera.rotation.order = 'YXZ'
-  scene.add(new THREE.HemisphereLight('#dff3ff', '#496733', 2.1))
-  const sun = new THREE.DirectionalLight('#fff5d6', 2.4)
-  sun.position.set(-80, 120, 45)
-  scene.add(sun)
+  scene.add(new THREE.AmbientLight('#ffffff', 0.025))
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(world.terrain.size, world.terrain.size),
@@ -162,9 +159,9 @@ export function mountOrchardWorld(
   const materialsByLayout = new Map<string, OrchardMaterialSource>()
   for (const [layoutId, layout] of Object.entries(world.layouts)) {
     materialsByLayout.set(layoutId, materialsFor({
-      branch: '#1c251e',
-      cutBranch: '#67736a',
-      baseWire: '#26343a',
+      branch: layout.palette.branch,
+      cutBranch: layout.palette.cutBranch,
+      baseWire: layout.palette.baseWire,
       hues: new Map(layout.hues),
     }, lineMaterials, textures, spriteMaterials, () => size))
   }
@@ -203,14 +200,18 @@ export function mountOrchardWorld(
             x: saved.x,
             z: saved.z,
             yaw: saved.yaw,
-          }, materialsByLayout.get(saved.layout)!)
+          }, materialsByLayout.get(saved.layout)!, layout.glow)
           groups.push(group)
           trees.add(group)
         }
         if (groups.length < count) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
       }
       let instanced = 0
-      trees.traverse((object) => { if ((object as THREE.InstancedMesh).isInstancedMesh === true) instanced++ })
+      let objects = 0
+      for (const group of groups) group.traverse((object) => {
+        objects++
+        if ((object as THREE.InstancedMesh).isInstancedMesh === true) instanced++
+      })
       let entities = 0
       for (let index = 0; index < count; index++) {
         const saved = world.trees[index]!
@@ -219,7 +220,7 @@ export function mountOrchardWorld(
       return {
         trees: count,
         entities,
-        objects: entities,
+        objects,
         instanced,
         buildMs: performance.now() - started,
       }

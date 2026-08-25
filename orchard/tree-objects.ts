@@ -4,6 +4,7 @@ import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import type { Entity, Scene3 } from '../src/view3d/scene'
 import type { TreePlacement } from './placement'
+import type { SavedTreeGlow } from './world'
 
 type LineEntity = Extract<Entity, { kind: 'branch' | 'ring' | 'strand' }>
 type SpriteEntity = Extract<Entity, { kind: 'pip' | 'label' }>
@@ -17,11 +18,18 @@ export function makeTreeObject(
   tree: Scene3,
   placement: TreePlacement,
   materials: OrchardMaterialSource,
+  glow: SavedTreeGlow,
 ): THREE.Group {
   const group = new THREE.Group()
   group.name = placement.id
   group.position.set(placement.x, 0, placement.z)
   group.rotation.y = placement.yaw
+
+  const light = new THREE.PointLight(glow.color, glow.intensity, glow.distance, glow.decay)
+  light.name = `${placement.id}:glow`
+  light.position.set(0, glow.height, 0)
+  light.userData['treeIndex'] = placement.index
+  group.add(light)
 
   for (const entity of tree.entities) {
     let object: THREE.Object3D

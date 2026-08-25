@@ -21,20 +21,34 @@ const materials: OrchardMaterialSource = {
   line: (_entity: Extract<Entity, { kind: 'branch' | 'ring' | 'strand' }>) => lineMaterial,
   sprite: (_entity: Extract<Entity, { kind: 'pip' | 'label' }>) => spriteMaterial,
 }
+const glow = { color: '#ffffff', intensity: 1800, distance: 32, decay: 2, height: 13 }
 
 describe('makeTreeObject', () => {
   it('creates separate objects and geometry for every tree without instancing', () => {
-    const a = makeTreeObject(scene, { id: 'tree-a', index: 0, x: 10, z: 20, yaw: 0.5 }, materials)
-    const b = makeTreeObject(scene, { id: 'tree-b', index: 1, x: -10, z: -20, yaw: 1 }, materials)
+    const a = makeTreeObject(scene, { id: 'tree-a', index: 0, x: 10, z: 20, yaw: 0.5 }, materials, glow)
+    const b = makeTreeObject(scene, { id: 'tree-b', index: 1, x: -10, z: -20, yaw: 1 }, materials, glow)
 
     expect(a).not.toBe(b)
-    expect(a.children).toHaveLength(scene.entities.length)
-    expect(b.children).toHaveLength(scene.entities.length)
+    expect(a.children).toHaveLength(scene.entities.length + 1)
+    expect(b.children).toHaveLength(scene.entities.length + 1)
     expect(a.position.toArray()).toEqual([10, 0, 20])
     expect(a.rotation.y).toBe(0.5)
 
-    for (let index = 0; index < a.children.length; index++) {
-      const first = a.children[index]!, second = b.children[index]!
+    const firstLight = a.children.find((child): child is THREE.PointLight => child instanceof THREE.PointLight)
+    const secondLight = b.children.find((child): child is THREE.PointLight => child instanceof THREE.PointLight)
+    expect(firstLight).toBeDefined()
+    expect(secondLight).toBeDefined()
+    expect(firstLight).not.toBe(secondLight)
+    expect(firstLight!.color.getHexString()).toBe('ffffff')
+    expect(firstLight!.intensity).toBe(1800)
+    expect(firstLight!.distance).toBe(32)
+    expect(firstLight!.decay).toBe(2)
+    expect(firstLight!.position.toArray()).toEqual([0, 13, 0])
+
+    const firstEntities = a.children.filter((child) => !(child instanceof THREE.PointLight))
+    const secondEntities = b.children.filter((child) => !(child instanceof THREE.PointLight))
+    for (let index = 0; index < scene.entities.length; index++) {
+      const first = firstEntities[index]!, second = secondEntities[index]!
       expect(first).not.toBe(second)
       expect((first as THREE.InstancedMesh).isInstancedMesh).not.toBe(true)
       if (first instanceof Line2 && second instanceof Line2) {

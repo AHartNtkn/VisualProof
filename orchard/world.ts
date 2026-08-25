@@ -37,6 +37,22 @@ export type SavedTreeLayout = {
   readonly label: string
   readonly scene: Scene3
   readonly hues: readonly (readonly [WireId, string])[]
+  readonly palette: SavedTreePalette
+  readonly glow: SavedTreeGlow
+}
+
+export type SavedTreePalette = {
+  readonly branch: string
+  readonly cutBranch: string
+  readonly baseWire: string
+}
+
+export type SavedTreeGlow = {
+  readonly color: string
+  readonly intensity: number
+  readonly distance: number
+  readonly decay: number
+  readonly height: number
 }
 
 export type OrchardWorldSave = {
@@ -133,7 +149,7 @@ export function parseWorldSave(value: unknown): OrchardWorldSave {
   }
   const layouts: Record<string, SavedTreeLayout> = {}
   for (const [layoutId, raw] of Object.entries(layoutsRaw)) {
-    if (!isRecord(raw) || !isRecord(raw['scene']) || !Array.isArray(raw['scene']['entities']) || !Array.isArray(raw['hues'])) {
+    if (!isRecord(raw) || !isRecord(raw['scene']) || !Array.isArray(raw['scene']['entities']) || !Array.isArray(raw['hues']) || !isRecord(raw['palette']) || !isRecord(raw['glow'])) {
       throw new Error(`invalid orchard save: layouts.${layoutId}`)
     }
     const scene: Scene3 = {
@@ -145,7 +161,23 @@ export function parseWorldSave(value: unknown): OrchardWorldSave {
       if (!Array.isArray(entry) || entry.length !== 2) throw new Error(`invalid orchard save: layouts.${layoutId}.hues[${index}]`)
       return [text(entry[0], `layouts.${layoutId}.hues[${index}][0]`), text(entry[1], `layouts.${layoutId}.hues[${index}][1]`)]
     })
-    layouts[layoutId] = { label: text(raw['label'], `layouts.${layoutId}.label`), scene, hues }
+    layouts[layoutId] = {
+      label: text(raw['label'], `layouts.${layoutId}.label`),
+      scene,
+      hues,
+      palette: {
+        branch: text(raw['palette']['branch'], `layouts.${layoutId}.palette.branch`),
+        cutBranch: text(raw['palette']['cutBranch'], `layouts.${layoutId}.palette.cutBranch`),
+        baseWire: text(raw['palette']['baseWire'], `layouts.${layoutId}.palette.baseWire`),
+      },
+      glow: {
+        color: text(raw['glow']['color'], `layouts.${layoutId}.glow.color`),
+        intensity: finite(raw['glow']['intensity'], `layouts.${layoutId}.glow.intensity`),
+        distance: finite(raw['glow']['distance'], `layouts.${layoutId}.glow.distance`),
+        decay: finite(raw['glow']['decay'], `layouts.${layoutId}.glow.decay`),
+        height: finite(raw['glow']['height'], `layouts.${layoutId}.glow.height`),
+      },
+    }
   }
   const ids = new Set<string>()
   const trees = value['trees'].map((raw, index): SavedTree => {

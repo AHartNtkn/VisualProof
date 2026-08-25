@@ -10,8 +10,8 @@ describe('orchard world save', () => {
     expect(world.version).toBe(1)
     expect(world.terrain).toEqual({
       size: 4000,
-      ground: '#4f8f3b',
-      sky: '#a9d5ec',
+      ground: '#181a1d',
+      sky: '#000000',
       fogNear: 170,
       fogFar: 780,
       bounds: { minX: -2000, maxX: 2000, minZ: -2000, maxZ: 2000 },
@@ -29,6 +29,8 @@ describe('orchard world save', () => {
 
     const layout = world.layouts['zero-is-nat-20']!
     expect(layout.label).toBe('zeroIsNat · step 20')
+    expect(layout.palette).toEqual({ branch: '#e6e1d6', cutBranch: '#4a5058', baseWire: '#5bd2de' })
+    expect(layout.glow).toEqual({ color: '#ffffff', intensity: 1800, distance: 32, decay: 2, height: 13 })
     expect(layout.scene.entities).toHaveLength(73)
     expect(layout.scene.entities.filter(({ kind }) => kind === 'branch')).toHaveLength(17)
     expect(layout.scene.entities.filter(({ kind }) => kind === 'strand')).toHaveLength(41)
