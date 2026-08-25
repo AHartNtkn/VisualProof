@@ -1,10 +1,9 @@
-import VisualProof.Rule.Completeness.Comprehension.Structural.Arity
 import VisualProof.Rule.Completeness.Comprehension.Structural.Atom
 import VisualProof.Rule.Completeness.Comprehension.Structural.Blank
-import VisualProof.Rule.Completeness.Comprehension.Structural.Boundary
 import VisualProof.Rule.Completeness.Comprehension.Structural.Cut
 import VisualProof.Rule.Completeness.Comprehension.Structural.Identity
 import VisualProof.Rule.Completeness.Comprehension.Structural.ParallelDerives
+import VisualProof.Rule.Completeness.Comprehension.Structural.Region
 
 namespace VisualProof.Rule.Completeness.Comprehension
 
@@ -40,34 +39,12 @@ theorem supportPatternDerives
     request.Result := by
   refine (Region.rec
     (motive_1 := fun _ region => SupportDerives region)
-    (motive_2 := fun wires item =>
-      wires = [] → SupportDerives (Region.singleton item))
-    (motive_3 := fun wires materialItems =>
-      wires = [] → SupportDerives (Region.ofItems materialItems))
-    ?_ (fun head ports _ => supportAtomDerives head ports)
-      (fun signature arity ports _ =>
-        supportIdentityDerives signature arity ports)
+    (motive_2 := fun _ item => SupportDerives (Region.singleton item))
+    (motive_3 := fun _ materialItems =>
+      SupportDerives (Region.ofItems materialItems))
+    supportRegionDerives supportAtomDerives supportIdentityDerives
       supportCutDerives supportBlankDerives
       supportParallelDerives material) materialCanonical evidence request
-  · intro outer locals materialItems materialItemsIH materialCanonical
-      structuralOuter structuralBefore structuralAfter items result evidence
-      structuralRequest
-    cases outer with
-    | nil =>
-        cases locals with
-        | nil =>
-            exact supportItemsDerives (materialItemsIH rfl) materialCanonical
-              evidence structuralRequest
-        | cons firstLocal locals =>
-            exact supportArityDerives materialItems materialCanonical
-              (supportBoundaryWireDerives
-                (Region.mk locals materialItems : Region [firstLocal]))
-              evidence structuralRequest
-    | cons firstBoundary remainingOuter =>
-        simpa only [List.cons_append] using
-          supportBoundaryWireDerives
-            (material := Region.mk locals materialItems) materialCanonical
-            evidence structuralRequest
 end Structural
 
 end VisualProof.Rule.Completeness.Comprehension
