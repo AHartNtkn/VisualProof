@@ -1189,7 +1189,7 @@ theorem supportBlankSelectedTargetItem
 
 mutual
   /-- The Ends operation has unit site data at every selected blank-pattern
-  application, so authoritative region evidence admits exact sites. -/
+  application, so the region evidence supports exact sites. -/
   theorem endsRegionSites_nonempty
       {frame : Transform.Frame [] common sourceWires targetWires}
       {source : Region sourceWires} {result : Region common}

@@ -207,4 +207,116 @@ theorem pinStep
   exact ⟨validity.1, validity.2,
     Step.vacuity step, Step.vacuity step.symm⟩
 
+/-- Add exactly a selected batch of unary pins at an exact occurrence. -/
+theorem pinWiresExact
+    {boundary holeWires locals selectedWires : List Sig}
+    (interface : OpenDiagram boundary)
+    (context : DiagramContext interface.external holeWires)
+    (items : ItemSeq (holeWires ++ locals))
+    (rename : WireRenaming selectedWires (holeWires ++ locals))
+    (selected : ∀ {signature}, Var selectedWires signature → Bool)
+    (sourceCanonical : (context.fill (.mk locals items)).Canonical)
+    (sourceExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill (.mk locals items))) :
+    ∃ targetCanonical :
+        (context.fill (.mk locals
+          (items.append
+            (ItemSeq.pinWires selectedWires rename selected)))).Canonical,
+      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          interface.boundaryWire
+          (context.fill (.mk locals
+            (items.append
+              (ItemSeq.pinWires selectedWires rename selected)))),
+        Equates
+          (exactOccurrence interface context (.mk locals items)
+            sourceCanonical sourceExternalTwoEnded)
+          (.mk locals
+            (items.append
+              (ItemSeq.pinWires selectedWires rename selected)))
+          targetCanonical targetExternalTwoEnded := by
+  induction selectedWires generalizing items with
+  | nil =>
+      refine ⟨by simpa [ItemSeq.pinWires, ItemSeq.append_nil] using
+          sourceCanonical,
+        by
+          intro wireSignature wire
+          simpa [ItemSeq.pinWires, ItemSeq.append_nil] using
+            sourceExternalTwoEnded wire,
+        ?_⟩
+      simpa [ItemSeq.pinWires, ItemSeq.append_nil] using
+        (show Equates
+          (exactOccurrence interface context (.mk locals items)
+            sourceCanonical sourceExternalTwoEnded)
+          (.mk locals items) sourceCanonical sourceExternalTwoEnded from
+          ⟨.refl, .refl⟩)
+  | cons signature tail induction =>
+      let tailRename : WireRenaming tail (holeWires ++ locals) :=
+        ⟨fun wire => rename (.there wire)⟩
+      let tailSelected : ∀ {wireSignature},
+          Var tail wireSignature → Bool :=
+        fun wire => selected (.there wire)
+      cases selectedHead : selected (.here : Var (signature :: tail)
+          signature) with
+      | false =>
+          obtain ⟨targetCanonical, targetExternalTwoEnded, steps⟩ :=
+            induction items tailRename tailSelected sourceCanonical
+              sourceExternalTwoEnded
+          refine ⟨?_, ?_, ?_⟩
+          · simpa only [ItemSeq.pinWires, selectedHead, Bool.false_eq,
+              tailRename, tailSelected] using targetCanonical
+          · intro wireSignature wire
+            simpa only [ItemSeq.pinWires, selectedHead, Bool.false_eq,
+              tailRename, tailSelected] using targetExternalTwoEnded wire
+          · simpa only [ItemSeq.pinWires, selectedHead, Bool.false_eq,
+              tailRename, tailSelected] using steps
+      | true =>
+          let pin := Item.identity signature 1 (fun _ => rename .here)
+          let occurrence := exactOccurrence interface context (.mk locals items)
+            sourceCanonical sourceExternalTwoEnded
+          obtain ⟨firstCanonical, firstExternalTwoEnded, firstSteps⟩ :=
+            pinStep occurrence signature (rename .here)
+          let firstItems := items.append (.cons pin .nil)
+          have firstCanonical' :
+              (context.fill (.mk locals firstItems)).Canonical := by
+            simpa only [occurrence, pin, firstItems, Vacuity.Pin.present,
+              Vacuity.Pin.plain] using firstCanonical
+          have firstExternalTwoEnded' : OpenDiagram.ExternalTwoEnded
+              interface.boundaryWire
+              (context.fill (.mk locals firstItems)) := by
+            intro wireSignature wire
+            simpa only [occurrence, pin, firstItems, Vacuity.Pin.present,
+              Vacuity.Pin.plain] using firstExternalTwoEnded wire
+          obtain ⟨targetCanonical, targetExternalTwoEnded, rest⟩ :=
+            induction firstItems tailRename tailSelected firstCanonical'
+              firstExternalTwoEnded'
+          refine ⟨?_, ?_, ?_⟩
+          · simpa only [ItemSeq.pinWires, selectedHead, if_true,
+              firstItems, pin, tailRename, tailSelected,
+              ItemSeq.append_assoc] using targetCanonical
+          · intro wireSignature wire
+            simpa only [ItemSeq.pinWires, selectedHead, if_true,
+              firstItems, pin, tailRename, tailSelected,
+              ItemSeq.append_assoc] using targetExternalTwoEnded wire
+          · have firstEquates : Equates occurrence
+                (.mk locals firstItems) firstCanonical'
+                firstExternalTwoEnded' := by
+              exact ⟨.tail .refl (by
+                  simpa only [occurrence, pin, firstItems,
+                    Vacuity.Pin.present, Vacuity.Pin.plain] using
+                      firstSteps.1),
+                .tail .refl (by
+                  simpa only [occurrence, pin, firstItems,
+                    Vacuity.Pin.present, Vacuity.Pin.plain] using
+                      firstSteps.2)⟩
+            have combined : Equates occurrence
+                (.mk locals
+                  (firstItems.append
+                    (ItemSeq.pinWires tail tailRename tailSelected)))
+                targetCanonical targetExternalTwoEnded :=
+              ⟨firstEquates.1.trans rest.1,
+                rest.2.trans firstEquates.2⟩
+            simpa only [ItemSeq.pinWires, selectedHead, if_true,
+              firstItems, pin, tailRename, tailSelected,
+              ItemSeq.append_assoc] using combined
+
 end VisualProof.Rule.Completeness

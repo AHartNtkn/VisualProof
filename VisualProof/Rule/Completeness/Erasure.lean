@@ -1,5 +1,6 @@
 import VisualProof.Rule.Completeness.Erasure.Duplication
 import VisualProof.Rule.Completeness.Erasure.TwoSite
+import VisualProof.Rule.Completeness.Comprehension.Normalization.Support
 import VisualProof.Rule.Step
 
 namespace VisualProof.Rule.UncappedErasure
@@ -412,3 +413,267 @@ theorem complete
           exact presented.reflTransGen exposedEquates.2
 
 end VisualProof.Rule.UncappedErasure
+
+namespace VisualProof.Rule.Erasure
+
+open Diagram
+open Theory
+
+/-- Add the strong erasure's selected cap block while the material is still
+present, then move that block into the surviving host presentation. -/
+theorem capEquates
+    {boundary outer : List Theory.Sig}
+    (description : Erasure.Description outer)
+    {source : OpenDiagram boundary}
+    (occurrence : Occurrence description.source source) :
+    let cappedSource := Region.spliceAt description.hostLocals
+      (description.hostItems.append description.caps)
+      description.material description.wireMap
+    ∃ targetCanonical :
+        (occurrence.context.fill cappedSource).Canonical,
+      ∃ targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill cappedSource),
+        Completeness.Equates occurrence cappedSource targetCanonical
+          targetExternalTwoEnded := by
+  dsimp only
+  generalize materialEq :
+    description.material.renameWires description.wireMap = material
+  cases material with
+  | mk materialLocals materialItems =>
+      let hostRename := Region.adjoinHostWire outer
+        description.hostLocals materialLocals
+      let materialRename := Region.adjoinMaterialWire outer
+        description.hostLocals materialLocals
+      let selected : ∀ {signature},
+          Var (outer ++ description.hostLocals) signature → Bool :=
+        fun wire => decide
+          ((description.hostItems.incidencePaths wire.index.val 0).length = 1)
+      let host := description.hostItems.renameWires hostRename
+      let materialItems' := materialItems.renameWires materialRename
+      let pins := ItemSeq.pinWires (outer ++ description.hostLocals)
+        hostRename selected
+      let base := host.append materialItems'
+      have directCanonical :
+          (occurrence.context.fill
+            (.mk (description.hostLocals ++ materialLocals) base)).Canonical := by
+        simpa only [Erasure.Description.source,
+          UncappedErasure.Description.source, Region.spliceAt,
+          Region.adjoinAt, materialEq, hostRename, materialRename, host,
+          materialItems', base] using occurrence.sourceCanonical
+      have directExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill
+            (.mk (description.hostLocals ++ materialLocals) base)) := by
+        intro signature wire
+        simpa only [Erasure.Description.source,
+          UncappedErasure.Description.source, Region.spliceAt,
+          Region.adjoinAt, materialEq, hostRename, materialRename, host,
+          materialItems', base] using occurrence.sourceExternalTwoEnded wire
+      obtain ⟨rawCanonical, rawExternalTwoEnded, rawEquates⟩ :=
+        Completeness.pinWiresExact occurrence.interface occurrence.context
+          base hostRename selected directCanonical directExternalTwoEnded
+      let raw := Region.mk (description.hostLocals ++ materialLocals)
+        (base.append pins)
+      have rawCanonical' : (occurrence.context.fill raw).Canonical := by
+        simpa only [pins, base, raw] using rawCanonical
+      have rawExternalTwoEnded' : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill raw) := by
+        intro signature wire
+        simpa only [pins, base, raw] using rawExternalTwoEnded wire
+      have compId : WireRenaming.comp hostRename WireRenaming.id =
+          hostRename := by
+        apply WireRenaming.ext
+        intro signature wire
+        rfl
+      have pinsRename :
+          description.caps.renameWires hostRename = pins := by
+        simp only [Erasure.Description.caps,
+          ItemSeq.pinWires_renameWires, compId, pins, selected]
+      have rawEq : raw =
+          Completeness.Comprehension.EqualityNormalization.appendAdjoinedPins
+            description.hostLocals description.hostItems description.caps
+            (.mk materialLocals materialItems) := by
+        simp only [raw,
+          Completeness.Comprehension.EqualityNormalization.appendAdjoinedPins,
+          hostRename, materialRename, host, materialItems', base, pinsRename,
+          ItemSeq.append_assoc]
+      let cappedSource := Region.adjoinAt description.hostLocals
+        (description.hostItems.append description.caps)
+        (.mk materialLocals materialItems)
+      let presentation : RegionIso (WireEquiv.refl outer) raw cappedSource := by
+        rw [rawEq]
+        exact
+          Completeness.Comprehension.EqualityNormalization.adjoinPinsIso
+            description.hostLocals description.hostItems description.caps
+            (.mk materialLocals materialItems)
+      have rawLocalCanonical : raw.Canonical :=
+        occurrence.context.holeCanonical raw rawCanonical'
+      have cappedLocalCanonical : cappedSource.Canonical :=
+        presentation.canonical_iff.mp rawLocalCanonical
+      have sameNonempty : ∀ {signature} (wire : Var outer signature),
+          raw.incidencePaths wire.index.val ≠ [] ↔
+            cappedSource.incidencePaths wire.index.val ≠ [] := by
+        intro signature wire
+        rw [← List.length_pos_iff, ← List.length_pos_iff,
+          presentation.incidencePaths_length_eq wire]
+      have replacement := occurrence.context.replaceCanonical raw cappedSource
+        rawCanonical' cappedLocalCanonical sameNonempty
+      let targetCanonical := replacement.1
+      let rawEndpoint := occurrence.interface.withBody
+        (occurrence.context.fill raw) rawCanonical' rawExternalTwoEnded'
+      let directEndpoint := occurrence.interface.withBody
+        (occurrence.context.fill
+          (.mk (description.hostLocals ++ materialLocals) base))
+        directCanonical directExternalTwoEnded
+      let sourceIso : OpenDiagramIso source directEndpoint := by
+        simpa only [directEndpoint, Erasure.Description.source,
+          UncappedErasure.Description.source, Region.spliceAt,
+          Region.adjoinAt, materialEq, hostRename, materialRename, host,
+          materialItems', base] using occurrence.host_iso
+      have targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+          occurrence.interface.boundaryWire
+          (occurrence.context.fill cappedSource) :=
+        rawEndpoint.externalTwoEnded_of_nonempty_iff _ replacement.2
+      let targetEndpoint := occurrence.interface.withBody
+        (occurrence.context.fill cappedSource) targetCanonical
+          targetExternalTwoEnded
+      let endpointIso : OpenDiagramIso rawEndpoint targetEndpoint :=
+        OpenDiagram.withBody_iso rawCanonical' targetCanonical
+          rawExternalTwoEnded' targetExternalTwoEnded
+          (occurrence.context.fillIso presentation)
+      have rawForward : Relation.ReflTransGen Step source rawEndpoint := by
+        exact
+          Completeness.Comprehension.EqualityNormalization.reflTransGen_iso
+            sourceIso.symm (by
+              simpa only [pins, base, raw, rawEndpoint, directEndpoint,
+                Completeness.exactOccurrence] using rawEquates.1)
+            (OpenDiagramIso.refl rawEndpoint)
+      have rawReverse : Relation.ReflTransGen Step rawEndpoint source := by
+        exact
+          Completeness.Comprehension.EqualityNormalization.reflTransGen_iso
+            (OpenDiagramIso.refl rawEndpoint) (by
+              simpa only [pins, base, raw, rawEndpoint, directEndpoint,
+                Completeness.exactOccurrence] using rawEquates.2)
+            sourceIso.symm
+      have presented : Completeness.Equates occurrence cappedSource
+          targetCanonical targetExternalTwoEnded := ⟨
+        Completeness.Comprehension.EqualityNormalization.reflTransGen_iso
+          (OpenDiagramIso.refl source) rawForward endpointIso,
+        Completeness.Comprehension.EqualityNormalization.reflTransGen_iso
+          endpointIso rawReverse (OpenDiagramIso.refl source)⟩
+      simpa only [cappedSource, materialEq, Erasure.Description.source,
+        UncappedErasure.Description.source, Region.spliceAt] using
+          ⟨targetCanonical, targetExternalTwoEnded, presented⟩
+
+/-- Every strong capping erasure is derivable by a nonempty chain of
+primitive HOL-calculus steps. -/
+theorem complete
+    {boundary : List Theory.Sig}
+    {source target : OpenDiagram boundary}
+    (step : Erasure source target) :
+    Relation.TransGen Step source target := by
+  rcases step with ⟨outer, before, after, occurrence, targetCanonical,
+    targetExternalTwoEnded, targetIso, localEvidence⟩
+  cases polarityEq : occurrence.context.polarity with
+  | positive =>
+      have localStep : Erasure.Local before after := by
+        simpa only [atPolarity, polarityEq] using localEvidence
+      cases localStep with
+      | erase description =>
+          obtain ⟨cappedCanonical, cappedExternalTwoEnded, caps⟩ :=
+            capEquates description occurrence
+          let cappedSource := Region.spliceAt description.hostLocals
+            (description.hostItems.append description.caps)
+            description.material description.wireMap
+          let cappedEndpoint := occurrence.interface.withBody
+            (occurrence.context.fill cappedSource) cappedCanonical
+              cappedExternalTwoEnded
+          let cappedDescription : UncappedErasure.Description outer := {
+            description with
+            hostItems := description.hostItems.append description.caps
+          }
+          let cappedOccurrence : Occurrence cappedDescription.source
+              cappedEndpoint := by
+            simpa only [cappedDescription, cappedSource,
+              UncappedErasure.Description.source] using
+              Completeness.exactOccurrence occurrence.interface
+                occurrence.context cappedSource cappedCanonical
+                cappedExternalTwoEnded
+          have uncapped : UncappedErasure cappedEndpoint target := by
+            refine ⟨outer, cappedDescription.source,
+              cappedDescription.target, cappedOccurrence, ?_, ?_, ?_, ?_⟩
+            · simpa only [cappedDescription,
+                UncappedErasure.Description.target,
+                Erasure.Description.target] using targetCanonical
+            · intro signature wire
+              simpa only [cappedDescription,
+                  UncappedErasure.Description.target,
+                  Erasure.Description.target] using
+                targetExternalTwoEnded wire
+            · simpa only [cappedDescription,
+                UncappedErasure.Description.target,
+                Erasure.Description.target] using targetIso
+            · rw [show cappedOccurrence.context.polarity = .positive by
+                simpa only [cappedOccurrence, Completeness.exactOccurrence]
+                  using polarityEq]
+              exact UncappedErasure.Local.erase cappedDescription
+          have core : Relation.TransGen Step cappedEndpoint target :=
+            UncappedErasure.complete uncapped
+          have pinPrefix : Relation.ReflTransGen Step source cappedEndpoint := by
+            simpa only [cappedSource, cappedEndpoint,
+              Completeness.Equates] using caps.1
+          exact pinPrefix.transGen core
+  | negative =>
+      have localStep : Erasure.Local after before := by
+        simpa only [atPolarity, converse, polarityEq] using localEvidence
+      cases localStep with
+      | erase description =>
+          let materialOccurrence : Occurrence description.source target := {
+            interface := occurrence.interface
+            context := occurrence.context
+            sourceCanonical := targetCanonical
+            sourceExternalTwoEnded := targetExternalTwoEnded
+            host_iso := targetIso
+          }
+          obtain ⟨cappedCanonical, cappedExternalTwoEnded, caps⟩ :=
+            capEquates description materialOccurrence
+          let cappedSource := Region.spliceAt description.hostLocals
+            (description.hostItems.append description.caps)
+            description.material description.wireMap
+          let cappedEndpoint := occurrence.interface.withBody
+            (occurrence.context.fill cappedSource) cappedCanonical
+              cappedExternalTwoEnded
+          let cappedDescription : UncappedErasure.Description outer := {
+            description with
+            hostItems := description.hostItems.append description.caps
+          }
+          let cappedTargetOccurrence : Occurrence cappedDescription.target
+              source := by
+            simpa only [cappedDescription,
+              UncappedErasure.Description.target,
+              Erasure.Description.target] using occurrence
+          have uncapped : UncappedErasure source cappedEndpoint := by
+            refine ⟨outer, cappedDescription.target,
+              cappedDescription.source, cappedTargetOccurrence, ?_, ?_, ?_, ?_⟩
+            · simpa only [cappedDescription, cappedSource,
+                UncappedErasure.Description.source] using cappedCanonical
+            · intro signature wire
+              simpa only [cappedDescription, cappedSource,
+                  UncappedErasure.Description.source] using
+                cappedExternalTwoEnded wire
+            · simpa only [cappedDescription, cappedSource,
+                UncappedErasure.Description.source, cappedEndpoint] using
+                (OpenDiagramIso.refl cappedEndpoint)
+            · rw [show cappedTargetOccurrence.context.polarity = .negative by
+                simpa only [cappedTargetOccurrence] using polarityEq]
+              exact UncappedErasure.Local.erase cappedDescription
+          have core : Relation.TransGen Step source cappedEndpoint :=
+            UncappedErasure.complete uncapped
+          have suffix : Relation.ReflTransGen Step cappedEndpoint target := by
+            simpa only [cappedSource, cappedEndpoint,
+              Completeness.Equates, materialOccurrence] using caps.2
+          exact core.reflTransGen suffix
+
+end VisualProof.Rule.Erasure

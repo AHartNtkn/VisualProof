@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Algebra
+import VisualProof.Diagram.UnaryIdentity
 import VisualProof.Rule.Relation
 
 namespace VisualProof.Rule
@@ -51,5 +52,54 @@ theorem UncappedErasure.backward_respectsTargetIso
     UncappedErasure target' source := by
   rcases isomorphic with ⟨targetIso⟩
   exact UncappedErasure.iso targetIso step (OpenDiagramIso.refl source)
+
+namespace Erasure
+
+abbrev Description (outer : List Sig) :=
+  UncappedErasure.Description outer
+
+def Description.source (description : Description outer) : Region outer :=
+  UncappedErasure.Description.source description
+
+/-- Unary caps for exactly the wires with one surviving host incidence. -/
+def Description.caps (description : Description outer) :
+    ItemSeq (outer ++ description.hostLocals) :=
+  ItemSeq.pinWires (outer ++ description.hostLocals) WireRenaming.id
+    (fun wire => decide
+      ((description.hostItems.incidencePaths wire.index.val 0).length = 1))
+
+def Description.target (description : Description outer) : Region outer :=
+  .mk description.hostLocals
+    (description.hostItems.append description.caps)
+
+inductive Local : LocalRule
+  | erase (description : Description wires) :
+      Local description.source description.target
+
+end Erasure
+
+def Erasure : Rule :=
+  Contextual Erasure.Local
+
+theorem Erasure.iso
+    (sourceIso : OpenDiagramIso source source')
+    (step : Erasure source target)
+    (targetIso : OpenDiagramIso target target') :
+    Erasure source' target' :=
+  Contextual.iso sourceIso step targetIso
+
+theorem Erasure.respectsTargetIso
+    (step : Erasure source target)
+    (isomorphic : OpenDiagram.Isomorphic target target') :
+    Erasure source target' := by
+  rcases isomorphic with ⟨targetIso⟩
+  exact Erasure.iso (OpenDiagramIso.refl source) step targetIso
+
+theorem Erasure.backward_respectsTargetIso
+    (step : Erasure target source)
+    (isomorphic : OpenDiagram.Isomorphic target target') :
+    Erasure target' source := by
+  rcases isomorphic with ⟨targetIso⟩
+  exact Erasure.iso targetIso step (OpenDiagramIso.refl source)
 
 end VisualProof.Rule
