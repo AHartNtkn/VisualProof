@@ -1,6 +1,6 @@
 import VisualProof.Rule.Completeness.Erasure.Exposure
 import VisualProof.Rule.Completeness.Comprehension.Sites
-import VisualProof.Rule.Step
+import VisualProof.Rule.Iteration
 
 namespace VisualProof.Rule.Completeness.Erasure.Duplication
 
@@ -159,7 +159,7 @@ theorem copyStep
     (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
       occurrence.interface.boundaryWire
       targetBody) :
-    Step source
+    Rule.Iteration source
       (occurrence.interface.withBody
         targetBody targetCanonical targetExternalTwoEnded) := by
   let copiedBlockPresentation := copyBlockEmptyIso occurrence.selected
@@ -218,7 +218,7 @@ theorem copyStep
       rawTarget :=
     (OpenDiagram.withBody_iso rawCanonical targetCanonical
       rawExternalTwoEnded targetExternalTwoEnded fullPresentation).symm
-  exact Step.iteration ⟨occurrence,
+  exact ⟨occurrence,
     Iteration.copied occurrence.selected occurrence.before
       (emptyFreshening occurrence.descendant.outerWire),
     rawCanonical, rawExternalTwoEnded, targetIso,
@@ -246,7 +246,7 @@ theorem exposedCopyStep
     (targetCanonical : targetBody.Canonical)
     (targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
       occurrence.interface.boundaryWire targetBody) :
-    Step source
+    Rule.Iteration source
       (occurrence.interface.withBody targetBody targetCanonical
         targetExternalTwoEnded) := by
   exact copyStep
