@@ -32,12 +32,12 @@
 - Consumes: existing generalized Atom, Identity, and Blank `SupportDerives` theorems.
 - Produces: unrestricted mutual recursion motives and production statement `supportRegionDerives`.
 
-- [ ] State generalized Cut, Parallel, and Region constructor production theorems with `sorry` only in those owning theorem proofs.
-- [ ] Change all three mutual recursion motives to `SupportDerives` at arbitrary inherited wire contexts.
-- [ ] Make the `Region.mk` callback consume the generalized ItemSeq induction hypothesis through `supportRegionDerives`.
-- [ ] Confirm the recursion elaborates without a boundary-wire case.
-- [ ] Run `lake env lean VisualProof/Rule/Completeness/Comprehension/Structural/Complete.lean` and record the exact pass/fail classification.
-- [ ] Commit the GREEN structural skeleton.
+- [x] State generalized Cut, Parallel, and Region constructor production theorems with `sorry` only in those owning theorem proofs.
+- [x] Change all three mutual recursion motives to `SupportDerives` at arbitrary inherited wire contexts.
+- [x] Make the `Region.mk` callback consume the generalized ItemSeq induction hypothesis through `supportRegionDerives`.
+- [x] Confirm the recursion elaborates without a boundary-wire case.
+- [x] Run `lake env lean VisualProof/Rule/Completeness/Comprehension/Structural/Complete.lean` and record the exact pass/fail classification.
+- [x] Commit the GREEN structural skeleton.
 
 ### Task 2: Generalized Cut
 
@@ -50,13 +50,13 @@
 - Consumes: `SupportDerives body`, existing identity-boundary normalization, CutShape, `supportCutInstantiatedHosted`, and iso transport.
 - Produces: `supportCutDerives` for arbitrary `body : Region wires` with no `wires = []` premise.
 
-- [ ] Put generalized `supportCutDerives` in RED with its final production statement.
-- [ ] Prove one Prop-valued mutual Cut factor theorem over the authoritative instantiation evidence, jointly returning edit, child evidence, validity, and endpoint isomorphisms.
-- [ ] Close selected-atom and nested-cut cases without inverse renaming, a second site traversal, endpoint uniqueness, or exact fresh-name equality.
-- [ ] Consume the factor and child induction hypothesis in generalized `supportCutDerives`.
-- [ ] Run `lake env lean VisualProof/Rule/Completeness/Comprehension/Structural/Cut.lean`, then `lake build`.
-- [ ] Record whether any failure was presentation, validity, evidence insufficiency, support, or roster related; correct only that cause and rerun.
-- [ ] Commit generalized Cut GREEN.
+- [x] Put generalized `supportCutDerives` in RED with its final production statement.
+- [x] Prove one Prop-valued mutual Cut factor theorem over the authoritative instantiation evidence, jointly returning edit, child evidence, validity, and endpoint isomorphisms.
+- [x] Close selected-atom and nested-cut cases without inverse renaming, a second site traversal, endpoint uniqueness, or exact fresh-name equality.
+- [x] Consume the factor and child induction hypothesis in generalized `supportCutDerives`.
+- [x] Run `lake env lean VisualProof/Rule/Completeness/Comprehension/Structural/Cut.lean`, then `lake build`.
+- [x] Record whether any failure was presentation, validity, evidence insufficiency, support, or roster related; correct only that cause and rerun.
+- [x] Commit generalized Cut GREEN.
 
 ### Task 3: Generalized Parallel
 
@@ -68,12 +68,12 @@
 - Consumes: head and tail `SupportDerives`, ParallelShape, Vacuity, and iso-aware telescope composition.
 - Produces: `supportParallelDerives` at arbitrary inherited wires.
 
-- [ ] Put generalized `supportParallelDerives` in RED with no empty-wire premises.
-- [ ] Prove one Prop-valued factor traversal that returns the Parallel edit and both child instantiation witnesses together.
-- [ ] Handle the head-only boundary-wire support case with a real constructor-local Vacuity reconciliation.
-- [ ] Compose head and tail induction hypotheses with binder and conjunction presentation only up to isomorphism.
-- [ ] Run the narrow Lean checks for both Parallel modules, then `lake build`.
-- [ ] Record the exact result and commit generalized Parallel GREEN.
+- [x] Put generalized `supportParallelDerives` in RED with no empty-wire premises.
+- [x] Prove one Prop-valued factor traversal that returns the Parallel edit and both child instantiation witnesses together.
+- [x] Handle the head-only boundary-wire support case with a real constructor-local Vacuity reconciliation.
+- [x] Compose head and tail induction hypotheses with binder and conjunction presentation only up to isomorphism.
+- [x] Run the narrow Lean checks for both Parallel modules, then `lake build`.
+- [x] Record the exact result and commit generalized Parallel GREEN.
 
 ### Task 4: Generalized Arity and Region Locals
 
@@ -85,12 +85,12 @@
 - Consumes: child `SupportDerives`, Arity, Vacuity/hosted support, and typed context isomorphisms.
 - Produces: generalized one-local Arity and GREEN `supportRegionDerives`.
 
-- [ ] Generalize the exposed-material canonicality and presentation lemmas from empty arguments to arbitrary `arguments`.
-- [ ] Put generalized `supportArityDerives` in RED.
-- [ ] Prove one selected-site factor that owns the Arity edit, child evidence, unary support pin, validity, and endpoint isomorphism.
-- [ ] Prove `supportRegionDerives` by folding locals from the ItemSeq induction hypothesis.
-- [ ] Run the narrow Lean checks for Arity and Region support, then `lake build`.
-- [ ] Record the exact result and commit generalized Arity/Region GREEN.
+- [x] Generalize the exposed-material canonicality and presentation lemmas from empty arguments to arbitrary `arguments`.
+- [x] Put generalized `supportArityDerives` in RED.
+- [x] Prove one selected-site factor that owns the Arity edit, child evidence, unary support pin, validity, and endpoint isomorphism.
+- [x] Prove `supportRegionDerives` by folding locals from the ItemSeq induction hypothesis.
+- [x] Run the narrow Lean checks for Arity and Region support, then `lake build`.
+- [x] Record the exact result and commit generalized Arity/Region GREEN.
 
 ### Task 5: Structural and Comprehension Completion
 
@@ -103,11 +103,11 @@
 - Consumes: all generalized structural constructor theorems and existing normalization.
 - Produces: GREEN `supportPatternDerives` and `Comprehension.complete`.
 
-- [ ] Replace every remaining constructor `sorry` in the structural recursion with its GREEN theorem.
-- [ ] Close `supportPatternDerives` by pure syntax-constructor dispatch.
-- [ ] Close internal and public Comprehension completeness from normalization plus structural derivation.
-- [ ] Run narrow checks, `lake build`, and the repository command-line axiom check.
-- [ ] Record the result and commit Comprehension completeness GREEN.
+- [x] Replace every remaining constructor `sorry` in the structural recursion with its GREEN theorem.
+- [x] Close `supportPatternDerives` by pure syntax-constructor dispatch.
+- [x] Close internal and public Comprehension completeness from normalization plus structural derivation.
+- [x] Run narrow checks, `lake build`, and the repository command-line axiom check.
+- [x] Record the result and commit Comprehension completeness GREEN.
 
 ### Task 6: Erasure Reduction Spikes
 
