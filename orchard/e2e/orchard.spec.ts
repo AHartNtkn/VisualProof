@@ -1,0 +1,32 @@
+import { expect, test } from '@playwright/test'
+
+test('renders exact separate tree counts and lets the player walk', async ({ page }) => {
+  test.setTimeout(45_000)
+  const started = performance.now()
+  await page.goto('/?trees=3')
+
+  const orchard = page.locator('[data-orchard]')
+  await expect(orchard).toHaveAttribute('data-ready', 'true', { timeout: 30_000 })
+  expect(performance.now() - started).toBeLessThan(3000)
+  await expect(page).toHaveTitle('Orchard Renderer Stress Test')
+  await expect(orchard).toHaveAttribute('data-world-version', '1')
+  await expect(orchard).toHaveAttribute('data-saved-tree-count', '2000')
+  await expect(orchard).toHaveAttribute('data-tree-count', '3')
+  await expect(orchard).toHaveAttribute('data-entity-count', '219')
+  await expect(orchard).toHaveAttribute('data-instanced-count', '0')
+  await expect(page.getByText('zeroIsNat · step 20')).toBeVisible()
+  await expect(page.getByText('Draw calls')).toBeVisible()
+
+  const before = Number(await orchard.getAttribute('data-player-z'))
+  await page.keyboard.down('w')
+  await page.waitForTimeout(350)
+  await page.keyboard.up('w')
+  const after = Number(await orchard.getAttribute('data-player-z'))
+  expect(after).toBeLessThan(before - 0.5)
+
+  await page.getByRole('spinbutton', { name: 'Tree count', exact: true }).fill('5')
+  await page.getByRole('button', { name: 'Apply tree count' }).click()
+  await expect(orchard).toHaveAttribute('data-tree-count', '5')
+  await expect(orchard).toHaveAttribute('data-entity-count', '365')
+  await expect(orchard).toHaveAttribute('data-instanced-count', '0')
+})

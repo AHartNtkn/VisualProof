@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orchard Renderer Stress Test</title>
+  </head>
+  <body>
+    <main class="orchard" data-orchard data-ready="false">
+      <div class="viewport" data-viewport></div>
+
+      <section class="panel" aria-label="Orchard stress controls">
+        <p class="eyebrow">Renderer stress test</p>
+        <h1>Proof Orchard</h1>
+        <p class="specimen">zeroIsNat · step 20</p>
+
+        <form class="count-form" data-count-form>
+          <label for="tree-count">Tree count</label>
+          <div class="count-row">
+            <input id="tree-count" name="trees" type="number" min="1" max="2000" step="1" value="50" />
+            <button type="submit">Apply tree count</button>
+          </div>
+        </form>
+        <div class="presets" aria-label="Tree count presets">
+          <button type="button" data-preset="10">10</button>
+          <button type="button" data-preset="50">50</button>
+          <button type="button" data-preset="100">100</button>
+          <button type="button" data-preset="250">250</button>
+          <button type="button" data-preset="500">500</button>
+          <button type="button" data-preset="1000">1,000</button>
+          <button type="button" data-preset="2000">2,000</button>
+        </div>
+
+        <dl class="metrics">
+          <div><dt>FPS</dt><dd data-fps>—</dd></div>
+          <div><dt>Frame time</dt><dd data-frame-ms>—</dd></div>
+          <div><dt>Draw calls</dt><dd data-draw-calls>—</dd></div>
+          <div><dt>Geometries</dt><dd data-geometries>—</dd></div>
+          <div><dt>Tree entities</dt><dd data-entities>—</dd></div>
+          <div><dt>Build time</dt><dd data-build-ms>—</dd></div>
+        </dl>
+
+        <p class="status" data-status>Loading saved world…</p>
+        <p class="controls"><kbd>WASD</kbd> walk · <kbd>Shift</kbd> sprint<br />Click landscape for mouse look · <kbd>Esc</kbd> release</p>
+      </section>
+
+      <div class="reticle" aria-hidden="true"></div>
+      <div class="look-hint" data-look-hint>Click to look around</div>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
