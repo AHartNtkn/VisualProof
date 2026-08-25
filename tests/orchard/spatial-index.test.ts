@@ -23,4 +23,21 @@ describe('SpatialIndex', () => {
 
     expect(index.query({ minX: 10, maxX: 20, minZ: -10, maxZ: 0 }).map(({ id }) => id)).toEqual(['inside'])
   })
+
+  it('keeps negative and positive cells separate with signed floor coordinates', () => {
+    const index = new SpatialIndex<Item>(10)
+    index.insert({ id: 'positive', x: 0.1, z: 0 })
+    index.insert({ id: 'negative', x: -0.1, z: 0 })
+
+    expect(index.query({ minX: -1, maxX: 1, minZ: -1, maxZ: 1 }).map(({ id }) => id)).toEqual(['negative', 'positive'])
+  })
+
+  it('returns one result when an ID is reinserted and moved across queried cells', () => {
+    const index = new SpatialIndex<Item>(10)
+    index.insert({ id: 'tree', x: -10.1, z: -10.1 })
+    index.insert({ id: 'tree', x: 10.1, z: 10.1 })
+    index.move('tree', -0.1, -0.1)
+
+    expect(index.query({ minX: -20, maxX: 20, minZ: -20, maxZ: 20 }).map(({ id }) => id)).toEqual(['tree'])
+  })
 })
