@@ -8,13 +8,13 @@ open Theory
 open WirePrimitive
 
 def pattern
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     OpenDiagram description.materialWires :=
   Exposure.supportPattern description.material materialCanonical
 
 def commonEquiv
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     WireEquiv (outer ++ description.hostLocals)
       (outer ++ (description.hostLocals ++ [])) :=
   WireEquiv.ofEq (by simp)
@@ -84,7 +84,7 @@ noncomputable def appendNilAdjoinIso
 
 /-- The support-completed material instantiated at the erased attachment. -/
 def instanceRegion
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     Region (outer ++ (description.hostLocals ++ [])) :=
   Comprehension.Instantiation.instantiate
@@ -93,14 +93,14 @@ def instanceRegion
       commonEquiv description wire)
 
 def retainedHost
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     Region (outer ++ (description.hostLocals ++ [])) :=
   Comprehension.retainedItemsPresentation
     (description.hostItems.renameWires (commonEquiv description).toRenaming)
 
 /-- The exact two-site specialization produced by empty-fresh Iteration. -/
 def specializedBody
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     Region (outer ++ (description.hostLocals ++ [])) :=
   (instanceRegion description materialCanonical).conjoin
@@ -108,13 +108,13 @@ def specializedBody
       (retainedHost description))
 
 def specialized
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) : Region outer :=
   Region.adjoinAt (description.hostLocals ++ []) .nil
     (specializedBody description materialCanonical)
 
 def baseInstance
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     Region (outer ++ description.hostLocals) :=
   Comprehension.Instantiation.instantiate
@@ -122,7 +122,7 @@ def baseInstance
     (Exposure.applicationPorts description)
 
 def targetPresentation
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) : Region outer :=
   Region.adjoinAt description.hostLocals .nil
     ((baseInstance description materialCanonical).conjoin
@@ -130,7 +130,7 @@ def targetPresentation
         (Comprehension.retainedItemsPresentation description.hostItems)))
 
 noncomputable def specializedTargetIso
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     RegionIso (WireEquiv.refl outer)
       (specialized description materialCanonical)
@@ -156,14 +156,14 @@ noncomputable def specializedTargetIso
     (appendNilAdjoinIso description.hostLocals body)
 
 def duplicatedMaterial
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     Region (outer ++ description.hostLocals) :=
   (baseInstance description materialCanonical).conjoin
     (baseInstance description materialCanonical)
 
 noncomputable def specializedHostedIso
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     RegionIso (WireEquiv.refl outer)
       (specialized description materialCanonical)
@@ -198,7 +198,7 @@ noncomputable def specializedHostedIso
     chain.castAmbient ambientEq
 
 theorem specialized_canonical
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical)
     (erasedCanonical : description.target.Canonical) :
     (specialized description materialCanonical).Canonical := by
@@ -221,19 +221,19 @@ theorem specialized_canonical
     hostedCanonical
 
 def frame
-    (description : Rule.Erasure.Description outer) :=
+    (description : Rule.UncappedErasure.Description outer) :=
   Content.Ends.rootFrame outer description.hostLocals []
     description.materialWires
 
 def application
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     Vars (outer ++ (description.hostLocals ++ []))
       description.materialWires :=
   (Exposure.applicationPorts description).map fun wire =>
     commonEquiv description wire
 
 theorem frame_sourceKeep_index
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (wire : Var (outer ++ (description.hostLocals ++ [])) signature) :
     ((frame description).sourceKeep wire).index.val = wire.index.val := by
   apply Var.appendCases (left := outer)
@@ -256,7 +256,7 @@ theorem frame_sourceKeep_index
       exact nomatch trailing
 
 theorem frame_targetKeep_eq_id
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     (frame description).targetKeep = WireRenaming.id := by
   apply WireRenaming.ext
   intro signature wire
@@ -282,14 +282,14 @@ theorem frame_targetKeep_eq_id
       exact nomatch trailing
 
 def selectedAtom
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     Item (outer ++ (description.hostLocals ++
       .rel description.materialWires :: [])) :=
   .atom (frame description).selected
     ((application description).map fun wire => (frame description).sourceKeep wire)
 
 def quantifiedItems
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     ItemSeq (outer ++ (description.hostLocals ++
       .rel description.materialWires :: [])) :=
   .cons (selectedAtom description)
@@ -299,37 +299,37 @@ def quantifiedItems
           (frame description).sourceKeep))
 
 def quantified
-    (description : Rule.Erasure.Description outer) : Region outer :=
+    (description : Rule.UncappedErasure.Description outer) : Region outer :=
   .mk (description.hostLocals ++ [.rel description.materialWires])
     (quantifiedItems description)
 
 def relationHead
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     Var ((outer ++ description.hostLocals) ++
       [.rel description.materialWires]) (.rel description.materialWires) :=
   Var.appendRight (outer ++ description.hostLocals) .here
 
 def relationPorts
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     Vars ((outer ++ description.hostLocals) ++
       [.rel description.materialWires]) description.materialWires :=
   (Exposure.applicationPorts description).map fun wire =>
     wire.appendLeft [.rel description.materialWires]
 
 def relationItems
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     ItemSeq ((outer ++ description.hostLocals) ++
       [.rel description.materialWires]) :=
   .cons (.atom (relationHead description) (relationPorts description))
     (.cons (.atom (relationHead description) (relationPorts description)) .nil)
 
 def relationMaterial
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     Region (outer ++ description.hostLocals) :=
   .mk [.rel description.materialWires] (relationItems description)
 
 theorem relationMaterial_canonical
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     (relationMaterial description).Canonical := by
   constructor
   · intro localIndex
@@ -352,17 +352,17 @@ theorem relationMaterial_canonical
   · exact ⟨True.intro, ⟨True.intro, True.intro⟩⟩
 
 def hostFirst
-    (description : Rule.Erasure.Description outer) : Region outer :=
+    (description : Rule.UncappedErasure.Description outer) : Region outer :=
   Region.adjoinAt description.hostLocals description.hostItems
     (relationMaterial description)
 
 def atomFirst
-    (description : Rule.Erasure.Description outer) : Region outer :=
+    (description : Rule.UncappedErasure.Description outer) : Region outer :=
   Region.appendAdjoinedHostSuffix description.hostLocals .nil
     description.hostItems (relationMaterial description)
 
 theorem quantified_eq_atomFirst
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     quantified description = atomFirst description := by
   have selectedEq : (frame description).selected =
       Region.adjoinMaterialWire outer description.hostLocals
@@ -408,7 +408,7 @@ theorem quantified_eq_atomFirst
   rfl
 
 noncomputable def quantifiedHostFirstIso
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     RegionIso (WireEquiv.refl outer)
       (quantified description) (hostFirst description) :=
   (RegionIso.ofEq (quantified_eq_atomFirst description)).trans
@@ -416,7 +416,7 @@ noncomputable def quantifiedHostFirstIso
       description.hostItems (relationMaterial description))
 
 theorem hostFirst_canonical
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (erasedCanonical : description.target.Canonical) :
     (hostFirst description).Canonical := by
   exact Region.Canonical.adjoinAt description.hostLocals
@@ -424,14 +424,14 @@ theorem hostFirst_canonical
     erasedCanonical (relationMaterial_canonical description)
 
 def retainedResult
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :=
   Comprehension.retainedItemsResult
     (pattern description materialCanonical) (frame description)
     (description.hostItems.renameWires (commonEquiv description).toRenaming)
 
 def itemsResult
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     Comprehension.Instantiation.ItemsResult
       (pattern description materialCanonical)
@@ -444,7 +444,7 @@ def itemsResult
 
 /-- The declarative two-site comprehension witness. -/
 theorem instantiates
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     Rule.Comprehension.Instantiates
       (pattern description materialCanonical) description.hostLocals []
@@ -453,7 +453,7 @@ theorem instantiates
   exact .mk (itemsResult description materialCanonical)
 
 def retainedSites
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :=
   Comprehension.retainedItemsSites
     (pattern description materialCanonical)
@@ -553,7 +553,7 @@ mutual
 end
 
 def itemsSites
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     Comprehension.ItemsSites
       (Content.Ends.operation description.materialWires) PUnit.unit
@@ -565,7 +565,7 @@ def itemsSites
       (retainedSites description materialCanonical))
 
 def editOutput
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :=
   Comprehension.itemsEdit
     (operation := Content.Ends.operation description.materialWires)
@@ -573,19 +573,19 @@ def editOutput
     (itemsSites description materialCanonical)
 
 def absorbedBody
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     Region (outer ++ (description.hostLocals ++ [])) :=
   (editOutput description materialCanonical).endpoint
 
 def absorbed
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) : Region outer :=
   Region.adjoinAt (description.hostLocals ++ []) .nil
     (absorbedBody description materialCanonical)
 
 noncomputable def absorbedBodyRetainedIso
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     RegionIso (WireEquiv.refl (outer ++ (description.hostLocals ++ [])))
       (absorbedBody description materialCanonical)
@@ -646,7 +646,7 @@ noncomputable def absorbedBodyRetainedIso
   exact outerBlank.trans inner
 
 noncomputable def absorbedTargetIso
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     RegionIso (WireEquiv.refl outer)
       (absorbed description materialCanonical) description.target := by
@@ -676,7 +676,7 @@ noncomputable def absorbedTargetIso
     (commonToPresented.trans (presentation.trans collapse))
 
 def deletion
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     Content.Ends.Delete.Description outer where
   arguments := description.materialWires
@@ -686,13 +686,13 @@ def deletion
   itemsEdit := (editOutput description materialCanonical).edit
 
 @[simp] theorem deletion_source
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     (deletion description materialCanonical).source = quantified description := by
   rfl
 
 theorem deletion_target
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     (deletion description materialCanonical).target =
       absorbed description materialCanonical := by
@@ -702,7 +702,7 @@ theorem deletion_target
     (editOutput description materialCanonical).run_eq
 
 def guard
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     Content.Ends.Absorb.ItemsGuard .positive
       (frame description) (deletion description materialCanonical).itemsEdit :=
@@ -714,7 +714,7 @@ def guard
           (commonEquiv description).toRenaming)))
 
 def absorbDescription
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     Content.Ends.Absorb.Description outer where
   deletion := deletion description materialCanonical
@@ -723,7 +723,7 @@ def absorbDescription
 /-- Both selected sites occur at positive parity, so the guarded converse of
 Ends absorbs the quantified two-site block. -/
 theorem absorbEvidence
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     Content.Ends.Absorb
       (quantified description) (absorbed description materialCanonical) := by
@@ -737,7 +737,7 @@ theorem absorbEvidence
 
 theorem specializedFilledValidity
     {boundary outer : List Sig}
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical)
     {source : OpenDiagram boundary}
     (occurrence : Occurrence description.source source)
@@ -760,7 +760,7 @@ theorem specializedFilledValidity
   have extension := occurrence.context.extendCanonical description.target
     hosted erasedCanonical hostedCanonical (by
       intro signature wire
-      simpa only [Rule.Erasure.Description.target, hosted] using
+      simpa only [Rule.UncappedErasure.Description.target, hosted] using
         Region.incidencePaths_adjoinAt_host_sublist
           description.hostLocals description.hostItems
           (duplicatedMaterial description materialCanonical) wire)
@@ -780,7 +780,7 @@ theorem specializedFilledValidity
 
 theorem quantifiedFilledValidity
     {boundary outer : List Sig}
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     {source : OpenDiagram boundary}
     (occurrence : Occurrence description.source source)
     (erasedCanonical :
@@ -797,7 +797,7 @@ theorem quantifiedFilledValidity
     (hostFirst description) erasedCanonical
     (hostFirst_canonical description targetCanonical) (by
       intro signature wire
-      simpa only [Rule.Erasure.Description.target, hostFirst] using
+      simpa only [Rule.UncappedErasure.Description.target, hostFirst] using
         Region.incidencePaths_adjoinAt_host_sublist
           description.hostLocals description.hostItems
           (relationMaterial description) wire)
@@ -817,7 +817,7 @@ theorem quantifiedFilledValidity
 
 theorem absorbedFilledValidity
     {boundary outer : List Sig}
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical)
     {source : OpenDiagram boundary}
     (occurrence : Occurrence description.source source)

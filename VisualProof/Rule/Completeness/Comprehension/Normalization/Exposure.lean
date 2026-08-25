@@ -143,7 +143,7 @@ theorem equatesIdentityBoundary
       have canonical := pinnedHostCanonical ([] : List Sig) hostItems
         sourceMaterial sourceLocalCanonical
       simpa only [description, exposureDescriptionWithHost,
-        Rule.Erasure.Description.target, contextPins, allPins,
+        Rule.UncappedErasure.Description.target, contextPins, allPins,
         List.nil_append, ItemSeq.pinWires, ItemSeq.nil_append,
         ItemSeq.append_nil] using canonical
     have erasedSameNonempty : ∀ {signature} (wire : Var [] signature),

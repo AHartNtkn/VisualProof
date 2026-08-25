@@ -6,7 +6,7 @@ namespace VisualProof.Rule
 open Theory
 open Diagram
 
-namespace Erasure
+namespace UncappedErasure
 
 structure Description (outer : List Sig) where
   materialWires : List Sig
@@ -26,30 +26,30 @@ inductive Local : LocalRule
   | erase (description : Description wires) :
       Local description.source description.target
 
-end Erasure
+end UncappedErasure
 
-def Erasure : Rule :=
-  Contextual Erasure.Local
+def UncappedErasure : Rule :=
+  Contextual UncappedErasure.Local
 
-theorem Erasure.iso
+theorem UncappedErasure.iso
     (sourceIso : OpenDiagramIso source source')
-    (step : Erasure source target)
+    (step : UncappedErasure source target)
     (targetIso : OpenDiagramIso target target') :
-    Erasure source' target' :=
+    UncappedErasure source' target' :=
   Contextual.iso sourceIso step targetIso
 
-theorem Erasure.respectsTargetIso
-    (step : Erasure source target)
+theorem UncappedErasure.respectsTargetIso
+    (step : UncappedErasure source target)
     (isomorphic : OpenDiagram.Isomorphic target target') :
-    Erasure source target' := by
+    UncappedErasure source target' := by
   rcases isomorphic with ⟨targetIso⟩
-  exact Erasure.iso (OpenDiagramIso.refl source) step targetIso
+  exact UncappedErasure.iso (OpenDiagramIso.refl source) step targetIso
 
-theorem Erasure.backward_respectsTargetIso
-    (step : Erasure target source)
+theorem UncappedErasure.backward_respectsTargetIso
+    (step : UncappedErasure target source)
     (isomorphic : OpenDiagram.Isomorphic target target') :
-    Erasure target' source := by
+    UncappedErasure target' source := by
   rcases isomorphic with ⟨targetIso⟩
-  exact Erasure.iso targetIso step (OpenDiagramIso.refl source)
+  exact UncappedErasure.iso targetIso step (OpenDiagramIso.refl source)
 
 end VisualProof.Rule

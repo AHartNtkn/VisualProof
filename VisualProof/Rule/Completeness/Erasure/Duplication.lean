@@ -25,7 +25,7 @@ def emptyFreshening
     rfl
 
 noncomputable def exposedSelectedSourceIso
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     RegionIso (WireEquiv.refl outer)
       (Exposure.exposedRegion description materialCanonical)
@@ -89,7 +89,7 @@ noncomputable def copyBlockEmptyIso
 
 noncomputable def exposedNestedOccurrence
     {boundary outer : List Sig}
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical)
     {source : OpenDiagram boundary}
     (occurrence : Occurrence
@@ -230,7 +230,7 @@ chosen by the caller and is required only to present the raw copied body up to
 isomorphism. -/
 theorem exposedCopyStep
     {boundary outer : List Sig}
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical)
     {source : OpenDiagram boundary}
     (occurrence : Occurrence

@@ -479,7 +479,7 @@ theorem accumulateSelectedAtomFormal
     (head := head) (ports := ports) tail hostLocals outerHostItems application
   have rawSourceEq : raw.source =
       Region.adjoinAt retainedLocals hostItems direct := by
-    simp only [raw, Rule.Erasure.Description.source, Region.spliceAt,
+    simp only [raw, Rule.UncappedErasure.Description.source, Region.spliceAt,
       atomExposureDescription, retainedLocals, hostItems, direct]
     exact congrArg
       (fun material => Region.adjoinAt

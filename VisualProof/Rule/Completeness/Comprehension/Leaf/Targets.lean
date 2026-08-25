@@ -632,7 +632,7 @@ theorem atomSelectedTargetItem
         tail application
       have rawSourceEq : raw.source =
           Region.adjoinAt retainedLocals hostItems direct := by
-        simp only [raw, Rule.Erasure.Description.source, Region.spliceAt,
+        simp only [raw, Rule.UncappedErasure.Description.source, Region.spliceAt,
           atomExposureDescription, retainedLocals, hostItems, direct]
         exact congrArg
           (fun material => Region.adjoinAt retainedLocals hostItems material)
@@ -2398,7 +2398,7 @@ theorem equatesPositionalAtomApplication
         (VisualProof.Rule.Comprehension.Instantiation.instantiate
           (positionalAtomPattern atomArguments) (.cons formal retained)))
       targetCanonical targetExternalTwoEnded := by
-  let description : Rule.Erasure.Description outer := {
+  let description : Rule.UncappedErasure.Description outer := {
     materialWires := positionalAtomWires atomArguments
     hostLocals := hostLocals
     hostItems := hostItems.append

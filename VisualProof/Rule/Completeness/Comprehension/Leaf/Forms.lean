@@ -340,7 +340,7 @@ def identityExposureDescriptionWithHost
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
     (application : Vars (outer ++ hostLocals)
       (List.replicate arity signature)) :
-    Rule.Erasure.Description outer where
+    Rule.UncappedErasure.Description outer where
   materialWires := List.replicate arity signature
   hostLocals := hostLocals
   hostItems := hostItems
@@ -357,7 +357,7 @@ theorem identityExposureDescriptionWithHost_source
       Region.adjoinAt hostLocals hostItems
         (positionalIdentityApplication signature arity application) := by
   simp only [identityExposureDescriptionWithHost,
-    Rule.Erasure.Description.source, Region.spliceAt]
+    Rule.UncappedErasure.Description.source, Region.spliceAt]
   rw [positionalIdentityMaterial_rename]
 
 theorem identityExposureDescriptionWithHost_exposed
@@ -485,7 +485,7 @@ theorem equatesPositionalIdentityApplication
         (positionalIdentityApplication signature arity application)
         directLocalCanonical
       simpa only [description, identityExposureDescriptionWithHost,
-        Rule.Erasure.Description.target,
+        Rule.UncappedErasure.Description.target,
         EqualityNormalization.contextPins,
         EqualityNormalization.allPins, List.nil_append,
         ItemSeq.pinWires, ItemSeq.nil_append, ItemSeq.append_nil] using canonical
@@ -1060,7 +1060,7 @@ def atomExposureDescription
     {ports : Vars pattern.external atomArguments}
     (tail : ItemSeq pattern.external)
     (application : Vars common patternArguments) :
-    Rule.Erasure.Description common where
+    Rule.UncappedErasure.Description common where
   materialWires := positionalAtomWires atomArguments
   hostLocals := EqualityNormalization.locals pattern
   hostItems := atomSiteHostItems pattern tail application
@@ -1883,7 +1883,7 @@ noncomputable def atomExposureSourceIso
     (atomSiteHostItems pattern tail application) selected
   rw [atomInstantiation_eq body_eq application]
   let combined := (adjoined.trans flattened).trans front
-  simpa only [Rule.Erasure.Description.source, Region.spliceAt,
+  simpa only [Rule.UncappedErasure.Description.source, Region.spliceAt,
     atomExposureDescription, selected, WireEquiv.refl_trans] using combined
 
 /-- Merge surrounding sibling syntax into the selected atom exposure host. -/
@@ -1895,7 +1895,7 @@ def atomExposureDescriptionWithHost
     (tail : ItemSeq pattern.external)
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
     (application : Vars (outer ++ hostLocals) patternArguments) :
-    Rule.Erasure.Description outer :=
+    Rule.UncappedErasure.Description outer :=
   let inner := atomExposureDescription (head := head) (ports := ports)
     tail application
   let innerHost : Region (outer ++ hostLocals) :=
@@ -1919,7 +1919,7 @@ def atomPinnedExposureDescriptionWithHost
     (tail : ItemSeq pattern.external)
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
     (application : Vars (outer ++ hostLocals) patternArguments) :
-    Rule.Erasure.Description outer :=
+    Rule.UncappedErasure.Description outer :=
   let raw := atomExposureDescriptionWithHost
     (head := head) (ports := ports) tail hostLocals hostItems application
   {
@@ -2042,7 +2042,7 @@ noncomputable def atomExposureDescriptionWithHostSourceIso
     (RegionIso.adjoinAt hostLocals hostItems
       (atomExposureSourceIso body_eq application))
   simpa only [combined, inner, innerMaterial, assoc,
-    atomExposureDescriptionWithHost, Rule.Erasure.Description.source,
+    atomExposureDescriptionWithHost, Rule.UncappedErasure.Description.source,
     Region.spliceAt, WireEquiv.adjoinMaterialAssoc] using sourcePresentation
 
 noncomputable def atomFormalPrefixResultIso

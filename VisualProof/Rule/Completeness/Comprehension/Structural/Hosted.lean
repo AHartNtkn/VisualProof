@@ -1670,7 +1670,7 @@ theorem supportCutHosted
   let directOccurrence := exactOccurrence
     occurrence.interface occurrence.context direct directCanonical
       directExternalTwoEnded
-  let outerDescription : Rule.Erasure.Description outer := {
+  let outerDescription : Rule.UncappedErasure.Description outer := {
     materialWires := materialWires
     hostLocals := hostLocals
     hostItems := pinnedItems
@@ -1678,7 +1678,7 @@ theorem supportCutHosted
     wireMap := rename
   }
   have outerSourceEq : outerDescription.source = direct := by
-    simp [outerDescription, Rule.Erasure.Description.source,
+    simp [outerDescription, Rule.UncappedErasure.Description.source,
       Region.spliceAt, direct, directMaterial, outerMaterial,
       Region.singleton_renameWires, Item.renameWires]
   have outerTargetEq : outerDescription.target =
@@ -1784,7 +1784,7 @@ theorem supportCutHosted
               rfl) wire
         rw [mapEq]
         simp only [List.nil_append]
-  let childDescription : Rule.Erasure.Description (outer ++ hostLocals) := {
+  let childDescription : Rule.UncappedErasure.Description (outer ++ hostLocals) := {
     materialWires := materialWires
     hostLocals := []
     hostItems := .nil
@@ -1792,7 +1792,7 @@ theorem supportCutHosted
     wireMap := childWireMap
   }
   have childSourceEq : childDescription.source = body.renameWires rename := by
-    simpa only [childDescription, Rule.Erasure.Description.source] using
+    simpa only [childDescription, Rule.UncappedErasure.Description.source] using
       spliceNilRename body
   let erasedChildMaterial :=
     Region.singleton (.cut (Region.blank (outer ++ hostLocals)))
@@ -1808,7 +1808,7 @@ theorem supportCutHosted
   let erasedPresentation : RegionIso (WireEquiv.refl outer)
       erasedChild innerErased := by
     simpa only [erasedChild, erasedChildMaterial, innerErased, innerContext,
-      childDescription, Rule.Erasure.Description.target,
+      childDescription, Rule.UncappedErasure.Description.target,
       DiagramContext.fill, ItemSeq.append_nil] using
       RegionIso.adjoinAtSingleton hostLocals pinnedItems
         (.cut (Region.blank (outer ++ hostLocals)))
@@ -2154,7 +2154,7 @@ theorem supportInstantiationHosted
   let rawOccurrence : Occurrence raw rawEndpoint :=
     exactOccurrence occurrence.interface occurrence.context raw rawCanonical
       rawExternalTwoEnded
-  let description : Rule.Erasure.Description outer := {
+  let description : Rule.UncappedErasure.Description outer := {
     materialWires := materialWires
     hostLocals := hostLocals
     hostItems := hostItems.append
@@ -2175,7 +2175,7 @@ theorem supportInstantiationHosted
         renamedMaterial)
       pinnedSourceCanonical pinnedSourceExternalTwoEnded
     apply EqualityNormalization.pinnedExposureCore pinnedOccurrence description
-    · simp [description, Rule.Erasure.Description.source, Region.spliceAt,
+    · simp [description, Rule.UncappedErasure.Description.source, Region.spliceAt,
         renamedMaterial]
     · rfl
     · intro canonical

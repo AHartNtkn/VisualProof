@@ -1149,7 +1149,7 @@ theorem exposureCore
     {before after : Region holeWires}
     {source : OpenDiagram boundary}
     (occurrence : Occurrence before source)
-    (description : Rule.Erasure.Description holeWires)
+    (description : Rule.UncappedErasure.Description holeWires)
     (sourceEq : description.source = before)
     (erasedCanonical :
       (occurrence.context.fill description.target).Canonical)
@@ -1198,7 +1198,7 @@ theorem pinnedExposureCore
     (occurrence : Occurrence
       (Region.adjoinAt hostLocals
         (hostItems.append (contextPins outer hostLocals)) before) source)
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (sourceEq : description.source =
       Region.adjoinAt hostLocals
         (hostItems.append (contextPins outer hostLocals)) before)
@@ -1693,7 +1693,7 @@ theorem pinnedExposureStrict
       (occurrence.context.fill
         (Region.adjoinAt hostLocals hostItems after)))
     (nonempty : outer ++ hostLocals ≠ [])
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (sourceEq : description.source =
       Region.adjoinAt hostLocals
         (hostItems.append (contextPins outer hostLocals)) before)

@@ -2,7 +2,7 @@ import VisualProof.Rule.Completeness.Erasure.Duplication
 import VisualProof.Rule.Completeness.Erasure.TwoSite
 import VisualProof.Rule.Step
 
-namespace VisualProof.Rule.Erasure
+namespace VisualProof.Rule.UncappedErasure
 
 open Diagram
 
@@ -11,13 +11,13 @@ primitive HOL-calculus steps. -/
 theorem complete
     {boundary : List Theory.Sig}
     {source target : OpenDiagram boundary}
-    (step : Erasure source target) :
+    (step : UncappedErasure source target) :
     Relation.TransGen Step source target := by
   rcases step with ⟨outer, before, after, occurrence, targetCanonical,
     targetExternalTwoEnded, targetIso, localEvidence⟩
   cases polarityEq : occurrence.context.polarity with
   | positive =>
-      have localStep : Erasure.Local before after := by
+      have localStep : UncappedErasure.Local before after := by
         simpa only [atPolarity, polarityEq] using localEvidence
       cases localStep with
       | erase description =>
@@ -211,7 +211,7 @@ theorem complete
           exact Completeness.transGen_iso (OpenDiagramIso.refl source) exact
             absorbedOpenIso
   | negative =>
-      have localStep : Erasure.Local after before := by
+      have localStep : UncappedErasure.Local after before := by
         simpa only [atPolarity, converse, polarityEq] using localEvidence
       cases localStep with
       | erase description =>
@@ -411,4 +411,4 @@ theorem complete
             (OpenDiagramIso.refl exposedEndpoint)
           exact presented.reflTransGen exposedEquates.2
 
-end VisualProof.Rule.Erasure
+end VisualProof.Rule.UncappedErasure

@@ -614,7 +614,7 @@ def exposureDescriptionWithHost
     (pattern : OpenDiagram arguments)
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
     (ports : Vars (outer ++ hostLocals) arguments) :
-    Rule.Erasure.Description outer where
+    Rule.UncappedErasure.Description outer where
   materialWires := arguments
   hostLocals := hostLocals
   hostItems := hostItems
@@ -630,7 +630,7 @@ theorem exposureDescriptionWithHost_source
       Region.adjoinAt hostLocals hostItems
         (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern ports) := by
-  simp only [Rule.Erasure.Description.source,
+  simp only [Rule.UncappedErasure.Description.source,
     exposureDescriptionWithHost, Region.spliceAt]
   rw [instantiate_renameWires, formalPorts_map_substitution]
 
