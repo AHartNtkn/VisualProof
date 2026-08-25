@@ -440,6 +440,74 @@ theorem HostedStrict.trans
     targetCanonical targetExternalTwoEnded
   exact EqualityNormalization.StrictEquates.trans firstCore secondCore
 
+/-- Compose hosted strict equivalences under one shared temporary support
+envelope.  Structural canonicality of the middle material is the only extra
+fact needed to validate it in every host. -/
+theorem HostedStrict.transPinned
+    {before middle after : Region common}
+    (first : HostedStrict before middle)
+    (second : HostedStrict middle after)
+    (middleCanonical : middle.Canonical) :
+    HostedStrict before after := by
+  intro outer hostLocals rename hostItems boundary source occurrence
+    targetCanonical targetExternalTwoEnded
+  apply EqualityNormalization.withPinnedEnvelope occurrence targetCanonical
+    targetExternalTwoEnded
+  intro pinnedSourceCanonical pinnedSourceExternalTwoEnded
+  let pinnedItems := hostItems.append
+    (EqualityNormalization.contextPins outer hostLocals)
+  let pinnedBefore := Region.adjoinAt hostLocals pinnedItems
+    (before.renameWires rename)
+  let pinnedMiddle := Region.adjoinAt hostLocals pinnedItems
+    (middle.renameWires rename)
+  let pinnedAfter := Region.adjoinAt hostLocals pinnedItems
+    (after.renameWires rename)
+  let pinnedOccurrence := exactOccurrence occurrence.interface
+    occurrence.context pinnedBefore pinnedSourceCanonical
+      pinnedSourceExternalTwoEnded
+  have sourceLocalCanonical :
+      (Region.adjoinAt hostLocals hostItems
+        (before.renameWires rename)).Canonical :=
+    occurrence.context.holeCanonical _ occurrence.sourceCanonical
+  have pinnedHostCanonical :
+      (Region.mk hostLocals pinnedItems).Canonical := by
+    simpa only [pinnedItems] using
+      EqualityNormalization.pinnedHostCanonical hostLocals hostItems
+        (before.renameWires rename) sourceLocalCanonical
+  have pinnedHostNonempty : ∀ {signature} (wire : Var outer signature),
+      (Region.mk hostLocals pinnedItems).incidencePaths wire.index.val ≠ [] := by
+    intro signature wire
+    simpa only [pinnedItems] using
+      EqualityNormalization.pinnedHost_incidence_nonempty hostLocals hostItems wire
+  have mappedMiddleCanonical : (middle.renameWires rename).Canonical :=
+    (Region.Canonical.renameWires_iff middle rename).mpr middleCanonical
+  have middleValidity :=
+    EqualityNormalization.supportedAdjoinValidity hostLocals pinnedItems
+      pinnedOccurrence pinnedHostCanonical pinnedHostNonempty
+      mappedMiddleCanonical
+  have targetLocalCanonical :
+      (Region.adjoinAt hostLocals hostItems
+        (after.renameWires rename)).Canonical :=
+    occurrence.context.holeCanonical _ targetCanonical
+  have mappedAfterCanonical : (after.renameWires rename).Canonical :=
+    Region.Canonical.material_of_adjoinAt hostLocals hostItems _
+      targetLocalCanonical
+  have afterValidity :=
+    EqualityNormalization.supportedAdjoinValidity hostLocals pinnedItems
+      pinnedOccurrence pinnedHostCanonical pinnedHostNonempty
+      mappedAfterCanonical
+  have firstCore := first outer hostLocals rename pinnedItems
+    pinnedOccurrence middleValidity.1 middleValidity.2
+  let middleEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill pinnedMiddle) middleValidity.1 middleValidity.2
+  let middleOccurrence : Occurrence pinnedMiddle middleEndpoint :=
+    exactOccurrence occurrence.interface occurrence.context pinnedMiddle
+      middleValidity.1 middleValidity.2
+  have secondCore := second outer hostLocals rename pinnedItems
+    middleOccurrence afterValidity.1 afterValidity.2
+  exact ⟨afterValidity.1, afterValidity.2,
+    (EqualityNormalization.StrictEquates.trans firstCore secondCore).toEquates⟩
+
 /-- Specialize a hosted transformation along one fixed wire substitution. -/
 theorem HostedStrict.specialize
     {before after : Region sourceWires}
