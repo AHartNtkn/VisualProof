@@ -231,14 +231,27 @@ Completed constructors have ordinary proofs; only the currently unfinished
 Arity and boundary-wire production theorems may own `sorry` during this
 checkpoint.
 
+The structural recursion motive ranges over arbitrary inherited material
+wires. Boundary wires are a type index of `Region`, not a recursive
+constructor, so the dispatcher must not delegate a nonempty-boundary branch
+without an induction hypothesis. Atom, identity, cut, parallel, blank, and
+item-sequence constructor theorems therefore retain their inherited wire
+parameter. The local-wire/Arity theorem consumes an explicit derivation for
+the region obtained by exposing that local wire; it must not call the
+boundary theorem. `supportBoundaryWireDerives` is a corollary of the
+generalized structural derivation and the existing argument-normalization
+machinery, never part of the recursion.
+
 Prove in order:
 
 1. Cut bodies using the child telescope result and CutShape.
 2. Item-sequence conjunction using both child results and ParallelShape.
 3. Pattern-local wires using Arity, including the required pin supplied by its
-   current relation.
-4. Boundary order, repetition, and omission using ArgumentPermutation,
-   ArgumentDuplicate, and ArgumentProjection.
+   current relation and an explicit child derivation from the generalized
+   induction.
+4. Boundary order, repetition, and omission using the existing
+   `argumentNormalizationTelescopeAll` / `argumentVarsProjectionCompiles`
+   layer over the structurally derived binder.
 
 At each rung, the induction hypothesis must consume and produce the actual
 pending telescope endpoints. Do not patch endpoint mismatches with casts or a

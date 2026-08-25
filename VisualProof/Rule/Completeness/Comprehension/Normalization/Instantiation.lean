@@ -685,6 +685,29 @@ theorem Vars.exists_get_index_of_countIndex_pos
         exact ⟨position.succ, by
           simpa only [Vars.get] using positionEq⟩
 
+/-- A wire absent from an actual argument tuple has no preimage under its
+formal boundary substitution. -/
+theorem formalSubstitution_index_ne_of_countIndex_eq_zero
+    (variables : Vars common sourceSignatures)
+    (targetWire : Var common targetSignature)
+    (countZero : variables.countIndex targetWire.index.val = 0)
+    (sourceWire : Var sourceSignatures sourceSignature) :
+    (formalSubstitution variables sourceWire).index.val ≠
+      targetWire.index.val := by
+  induction variables with
+  | nil => exact nomatch sourceWire
+  | cons applicationHead applicationTail induction =>
+      cases sourceWire with
+      | here =>
+          intro mapped
+          simp only [formalSubstitution_here] at mapped
+          simp only [Vars.countIndex, mapped, if_true] at countZero
+          omega
+      | there tailWire =>
+          apply induction
+          simp only [Vars.countIndex] at countZero
+          omega
+
 theorem instantiate_incidence_mem_nil_of_nonempty
     (pattern : OpenDiagram arguments)
     (ports : Vars targetWires arguments)

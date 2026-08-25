@@ -44,7 +44,8 @@ theorem supportPatternDerives
       wires = [] → SupportDerives (Region.singleton item))
     (motive_3 := fun wires materialItems =>
       wires = [] → SupportDerives (Region.ofItems materialItems))
-    ?_ supportAtomDerives supportIdentityDerives supportCutDerives supportBlankDerives
+    ?_ (fun head ports _ => supportAtomDerives head ports)
+      supportIdentityDerives supportCutDerives supportBlankDerives
       supportParallelDerives material) materialCanonical evidence request
   · intro outer locals materialItems materialItemsIH materialCanonical
       structuralOuter structuralBefore structuralAfter items result evidence
@@ -56,8 +57,10 @@ theorem supportPatternDerives
             exact supportItemsDerives (materialItemsIH rfl) materialCanonical
               evidence structuralRequest
         | cons firstLocal locals =>
-            exact supportArityDerives materialItems materialCanonical evidence
-              structuralRequest
+            exact supportArityDerives materialItems materialCanonical
+              (supportBoundaryWireDerives
+                (Region.mk locals materialItems : Region [firstLocal]))
+              evidence structuralRequest
     | cons firstBoundary remainingOuter =>
         simpa only [List.cons_append] using
           supportBoundaryWireDerives

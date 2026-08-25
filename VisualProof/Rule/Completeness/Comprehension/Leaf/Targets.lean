@@ -682,6 +682,1021 @@ theorem atomSelectedTargetItem
       -/
       exact ⟨staged, hosted, selectedScope, ⟨RegionIso.refl staged⟩⟩
 
+/-- The singleton atom whose support pattern is being compiled. -/
+def supportAtomMaterial
+    {wires atomArguments : List Sig}
+    (head : Var wires (.rel atomArguments))
+    (ports : Vars wires atomArguments) : Region wires :=
+  Region.singleton (.atom head ports)
+
+theorem supportAtomMaterial_canonical
+    {wires atomArguments : List Sig}
+    (head : Var wires (.rel atomArguments))
+    (ports : Vars wires atomArguments) :
+    (supportAtomMaterial head ports).Canonical := by
+  change (∀ localIndex : Fin 0, RegionPath.RootedTwo _) ∧
+    (ItemSeq.cons _ ItemSeq.nil).ChildrenCanonical
+  exact ⟨fun localIndex => Fin.elim0 localIndex,
+    ⟨True.intro, True.intro⟩⟩
+
+/-- The authoritative support pins on the singleton atom's explicit
+zero-local carrier. -/
+def supportAtomPinsAppended
+    {wires atomArguments : List Sig}
+    (head : Var wires (.rel atomArguments))
+    (ports : Vars wires atomArguments) : ItemSeq (wires ++ []) :=
+  Erasure.Exposure.supportPins (supportAtomMaterial head ports) wires
+    (Erasure.Exposure.identityBoundary wires)
+
+def supportAtomTail
+    {wires atomArguments : List Sig}
+    (head : Var wires (.rel atomArguments))
+    (ports : Vars wires atomArguments) : ItemSeq wires :=
+  (supportAtomPinsAppended head ports).renameWires
+    (WireEquiv.appendNil wires).toRenaming
+
+theorem supportAtomTail_appendNil
+    {wires atomArguments : List Sig}
+    (head : Var wires (.rel atomArguments))
+    (ports : Vars wires atomArguments) :
+    (supportAtomTail head ports).renameWires
+        (WireEquiv.appendNil wires).symm.toRenaming =
+      supportAtomPinsAppended head ports := by
+  unfold supportAtomTail
+  rw [ItemSeq.renameWires_comp]
+  have renameEq : WireRenaming.comp
+      (WireEquiv.appendNil wires).symm.toRenaming
+      (WireEquiv.appendNil wires).toRenaming = WireRenaming.id := by
+    apply WireRenaming.ext
+    intro signature wire
+    exact (WireEquiv.appendNil wires).left_inv wire
+  rw [renameEq]
+  exact ItemSeq.renameWires_id _
+
+theorem supportAtomBody_eq
+    {wires atomArguments : List Sig}
+    (head : Var wires (.rel atomArguments))
+    (ports : Vars wires atomArguments) :
+    Erasure.Exposure.supportBody (supportAtomMaterial head ports) =
+      Region.ofItems (.cons (.atom head ports) (supportAtomTail head ports)) := by
+  unfold Erasure.Exposure.supportBody supportAtomMaterial
+  simp only [Region.singleton, Region.ofItems, Region.locals, Region.items]
+  have pinsEq :
+      Erasure.Exposure.supportPins
+          (Region.mk [] (ItemSeq.renameWires
+            ⟨fun wire => wire.appendLeft []⟩
+            (.cons (.atom head ports) .nil))) wires
+          (Erasure.Exposure.identityBoundary wires) =
+        supportAtomPinsAppended head ports := by
+    simp [supportAtomPinsAppended, supportAtomMaterial, Region.singleton,
+      Region.ofItems, Region.locals]
+  rw [pinsEq]
+  rw [← supportAtomTail_appendNil head ports]
+  have appendEq : (⟨fun wire => wire.appendLeft []⟩ :
+      WireRenaming wires (wires ++ [])) =
+      (WireEquiv.appendNil wires).symm.toRenaming := by
+    apply WireRenaming.ext
+    intro signature wire
+    exact (WireEquiv.appendNil_symm_apply wires wire).symm
+  rw [appendEq]
+  rfl
+
+/-- Instantiating the support completion of one atom preserves exactly the
+scope of the atom and its support pins after the boundary substitution. -/
+theorem supportAtomInstantiationScope
+    {wires atomArguments common : List Sig}
+    (head : Var wires (.rel atomArguments))
+    (ports : Vars wires atomArguments)
+    (application : Vars common wires) :
+    let substitution := EqualityNormalization.formalSubstitution application
+    let pins := EqualityNormalization.allPins wires substitution
+    ScopePreservation
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (Erasure.Exposure.supportPattern
+          (supportAtomMaterial head ports)
+          (supportAtomMaterial_canonical head ports))
+        application)
+      (((Erasure.Exposure.supportBody
+          (supportAtomMaterial head ports)).renameWires substitution).conjoin
+        (Region.ofItems (pins.append pins))) := by
+  dsimp only
+  let substitution := EqualityNormalization.formalSubstitution application
+  let pins := EqualityNormalization.allPins wires substitution
+  let material := supportAtomMaterial head ports
+  let supported := Erasure.Exposure.supportBody material
+  let pinRegion := Region.ofItems (pins.append pins)
+  have ofItemsRenameEq : ∀ {sourceWires targetWires : List Sig}
+      (items : ItemSeq sourceWires)
+      (rename : WireRenaming sourceWires targetWires),
+      (Region.ofItems items).renameWires rename =
+        Region.ofItems (items.renameWires rename) := by
+    intro sourceWires targetWires items rename
+    unfold Region.ofItems Region.renameWires
+    congr 1
+    simp only [ItemSeq.renameWires_comp]
+    apply congrArg (fun mapped => items.renameWires mapped)
+    apply WireRenaming.ext
+    intro signature wire
+    simp [WireRenaming.comp, WireRenaming.appendRight]
+  have mappedFormalOfPositive : ∀ {signature}
+      (wire : Var common signature),
+      0 < application.countIndex wire.index.val →
+      ∃ sourceSignature, ∃ sourceWire : Var wires sourceSignature,
+        (substitution sourceWire).index.val = wire.index.val := by
+    intro signature wire positive
+    obtain ⟨position, positionEq⟩ :=
+      EqualityNormalization.Vars.exists_get_index_of_countIndex_pos
+        application wire.index.val positive
+    let sourceWire := (EqualityNormalization.formalPorts wires).get position
+    have mappedAt : substitution sourceWire = application.get position := by
+      have mappedTuple := EqualityNormalization.formalPorts_map_substitution
+        application
+      have mappedGet := congrArg (fun variables => variables.get position)
+        mappedTuple
+      simpa only [EqualityNormalization.Vars.get_map, sourceWire,
+        substitution] using mappedGet
+    exact ⟨wires.get position, sourceWire, by rw [mappedAt, positionEq]⟩
+  have noPreimageOfCountZero :
+      ∀ {sourceSignatures : List Sig}
+        (variables : Vars common sourceSignatures)
+        {targetSignature} (targetWire : Var common targetSignature),
+        variables.countIndex targetWire.index.val = 0 →
+        ∀ {sourceSignature}
+          (sourceWire : Var sourceSignatures sourceSignature),
+          (EqualityNormalization.formalSubstitution variables sourceWire).index.val ≠
+            targetWire.index.val := by
+    intro sourceSignatures variables
+    induction variables with
+    | nil =>
+        intro targetSignature targetWire zero sourceSignature sourceWire
+        exact nomatch sourceWire
+    | cons applicationHead applicationTail induction =>
+        intro targetSignature targetWire zero sourceSignature sourceWire
+        cases sourceWire with
+        | here =>
+            intro mapped
+            simp only [EqualityNormalization.formalSubstitution_here] at mapped
+            simp only [Vars.countIndex, mapped, if_true] at zero
+            omega
+        | there tailWire =>
+            apply induction targetWire
+            simp only [Vars.countIndex] at zero
+            omega
+  have supportedCanonical : supported.Canonical :=
+    Erasure.Exposure.supportBody_canonical material
+      (supportAtomMaterial_canonical head ports)
+  have pinCanonical : pinRegion.Canonical := by
+    change (∀ localIndex : Fin 0, RegionPath.RootedTwo _) ∧
+      ((pins.append pins).renameWires _).ChildrenCanonical
+    exact ⟨fun localIndex => Fin.elim0 localIndex,
+      (ItemSeq.ChildrenCanonical.renameWires_iff _ _).mpr
+        (EqualityNormalization.allPins_twice_childrenCanonical
+          wires substitution)⟩
+  constructor
+  · intro _
+    exact EqualityNormalization.canonical_conjoin
+      ((Region.Canonical.renameWires_iff supported substitution).mpr
+        supportedCanonical)
+      pinCanonical
+  · intro signature wire
+    rw [EqualityNormalization.instantiate_incidence_nonempty_iff]
+    constructor
+    · intro positive
+      obtain ⟨sourceSignature, sourceWire, mappedIndex⟩ :=
+        mappedFormalOfPositive wire positive
+      have pinRoot := EqualityNormalization.allPins_twice_rooted
+        wires substitution sourceWire 0
+      rw [mappedIndex] at pinRoot
+      have pinNonempty : pinRegion.incidencePaths wire.index.val ≠ [] := by
+        rw [Region.incidencePaths_ofItems]
+        exact pinRoot.nonempty
+      rw [Region.incidencePaths_conjoin]
+      intro empty
+      have mappedEmpty := (List.append_eq_nil_iff.mp empty).2
+      exact pinNonempty ((List.map_eq_nil_iff).mp mappedEmpty)
+    · intro targetNonempty
+      cases countEq : application.countIndex wire.index.val with
+      | zero =>
+          have noPreimage : ∀ {sourceSignature}
+              (sourceWire : Var wires sourceSignature),
+              (substitution sourceWire).index.val ≠ wire.index.val := by
+            exact noPreimageOfCountZero application wire countEq
+          have supportedEmpty :
+              (supported.renameWires substitution).incidencePaths
+                wire.index.val = [] := by
+            change ((Erasure.Exposure.supportBody
+              (supportAtomMaterial head ports)).renameWires substitution
+                ).incidencePaths wire.index.val = []
+            rw [supportAtomBody_eq head ports, ofItemsRenameEq,
+              Region.incidencePaths_ofItems]
+            apply ItemSeq.incidencePaths_renameWires_eq_nil_of_no_preimage
+            · exact wire.index.isLt
+            · exact noPreimage
+          have firstPinsEmpty : pins.incidencePaths wire.index.val 0 = [] := by
+            exact ItemSeq.pinWires_incidence_eq_nil_of wires substitution
+              (fun _ => true) wire.index.val 0
+              (fun sourceWire _ => noPreimage sourceWire)
+          have secondPinsEmpty :
+              pins.incidencePaths wire.index.val pins.length = [] := by
+            exact ItemSeq.pinWires_incidence_eq_nil_of wires substitution
+              (fun _ => true) wire.index.val pins.length
+              (fun sourceWire _ => noPreimage sourceWire)
+          have pinEmpty : pinRegion.incidencePaths wire.index.val = [] := by
+            rw [Region.incidencePaths_ofItems,
+              ItemSeq.incidencePaths_append, firstPinsEmpty]
+            simpa only [List.nil_append, Nat.zero_add] using secondPinsEmpty
+          rw [Region.incidencePaths_conjoin, supportedEmpty, pinEmpty] at targetNonempty
+          exact False.elim (targetNonempty (by simp))
+      | succ count => omega
+  · intro signature wire sourceRoot
+    have positive : 0 < application.countIndex wire.index.val := by
+      have countBound :=
+        (EqualityNormalization.instantiate_rootedTwo_iff
+          (Erasure.Exposure.supportPattern material
+            (supportAtomMaterial_canonical head ports)) application wire).mp
+          sourceRoot
+      omega
+    obtain ⟨sourceSignature, sourceWire, mappedIndex⟩ :=
+      mappedFormalOfPositive wire positive
+    have pinRoot := EqualityNormalization.allPins_twice_rooted
+      wires substitution sourceWire 0
+    rw [mappedIndex] at pinRoot
+    rw [Region.incidencePaths_conjoin]
+    apply RegionPath.RootedTwo.of_sublist
+      (List.sublist_append_right _ _)
+    exact (RegionPath.RootedTwo.map_shiftHead_iff _ _).mpr (by
+      rw [Region.incidencePaths_ofItems]
+      exact pinRoot)
+
+theorem positionalAtomInstantiation_reverseScope
+    {wires atomArguments : List Sig}
+    (formal : Var wires (.rel atomArguments))
+    (retained : Vars wires atomArguments) :
+    ScopePreservation
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (positionalAtomPattern atomArguments) (.cons formal retained))
+      (Region.singleton (.atom formal retained)) := by
+  have directScope := positionalAtomInstantiation_scope formal retained
+  constructor
+  · intro _
+    change (∀ localIndex : Fin 0, RegionPath.RootedTwo _) ∧ _
+    exact ⟨fun localIndex => Fin.elim0 localIndex,
+      ⟨True.intro, True.intro⟩⟩
+  · intro signature wire
+    exact (directScope.incidenceNonempty wire).symm
+  · intro signature wire sourceRoot
+    have countBound : 2 ≤ (Vars.cons formal retained).countIndex
+        wire.index.val := by
+      rw [← EqualityNormalization.instantiate_rootedTwo_iff]
+      exact sourceRoot
+    constructor
+    · rw [selectedAtomIncidencePaths_length]
+      exact countBound
+    · apply RegionPath.deepestCommonAncestor_eq_nil_of_mem_nil
+      let appendNil : WireRenaming wires (wires ++ []) :=
+        ⟨fun selected => selected.appendLeft []⟩
+      have retainedCountEq :
+          (retained.map (fun selected => appendNil selected)).countIndex
+              wire.index.val = retained.countIndex wire.index.val :=
+        Vars.countIndex_map_of_sameIndex retained appendNil
+          (fun selected => Var.index_appendLeft selected []) wire.index.val
+      simp only [Region.singleton, Region.ofItems, Region.incidencePaths,
+        ItemSeq.renameWires, Item.renameWires, ItemSeq.incidencePaths,
+        Item.incidencePaths, List.append_nil, Var.index_appendLeft,
+        List.mem_append]
+      rw [List.mem_replicate, retainedCountEq]
+      exact ⟨by
+        simp only [Vars.countIndex] at countBound
+        simpa only [Vars.countIndex] using Nat.ne_of_gt (by omega), rfl⟩
+
+theorem positionalAtomInstantiation_reverseHostedScope
+    {wires atomArguments : List Sig}
+    (formal : Var wires (.rel atomArguments))
+    (retained : Vars wires atomArguments) :
+    HostedScope
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (positionalAtomPattern atomArguments) (.cons formal retained))
+      (Region.singleton (.atom formal retained)) := by
+  intro target rename
+  let mappedFormal := rename formal
+  let mappedRetained := retained.map fun wire => rename wire
+  have sourceEq :
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (positionalAtomPattern atomArguments) (.cons formal retained)
+        ).renameWires rename =
+      VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (positionalAtomPattern atomArguments)
+        (.cons mappedFormal mappedRetained) := by
+    simpa only [mappedFormal, mappedRetained, Theory.Vars.map] using
+      EqualityNormalization.instantiate_renameWires
+        (positionalAtomPattern atomArguments) (.cons formal retained) rename
+  have targetEq :
+      (Region.singleton (.atom formal retained)).renameWires rename =
+        Region.singleton (.atom mappedFormal mappedRetained) := by
+    simp [mappedFormal, mappedRetained, Region.singleton_renameWires,
+      Item.renameWires]
+  rw [sourceEq, targetEq]
+  exact positionalAtomInstantiation_reverseScope mappedFormal mappedRetained
+
+/-- A selected support-singleton atom is presented directly at its actual
+application, without copied boundary locals. -/
+theorem supportAtomSelectedTargetItem
+    {wires atomArguments itemCommon itemSourceWires itemTargetWires
+      formalSourceWires formalTargetWires : List Sig}
+    (head : Var wires (.rel atomArguments))
+    (ports : Vars wires atomArguments)
+    {itemFrame : Transform.Frame wires itemCommon itemSourceWires
+      itemTargetWires}
+    {itemOperation : Transform.Operation wires}
+    {itemData : itemOperation.Data itemFrame}
+    (application : Vars itemCommon wires)
+    (siteData : itemOperation.SiteData itemFrame itemData application)
+    (formalFrame : Transform.Frame (positionalAtomWires atomArguments)
+      itemCommon formalSourceWires formalTargetWires) :
+    TargetItem
+      (targetPattern := positionalAtomPattern atomArguments)
+      (targetOperation := Leaf.Formal.operation [] atomArguments)
+      (VisualProof.Rule.Comprehension.Instantiation.ItemResult.selectedAtom
+        (pattern := Erasure.Exposure.supportPattern
+          (supportAtomMaterial head ports)
+          (supportAtomMaterial_canonical head ports))
+        (retain := itemFrame.sourceKeep)
+        (selected := itemFrame.selected) application)
+      (ItemSites.selectedAtom (operation := itemOperation)
+        (pattern := Erasure.Exposure.supportPattern
+          (supportAtomMaterial head ports)
+          (supportAtomMaterial_canonical head ports))
+        (frame := itemFrame) application siteData)
+      (positionalAtomSelection head ports) formalFrame PUnit.unit
+      (fun retained _formalSource formalResult _formalEvidence formalSites
+          _coherence =>
+        ∃ staged : Region itemCommon,
+          HostedStrict
+              (VisualProof.Rule.Comprehension.Instantiation.instantiate
+                (Erasure.Exposure.supportPattern
+                  (supportAtomMaterial head ports)
+                  (supportAtomMaterial_canonical head ports))
+                application)
+              staged ∧
+            ScopePreservation
+              (VisualProof.Rule.Comprehension.Instantiation.instantiate
+                (Erasure.Exposure.supportPattern
+                  (supportAtomMaterial head ports)
+                  (supportAtomMaterial_canonical head ports))
+                application)
+              staged ∧
+              Nonempty (RegionIso (WireEquiv.refl itemCommon) staged
+                (Region.adjoinAt retained .nil formalResult)) ∧
+              retained = [] ∧
+              let authoritativeFrame : Transform.Frame wires itemCommon
+                  itemSourceWires itemSourceWires := {
+                sourceKeep := itemFrame.sourceKeep
+                targetKeep := itemFrame.sourceKeep
+                selected := itemFrame.selected
+              }
+              let direct := Region.singleton (.atom itemFrame.selected
+                (application.map fun wire => itemFrame.sourceKeep wire))
+              let authoritative := Region.adjoinAt retained .nil
+                (Region.ofItems
+                  (argumentItemsEdit formalSites
+                    (EqualityNormalization.formalPorts wires)
+                    (normalizationOperation wires)
+                    (authoritativeFrame.append retained)
+                    PUnit.unit (fun _ _ _ => PUnit.unit)).1)
+              HostedStrict direct authoritative ∧
+                HostedScope direct authoritative) := by
+  unfold TargetItem
+  let commonEquiv := WireEquiv.appendNil itemCommon
+  let commonAppend := commonEquiv.symm.toRenaming
+  let mappedApplication := application.map fun wire => commonAppend wire
+  let substitution := EqualityNormalization.formalSubstitution mappedApplication
+  let mappedPins := EqualityNormalization.allPins wires substitution
+  let hostItems :=
+    ((supportAtomTail head ports).renameWires substitution).append
+      (mappedPins.append mappedPins)
+  let formal := substitution head
+  let retainedPorts := ports.map fun wire => substitution wire
+  let childFrame := formalFrame.append []
+  let formalSource := atomFormalPrefixSource childFrame hostItems formal
+    retainedPorts
+  let formalResult := atomFormalPrefixResult hostItems formal retainedPorts
+  let formalEvidence := atomFormalPrefixEvidence childFrame hostItems formal
+    retainedPorts
+  let formalSites := atomFormalPrefixRecordingSites childFrame hostItems formal
+    retainedPorts mappedApplication
+  refine ⟨[], formalSource, formalResult, formalEvidence, formalSites, ?_, ?_⟩
+  · apply atomFormalPrefixSource_eq_argumentItemsEdit childFrame hostItems
+      formal retainedPorts mappedApplication
+      (positionalAtomSelection head ports)
+      substitution
+    · exact (EqualityNormalization.formalPorts_map_substitution
+        mappedApplication).symm
+    · simp only [positionalAtomSelection, Vars.map]
+      rfl
+  · let rawSubstitution := EqualityNormalization.formalSubstitution application
+    let rawSupportItems :=
+      (supportAtomTail head ports).renameWires rawSubstitution
+    let rawPins := EqualityNormalization.allPins wires rawSubstitution
+    let rawHostItems := rawSupportItems.append (rawPins.append rawPins)
+    let rawFormal := rawSubstitution head
+    let rawRetainedPorts := ports.map fun wire => rawSubstitution wire
+    let staged := atomFormalPrefixResult rawHostItems rawFormal rawRetainedPorts
+    refine ⟨staged, ?_, ?_, ?_, rfl, ?_⟩
+    · let material := supportAtomMaterial head ports
+      let materialCanonical := supportAtomMaterial_canonical head ports
+      let supported := Erasure.Exposure.supportBody material
+      let supportedCanonical := Erasure.Exposure.supportBody_canonical
+        material materialCanonical
+      have supportedPinsNil : Erasure.Exposure.supportPins supported wires
+          (Erasure.Exposure.identityBoundary wires) = .nil := by
+        apply EqualityNormalization.supportPins_eq_nil
+        intro position
+        exact Erasure.Exposure.supportBody_incidence_nonempty material
+          ((Erasure.Exposure.identityBoundary wires).get position)
+      have supportedFixed : Erasure.Exposure.supportBody supported =
+          supported :=
+        EqualityNormalization.supportBody_eq_of_supportPins_nil supported
+          supportedPinsNil
+      have patternEq : Erasure.Exposure.supportPattern supported
+            supportedCanonical =
+          Erasure.Exposure.supportPattern material materialCanonical := by
+        apply EqualityNormalization.OpenDiagram.eq_of_data
+        · rfl
+        · rfl
+        · exact heq_of_eq supportedFixed
+      have sourceToSupported : HostedStrict
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (Erasure.Exposure.supportPattern material materialCanonical)
+            application)
+          (supported.renameWires rawSubstitution) := by
+        rw [← patternEq]
+        exact supportInstantiationHosted supported supportedCanonical application
+      have supportedTargetEq : supported.renameWires rawSubstitution =
+          Region.ofItems (.cons (.atom rawFormal rawRetainedPorts)
+            rawSupportItems) := by
+        change (Erasure.Exposure.supportBody
+          (supportAtomMaterial head ports)).renameWires rawSubstitution = _
+        rw [supportAtomBody_eq head ports]
+        simp only [Region.renameWires, Region.ofItems, ItemSeq.renameWires,
+          Item.renameWires, rawFormal, rawRetainedPorts, rawSupportItems]
+        simp [WireRenaming.appendRight, Vars.map_map,
+          ItemSeq.renameWires_comp]
+        apply congrArg (fun rename =>
+          (supportAtomTail head ports).renameWires rename)
+        apply WireRenaming.ext
+        intro signature wire
+        simp [WireRenaming.comp, WireRenaming.appendRight]
+      let direct := Region.singleton (.atom rawFormal rawRetainedPorts)
+      let supportPins := Region.ofItems rawSupportItems
+      let allPins := Region.ofItems (rawPins.append rawPins)
+      let positional :=
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (positionalAtomPattern atomArguments)
+          (.cons rawFormal rawRetainedPorts)
+      let supportedPresentation : RegionIso (WireEquiv.refl itemCommon)
+          (supported.renameWires rawSubstitution)
+          (direct.conjoin supportPins) :=
+        (RegionIso.ofEq supportedTargetEq).trans
+          (RegionIso.ofEq
+            (Region.singleton_conjoin_ofItems
+              (.atom rawFormal rawRetainedPorts) rawSupportItems).symm)
+      have sourceToDirectPins : HostedStrict
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (Erasure.Exposure.supportPattern material materialCanonical)
+            application)
+          (direct.conjoin supportPins) :=
+        HostedStrict.iso (RegionIso.refl _) supportedPresentation
+          sourceToSupported
+      have positionalToDirect : HostedStrict positional direct := by
+        have exposed := supportInstantiationHosted
+          (Region.singleton (positionalAtomItem atomArguments))
+          (positionalAtomCanonical atomArguments)
+          (.cons rawFormal rawRetainedPorts)
+        rw [positionalAtomSupportPattern_eq] at exposed
+        have targetEq :
+            (Region.singleton (positionalAtomItem atomArguments)).renameWires
+                (EqualityNormalization.formalSubstitution
+                  (.cons rawFormal rawRetainedPorts)) = direct := by
+          calc
+            _ = Region.singleton
+                ((positionalAtomItem atomArguments).renameWires
+                  (EqualityNormalization.formalSubstitution
+                    (.cons rawFormal rawRetainedPorts))) :=
+              Region.singleton_renameWires _ _
+            _ = direct := by
+              apply congrArg Region.singleton
+              simpa only [positionalAtomCollapse,
+                positionalAtomSelection] using
+                positionalAtomItem_rename rawFormal rawRetainedPorts
+        exact HostedStrict.iso (RegionIso.refl _)
+          (RegionIso.ofEq targetEq) exposed
+      have directToPositionalPins : HostedStrict (direct.conjoin supportPins)
+          (positional.conjoin supportPins) :=
+        HostedStrict.conjoin direct supportPins positional supportPins
+          positionalToDirect.symm (HostedStrict.refl supportPins)
+      have positionalPinsReverse : HostedScope
+          (positional.conjoin supportPins)
+          (direct.conjoin supportPins) := by
+        intro target rename
+        simpa only [positional, direct, Region.renameWires_conjoin] using
+          ScopePreservation.conjoin
+            (positionalAtomInstantiation_reverseHostedScope rawFormal
+              rawRetainedPorts rename)
+            (ScopePreservation.refl (supportPins.renameWires rename))
+      have sourceToPositionalPins : HostedStrict
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (Erasure.Exposure.supportPattern material materialCanonical)
+            application)
+          (positional.conjoin supportPins) :=
+        HostedStrict.trans sourceToDirectPins directToPositionalPins
+          (fun outer hostLocals rename hostItems =>
+            HostedScope.adjoinHost positionalPinsReverse outer hostLocals
+              rename hostItems)
+      let source :=
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (Erasure.Exposure.supportPattern material materialCanonical)
+          application
+      let pinned := HostedStrict.conjoin source (Region.blank itemCommon)
+        (positional.conjoin supportPins) allPins sourceToPositionalPins
+        (HostedStrict.allPinsTwice wires rawSubstitution)
+      let supportPinsPresentation : RegionIso (WireEquiv.refl itemCommon)
+          (supportPins.conjoin allPins) (Region.ofItems rawHostItems) :=
+        RegionIso.ofEq (by
+          rw [Region.ofItems_conjoin])
+      let resultPresentation : RegionIso (WireEquiv.refl itemCommon)
+          ((positional.conjoin supportPins).conjoin allPins) staged :=
+        (RegionIso.conjoinAssoc positional supportPins allPins).trans
+          ((RegionIso.conjoinCongr (RegionIso.refl positional)
+            supportPinsPresentation).trans
+            ((RegionIso.conjoinComm positional
+              (Region.ofItems rawHostItems)).trans
+              (atomFormalPrefixResultIso rawHostItems rawFormal
+                rawRetainedPorts).symm))
+      exact HostedStrict.iso (RegionIso.conjoinBlank source).symm
+        resultPresentation pinned
+    · let supported := Erasure.Exposure.supportBody
+        (supportAtomMaterial head ports)
+      let direct := Region.singleton (.atom rawFormal rawRetainedPorts)
+      let supportPins := Region.ofItems rawSupportItems
+      let allPins := Region.ofItems (rawPins.append rawPins)
+      let positional :=
+        VisualProof.Rule.Comprehension.Instantiation.instantiate
+          (positionalAtomPattern atomArguments)
+          (.cons rawFormal rawRetainedPorts)
+      have sourceToSupportedPins : ScopePreservation
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (Erasure.Exposure.supportPattern
+              (supportAtomMaterial head ports)
+              (supportAtomMaterial_canonical head ports))
+            application)
+          ((supported.renameWires rawSubstitution).conjoin allPins) := by
+        exact supportAtomInstantiationScope head ports application
+      have supportedTargetEq : supported.renameWires rawSubstitution =
+          Region.ofItems (.cons (.atom rawFormal rawRetainedPorts)
+            rawSupportItems) := by
+        change (Erasure.Exposure.supportBody
+          (supportAtomMaterial head ports)).renameWires rawSubstitution = _
+        rw [supportAtomBody_eq head ports]
+        simp only [Region.renameWires, Region.ofItems, ItemSeq.renameWires,
+          Item.renameWires, rawFormal, rawRetainedPorts, rawSupportItems]
+        simp [WireRenaming.appendRight, Vars.map_map,
+          ItemSeq.renameWires_comp]
+        apply congrArg (fun rename =>
+          (supportAtomTail head ports).renameWires rename)
+        apply WireRenaming.ext
+        intro signature wire
+        simp [WireRenaming.comp, WireRenaming.appendRight]
+      let supportedPresentation : RegionIso (WireEquiv.refl itemCommon)
+          (supported.renameWires rawSubstitution)
+          (direct.conjoin supportPins) :=
+        (RegionIso.ofEq supportedTargetEq).trans
+          (RegionIso.ofEq
+            (Region.singleton_conjoin_ofItems
+              (.atom rawFormal rawRetainedPorts) rawSupportItems).symm)
+      have supportedToDirectPins : ScopePreservation
+          ((supported.renameWires rawSubstitution).conjoin allPins)
+          ((direct.conjoin supportPins).conjoin allPins) :=
+        ScopePreservation.ofIso
+          (RegionIso.conjoinCongr supportedPresentation
+            (RegionIso.refl allPins))
+      have directToPositionalPins : ScopePreservation
+          ((direct.conjoin supportPins).conjoin allPins)
+          ((positional.conjoin supportPins).conjoin allPins) :=
+        ScopePreservation.conjoin
+          (ScopePreservation.conjoin
+            (positionalAtomInstantiation_scope rawFormal rawRetainedPorts)
+            (ScopePreservation.refl supportPins))
+          (ScopePreservation.refl allPins)
+      let supportPinsPresentation : RegionIso (WireEquiv.refl itemCommon)
+          (supportPins.conjoin allPins) (Region.ofItems rawHostItems) :=
+        RegionIso.ofEq (by
+          rw [Region.ofItems_conjoin])
+      let resultPresentation : RegionIso (WireEquiv.refl itemCommon)
+          ((positional.conjoin supportPins).conjoin allPins) staged :=
+        (RegionIso.conjoinAssoc positional supportPins allPins).trans
+          ((RegionIso.conjoinCongr (RegionIso.refl positional)
+            supportPinsPresentation).trans
+            ((RegionIso.conjoinComm positional
+              (Region.ofItems rawHostItems)).trans
+              (atomFormalPrefixResultIso rawHostItems rawFormal
+                rawRetainedPorts).symm))
+      exact sourceToSupportedPins.trans
+        (supportedToDirectPins.trans
+          (directToPositionalPins.trans
+            (ScopePreservation.ofIso resultPresentation)))
+    · have mappedResultEq : staged.renameWires commonAppend = formalResult := by
+        rw [atomFormalPrefixResult_renameWires]
+        have hostItemsEq : rawHostItems.renameWires commonAppend = hostItems := by
+          have substitutionEq : WireRenaming.comp commonAppend rawSubstitution =
+              substitution := by
+            apply WireRenaming.ext
+            intro signature wire
+            exact (EqualityNormalization.formalSubstitution_map
+              application commonAppend wire).symm
+          have supportItemsEq : rawSupportItems.renameWires commonAppend =
+              (supportAtomTail head ports).renameWires substitution := by
+            unfold rawSupportItems rawSubstitution
+            rw [ItemSeq.renameWires_comp, substitutionEq]
+          have pinsEq : rawPins.renameWires commonAppend = mappedPins := by
+            unfold rawPins mappedPins rawSubstitution
+            rw [EqualityNormalization.allPins_renameWires, substitutionEq]
+          unfold rawHostItems hostItems
+          simp only [ItemSeq.renameWires_append, supportItemsEq, pinsEq]
+        have formalEq : commonAppend rawFormal = formal := by
+          exact (EqualityNormalization.formalSubstitution_map
+            application commonAppend head).symm
+        have portsEq : rawRetainedPorts.map (fun wire => commonAppend wire) =
+            retainedPorts := by
+          unfold rawRetainedPorts retainedPorts
+          rw [Vars.map_map]
+          apply Vars.map_congr
+          intro signature wire
+          exact (EqualityNormalization.formalSubstitution_map
+            application commonAppend wire).symm
+        rw [hostItemsEq, formalEq, portsEq]
+      let intoMapped : RegionIso commonEquiv.symm staged formalResult := by
+        let renamed := RegionIso.renameWires staged WireRenaming.id
+          commonAppend commonEquiv.symm (by intro signature wire; rfl)
+        rw [Region.renameWires_id, mappedResultEq] at renamed
+        exact renamed
+      let mappedBack : RegionIso commonEquiv formalResult
+          (formalResult.renameWires commonEquiv.toRenaming) := by
+        simpa only [Region.renameWires_id] using
+          RegionIso.renameWires formalResult WireRenaming.id
+            commonEquiv.toRenaming commonEquiv (by intro signature wire; rfl)
+      let chained := (intoMapped.trans mappedBack).trans
+        (RegionIso.adjoinAtNil formalResult)
+      have ambientEq : (commonEquiv.symm.trans commonEquiv).trans
+          (WireEquiv.refl itemCommon) = WireEquiv.refl itemCommon := by
+        apply WireEquiv.ext
+        intro signature wire
+        exact commonEquiv.right_inv wire
+      exact ⟨chained.castAmbient ambientEq⟩
+    · dsimp only
+      simp only [formalSites]
+      let authoritativeFrame : Transform.Frame wires itemCommon
+          itemSourceWires itemSourceWires := {
+        sourceKeep := itemFrame.sourceKeep
+        targetKeep := itemFrame.sourceKeep
+        selected := itemFrame.selected
+      }
+      have editedEq :=
+        atomFormalPrefixArgumentItemsEdit_source childFrame
+          (authoritativeFrame.append []) hostItems formal retainedPorts
+          mappedApplication (EqualityNormalization.formalPorts wires)
+      change
+        let direct := Region.singleton (.atom itemFrame.selected
+          (application.map fun wire => itemFrame.sourceKeep wire))
+        let authoritative := Region.adjoinAt [] .nil
+          (Region.ofItems
+            (argumentItemsEdit
+              (atomFormalPrefixRecordingSites childFrame hostItems formal
+                retainedPorts mappedApplication)
+              (EqualityNormalization.formalPorts wires)
+              (normalizationOperation wires)
+              (authoritativeFrame.append []) PUnit.unit
+              (fun _ _ _ => PUnit.unit)).1)
+        HostedStrict direct authoritative ∧
+          HostedScope direct authoritative
+      rw [editedEq]
+      let rawSubstitution :=
+        EqualityNormalization.formalSubstitution application
+      let targetSubstitution : WireRenaming wires itemSourceWires :=
+        WireRenaming.comp itemFrame.sourceKeep rawSubstitution
+      let direct := Region.singleton (.atom itemFrame.selected
+        (application.map fun wire => itemFrame.sourceKeep wire))
+      let supportPins := Region.ofItems
+        ((supportAtomTail head ports).renameWires targetSubstitution)
+      let pins := EqualityNormalization.allPins wires targetSubstitution
+      let allPins := Region.ofItems (pins.append pins)
+      let material := supportAtomMaterial head ports
+      let supportRename : WireRenaming (wires ++ []) itemSourceWires :=
+        WireRenaming.comp targetSubstitution
+          (WireEquiv.appendNil wires).toRenaming
+      have supportStep : HostedStrict (Region.blank itemSourceWires)
+          supportPins := by
+        have base : HostedStrict (Region.blank wires)
+            (Region.ofItems (supportAtomTail head ports)) := by
+          apply HostedStrict.specialize
+            (HostedStrict.supportPins material
+              (Erasure.Exposure.identityBoundary wires))
+            (WireEquiv.appendNil wires).toRenaming
+          · change (Region.blank (wires ++ [])).renameWires
+                (WireEquiv.appendNil wires).toRenaming =
+              Region.blank wires
+            rfl
+          · unfold material supportAtomMaterial
+            rw [Region.ofItems_renameWires]
+            simp [supportAtomTail, supportAtomPinsAppended,
+              supportAtomMaterial] <;> rfl
+        apply HostedStrict.specialize base targetSubstitution
+        · rfl
+        · unfold supportPins
+          exact Region.ofItems_renameWires
+            (supportAtomTail head ports) targetSubstitution
+      have allPinsStep : HostedStrict (Region.blank itemSourceWires)
+          allPins :=
+        HostedStrict.allPinsTwice wires targetSubstitution
+      let hostStep := HostedStrict.conjoin
+        (Region.blank itemSourceWires) (Region.blank itemSourceWires)
+        supportPins allPins supportStep allPinsStep
+      let host := supportPins.conjoin allPins
+      let hostFromBlank : HostedStrict (Region.blank itemSourceWires) host :=
+        HostedStrict.iso (RegionIso.blankConjoin _).symm
+          (RegionIso.refl host) hostStep
+      let directHost := HostedStrict.conjoin direct
+        (Region.blank itemSourceWires) direct host
+        (HostedStrict.refl direct) hostFromBlank
+      let directToHostDirect : HostedStrict direct (host.conjoin direct) :=
+        HostedStrict.iso (RegionIso.conjoinBlank direct).symm
+          (RegionIso.conjoinComm direct host) directHost
+      let authoritativeSource :=
+        (hostItems.renameWires
+            (authoritativeFrame.append []).sourceKeep).append
+          (.cons (.atom (authoritativeFrame.append []).selected
+            ((EqualityNormalization.formalPorts wires).map fun wire =>
+              (authoritativeFrame.append []).sourceKeep
+                (EqualityNormalization.formalSubstitution mappedApplication
+                  wire))) .nil)
+      let child := Region.ofItems authoritativeSource
+      have childDownEq :
+          child.renameWires (WireEquiv.appendNil itemSourceWires).toRenaming =
+            host.conjoin direct := by
+        let down := (WireEquiv.appendNil itemSourceWires).toRenaming
+        let downFrame : WireRenaming (itemCommon ++ []) itemSourceWires :=
+          WireRenaming.comp down
+            (authoritativeFrame.append []).sourceKeep
+        have downFrameCommonEq : ∀ {signature}
+            (wire : Var itemCommon signature),
+            downFrame (commonAppend wire) = itemFrame.sourceKeep wire := by
+          intro signature wire
+          unfold downFrame down commonAppend authoritativeFrame
+          rw [show commonEquiv.symm.toRenaming wire =
+              wire.appendLeft [] by
+            exact WireEquiv.appendNil_symm_apply itemCommon wire]
+          simp [WireRenaming.comp, Transform.Frame.append,
+            WireRenaming.appendRight, Var.appendMap_left,
+            WireEquiv.appendNil_apply]
+        have combinedSubstitutionEq :
+            WireRenaming.comp downFrame substitution =
+              targetSubstitution := by
+          apply WireRenaming.ext
+          intro signature wire
+          change downFrame
+              (EqualityNormalization.formalSubstitution mappedApplication
+                wire) =
+            itemFrame.sourceKeep
+              (EqualityNormalization.formalSubstitution application wire)
+          rw [EqualityNormalization.formalSubstitution_map
+            application commonAppend wire]
+          exact downFrameCommonEq _
+        have selectedPortsEq :
+            (EqualityNormalization.formalPorts wires).map (fun wire =>
+              downFrame
+                (EqualityNormalization.formalSubstitution mappedApplication
+                  wire)) =
+              application.map fun wire => itemFrame.sourceKeep wire := by
+          calc
+            _ = ((EqualityNormalization.formalPorts wires).map
+                (fun wire =>
+                  EqualityNormalization.formalSubstitution mappedApplication
+                    wire)).map (fun wire => downFrame wire) := by
+              rw [Vars.map_map]
+            _ = mappedApplication.map (fun wire => downFrame wire) := by
+              rw [EqualityNormalization.formalPorts_map_substitution]
+            _ = application.map (fun wire => itemFrame.sourceKeep wire) := by
+              unfold mappedApplication
+              rw [Vars.map_map]
+              apply Vars.map_congr
+              intro signature wire
+              exact downFrameCommonEq wire
+        have selectedHeadEq :
+            down ((authoritativeFrame.append []).selected) =
+              itemFrame.selected := by
+          unfold down authoritativeFrame
+          simp [Transform.Frame.append, WireEquiv.appendNil_apply]
+        have hostItemsDownEq :
+            hostItems.renameWires downFrame =
+              ((supportAtomTail head ports).renameWires
+                  targetSubstitution).append
+                (pins.append pins) := by
+          unfold hostItems mappedPins pins
+          simp only [ItemSeq.renameWires_append,
+            ItemSeq.renameWires_comp,
+            EqualityNormalization.allPins_renameWires]
+          rw [combinedSubstitutionEq]
+        unfold host supportPins allPins direct
+        unfold child authoritativeSource pins
+        rw [Region.ofItems_renameWires]
+        rw [show Region.singleton
+              (.atom itemFrame.selected
+                (application.map fun wire => itemFrame.sourceKeep wire)) =
+            Region.ofItems
+              (.cons (.atom itemFrame.selected
+                (application.map fun wire => itemFrame.sourceKeep wire))
+                .nil) by rfl]
+        rw [Region.ofItems_conjoin]
+        rw [Region.ofItems_conjoin]
+        apply congrArg Region.ofItems
+        simp only [ItemSeq.renameWires_append, ItemSeq.renameWires,
+          Item.renameWires, ItemSeq.renameWires_comp, Vars.map_map]
+        change
+          (hostItems.renameWires downFrame).append
+              (.cons (.atom
+                (down ((authoritativeFrame.append []).selected))
+                ((EqualityNormalization.formalPorts wires).map fun wire =>
+                  downFrame
+                    (EqualityNormalization.formalSubstitution
+                      mappedApplication wire))) .nil) =
+            (((supportAtomTail head ports).renameWires
+                targetSubstitution).append
+              ((EqualityNormalization.allPins wires
+                  targetSubstitution).append
+                (EqualityNormalization.allPins wires
+                  targetSubstitution))).append
+              (.cons (.atom itemFrame.selected
+                (application.map fun wire => itemFrame.sourceKeep wire)) .nil)
+        rw [hostItemsDownEq, selectedHeadEq, selectedPortsEq]
+      have supportPinsCanonical : supportPins.Canonical := by
+        have baseCanonical :
+            (Region.ofItems (supportAtomTail head ports)).Canonical := by
+          constructor
+          · intro localIndex
+            exact Fin.elim0 localIndex
+          · unfold supportAtomTail supportAtomPinsAppended
+            exact (ItemSeq.ChildrenCanonical.renameWires_iff _ _).mpr
+              ((ItemSeq.ChildrenCanonical.renameWires_iff _ _).mpr
+                (Erasure.Exposure.supportPins_childrenCanonical
+                  (supportAtomMaterial head ports)
+                  (Erasure.Exposure.identityBoundary wires)))
+        simpa only [supportPins, Region.ofItems_renameWires] using
+          (Region.Canonical.renameWires_iff
+            (Region.ofItems (supportAtomTail head ports))
+            targetSubstitution).mpr baseCanonical
+      have allPinsCanonical : allPins.Canonical := by
+        constructor
+        · intro localIndex
+          exact Fin.elim0 localIndex
+        · exact (ItemSeq.ChildrenCanonical.renameWires_iff _ _).mpr
+            (EqualityNormalization.allPins_twice_childrenCanonical
+              wires targetSubstitution)
+      have hostCanonical : host.Canonical := by
+        exact EqualityNormalization.canonical_conjoin supportPinsCanonical
+          allPinsCanonical
+      have directToHostDirectScope : HostedScope direct
+          (host.conjoin direct) := by
+        intro target rename
+        let mappedApplication :=
+          (application.map fun wire => itemFrame.sourceKeep wire).map
+            (fun wire => rename wire)
+        let mappedSubstitution : WireRenaming wires target :=
+          EqualityNormalization.formalSubstitution mappedApplication
+        have mappedSubstitutionEq : mappedSubstitution =
+            WireRenaming.comp rename targetSubstitution := by
+          apply WireRenaming.ext
+          intro signature wire
+          unfold mappedSubstitution mappedApplication targetSubstitution
+            rawSubstitution
+          calc
+            _ = rename
+                (EqualityNormalization.formalSubstitution
+                  (application.map fun wire => itemFrame.sourceKeep wire)
+                  wire) :=
+              EqualityNormalization.formalSubstitution_map
+                (application.map fun wire => itemFrame.sourceKeep wire)
+                rename wire
+            _ = rename
+                (itemFrame.sourceKeep
+                  (EqualityNormalization.formalSubstitution application
+                    wire)) := by
+              rw [EqualityNormalization.formalSubstitution_map]
+            _ = _ := rfl
+        have directRenameEq : direct.renameWires rename =
+            Region.singleton (.atom (rename itemFrame.selected)
+              mappedApplication) := by
+          unfold direct mappedApplication
+          simp only [Region.singleton_renameWires, Item.renameWires,
+            Vars.map_map]
+        have hostRenameCanonical : (host.renameWires rename).Canonical :=
+          (Region.Canonical.renameWires_iff host rename).mpr hostCanonical
+        have scopeProof : ScopePreservation
+            (direct.renameWires rename)
+            ((host.renameWires rename).conjoin
+              (direct.renameWires rename)) :=
+          ScopePreservation.hostLeft
+            (direct.renameWires rename) (host.renameWires rename)
+            hostRenameCanonical (by
+              intro signature wire hostNonempty
+              rw [directRenameEq]
+              intro directEmpty
+              let appendNil : WireRenaming target (target ++ []) :=
+                ⟨fun selected => selected.appendLeft []⟩
+              have mappedCountEq :
+                  (mappedApplication.map fun selected =>
+                    appendNil selected).countIndex wire.index.val =
+                    mappedApplication.countIndex wire.index.val :=
+                Vars.countIndex_map_of_sameIndex mappedApplication appendNil
+                  (fun selected => Var.index_appendLeft selected [])
+                  wire.index.val
+              simp only [Region.singleton, Region.ofItems,
+                Region.incidencePaths, ItemSeq.renameWires,
+                Item.renameWires, ItemSeq.incidencePaths,
+                Item.incidencePaths, List.append_nil,
+                Var.index_appendLeft] at directEmpty
+              rw [mappedCountEq] at directEmpty
+              have countZero : mappedApplication.countIndex
+                  wire.index.val = 0 := by
+                have totalZero :
+                    (if (rename itemFrame.selected).index.val =
+                        wire.index.val then 1 else 0) +
+                      mappedApplication.countIndex wire.index.val = 0 := by
+                  simpa only [List.replicate_eq_nil_iff] using directEmpty
+                omega
+              have noPreimage : ∀ {sourceSignature}
+                  (sourceWire : Var wires sourceSignature),
+                  ((WireRenaming.comp rename targetSubstitution)
+                      sourceWire).index.val ≠ wire.index.val := by
+                intro sourceSignature sourceWire
+                rw [← mappedSubstitutionEq]
+                exact EqualityNormalization.formalSubstitution_index_ne_of_countIndex_eq_zero
+                  mappedApplication wire countZero sourceWire
+              have supportEmpty :
+                  (supportPins.renameWires rename).incidencePaths
+                    wire.index.val = [] := by
+                unfold supportPins
+                rw [Region.ofItems_renameWires,
+                  ItemSeq.renameWires_comp, Region.incidencePaths_ofItems]
+                exact ItemSeq.incidencePaths_renameWires_eq_nil_of_no_preimage
+                  (supportAtomTail head ports)
+                  (WireRenaming.comp rename targetSubstitution)
+                  wire.index.val 0 wire.index.isLt noPreimage
+              have firstPinsEmpty :
+                  (EqualityNormalization.allPins wires mappedSubstitution
+                    ).incidencePaths wire.index.val 0 = [] := by
+                exact ItemSeq.pinWires_incidence_eq_nil_of wires
+                  mappedSubstitution (fun _ => true) wire.index.val 0
+                  (fun sourceWire _ =>
+                    EqualityNormalization.formalSubstitution_index_ne_of_countIndex_eq_zero
+                      mappedApplication wire countZero sourceWire)
+              have secondPinsEmpty :
+                  (EqualityNormalization.allPins wires mappedSubstitution
+                    ).incidencePaths wire.index.val
+                      (EqualityNormalization.allPins wires
+                        mappedSubstitution).length = [] := by
+                exact ItemSeq.pinWires_incidence_eq_nil_of wires
+                  mappedSubstitution (fun _ => true) wire.index.val
+                  (EqualityNormalization.allPins wires
+                    mappedSubstitution).length
+                  (fun sourceWire _ =>
+                    EqualityNormalization.formalSubstitution_index_ne_of_countIndex_eq_zero
+                      mappedApplication wire countZero sourceWire)
+              have allPinsEmpty :
+                  (allPins.renameWires rename).incidencePaths
+                    wire.index.val = [] := by
+                rw [mappedSubstitutionEq] at firstPinsEmpty secondPinsEmpty
+                unfold allPins pins
+                rw [Region.ofItems_renameWires,
+                  ItemSeq.renameWires_append,
+                  EqualityNormalization.allPins_renameWires,
+                  Region.incidencePaths_ofItems,
+                  ItemSeq.incidencePaths_append, firstPinsEmpty]
+                simpa only [List.nil_append, Nat.zero_add] using
+                  secondPinsEmpty
+              unfold host at hostNonempty
+              rw [Region.renameWires_conjoin,
+                Region.incidencePaths_conjoin, supportEmpty, allPinsEmpty]
+                at hostNonempty
+              exact hostNonempty (by simp))
+        simpa only [Region.renameWires_conjoin] using scopeProof
+      let targetPresentation :=
+        (RegionIso.ofEq childDownEq).symm.trans
+          (RegionIso.adjoinAtNil child)
+      exact ⟨HostedStrict.iso (RegionIso.refl direct)
+          targetPresentation directToHostDirect, by
+        intro target rename
+        exact (directToHostDirectScope rename).trans
+          ((HostedScope.ofIso targetPresentation) rename)⟩
+
 /-- The nonrecursive selected-site premise for the positional identity leaf. -/
 theorem identitySelectedTargetItem
     {patternWires itemCommon itemSourceWires itemTargetWires

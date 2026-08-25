@@ -1071,15 +1071,30 @@ obtain ⟨retained, formalSource, formalResult, formalEvidence,
     formalSites, formalCoherence, semantic⟩ :=
   accumulateHostedTargetWith (targetInserted := [.rel []]) evidence
     cutSites (Vars.nil : Vars [] [])
-    cutData ScopePreservation ScopePreservation.refl
+    cutData (Vars.nil : Vars [] []) ScopePreservation ScopePreservation.refl
     (fun locals before after scope =>
       adjoinAt_preserves_scope locals .nil before after scope)
     ScopePreservation.conjoin
-    ScopePreservation.cut cutDataSelects cutDataSelects_append
+    ScopePreservation.cut
+    (fun _ _ => True) (by intros; trivial) (by intros; trivial)
+    (by intros; trivial) (by intros; trivial) (by intros; trivial)
+    cutDataSelects cutDataSelects_append
     cutDataAligned cutDataAligned_append (cutDataNaturality [])
-    (cutSelectedTargetItem body bodyCanonical rfl)
+    (fun _ => True) True.intro (by intros; trivial)
+    (by
+      intro itemCommon itemSourceWires itemTargetWires itemFrame itemData
+        application siteData formalSourceWires formalTargetWires formalFrame
+        formalData
+      obtain ⟨retained, formalSource, formalResult, formalEvidence,
+          formalSites, coherence, staged, selectedHosted, selectedScope,
+          selectedPresentation, endpointPresentation⟩ :=
+        cutSelectedTargetItem body bodyCanonical rfl application siteData
+          formalFrame formalData
+      exact ⟨retained, formalSource, formalResult, formalEvidence,
+        formalSites, coherence, staged, selectedHosted, selectedScope,
+        selectedPresentation, endpointPresentation, True.intro, True.intro⟩)
 obtain ⟨staged, resultHosted, resultScope, stagedPresentation,
-    endpointSemantic⟩ := semantic
+    endpointSemantic, _sourceSide, _retained⟩ := semantic
 obtain ⟨stagedIso⟩ := stagedPresentation
 let rootFrame := Content.Cut.rootFrame structuralOuter structuralBefore
   structuralAfter []
@@ -1284,12 +1299,17 @@ have dataCoherent : (cutDataNaturality []).Coherent
   exact selectedCommutes
 obtain ⟨recursiveSource, recursiveResult, recursiveEvidence,
     recursiveSites, recursiveSourceEq, recursiveArgumentEq,
+    _recursiveSourceArgumentEq,
     ⟨recursiveResultIso⟩, ⟨recursiveEndpointIso⟩⟩ :=
   targetItemsReindex (baseOperation := Content.Cut.operation [])
     (external := []) (mappedFrame := recursiveFrame)
     (mappedData := recursiveData) formalEvidence formalSites
-    (Vars.nil : Vars [] []) commonRename sourceRename sourceRename
-    keepCommutes targetKeepCommutes selectedCommutes
+    (Vars.nil : Vars [] []) (Vars.nil : Vars [] [])
+    ((Content.Cut.rootFrame structuralOuter structuralBefore
+      structuralAfter []).append retained) recursiveFrame
+    commonRename sourceRename sourceRename sourceRename
+    keepCommutes targetKeepCommutes selectedCommutes keepCommutes
+    selectedCommutes
     (cutDataNaturality []) dataCoherent
 let oldLocals := structuralBefore ++ structuralAfter
 let newLocals := structuralBefore ++ (structuralAfter ++ retained)

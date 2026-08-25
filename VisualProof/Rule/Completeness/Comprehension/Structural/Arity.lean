@@ -1,4 +1,4 @@
-import VisualProof.Rule.Completeness.Comprehension.Structural.Boundary
+import VisualProof.Rule.Completeness.Comprehension.Structural.Support
 import VisualProof.Rule.Completeness.Comprehension.Structural.Parallel
 
 namespace VisualProof.Rule.Completeness.Comprehension
@@ -1315,6 +1315,8 @@ theorem supportArityDerives
     (materialItems : ItemSeq (firstLocal :: locals))
     (materialCanonical :
       (Region.mk (firstLocal :: locals) materialItems : Region []).Canonical)
+    (childDerives : SupportDerives
+      (Region.mk locals materialItems : Region [firstLocal]))
     {structuralOuter structuralBefore structuralAfter : List Sig}
     {items : ItemSeq
       (structuralOuter ++
@@ -1361,16 +1363,32 @@ obtain ⟨retained, formalSource, formalResult, formalEvidence,
     (targetBaseOperation := arityTargetOperation firstLocal)
     evidence aritySites
     (Erasure.Exposure.identityBoundary [firstLocal])
-    arityData ScopePreservation ScopePreservation.refl
+    arityData (Vars.nil : Vars [firstLocal] [])
+    ScopePreservation ScopePreservation.refl
     (fun locals before after scope =>
       adjoinAt_preserves_scope locals .nil before after scope)
     ScopePreservation.conjoin
-    ScopePreservation.cut arityDataSelects arityDataSelects_append
+    ScopePreservation.cut
+    (fun _ _ => True) (by intros; trivial) (by intros; trivial)
+    (by intros; trivial) (by intros; trivial) (by intros; trivial)
+    arityDataSelects arityDataSelects_append
     arityDataAligned arityDataAligned_append
     (arityTargetNaturality firstLocal)
-    (aritySelectedTargetItem materialItems materialCanonical rfl)
+    (fun _ => True) True.intro (by intros; trivial)
+    (by
+      intro itemCommon itemSourceWires itemTargetWires itemFrame itemData
+        application siteData formalSourceWires formalTargetWires formalFrame
+        formalData
+      obtain ⟨retained, formalSource, formalResult, formalEvidence,
+          formalSites, coherence, staged, selectedHosted, selectedScope,
+          selectedPresentation, endpointPresentation⟩ :=
+        aritySelectedTargetItem materialItems materialCanonical rfl application
+          siteData formalFrame formalData
+      exact ⟨retained, formalSource, formalResult, formalEvidence,
+        formalSites, coherence, staged, selectedHosted, selectedScope,
+        selectedPresentation, endpointPresentation, True.intro, True.intro⟩)
 obtain ⟨staged, resultHosted, resultScope, stagedPresentation,
-    endpointSemantic⟩ := semantic
+    endpointSemantic, _sourceSide, _retained⟩ := semantic
 obtain ⟨stagedIso⟩ := stagedPresentation
 let localRootFrame := Arity.rootFrame structuralOuter structuralBefore
   structuralAfter [] firstLocal
@@ -1571,13 +1589,17 @@ have dataCoherent : (arityTargetNaturality firstLocal).Coherent
   exact selectedCommutes
 obtain ⟨recursiveSource, recursiveResult, recursiveEvidence,
     recursiveSites, recursiveSourceEq, recursiveArgumentEq,
+    _recursiveSourceArgumentEq,
     ⟨recursiveResultIso⟩, ⟨recursiveEndpointIso⟩⟩ :=
   targetItemsReindex (baseOperation := arityTargetOperation firstLocal)
     (external := [firstLocal]) (mappedFrame := recursiveFrame)
     (mappedData := recursiveData) formalEvidence formalSites
     (Erasure.Exposure.identityBoundary [firstLocal])
-    commonRename sourceRename sourceRename
-    keepCommutes targetKeepCommutes selectedCommutes
+    (Erasure.Exposure.identityBoundary [firstLocal])
+    (formalRootFrame.append retained) recursiveFrame
+    commonRename sourceRename sourceRename sourceRename
+    keepCommutes targetKeepCommutes selectedCommutes keepCommutes
+    selectedCommutes
     (arityTargetNaturality firstLocal) dataCoherent
 let oldLocals := structuralBefore ++ structuralAfter
 let newLocals := structuralBefore ++ (structuralAfter ++ retained)
@@ -1948,7 +1970,7 @@ let recursiveRequest : Telescope.Request recursiveInstantiated
     structuralRequest.occurrence.context recursivePendingCanonical
     recursivePendingExternal polarityEq
 }
-have childCompiled := supportBoundaryWireDerives childMaterial childCanonical
+have childCompiled := childDerives childCanonical
   recursiveEvidence
   recursiveRequest
 have bodyTelescope : Telescope structuralRequest.polarity

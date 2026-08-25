@@ -74,6 +74,176 @@ theorem HostedScope.adjoinAt
     (after.renameWires (rename.appendRight locals)) childScope
   simpa only [Region.renameWires_adjoinAt_nil] using lifted
 
+/-- A scope-preserving local replacement transports canonicality and the
+external two-ended condition through the caller's exact diagram context. -/
+theorem filledValidityOfScope
+    {boundary wires : List Sig}
+    (interface : OpenDiagram boundary)
+    (context : DiagramContext interface.external wires)
+    (before after : Region wires)
+    (beforeCanonical : (context.fill before).Canonical)
+    (beforeExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill before))
+    (scope : ScopePreservation before after) :
+    (context.fill after).Canonical ∧
+      OpenDiagram.ExternalTwoEnded interface.boundaryWire
+        (context.fill after) := by
+  have afterCanonical : after.Canonical := scope.canonical
+    (context.holeCanonical before beforeCanonical)
+  have replacement := context.replaceCanonical before after beforeCanonical
+    afterCanonical scope.incidenceNonempty
+  let beforeEndpoint := interface.withBody (context.fill before)
+    beforeCanonical beforeExternalTwoEnded
+  exact ⟨replacement.1,
+    beforeEndpoint.externalTwoEnded_of_nonempty_iff _ replacement.2⟩
+
+/-- Compose two telescopes sharing the same occurrence and middle region. -/
+theorem telescopeTrans
+    {boundary wires : List Sig}
+    {polarity : Polarity}
+    {interface : OpenDiagram boundary}
+    {context : DiagramContext interface.external wires}
+    {first middle last : Region wires}
+    {firstCanonical : (context.fill first).Canonical}
+    {firstExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill first)}
+    {middleCanonical : (context.fill middle).Canonical}
+    {middleExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill middle)}
+    {lastCanonical : (context.fill last).Canonical}
+    {lastExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill last)}
+    (head : Telescope polarity interface context first middle
+      firstCanonical firstExternalTwoEnded middleCanonical
+      middleExternalTwoEnded)
+    (tail : Telescope polarity interface context middle last
+      middleCanonical middleExternalTwoEnded lastCanonical
+      lastExternalTwoEnded) :
+    Telescope polarity interface context first last firstCanonical
+      firstExternalTwoEnded lastCanonical lastExternalTwoEnded := by
+  cases polarity with
+  | positive => exact ⟨head.1, head.2.trans tail.2⟩
+  | negative => exact ⟨head.1, tail.2.trans head.2⟩
+
+/-- Transport a telescope across structural presentations of both endpoints. -/
+theorem telescopeIso
+    {boundary wires : List Sig} {polarity : Polarity}
+    {interface : OpenDiagram boundary}
+    {context : DiagramContext interface.external wires}
+    {before before' after after' : Region wires}
+    {beforeCanonical : (context.fill before).Canonical}
+    {beforeExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill before)}
+    {beforeCanonical' : (context.fill before').Canonical}
+    {beforeExternalTwoEnded' : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill before')}
+    {afterCanonical : (context.fill after).Canonical}
+    {afterExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill after)}
+    {afterCanonical' : (context.fill after').Canonical}
+    {afterExternalTwoEnded' : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill after')}
+    (beforeIso : RegionIso (WireEquiv.refl wires) before before')
+    (afterIso : RegionIso (WireEquiv.refl wires) after after')
+    (telescope : Telescope polarity interface context before after
+      beforeCanonical beforeExternalTwoEnded afterCanonical
+      afterExternalTwoEnded) :
+    Telescope polarity interface context before' after'
+      beforeCanonical' beforeExternalTwoEnded' afterCanonical'
+      afterExternalTwoEnded' := by
+  let beforeOpenIso := OpenDiagram.withBody_iso beforeCanonical
+    beforeCanonical' beforeExternalTwoEnded beforeExternalTwoEnded'
+    (DiagramContext.fillIso context beforeIso)
+  let afterOpenIso := OpenDiagram.withBody_iso afterCanonical
+    afterCanonical' afterExternalTwoEnded afterExternalTwoEnded'
+    (DiagramContext.fillIso context afterIso)
+  cases polarity with
+  | positive =>
+      exact ⟨telescope.1, EqualityNormalization.reflTransGen_iso
+        beforeOpenIso telescope.2 afterOpenIso⟩
+  | negative =>
+      exact ⟨telescope.1, EqualityNormalization.reflTransGen_iso
+        afterOpenIso telescope.2 beforeOpenIso⟩
+
+/-- Realize a hosted strict equivalence as a telescope in an exact occurrence. -/
+theorem telescopeOfHosted
+    {common outer hostLocals boundary : List Sig}
+    {before after : Region common}
+    (transformation : HostedStrict before after)
+    (rename : WireRenaming common (outer ++ hostLocals))
+    (hostItems : ItemSeq (outer ++ hostLocals))
+    (polarity : Polarity)
+    (interface : OpenDiagram boundary)
+    (context : DiagramContext interface.external outer)
+    (beforeCanonical :
+      (context.fill (Region.adjoinAt hostLocals hostItems
+        (before.renameWires rename))).Canonical)
+    (beforeExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire
+      (context.fill (Region.adjoinAt hostLocals hostItems
+        (before.renameWires rename))))
+    (afterCanonical :
+      (context.fill (Region.adjoinAt hostLocals hostItems
+        (after.renameWires rename))).Canonical)
+    (afterExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire
+      (context.fill (Region.adjoinAt hostLocals hostItems
+        (after.renameWires rename))))
+    (polarityEq : context.polarity = polarity) :
+    Telescope polarity interface context
+      (Region.adjoinAt hostLocals hostItems (before.renameWires rename))
+      (Region.adjoinAt hostLocals hostItems (after.renameWires rename))
+      beforeCanonical beforeExternalTwoEnded afterCanonical
+      afterExternalTwoEnded := by
+  let beforeHosted := Region.adjoinAt hostLocals hostItems
+    (before.renameWires rename)
+  let afterHosted := Region.adjoinAt hostLocals hostItems
+    (after.renameWires rename)
+  let occurrence := exactOccurrence interface context beforeHosted
+    beforeCanonical beforeExternalTwoEnded
+  have strict := transformation outer hostLocals rename hostItems occurrence
+    afterCanonical afterExternalTwoEnded
+  have equates := strict.toEquates
+  cases polarity with
+  | positive => exact ⟨polarityEq, equates.1⟩
+  | negative => exact ⟨polarityEq, equates.2⟩
+
+/-- Realize a hosted strict equivalence at an exact unhosted occurrence. -/
+theorem telescopeOfHostedExact
+    {common boundary : List Sig}
+    {before after : Region common}
+    (transformation : HostedStrict before after)
+    (polarity : Polarity)
+    (interface : OpenDiagram boundary)
+    (context : DiagramContext interface.external common)
+    (beforeCanonical : (context.fill before).Canonical)
+    (beforeExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill before))
+    (afterCanonical : (context.fill after).Canonical)
+    (afterExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      interface.boundaryWire (context.fill after))
+    (polarityEq : context.polarity = polarity) :
+    Telescope polarity interface context before after beforeCanonical
+      beforeExternalTwoEnded afterCanonical afterExternalTwoEnded := by
+  let emptyRename : WireRenaming common (common ++ []) :=
+    (WireEquiv.appendNil common).symm.toRenaming
+  let hostedBefore := Region.adjoinAt [] .nil
+    (before.renameWires emptyRename)
+  let hostedAfter := Region.adjoinAt [] .nil
+    (after.renameWires emptyRename)
+  let beforeIso := RegionIso.adjoinAtNilRenamed before
+  let afterIso := RegionIso.adjoinAtNilRenamed after
+  have hostedBeforeValidity := filledValidityOfScope interface context before
+    hostedBefore beforeCanonical beforeExternalTwoEnded
+      (ScopePreservation.ofIso beforeIso)
+  have hostedAfterValidity := filledValidityOfScope interface context after
+    hostedAfter afterCanonical afterExternalTwoEnded
+      (ScopePreservation.ofIso afterIso)
+  have hostedTelescope := telescopeOfHosted transformation emptyRename .nil
+    polarity interface context hostedBeforeValidity.1 hostedBeforeValidity.2
+      hostedAfterValidity.1 hostedAfterValidity.2 polarityEq
+  exact telescopeIso beforeIso.symm afterIso.symm hostedTelescope
+
 /-- The canonical nonempty loop witnesses hosted strict reflexivity. -/
 theorem HostedStrict.refl (region : Region common) :
     HostedStrict region region := by
@@ -1727,6 +1897,235 @@ theorem supportCutInstantiatedHosted
     simpa only [baseRename,
       EqualityNormalization.instantiate_renameWires,
       EqualityNormalization.formalPorts_map_substitution]
+
+/-- Unary support pins form a hosted strict extension of the blank region. -/
+theorem HostedStrict.supportPins
+    (material : Region materialWires)
+    (variables : Vars materialWires signatures) :
+    HostedStrict (Region.blank (materialWires ++ material.locals))
+      (Region.ofItems
+        (Erasure.Exposure.supportPins material signatures variables)) := by
+  induction variables with
+  | nil =>
+      exact HostedStrict.refl _
+  | @cons signature signatures wire tail induction =>
+      simp only [Erasure.Exposure.supportPins]
+      split
+      · let pinRename : WireRenaming [signature]
+            (materialWires ++ material.locals) :=
+          ⟨fun selected => by
+            cases selected with
+            | here => exact wire.appendLeft material.locals
+            | there tail => exact Fin.elim0 tail.index⟩
+        let pinTarget : Region (materialWires ++ material.locals) :=
+          Region.singleton (.identity signature 1
+            (fun _ => pinRename Var.here))
+        let pinHosted : HostedStrict
+            (Region.blank (materialWires ++ material.locals)) pinTarget :=
+          HostedStrict.specialize (HostedStrict.unaryPin signature)
+            pinRename (by rfl) (by rfl)
+        let combined := HostedStrict.conjoin
+          (Region.blank (materialWires ++ material.locals))
+          (Region.blank (materialWires ++ material.locals))
+          pinTarget
+          (Region.ofItems
+            (Erasure.Exposure.supportPins material signatures tail))
+          pinHosted induction
+        exact HostedStrict.iso
+          (RegionIso.blankConjoin _).symm
+          (RegionIso.ofEq
+            (Region.singleton_conjoin_ofItems
+              (.identity signature 1
+                (fun _ => pinRename Var.here))
+              (Erasure.Exposure.supportPins material signatures tail)))
+          combined
+      · exact induction
+
+/-- A complete unary-pin batch is a hosted strict extension of blank. -/
+theorem HostedStrict.allPins
+    (source : List Sig) (rename : WireRenaming source common) :
+    HostedStrict (Region.blank common)
+      (Region.ofItems (EqualityNormalization.allPins source rename)) := by
+  induction source with
+  | nil =>
+      exact HostedStrict.refl _
+  | cons signature tail induction =>
+      let tailRename : WireRenaming tail common :=
+        ⟨fun wire => rename (.there wire)⟩
+      let pinRename : WireRenaming [signature] common :=
+        ⟨fun selected => by
+          cases selected with
+          | here => exact rename .here
+          | there rest => exact Fin.elim0 rest.index⟩
+      let pinTarget : Region common :=
+        Region.singleton (.identity signature 1
+          (fun _ => pinRename Var.here))
+      let pinHosted : HostedStrict (Region.blank common) pinTarget :=
+        HostedStrict.specialize (HostedStrict.unaryPin signature)
+          pinRename (by rfl) (by rfl)
+      let combined := HostedStrict.conjoin
+        (Region.blank common) (Region.blank common)
+        pinTarget
+        (Region.ofItems (EqualityNormalization.allPins tail tailRename))
+        pinHosted (induction tailRename)
+      exact HostedStrict.iso
+        (RegionIso.blankConjoin _).symm
+        (RegionIso.ofEq
+          (Region.singleton_conjoin_ofItems
+            (.identity signature 1 (fun _ => pinRename Var.here))
+            (EqualityNormalization.allPins tail tailRename)))
+        (by simpa only [EqualityNormalization.allPins,
+            ItemSeq.pinWires, if_true, pinRename, tailRename] using combined)
+
+/-- Two complete unary-pin batches are a hosted strict extension of blank. -/
+theorem HostedStrict.allPinsTwice
+    (source : List Sig) (rename : WireRenaming source common) :
+    let pins := EqualityNormalization.allPins source rename
+    HostedStrict (Region.blank common)
+      (Region.ofItems (pins.append pins)) := by
+  dsimp only
+  let pins := EqualityNormalization.allPins source rename
+  let once := HostedStrict.allPins source rename
+  let combined := HostedStrict.conjoin
+    (Region.blank common) (Region.blank common)
+    (Region.ofItems pins) (Region.ofItems pins) once once
+  exact HostedStrict.iso (RegionIso.blankConjoin _).symm
+    (RegionIso.ofEq (Region.ofItems_conjoin pins pins)) combined
+
+/-- Exposing a support-completed material is stable under every host and wire
+substitution. -/
+theorem supportInstantiationHosted
+    (material : Region materialWires)
+    (materialCanonical : material.Canonical)
+    (application : Vars common materialWires) :
+    HostedStrict
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (Erasure.Exposure.supportPattern material materialCanonical)
+        application)
+      (material.renameWires
+        (EqualityNormalization.formalSubstitution application)) := by
+  intro outer hostLocals rename hostItems boundary source occurrence
+    targetCanonical targetExternalTwoEnded
+  let mappedApplication := application.map fun wire => rename wire
+  let substitution := EqualityNormalization.formalSubstitution
+    mappedApplication
+  let instantiated :=
+    VisualProof.Rule.Comprehension.Instantiation.instantiate
+      (Erasure.Exposure.supportPattern material materialCanonical)
+      mappedApplication
+  let renamedMaterial := material.renameWires substitution
+  let raw := Region.adjoinAt hostLocals hostItems renamedMaterial
+  let exposed := Region.adjoinAt hostLocals hostItems instantiated
+  have sourceEq :
+      Region.adjoinAt hostLocals hostItems
+          ((VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (Erasure.Exposure.supportPattern material materialCanonical)
+            application).renameWires rename) = exposed := by
+    simp only [exposed, instantiated, mappedApplication,
+      EqualityNormalization.instantiate_renameWires]
+  have targetEq :
+      Region.adjoinAt hostLocals hostItems
+          ((material.renameWires
+            (EqualityNormalization.formalSubstitution application)).renameWires
+              rename) = raw := by
+    simp only [raw, renamedMaterial, substitution, mappedApplication,
+      Region.renameWires_comp]
+    congr 2
+    apply WireRenaming.ext
+    intro signature wire
+    exact (EqualityNormalization.formalSubstitution_map
+      application rename wire).symm
+  change Occurrence
+    (Region.adjoinAt hostLocals hostItems
+      ((VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (Erasure.Exposure.supportPattern material materialCanonical)
+        application).renameWires rename)) source at occurrence
+  have exposedCanonical : (occurrence.context.fill exposed).Canonical := by
+    rw [← sourceEq]
+    exact occurrence.sourceCanonical
+  have exposedExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire
+      (occurrence.context.fill exposed) := by
+    intro signature wire
+    rw [← sourceEq]
+    exact occurrence.sourceExternalTwoEnded wire
+  have rawCanonical : (occurrence.context.fill raw).Canonical := by
+    rw [← targetEq]
+    exact targetCanonical
+  have rawExternalTwoEnded : OpenDiagram.ExternalTwoEnded
+      occurrence.interface.boundaryWire (occurrence.context.fill raw) := by
+    intro signature wire
+    rw [← targetEq]
+    exact targetExternalTwoEnded wire
+  let rawEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill raw) rawCanonical rawExternalTwoEnded
+  let rawOccurrence : Occurrence raw rawEndpoint :=
+    exactOccurrence occurrence.interface occurrence.context raw rawCanonical
+      rawExternalTwoEnded
+  let description : Rule.Erasure.Description outer := {
+    materialWires := materialWires
+    hostLocals := hostLocals
+    hostItems := hostItems.append
+      (EqualityNormalization.contextPins outer hostLocals)
+    material := material
+    wireMap := substitution
+  }
+  have exposedStrict : EqualityNormalization.StrictEquates rawOccurrence
+      exposed exposedCanonical exposedExternalTwoEnded := by
+    apply EqualityNormalization.withPinnedEnvelope rawOccurrence
+      exposedCanonical exposedExternalTwoEnded
+    intro pinnedSourceCanonical pinnedSourceExternalTwoEnded
+    let pinnedOccurrence := exactOccurrence rawOccurrence.interface
+      rawOccurrence.context
+      (Region.adjoinAt hostLocals
+        (hostItems.append
+          (EqualityNormalization.contextPins outer hostLocals))
+        renamedMaterial)
+      pinnedSourceCanonical pinnedSourceExternalTwoEnded
+    apply EqualityNormalization.pinnedExposureCore pinnedOccurrence description
+    · simp [description, Rule.Erasure.Description.source, Region.spliceAt,
+        renamedMaterial]
+    · rfl
+    · intro canonical
+      have canonicalEq : canonical = materialCanonical := Subsingleton.elim _ _
+      subst canonical
+      simp only [description, Erasure.Exposure.exposedRegion,
+        Erasure.Exposure.applicationPorts]
+      change Region.adjoinAt hostLocals
+          (hostItems.append
+            (EqualityNormalization.contextPins outer hostLocals))
+          (VisualProof.Rule.Comprehension.Instantiation.instantiate
+            (Erasure.Exposure.supportPattern material materialCanonical)
+            ((Erasure.Exposure.identityBoundary materialWires).map
+              (fun wire => substitution wire))) = _
+      have portsEq :
+          (Erasure.Exposure.identityBoundary materialWires).map
+              (fun wire => substitution wire) = mappedApplication := by
+        rw [← EqualityNormalization.formalPorts_eq_exposure,
+          EqualityNormalization.formalPorts_map_substitution]
+      rw [portsEq]
+  let exposedEndpoint := occurrence.interface.withBody
+    (occurrence.context.fill exposed) exposedCanonical exposedExternalTwoEnded
+  have sourceIso : OpenDiagramIso source exposedEndpoint := by
+    exact occurrence.host_iso.trans
+      (OpenDiagram.withBody_iso occurrence.sourceCanonical exposedCanonical
+        occurrence.sourceExternalTwoEnded exposedExternalTwoEnded
+        (DiagramContext.fillIso occurrence.context
+          (RegionIso.ofEq sourceEq)))
+  have targetIso : OpenDiagramIso
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (Region.adjoinAt hostLocals hostItems
+            ((material.renameWires
+              (EqualityNormalization.formalSubstitution application)).renameWires
+                rename)))
+        targetCanonical targetExternalTwoEnded)
+      rawEndpoint := by
+    exact OpenDiagram.withBody_iso targetCanonical rawCanonical
+      targetExternalTwoEnded rawExternalTwoEnded
+      (DiagramContext.fillIso occurrence.context (RegionIso.ofEq targetEq))
+  exact ⟨transGen_iso sourceIso.symm exposedStrict.2 targetIso.symm,
+    transGen_iso targetIso.symm exposedStrict.1 sourceIso.symm⟩
 
 
 end VisualProof.Rule.Completeness.Comprehension

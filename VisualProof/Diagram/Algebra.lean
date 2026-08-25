@@ -14,6 +14,17 @@ def ofItems (items : ItemSeq outer) : Region outer :=
     ⟨fun wire => wire.appendLeft []⟩
   .mk [] (items.renameWires appendNil)
 
+theorem ofItems_renameWires
+    (items : ItemSeq sourceWires)
+    (rename : WireRenaming sourceWires targetWires) :
+    (ofItems items).renameWires rename =
+      ofItems (items.renameWires rename) := by
+  simp only [ofItems, Region.renameWires, ItemSeq.renameWires_comp]
+  congr 2
+  apply WireRenaming.ext
+  intro signature wire
+  simp [WireRenaming.comp, WireRenaming.appendRight]
+
 /-- One item as an independently conjoinable zero-local region. -/
 def singleton (item : Item outer) : Region outer :=
   ofItems (ItemSeq.cons item ItemSeq.nil)

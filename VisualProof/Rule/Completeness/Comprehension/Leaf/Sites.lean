@@ -940,8 +940,9 @@ theorem formalRecordingSiteNatural
 
 mutual
   theorem targetRegionReindex
-      {arguments external common mappedCommon sourceWires mappedSourceWires
-        targetWires mappedTargetWires : List Sig}
+      {arguments external argumentArguments common mappedCommon sourceWires
+        mappedSourceWires targetWires mappedTargetWires argumentSourceWires
+        mappedArgumentSourceWires : List Sig}
       {pattern : OpenDiagram arguments}
       {baseOperation : Transform.Operation arguments}
       {frame : Transform.Frame arguments common
@@ -958,9 +959,16 @@ mutual
       (sites : RegionSites (recordingOperation baseOperation external)
         data evidence)
       (current : Vars external arguments)
+      (argumentCurrent : Vars external argumentArguments)
+      (argumentFrame : Transform.Frame argumentArguments common
+        argumentSourceWires argumentSourceWires)
+      (mappedArgumentFrame : Transform.Frame argumentArguments mappedCommon
+        mappedArgumentSourceWires mappedArgumentSourceWires)
       (commonRename : WireRenaming common mappedCommon)
       (sourceRename : WireRenaming sourceWires mappedSourceWires)
       (targetRename : WireRenaming targetWires mappedTargetWires)
+      (argumentSourceRename : WireRenaming argumentSourceWires
+        mappedArgumentSourceWires)
       (keepCommutes : ∀ {signature} (wire : Var common signature),
         sourceRename (frame.sourceKeep wire) =
           mappedFrame.sourceKeep (commonRename wire))
@@ -969,6 +977,11 @@ mutual
           mappedFrame.targetKeep (commonRename wire))
       (selectedCommutes : sourceRename frame.selected =
         mappedFrame.selected)
+      (argumentKeepCommutes : ∀ {signature} (wire : Var common signature),
+        argumentSourceRename (argumentFrame.sourceKeep wire) =
+          mappedArgumentFrame.sourceKeep (commonRename wire))
+      (argumentSelectedCommutes : argumentSourceRename argumentFrame.selected =
+        mappedArgumentFrame.selected)
       (naturality : DataNaturality baseOperation)
       (dataCoherent : naturality.Coherent frame mappedFrame data mappedData
         commonRename targetRename) :
@@ -986,8 +999,16 @@ mutual
                 (argumentRegionEdit sites current
                     (normalizationOperation arguments) frame PUnit.unit
                     (fun _ _ _ => PUnit.unit)).1.renameWires sourceRename =
-                  (argumentRegionEdit mappedSites current
+                (argumentRegionEdit mappedSites current
                     (normalizationOperation arguments) mappedFrame PUnit.unit
+                    (fun _ _ _ => PUnit.unit)).1 ∧
+                (argumentRegionEdit sites argumentCurrent
+                    (normalizationOperation argumentArguments) argumentFrame
+                    PUnit.unit (fun _ _ _ => PUnit.unit)).1.renameWires
+                    argumentSourceRename =
+                  (argumentRegionEdit mappedSites argumentCurrent
+                    (normalizationOperation argumentArguments)
+                    mappedArgumentFrame PUnit.unit
                     (fun _ _ _ => PUnit.unit)).1 ∧
                 Nonempty (RegionIso (WireEquiv.refl mappedCommon)
                   (result.renameWires commonRename) mappedResult) ∧
@@ -1011,6 +1032,12 @@ mutual
           apply WireRenaming.ext
           intro signature wire
           exact targetKeepCommutes wire
+        have argumentKeepMaps : WireRenaming.comp argumentSourceRename
+              argumentFrame.sourceKeep =
+            WireRenaming.comp mappedArgumentFrame.sourceKeep commonRename := by
+          apply WireRenaming.ext
+          intro signature wire
+          exact argumentKeepCommutes wire
         have appendedKeep : ∀ {signature}
             (wire : Var (common ++ locals) signature),
             sourceRename.appendRight locals
@@ -1031,13 +1058,36 @@ mutual
           simpa only [Transform.Frame.append, WireRenaming.appendRight,
             Var.appendMap_left] using
               congrArg (fun wire => wire.appendLeft locals) selectedCommutes
+        have appendedArgumentKeep : ∀ {signature}
+            (wire : Var (common ++ locals) signature),
+            argumentSourceRename.appendRight locals
+                ((argumentFrame.append locals).sourceKeep wire) =
+              (mappedArgumentFrame.append locals).sourceKeep
+                (commonRename.appendRight locals wire) := by
+          intro signature wire
+          change argumentSourceRename.appendRight locals
+              (argumentFrame.sourceKeep.appendRight locals wire) =
+            mappedArgumentFrame.sourceKeep.appendRight locals
+              (commonRename.appendRight locals wire)
+          rw [WireRenaming.appendRight_comp_apply,
+            WireRenaming.appendRight_comp_apply, argumentKeepMaps]
+        have appendedArgumentSelected :
+            argumentSourceRename.appendRight locals
+                (argumentFrame.append locals).selected =
+              (mappedArgumentFrame.append locals).selected := by
+          simpa only [Transform.Frame.append, WireRenaming.appendRight,
+            Var.appendMap_left] using congrArg
+              (fun wire => wire.appendLeft locals) argumentSelectedCommutes
         obtain ⟨mappedChildSource, mappedChildResult, mappedChildEvidence,
             mappedChildSites, mappedChildSourceEq,
             mappedChildArgumentEq,
+            mappedChildSourceArgumentEq,
             ⟨mappedChildIso⟩, ⟨mappedChildEndpointIso⟩⟩ :=
-          targetItemsReindex childEvidence childSites current
+          targetItemsReindex childEvidence childSites current argumentCurrent
+            (argumentFrame.append locals) (mappedArgumentFrame.append locals)
             (commonRename.appendRight locals)
             (sourceRename.appendRight locals) (targetRename.appendRight locals)
+            (argumentSourceRename.appendRight locals)
             appendedKeep (by
               intro signature wire
               change targetRename.appendRight locals
@@ -1046,7 +1096,8 @@ mutual
                   (commonRename.appendRight locals wire)
               rw [WireRenaming.appendRight_comp_apply,
                 WireRenaming.appendRight_comp_apply, targetMaps])
-            appendedSelected naturality (naturality.append dataCoherent locals)
+            appendedSelected appendedArgumentKeep appendedArgumentSelected
+            naturality (naturality.append dataCoherent locals)
         let mappedEvidence :=
           VisualProof.Rule.Comprehension.Instantiation.RegionResult.mk
             mappedChildEvidence
@@ -1074,6 +1125,20 @@ mutual
                   (fun _ _ _ => PUnit.unit)).1 := by
           simpa only [Region.renameWires] using
             congrArg (Region.mk locals) mappedChildArgumentEq
+        have mappedSourceArgumentEq :
+            (Region.mk locals
+                (argumentItemsEdit childSites argumentCurrent
+                  (normalizationOperation argumentArguments)
+                  (argumentFrame.append locals) PUnit.unit
+                  (fun _ _ _ => PUnit.unit)).1).renameWires
+                argumentSourceRename =
+              Region.mk locals
+                (argumentItemsEdit mappedChildSites argumentCurrent
+                  (normalizationOperation argumentArguments)
+                  (mappedArgumentFrame.append locals) PUnit.unit
+                  (fun _ _ _ => PUnit.unit)).1 := by
+          simpa only [Region.renameWires] using
+            congrArg (Region.mk locals) mappedChildSourceArgumentEq
         let exposed := RegionIso.renameWiresAdjoinAtNil childResult
           commonRename
         let child := RegionIso.adjoinAt locals .nil mappedChildIso
@@ -1087,13 +1152,15 @@ mutual
         exact ⟨Region.mk locals mappedChildSource,
           Region.adjoinAt locals .nil mappedChildResult, mappedEvidence,
           mappedSites, mappedSourceEq, mappedArgumentEq,
+          mappedSourceArgumentEq,
           ⟨exposed.trans child⟩,
           ⟨exposedEndpoint.trans childEndpoint⟩⟩
   termination_by sizeOf source
 
   theorem targetItemsReindex
-      {arguments external common mappedCommon sourceWires mappedSourceWires
-        targetWires mappedTargetWires : List Sig}
+      {arguments external argumentArguments common mappedCommon sourceWires
+        mappedSourceWires targetWires mappedTargetWires argumentSourceWires
+        mappedArgumentSourceWires : List Sig}
       {pattern : OpenDiagram arguments}
       {baseOperation : Transform.Operation arguments}
       {frame : Transform.Frame arguments common
@@ -1110,9 +1177,16 @@ mutual
       (sites : ItemsSites (recordingOperation baseOperation external)
         data evidence)
       (current : Vars external arguments)
+      (argumentCurrent : Vars external argumentArguments)
+      (argumentFrame : Transform.Frame argumentArguments common
+        argumentSourceWires argumentSourceWires)
+      (mappedArgumentFrame : Transform.Frame argumentArguments mappedCommon
+        mappedArgumentSourceWires mappedArgumentSourceWires)
       (commonRename : WireRenaming common mappedCommon)
       (sourceRename : WireRenaming sourceWires mappedSourceWires)
       (targetRename : WireRenaming targetWires mappedTargetWires)
+      (argumentSourceRename : WireRenaming argumentSourceWires
+        mappedArgumentSourceWires)
       (keepCommutes : ∀ {signature} (wire : Var common signature),
         sourceRename (frame.sourceKeep wire) =
           mappedFrame.sourceKeep (commonRename wire))
@@ -1121,6 +1195,11 @@ mutual
           mappedFrame.targetKeep (commonRename wire))
       (selectedCommutes : sourceRename frame.selected =
         mappedFrame.selected)
+      (argumentKeepCommutes : ∀ {signature} (wire : Var common signature),
+        argumentSourceRename (argumentFrame.sourceKeep wire) =
+          mappedArgumentFrame.sourceKeep (commonRename wire))
+      (argumentSelectedCommutes : argumentSourceRename argumentFrame.selected =
+        mappedArgumentFrame.selected)
       (naturality : DataNaturality baseOperation)
       (dataCoherent : naturality.Coherent frame mappedFrame data mappedData
         commonRename targetRename) :
@@ -1138,8 +1217,16 @@ mutual
                 (argumentItemsEdit sites current
                     (normalizationOperation arguments) frame PUnit.unit
                     (fun _ _ _ => PUnit.unit)).1.renameWires sourceRename =
-                  (argumentItemsEdit mappedSites current
+                (argumentItemsEdit mappedSites current
                     (normalizationOperation arguments) mappedFrame PUnit.unit
+                    (fun _ _ _ => PUnit.unit)).1 ∧
+                (argumentItemsEdit sites argumentCurrent
+                    (normalizationOperation argumentArguments) argumentFrame
+                    PUnit.unit (fun _ _ _ => PUnit.unit)).1.renameWires
+                    argumentSourceRename =
+                  (argumentItemsEdit mappedSites argumentCurrent
+                    (normalizationOperation argumentArguments)
+                    mappedArgumentFrame PUnit.unit
                     (fun _ _ _ => PUnit.unit)).1 ∧
                 Nonempty (RegionIso (WireEquiv.refl mappedCommon)
                   (result.renameWires commonRename) mappedResult) ∧
@@ -1158,7 +1245,7 @@ mutual
             (retain := mappedFrame.sourceKeep)
             (selected := mappedFrame.selected)
         exact ⟨.nil, Region.blank mappedCommon, mappedEvidence,
-          .nil mappedEvidence, rfl, rfl, ⟨RegionIso.refl _⟩,
+          .nil mappedEvidence, rfl, rfl, rfl, ⟨RegionIso.refl _⟩,
           ⟨by
             unfold itemsEdit ExactEdit.refl
             exact RegionIso.refl _⟩⟩
@@ -1167,19 +1254,25 @@ mutual
         obtain ⟨mappedItemSource, mappedItemResult, mappedItemEvidence,
             mappedItemSites, mappedItemSourceEq,
             mappedItemArgumentEq,
+            mappedItemSourceArgumentEq,
             ⟨mappedItemIso⟩,
             ⟨mappedItemEndpointIso⟩⟩ :=
-          targetItemReindex itemEvidence itemSites current commonRename
-            sourceRename targetRename keepCommutes targetKeepCommutes
-            selectedCommutes naturality dataCoherent
+          targetItemReindex itemEvidence itemSites current argumentCurrent
+            argumentFrame mappedArgumentFrame commonRename sourceRename
+            targetRename argumentSourceRename keepCommutes targetKeepCommutes
+            selectedCommutes argumentKeepCommutes argumentSelectedCommutes
+            naturality dataCoherent
         obtain ⟨mappedTailSource, mappedTailResult, mappedTailEvidence,
             mappedTailSites, mappedTailSourceEq,
             mappedTailArgumentEq,
+            mappedTailSourceArgumentEq,
             ⟨mappedTailIso⟩,
             ⟨mappedTailEndpointIso⟩⟩ :=
-          targetItemsReindex tailEvidence tailSites current commonRename
-            sourceRename targetRename keepCommutes targetKeepCommutes
-            selectedCommutes naturality dataCoherent
+          targetItemsReindex tailEvidence tailSites current argumentCurrent
+            argumentFrame mappedArgumentFrame commonRename sourceRename
+            targetRename argumentSourceRename keepCommutes targetKeepCommutes
+            selectedCommutes argumentKeepCommutes argumentSelectedCommutes
+            naturality dataCoherent
         let mappedEvidence :=
           VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
             mappedItemEvidence mappedTailEvidence
@@ -1209,6 +1302,26 @@ mutual
                   (fun _ _ _ => PUnit.unit)).1 := by
           simp only [ItemSeq.renameWires, mappedItemArgumentEq,
             mappedTailArgumentEq]
+        have mappedSourceArgumentEq :
+            (ItemSeq.cons
+                (argumentItemEdit itemSites argumentCurrent
+                  (normalizationOperation argumentArguments) argumentFrame
+                  PUnit.unit (fun _ _ _ => PUnit.unit)).1
+                (argumentItemsEdit tailSites argumentCurrent
+                  (normalizationOperation argumentArguments) argumentFrame
+                  PUnit.unit (fun _ _ _ => PUnit.unit)).1).renameWires
+                argumentSourceRename =
+              ItemSeq.cons
+                (argumentItemEdit mappedItemSites argumentCurrent
+                  (normalizationOperation argumentArguments)
+                  mappedArgumentFrame PUnit.unit
+                  (fun _ _ _ => PUnit.unit)).1
+                (argumentItemsEdit mappedTailSites argumentCurrent
+                  (normalizationOperation argumentArguments)
+                  mappedArgumentFrame PUnit.unit
+                  (fun _ _ _ => PUnit.unit)).1 := by
+          simp only [ItemSeq.renameWires, mappedItemSourceArgumentEq,
+            mappedTailSourceArgumentEq]
         let exposed := RegionIso.renameWiresConjoin itemResult tailResult
           commonRename
         let children := RegionIso.conjoinCongr mappedItemIso mappedTailIso
@@ -1224,13 +1337,15 @@ mutual
         exact ⟨.cons mappedItemSource mappedTailSource,
           mappedItemResult.conjoin mappedTailResult, mappedEvidence,
           mappedSites, mappedSourceEq, mappedArgumentEq,
+          mappedSourceArgumentEq,
           ⟨exposed.trans children⟩,
           ⟨exposedEndpoint.trans endpointChildren⟩⟩
   termination_by sizeOf source
 
   theorem targetItemReindex
-      {arguments external common mappedCommon sourceWires mappedSourceWires
-        targetWires mappedTargetWires : List Sig}
+      {arguments external argumentArguments common mappedCommon sourceWires
+        mappedSourceWires targetWires mappedTargetWires argumentSourceWires
+        mappedArgumentSourceWires : List Sig}
       {pattern : OpenDiagram arguments}
       {baseOperation : Transform.Operation arguments}
       {frame : Transform.Frame arguments common
@@ -1247,9 +1362,16 @@ mutual
       (sites : ItemSites (recordingOperation baseOperation external)
         data originalEvidence)
       (current : Vars external arguments)
+      (argumentCurrent : Vars external argumentArguments)
+      (argumentFrame : Transform.Frame argumentArguments common
+        argumentSourceWires argumentSourceWires)
+      (mappedArgumentFrame : Transform.Frame argumentArguments mappedCommon
+        mappedArgumentSourceWires mappedArgumentSourceWires)
       (commonRename : WireRenaming common mappedCommon)
       (sourceRename : WireRenaming sourceWires mappedSourceWires)
       (targetRename : WireRenaming targetWires mappedTargetWires)
+      (argumentSourceRename : WireRenaming argumentSourceWires
+        mappedArgumentSourceWires)
       (keepCommutes : ∀ {signature} (wire : Var common signature),
         sourceRename (frame.sourceKeep wire) =
           mappedFrame.sourceKeep (commonRename wire))
@@ -1258,6 +1380,11 @@ mutual
           mappedFrame.targetKeep (commonRename wire))
       (selectedCommutes : sourceRename frame.selected =
         mappedFrame.selected)
+      (argumentKeepCommutes : ∀ {signature} (wire : Var common signature),
+        argumentSourceRename (argumentFrame.sourceKeep wire) =
+          mappedArgumentFrame.sourceKeep (commonRename wire))
+      (argumentSelectedCommutes : argumentSourceRename argumentFrame.selected =
+        mappedArgumentFrame.selected)
       (naturality : DataNaturality baseOperation)
       (dataCoherent : naturality.Coherent frame mappedFrame data mappedData
         commonRename targetRename) :
@@ -1275,8 +1402,16 @@ mutual
                 (argumentItemEdit sites current
                     (normalizationOperation arguments) frame PUnit.unit
                     (fun _ _ _ => PUnit.unit)).1.renameWires sourceRename =
-                  (argumentItemEdit mappedSites current
+                (argumentItemEdit mappedSites current
                     (normalizationOperation arguments) mappedFrame PUnit.unit
+                    (fun _ _ _ => PUnit.unit)).1 ∧
+                (argumentItemEdit sites argumentCurrent
+                    (normalizationOperation argumentArguments) argumentFrame
+                    PUnit.unit (fun _ _ _ => PUnit.unit)).1.renameWires
+                    argumentSourceRename =
+                  (argumentItemEdit mappedSites argumentCurrent
+                    (normalizationOperation argumentArguments)
+                    mappedArgumentFrame PUnit.unit
                     (fun _ _ _ => PUnit.unit)).1 ∧
                 Nonempty (RegionIso (WireEquiv.refl mappedCommon)
                   (result.renameWires commonRename) mappedResult) ∧
@@ -1321,6 +1456,37 @@ mutual
           exact congrArg
             (Item.atom (mappedFrame.sourceKeep (commonRename itemHead)))
             mappedPortWires
+        have mappedArgumentPortWires :
+            (itemPorts.map fun wire => argumentFrame.sourceKeep wire).map
+                (fun wire => argumentSourceRename wire) =
+              mappedPorts.map fun wire =>
+                mappedArgumentFrame.sourceKeep wire := by
+          calc
+            _ = itemPorts.map (fun wire =>
+                argumentSourceRename (argumentFrame.sourceKeep wire)) :=
+              Diagram.vars_map_comp itemPorts argumentFrame.sourceKeep
+                argumentSourceRename
+            _ = itemPorts.map (fun wire =>
+                mappedArgumentFrame.sourceKeep (commonRename wire)) := by
+              apply Vars.map_congr
+              intro signature wire
+              exact argumentKeepCommutes wire
+            _ = _ := (Diagram.vars_map_comp itemPorts commonRename
+              mappedArgumentFrame.sourceKeep).symm
+        have mappedSourceArgument :
+            (Item.atom (argumentFrame.sourceKeep itemHead)
+              (itemPorts.map fun wire =>
+                argumentFrame.sourceKeep wire)).renameWires
+                argumentSourceRename =
+              Item.atom
+                (mappedArgumentFrame.sourceKeep (commonRename itemHead))
+                (mappedPorts.map fun wire =>
+                  mappedArgumentFrame.sourceKeep wire) := by
+          simp only [Item.renameWires]
+          rw [argumentKeepCommutes itemHead]
+          exact congrArg
+            (Item.atom (mappedArgumentFrame.sourceKeep
+              (commonRename itemHead))) mappedArgumentPortWires
         let mappedEvidence :=
           VisualProof.Rule.Comprehension.Instantiation.ItemResult.atom
             (pattern := pattern)
@@ -1375,7 +1541,7 @@ mutual
             (Item.atom (mappedFrame.targetKeep (commonRename itemHead)))
             mappedTargetPorts)
         exact ⟨_, _, mappedEvidence, mappedSites, mappedSource,
-          mappedSource,
+          mappedSource, mappedSourceArgument,
           ⟨RegionIso.ofEq mappedResult⟩,
           ⟨RegionIso.ofEq mappedEndpoint⟩⟩
     | .selectedAtom application siteData => by
@@ -1455,10 +1621,36 @@ mutual
               rw [EqualityNormalization.formalSubstitution_map]
               exact keepCommutes
                 (EqualityNormalization.formalSubstitution siteData.2 wire)
+        have mappedSourceArgumentEq :
+            (Item.atom argumentFrame.selected
+                (argumentCurrent.map fun wire => argumentFrame.sourceKeep
+                  (EqualityNormalization.formalSubstitution siteData.2
+                    wire))).renameWires argumentSourceRename =
+              Item.atom mappedArgumentFrame.selected
+                (argumentCurrent.map fun wire =>
+                  mappedArgumentFrame.sourceKeep
+                    (EqualityNormalization.formalSubstitution
+                      coherentMappedSite.2 wire)) := by
+          simp only [Item.renameWires, argumentSelectedCommutes]
+          apply congrArg (Item.atom mappedArgumentFrame.selected)
+          calc
+            _ = argumentCurrent.map (fun wire => argumentSourceRename
+                  (argumentFrame.sourceKeep
+                    (EqualityNormalization.formalSubstitution siteData.2
+                      wire))) := Vars.map_map _ _ _
+            _ = _ := by
+              apply Vars.map_congr
+              intro wireSignature wire
+              rw [EqualityNormalization.formalSubstitution_map]
+              exact argumentKeepCommutes
+                (EqualityNormalization.formalSubstitution siteData.2 wire)
         exact ⟨_, _, mappedEvidence, mappedSites, mappedSource,
           by
             simpa only [argumentItemEdit, Vars.map_map, mappedSites,
               coherentMappedSite] using mappedArgumentEq,
+          by
+            simpa only [argumentItemEdit, Vars.map_map, mappedSites,
+              coherentMappedSite] using mappedSourceArgumentEq,
           ⟨RegionIso.ofEq mappedResult⟩,
           ⟨by
             simpa only [itemEdit, ExactEdit.refl,
@@ -1476,6 +1668,17 @@ mutual
           apply congrArg (Item.identity signature arity)
           funext position
           exact keepCommutes (identityPorts position)
+        have mappedSourceArgument :
+            (Item.identity signature arity
+              (fun position => argumentFrame.sourceKeep
+                (identityPorts position))).renameWires argumentSourceRename =
+              Item.identity signature arity
+                (fun position => mappedArgumentFrame.sourceKeep
+                  (mappedPorts position)) := by
+          simp only [Item.renameWires, mappedPorts]
+          apply congrArg (Item.identity signature arity)
+          funext position
+          exact argumentKeepCommutes (identityPorts position)
         let mappedEvidence :=
           VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
             (pattern := pattern)
@@ -1513,17 +1716,20 @@ mutual
           funext position
           exact targetKeepCommutes (identityPorts position)
         exact ⟨_, _, mappedEvidence, mappedSites, mappedSource,
-          mappedSource, ⟨RegionIso.ofEq mappedResult⟩,
+          mappedSource, mappedSourceArgument, ⟨RegionIso.ofEq mappedResult⟩,
           ⟨RegionIso.ofEq mappedEndpoint⟩⟩
     | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
         childSites => by
         obtain ⟨mappedChildSource, mappedChildResult, mappedChildEvidence,
             mappedChildSites, mappedChildSourceEq,
             mappedChildArgumentEq,
+            mappedChildSourceArgumentEq,
             ⟨mappedChildIso⟩, ⟨mappedChildEndpointIso⟩⟩ :=
-          targetRegionReindex childEvidence childSites current commonRename
-            sourceRename targetRename keepCommutes targetKeepCommutes
-            selectedCommutes naturality dataCoherent
+          targetRegionReindex childEvidence childSites current argumentCurrent
+            argumentFrame mappedArgumentFrame commonRename sourceRename
+            targetRename argumentSourceRename keepCommutes targetKeepCommutes
+            selectedCommutes argumentKeepCommutes argumentSelectedCommutes
+            naturality dataCoherent
         let mappedEvidence :=
           VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
             mappedChildEvidence
@@ -1563,6 +1769,9 @@ mutual
           mappedSites, mappedSourceEq, by
             unfold argumentItemEdit
             exact congrArg Item.cut mappedChildArgumentEq,
+          by
+            unfold argumentItemEdit
+            exact congrArg Item.cut mappedChildSourceArgumentEq,
           ⟨exposed.trans child⟩,
           ⟨exposedEndpoint.trans endpointChild⟩⟩
   termination_by sizeOf source
@@ -1572,7 +1781,8 @@ end
 authoritative evidence and sites; conjunction reassociation is presentation
 only. -/
 theorem targetItemsAppend
-    {arguments external common sourceWires targetWires : List Sig}
+    {arguments external argumentArguments common sourceWires targetWires
+      argumentSourceWires : List Sig}
     {pattern : OpenDiagram arguments}
     {baseOperation : Transform.Operation arguments}
     {frame : Transform.Frame arguments common
@@ -1592,7 +1802,10 @@ theorem targetItemsAppend
         secondSource secondResult)
     (secondSites : ItemsSites
       (recordingOperation baseOperation external) data secondEvidence)
-    (current : Vars external arguments) :
+    (current : Vars external arguments)
+    (argumentCurrent : Vars external argumentArguments)
+    (argumentFrame : Transform.Frame argumentArguments common
+      argumentSourceWires argumentSourceWires) :
     ∃ combinedResult : Region common,
       ∃ combinedEvidence :
           VisualProof.Rule.Comprehension.Instantiation.ItemsResult
@@ -1609,6 +1822,15 @@ theorem targetItemsAppend
               (argumentItemsEdit secondSites current
                 (normalizationOperation arguments) frame PUnit.unit
                 (fun _ _ _ => PUnit.unit)).1 ∧
+          (argumentItemsEdit combinedSites argumentCurrent
+              (normalizationOperation argumentArguments) argumentFrame
+              PUnit.unit (fun _ _ _ => PUnit.unit)).1 =
+            (argumentItemsEdit firstSites argumentCurrent
+                (normalizationOperation argumentArguments) argumentFrame
+                PUnit.unit (fun _ _ _ => PUnit.unit)).1.append
+              (argumentItemsEdit secondSites argumentCurrent
+                (normalizationOperation argumentArguments) argumentFrame
+                PUnit.unit (fun _ _ _ => PUnit.unit)).1 ∧
           Nonempty (RegionIso (WireEquiv.refl common)
             (firstResult.conjoin secondResult) combinedResult) ∧
             Nonempty (RegionIso (WireEquiv.refl targetWires)
@@ -1623,7 +1845,7 @@ theorem targetItemsAppend
                 data combinedEvidence combinedSites).endpoint) :=
   match firstSites with
   | .nil _ => by
-      exact ⟨secondResult, secondEvidence, secondSites, rfl,
+      exact ⟨secondResult, secondEvidence, secondSites, rfl, rfl,
         ⟨RegionIso.blankConjoin secondResult⟩,
         ⟨by
           unfold itemsEdit ExactEdit.refl
@@ -1632,10 +1854,11 @@ theorem targetItemsAppend
   | @ItemsSites.cons _ _ _ _ _ _ _ _ item tail itemResult tailResult
       itemEvidence tailEvidence itemSites tailSites => by
       obtain ⟨combinedTailResult, combinedTailEvidence,
-          combinedTailSites, combinedTailArgumentEq, ⟨combinedTailIso⟩,
+          combinedTailSites, combinedTailArgumentEq,
+          combinedTailSourceArgumentEq, ⟨combinedTailIso⟩,
           ⟨combinedTailEndpointIso⟩⟩ :=
         targetItemsAppend tailEvidence tailSites secondEvidence secondSites
-          current
+          current argumentCurrent argumentFrame
       let combinedEvidence :=
         VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
           itemEvidence combinedTailEvidence
@@ -1660,7 +1883,7 @@ theorem targetItemsAppend
       let endpointTailPresented := RegionIso.conjoinCongr
         (RegionIso.refl itemOutput.endpoint) combinedTailEndpointIso
       exact ⟨itemResult.conjoin combinedTailResult, combinedEvidence,
-        combinedSites, by
+          combinedSites, by
           simpa only [combinedSites, argumentItemsEdit,
             ItemSeq.append] using congrArg
               (fun tail => ItemSeq.cons
@@ -1668,6 +1891,14 @@ theorem targetItemsAppend
                   (normalizationOperation arguments) frame PUnit.unit
                   (fun _ _ _ => PUnit.unit)).1 tail)
               combinedTailArgumentEq,
+        by
+          simpa only [combinedSites, argumentItemsEdit,
+            ItemSeq.append] using congrArg
+              (fun tail => ItemSeq.cons
+                (argumentItemEdit itemSites argumentCurrent
+                  (normalizationOperation argumentArguments) argumentFrame
+                  PUnit.unit (fun _ _ _ => PUnit.unit)).1 tail)
+              combinedTailSourceArgumentEq,
         ⟨associated.trans tailPresented⟩,
         ⟨by
           simpa only [itemsEdit, itemOutput, tailOutput, secondOutput,

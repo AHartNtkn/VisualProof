@@ -1053,6 +1053,35 @@ noncomputable def RegionIso.adjoinAtNil
       simpa only [Region.renameWires, Region.adjoinAt, Region.locals,
         Region.items, ItemSeq.nil_append, source, target] using transported
 
+/-- Present a region under an empty appended host. -/
+noncomputable def RegionIso.adjoinAtNilRenamed
+    (region : Region outer) :
+    RegionIso (WireEquiv.refl outer) region
+      (Region.adjoinAt [] .nil
+        (region.renameWires (WireEquiv.appendNil outer).symm.toRenaming)) := by
+  let emptyEquiv := WireEquiv.appendNil outer
+  let emptyRename : WireRenaming outer (outer ++ []) :=
+    emptyEquiv.symm.toRenaming
+  let directToCollapsed := RegionIso.renameWires region WireRenaming.id
+    (WireRenaming.comp emptyEquiv.toRenaming emptyRename)
+    (WireEquiv.refl outer) (by
+      intro signature wire
+      exact (emptyEquiv.right_inv wire).symm)
+  let collapsedFromHosted :=
+    (RegionIso.renameWiresComp region emptyRename
+      emptyEquiv.toRenaming).symm
+  let chained := (directToCollapsed.trans collapsedFromHosted).trans
+    (RegionIso.adjoinAtNil (region.renameWires emptyRename))
+  have ambientEq :
+      (((WireEquiv.refl outer).trans
+        (WireEquiv.refl outer).symm).trans
+        (WireEquiv.refl outer)) = WireEquiv.refl outer := by
+    apply WireEquiv.ext
+    intro signature wire
+    rfl
+  simpa only [emptyRename, Region.renameWires_id] using
+    chained.castAmbient ambientEq
+
 /-- Conjunction is commutative up to region presentation. -/
 noncomputable def RegionIso.conjoinComm
     (left right : Region outer) :

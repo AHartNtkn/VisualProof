@@ -119,42 +119,46 @@ theorem formalSelectedAtom_retainedTargetToSource
 prepared direct-atom target supplies every retained-wire obligation; the sole
 additional premise is rootedness of the source-only relation binder. -/
 theorem target_source_validity
-    {outer retained arguments : List Sig}
-    {items : ItemSeq (outer ++
-      (.rel (.rel arguments :: arguments) :: retained))}
+    {outer localBefore localAfter arguments : List Sig}
+    {items : ItemSeq (outer ++ (localBefore ++
+      .rel (.rel arguments :: arguments) :: localAfter))}
     (edit : Transform.ItemsEdit (operation [] arguments)
-      (rootFrame outer [] retained [] arguments) PUnit.unit items)
+      (rootFrame outer localBefore localAfter [] arguments) PUnit.unit items)
     (noPin : edit.NoSelectedPin)
     (targetCanonical :
-      (Region.adjoinAt retained .nil edit.run).Canonical)
+      (Region.adjoinAt (localBefore ++ localAfter) .nil edit.run).Canonical)
     (selectedRooted : RegionPath.RootedTwo
-      (items.incidencePaths outer.length 0)) :
-    ((.mk (.rel (.rel arguments :: arguments) :: retained) items :
-        Region outer).Canonical) ∧
+      (items.incidencePaths (outer.length + localBefore.length) 0)) :
+    ((.mk (localBefore ++ .rel (.rel arguments :: arguments) :: localAfter)
+        items : Region outer).Canonical) ∧
       ∀ {signature} (wire : Var outer signature),
-        (Region.adjoinAt retained .nil edit.run).incidencePaths wire.index.val =
-          (.mk (.rel (.rel arguments :: arguments) :: retained) items :
-            Region outer).incidencePaths wire.index.val := by
-  let frame := rootFrame outer [] retained [] arguments
+        (Region.adjoinAt (localBefore ++ localAfter) .nil edit.run).incidencePaths
+            wire.index.val =
+          (.mk (localBefore ++ .rel (.rel arguments :: arguments) :: localAfter)
+            items : Region outer).incidencePaths wire.index.val := by
+  let sourceLocals := localBefore ++
+    .rel (.rel arguments :: arguments) :: localAfter
+  let targetLocals := localBefore ++ localAfter
+  let frame := rootFrame outer localBefore localAfter [] arguments
   have rootInvariant : Transform.RetainedIndexInvariant frame := by
     constructor
     · intro leftSignature rightSignature left right
       simpa [frame, rootFrame, Transform.Frame.replace] using
         (Transform.Frame.keep_index_eq_iff
-          (outer := outer) (before := [])
+          (outer := outer) (before := localBefore)
           (inserted := [.rel (.rel arguments :: arguments)])
-          (after := retained) left right).trans
+          (after := localAfter) left right).trans
         (Transform.Frame.keep_index_eq_iff
-          (outer := outer) (before := []) (inserted := [])
-          (after := retained) left right).symm
+          (outer := outer) (before := localBefore) (inserted := [])
+          (after := localAfter) left right).symm
     · intro signature wire
       simpa [frame, rootFrame, Transform.Frame.replace] using
         (Transform.Frame.insertedHead_ne_keep
-          (outer := outer) (before := []) (after := retained)
+          (outer := outer) (before := localBefore) (after := localAfter)
           (selectedSignature := .rel (.rel arguments :: arguments))
           (inserted := []) wire)
   have materialCanonical : edit.run.Canonical :=
-    Region.Canonical.material_of_adjoinAt retained .nil edit.run
+    Region.Canonical.material_of_adjoinAt targetLocals .nil edit.run
       targetCanonical
   have child := Transform.ItemsEdit.retainedTargetToSource
     (fun invariantFrame (_ : (operation [] arguments).Data invariantFrame) =>
@@ -164,48 +168,89 @@ theorem target_source_validity
     (fun hypothesis ports siteData =>
       formalSelectedAtom_retainedTargetToSource hypothesis ports siteData)
     formalItemEdit_run_items_length rootInvariant edit noPin materialCanonical
-  have sourceCanonical :
-      (.mk (.rel (.rel arguments :: arguments) :: retained) items :
-        Region outer).Canonical := by
+  have sourceCanonical : (.mk sourceLocals items : Region outer).Canonical := by
     refine ⟨?_, (ItemSeq.ChildrenCanonical.renameWires_iff items _).mp
       child.1.2⟩
     intro localIndex
-    refine Fin.cases selectedRooted (fun retainedIndex => ?_) localIndex
-    let retainedWire : Var (outer ++ retained)
-        (retained.get retainedIndex) :=
-      Var.appendRight outer (Var.ofIndex retainedIndex)
-    have targetRoot :=
-      Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil edit.run
-        targetCanonical retainedIndex
-    have paths := child.2 retainedWire
-    rw [Region.incidencePaths_ofItems] at paths
-    have targetRoot' : RegionPath.RootedTwo
-        (edit.run.incidencePaths
-          (frame.targetKeep retainedWire).index.val) := by
-      simpa [retainedWire, frame, rootFrame, Transform.Frame.replace,
-        Transform.Frame.keep, Transform.Frame.localKeep,
-        Var.appendMap_right, Var.appendMap, Var.appendRight, Var.index,
-        Var.index_appendRight, List.length_nil, Nat.zero_add] using targetRoot
-    have sourceRoot : RegionPath.RootedTwo
-        (items.incidencePaths
-          (frame.sourceKeep retainedWire).index.val 0) := by
-      exact (congrArg RegionPath.RootedTwo paths).mp targetRoot'
-    simpa [retainedWire, frame, rootFrame, Transform.Frame.replace,
-      Transform.Frame.keep, Transform.Frame.localKeep,
-      Var.appendMap_right, Var.appendMap, Var.appendRight, Var.index,
-      Var.index_appendRight, List.length_nil, Nat.zero_add] using sourceRoot
+    have localBound : localIndex.val <
+        localBefore.length + 1 + localAfter.length := by
+      simpa [sourceLocals, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
+        using localIndex.isLt
+    by_cases beforeCase : localIndex.val < localBefore.length
+    · let beforeIndex : Fin localBefore.length :=
+        ⟨localIndex.val, beforeCase⟩
+      let targetIndex : Fin targetLocals.length :=
+        ⟨beforeIndex.val, by
+          simp only [targetLocals, List.length_append]
+          omega⟩
+      let targetWire := Var.appendRight outer
+        ((Var.ofIndex beforeIndex).appendLeft localAfter)
+      have targetRoot :=
+        Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil edit.run
+          targetCanonical targetIndex
+      have paths := child.2 targetWire
+      rw [Region.incidencePaths_ofItems] at paths
+      have targetKeepIndex :
+          (frame.targetKeep targetWire).index.val =
+            outer.length + targetIndex.val := by
+        simp [targetWire, targetIndex, targetLocals, frame, rootFrame,
+          Transform.Frame.replace, Transform.Frame.keep,
+          Transform.Frame.localKeep, Var.appendMap, Var.appendRight,
+          Var.index]
+      have sourceKeepIndex :
+          (frame.sourceKeep targetWire).index.val =
+            outer.length + localIndex.val := by
+        simp [targetWire, beforeIndex, frame, rootFrame,
+          Transform.Frame.replace, Transform.Frame.keep,
+          Transform.Frame.localKeep, Var.appendMap, Var.appendRight,
+          Var.index]
+      rw [targetKeepIndex, sourceKeepIndex] at paths
+      exact (congrArg RegionPath.RootedTwo paths).mp targetRoot
+    · by_cases selectedCase : localIndex.val = localBefore.length
+      · simpa only [selectedCase] using selectedRooted
+      · let afterIndex : Fin localAfter.length :=
+          ⟨localIndex.val - localBefore.length - 1, by omega⟩
+        let targetIndex : Fin targetLocals.length :=
+          ⟨localBefore.length + afterIndex.val, by
+            simp only [targetLocals, List.length_append]
+            omega⟩
+        let targetWire := Var.appendRight outer
+          (Var.appendRight localBefore (Var.ofIndex afterIndex))
+        have targetRoot :=
+          Region.Canonical.rootedTwo_materialHost_of_adjoinAt_nil edit.run
+            targetCanonical targetIndex
+        have paths := child.2 targetWire
+        rw [Region.incidencePaths_ofItems] at paths
+        have targetKeepIndex :
+            (frame.targetKeep targetWire).index.val =
+              outer.length + targetIndex.val := by
+          simp [targetWire, targetIndex, targetLocals, frame, rootFrame,
+            Transform.Frame.replace, Transform.Frame.keep,
+            Transform.Frame.localKeep, Var.appendMap, Var.appendRight,
+            Var.index]
+        have sourceKeepIndex :
+            (frame.sourceKeep targetWire).index.val =
+              outer.length + localIndex.val := by
+          simp [targetWire, afterIndex, frame, rootFrame,
+            Transform.Frame.replace, Transform.Frame.keep,
+            Transform.Frame.localKeep, Var.appendMap, Var.appendRight,
+            Var.index]
+          omega
+        rw [targetKeepIndex, sourceKeepIndex] at paths
+        exact (congrArg RegionPath.RootedTwo paths).mp targetRoot
   refine ⟨sourceCanonical, ?_⟩
   intro signature wire
   have targetPaths := Region.incidencePaths_adjoinAt_nil edit.run
-    (wire.appendLeft retained)
-  have paths := child.2 (wire.appendLeft retained)
+    (wire.appendLeft targetLocals)
+  have paths := child.2 (wire.appendLeft targetLocals)
   rw [Region.incidencePaths_ofItems] at paths
-  have paths' : edit.run.incidencePaths (wire.appendLeft retained).index.val =
+  have paths' : edit.run.incidencePaths
+      (wire.appendLeft targetLocals).index.val =
       items.incidencePaths wire.index.val 0 := by
     simpa [frame, rootFrame, Transform.Frame.replace, Transform.Frame.keep,
-      Transform.Frame.localKeep, Var.appendMap_left,
+      Transform.Frame.localKeep, Var.appendMap_left, targetLocals,
       Var.index_appendLeft] using paths
-  simpa using targetPaths.trans paths'
+  simpa [sourceLocals, targetLocals] using targetPaths.trans paths'
 
 inductive Local : LocalRule
   | abstractFormal (step : Applies applied formal) : Local formal applied

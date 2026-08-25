@@ -593,6 +593,7 @@ theorem accumulateHostedTargetWith
     (targetValues : Vars targetExternal targetArguments)
     (targetData : targetBaseOperation.Data
       (Transform.Frame.replace outer before after targetInserted targetArguments))
+    (sourceValues : Vars targetExternal patternWires)
     (Side : {wires : List Sig} → Region wires → Region wires → Prop)
     (sideRefl : ∀ {wires : List Sig} (region : Region wires),
       Side region region)
@@ -610,6 +611,29 @@ theorem accumulateHostedTargetWith
       Side before after →
         Side (Region.singleton (.cut before))
           (Region.singleton (.cut after)))
+    (SourceSide : {wires : List Sig} → Region wires → Region wires → Prop)
+    (sourceSideRefl : ∀ {wires : List Sig} (region : Region wires),
+      SourceSide region region)
+    (sourceSideAdjoinAt : ∀ {common : List Sig} (locals : List Sig)
+      (before after : Region (common ++ locals)),
+      SourceSide before after →
+        SourceSide (Region.adjoinAt locals .nil before)
+          (Region.adjoinAt locals .nil after))
+    (sourceSideConjoin : ∀ {wires : List Sig}
+      {firstBefore firstAfter secondBefore secondAfter : Region wires},
+      SourceSide firstBefore firstAfter →
+        SourceSide secondBefore secondAfter →
+          SourceSide (firstBefore.conjoin secondBefore)
+            (firstAfter.conjoin secondAfter))
+    (sourceSideCut : ∀ {wires : List Sig} {before after : Region wires},
+      SourceSide before after →
+        SourceSide (Region.singleton (.cut before))
+          (Region.singleton (.cut after)))
+    (sourceSideIso : ∀ {wires : List Sig}
+      {before before' after after' : Region wires},
+      RegionIso (WireEquiv.refl wires) before' before →
+        RegionIso (WireEquiv.refl wires) after after' →
+          SourceSide before after → SourceSide before' after')
     (DataSelects : ∀ {common sourceWires targetWires : List Sig}
       {frame : Transform.Frame targetArguments common sourceWires targetWires},
       targetBaseOperation.Data frame →
@@ -646,6 +670,10 @@ theorem accumulateHostedTargetWith
           (targetBaseOperation.appendData formalFrame formalData locals)
           (ambient.append (WireEquiv.refl locals)))
     (targetNaturality : DataNaturality targetBaseOperation)
+    (Retained : List Sig → Prop)
+    (retainedNil : Retained [])
+    (retainedAppend : ∀ first second,
+      Retained first → Retained second → Retained (first ++ second))
     (selectedCase : ∀
       {itemCommon itemSourceWires itemTargetWires : List Sig}
       {itemFrame : Transform.Frame patternWires itemCommon
@@ -666,7 +694,7 @@ theorem accumulateHostedTargetWith
         (ItemSites.selectedAtom (operation := operation)
           (pattern := pattern) (frame := itemFrame) application siteData)
         targetValues selectedTargetFrame selectedTargetData
-        (fun retained formalSource formalResult _formalEvidence _formalSites
+        (fun retained formalSource formalResult _formalEvidence formalSites
             _coherence =>
           ∃ staged : Region itemCommon,
             HostedStrict
@@ -677,7 +705,7 @@ theorem accumulateHostedTargetWith
                     pattern application) staged ∧
                 Nonempty (RegionIso (WireEquiv.refl itemCommon) staged
                   (Region.adjoinAt retained .nil formalResult)) ∧
-                  ∀ (bridge : TargetFrameBridge selectedTargetFrame
+                  (∀ (bridge : TargetFrameBridge selectedTargetFrame
                         (@DataSelects itemCommon selectedTargetSourceWires
                           selectedTargetWires selectedTargetFrame)
                         selectedTargetData)
@@ -698,13 +726,28 @@ theorem accumulateHostedTargetWith
                           application siteData)).endpoint.renameWires
                           alignment.ambient.toRenaming)
                       (.mk retained (formalSource.renameWires
-                        (bridge.sourceToTarget.appendRight retained)))))) :
+                        (bridge.sourceToTarget.appendRight retained))))) ∧
+                  SourceSide
+                    (Region.singleton (.atom itemFrame.selected
+                      (application.map fun wire => itemFrame.sourceKeep wire)))
+                    (Region.adjoinAt retained .nil
+                      (Region.ofItems
+                        (argumentItemsEdit formalSites
+                          sourceValues
+                          (normalizationOperation patternWires)
+                          (({ sourceKeep := itemFrame.sourceKeep
+                              targetKeep := itemFrame.sourceKeep
+                              selected := itemFrame.selected } :
+                            Transform.Frame patternWires itemCommon
+                              itemSourceWires itemSourceWires).append retained)
+                          PUnit.unit (fun _ _ _ => PUnit.unit)).1)) ∧
+                  Retained retained)) :
     TargetItems
       (targetPattern := targetPattern)
       (targetOperation := targetBaseOperation)
       evidence sites targetValues
       (Transform.Frame.replace outer before after targetInserted targetArguments) targetData
-      (fun retained formalSource formalResult _formalEvidence _formalSites
+      (fun retained formalSource formalResult _formalEvidence formalSites
           _coherence =>
         ∃ staged : Region (outer ++ (before ++ after)),
           HostedStrict result staged ∧
@@ -732,7 +775,22 @@ theorem accumulateHostedTargetWith
                     ((itemsEdit data evidence sites).endpoint.renameWires
                       alignment.ambient.toRenaming)
                     (.mk retained (formalSource.renameWires
-                      (bridge.sourceToTarget.appendRight retained)))))) := by
+                      (bridge.sourceToTarget.appendRight retained))))) ∧
+                SourceSide (Region.ofItems source)
+                  (Region.adjoinAt retained .nil
+                    (Region.ofItems
+                      (argumentItemsEdit formalSites
+                        sourceValues
+                        (normalizationOperation patternWires)
+                        (({ sourceKeep := originalFrame.sourceKeep
+                            targetKeep := originalFrame.sourceKeep
+                            selected := originalFrame.selected } :
+                          Transform.Frame patternWires
+                            (outer ++ (before ++ after))
+                            originalSourceWires originalSourceWires).append
+                          retained)
+                        PUnit.unit (fun _ _ _ => PUnit.unit)).1)) ∧
+                Retained retained) := by
   let common := outer ++ (before ++ after)
   let targetOperation := recordingOperation targetBaseOperation targetExternal
   let authoritativePattern := pattern
@@ -742,7 +800,7 @@ theorem accumulateHostedTargetWith
         (targetPattern := targetPattern)
         (targetOperation := targetBaseOperation)
         evidence sites targetValues targetFrame targetData
-        (fun retained formalSource formalResult _formalEvidence _formalSites
+        (fun retained formalSource formalResult _formalEvidence formalSites
             _coherence =>
           pattern = authoritativePattern →
           ∃ staged : Region common,
@@ -765,7 +823,22 @@ theorem accumulateHostedTargetWith
                       ((itemsEdit data evidence sites).endpoint.renameWires
                         alignment.ambient.toRenaming)
                       (.mk retained (formalSource.renameWires
-                        (bridge.sourceToTarget.appendRight retained)))))) := by
+                        (bridge.sourceToTarget.appendRight retained))))) ∧
+                  SourceSide (Region.ofItems source)
+                    (Region.adjoinAt retained .nil
+                      (Region.ofItems
+                        (argumentItemsEdit formalSites
+                          sourceValues
+                          (normalizationOperation patternWires)
+                          (({ sourceKeep := originalFrame.sourceKeep
+                              targetKeep := originalFrame.sourceKeep
+                              selected := originalFrame.selected } :
+                            Transform.Frame patternWires
+                              (outer ++ (before ++ after))
+                              originalSourceWires originalSourceWires).append
+                            retained)
+                          PUnit.unit (fun _ _ _ => PUnit.unit)).1)) ∧
+                  Retained retained) := by
     refine accumulateTarget evidence sites targetValues targetData
       (KRegion := fun {common sourceWires targetWires} {localPattern}
         {localFrame} {localData} {localSource localResult}
@@ -779,7 +852,7 @@ theorem accumulateHostedTargetWith
               Side localResult staged ∧
               Nonempty (RegionIso (WireEquiv.refl common) staged
                   formalResult) ∧
-              ∀ (bridge : TargetFrameBridge formalFrame
+              (∀ (bridge : TargetFrameBridge formalFrame
                     (@DataSelects common formalSourceWires formalTargetWires
                       formalFrame) formalData)
                 (alignment : TargetAmbientBridge localFrame formalFrame
@@ -790,7 +863,17 @@ theorem accumulateHostedTargetWith
                   ((regionEdit localData _localEvidence
                     _localSites).endpoint.renameWires
                       alignment.ambient.toRenaming)
-                  (formalSource.renameWires bridge.sourceToTarget)))
+                  (formalSource.renameWires bridge.sourceToTarget))) ∧
+              SourceSide localSource
+                (argumentRegionEdit formalSites
+                  sourceValues
+                  (normalizationOperation patternWires)
+                  ({ sourceKeep := localFrame.sourceKeep
+                     targetKeep := localFrame.sourceKeep
+                     selected := localFrame.selected } :
+                    Transform.Frame patternWires common sourceWires
+                      sourceWires)
+                  PUnit.unit (fun _ _ _ => PUnit.unit)).1)
       (KItems := fun {common sourceWires targetWires} {localPattern}
         {localFrame} {localData} {localSource localResult}
         _localEvidence _localSites _values
@@ -802,7 +885,7 @@ theorem accumulateHostedTargetWith
               Side localResult staged ∧
               Nonempty (RegionIso (WireEquiv.refl common) staged
                   (Region.adjoinAt retained .nil formalResult)) ∧
-              ∀ (bridge : TargetFrameBridge formalFrame
+              (∀ (bridge : TargetFrameBridge formalFrame
                     (@DataSelects common formalSourceWires formalTargetWires
                       formalFrame) formalData)
                 (alignment : TargetAmbientBridge localFrame formalFrame
@@ -814,7 +897,20 @@ theorem accumulateHostedTargetWith
                     _localSites).endpoint.renameWires
                       alignment.ambient.toRenaming)
                   (.mk retained (formalSource.renameWires
-                    (bridge.sourceToTarget.appendRight retained)))))
+                    (bridge.sourceToTarget.appendRight retained))))) ∧
+              SourceSide (Region.ofItems localSource)
+                (Region.adjoinAt retained .nil
+                  (Region.ofItems
+                    (argumentItemsEdit formalSites
+                      sourceValues
+                      (normalizationOperation patternWires)
+                      (({ sourceKeep := localFrame.sourceKeep
+                          targetKeep := localFrame.sourceKeep
+                          selected := localFrame.selected } :
+                        Transform.Frame patternWires common sourceWires
+                          sourceWires).append retained)
+                      PUnit.unit (fun _ _ _ => PUnit.unit)).1)) ∧
+              Retained retained)
       (KItem := fun {common sourceWires targetWires} {localPattern}
         {localFrame} {localData} {localSource localResult}
         _localEvidence _localSites _values
@@ -826,7 +922,7 @@ theorem accumulateHostedTargetWith
               Side localResult staged ∧
               Nonempty (RegionIso (WireEquiv.refl common) staged
                   (Region.adjoinAt retained .nil formalResult)) ∧
-              ∀ (bridge : TargetFrameBridge formalFrame
+              (∀ (bridge : TargetFrameBridge formalFrame
                     (@DataSelects common formalSourceWires formalTargetWires
                       formalFrame) formalData)
                 (alignment : TargetAmbientBridge localFrame formalFrame
@@ -838,7 +934,20 @@ theorem accumulateHostedTargetWith
                     _localSites).endpoint.renameWires
                       alignment.ambient.toRenaming)
                   (.mk retained (formalSource.renameWires
-                    (bridge.sourceToTarget.appendRight retained)))))
+                    (bridge.sourceToTarget.appendRight retained))))) ∧
+              SourceSide (Region.singleton localSource)
+                (Region.adjoinAt retained .nil
+                  (Region.ofItems
+                    (argumentItemsEdit formalSites
+                      sourceValues
+                      (normalizationOperation patternWires)
+                      (({ sourceKeep := localFrame.sourceKeep
+                          targetKeep := localFrame.sourceKeep
+                          selected := localFrame.selected } :
+                        Transform.Frame patternWires common sourceWires
+                          sourceWires).append retained)
+                      PUnit.unit (fun _ _ _ => PUnit.unit)).1)) ∧
+              Retained retained)
       ?_ ?_ ?_ ?_ ?_ ?_ ?_
     case refine_1 =>
         intros
@@ -878,7 +987,9 @@ theorem accumulateHostedTargetWith
             refine ⟨?_⟩
             change RegionIso (WireEquiv.refl formalTargetWires)
               (Region.blank formalTargetWires) (Region.blank formalTargetWires)
-            exact RegionIso.refl _⟩
+            exact RegionIso.refl _, by
+              simpa [argumentItemsEdit] using
+                sourceSideRefl (Region.blank nilSourceWires), retainedNil⟩
     case refine_2 =>
       intros
       rename_i regionCommon regionSourceWires regionTargetWires regionPattern
@@ -899,6 +1010,8 @@ theorem accumulateHostedTargetWith
       let sourceRename := Region.adjoinMaterialWire formalSourceWires
         regionLocals retained
       let targetSourceRename := Region.adjoinMaterialWire formalTargetWires
+        regionLocals retained
+      let argumentSourceRename := Region.adjoinMaterialWire regionSourceWires
         regionLocals retained
       let combinedFrame := formalFrame.append combinedRetained
       let combinedData := targetOperation.appendData formalFrame formalData
@@ -942,6 +1055,59 @@ theorem accumulateHostedTargetWith
             combinedFrame.selected := by
         simp [sourceRename, combinedFrame, combinedRetained,
           Transform.Frame.append, Region.adjoinMaterialWire]
+      let argumentFrame : Transform.Frame patternWires
+          (regionCommon ++ regionLocals)
+          (regionSourceWires ++ regionLocals)
+          (regionSourceWires ++ regionLocals) := {
+        sourceKeep := (regionFrame.append regionLocals).sourceKeep
+        targetKeep := (regionFrame.append regionLocals).sourceKeep
+        selected := (regionFrame.append regionLocals).selected
+      }
+      let mappedArgumentFrame : Transform.Frame patternWires
+          (regionCommon ++ combinedRetained)
+          (regionSourceWires ++ combinedRetained)
+          (regionSourceWires ++ combinedRetained) := {
+        sourceKeep := (regionFrame.append combinedRetained).sourceKeep
+        targetKeep := (regionFrame.append combinedRetained).sourceKeep
+        selected := (regionFrame.append combinedRetained).selected
+      }
+      have argumentKeepCommutes : ∀ {signature}
+          (wire : Var ((regionCommon ++ regionLocals) ++ retained) signature),
+          argumentSourceRename
+              ((argumentFrame.append retained).sourceKeep wire) =
+            mappedArgumentFrame.sourceKeep (commonRename wire) := by
+        intro signature wire
+        apply Var.appendCases (left := regionCommon ++ regionLocals)
+          (right := retained) (motive := fun wire =>
+            argumentSourceRename
+                ((argumentFrame.append retained).sourceKeep wire) =
+              mappedArgumentFrame.sourceKeep (commonRename wire))
+        · intro inheritedSignature inherited
+          apply Var.appendCases (left := regionCommon) (right := regionLocals)
+            (motive := fun inherited =>
+              argumentSourceRename
+                  ((argumentFrame.append retained).sourceKeep
+                    (inherited.appendLeft retained)) =
+                mappedArgumentFrame.sourceKeep
+                  (commonRename (inherited.appendLeft retained)))
+          · intro
+            simp [argumentSourceRename, argumentFrame, mappedArgumentFrame,
+              commonRename, combinedRetained, Transform.Frame.append,
+              WireRenaming.appendRight, Region.adjoinMaterialWire]
+          · intro
+            simp [argumentSourceRename, argumentFrame, mappedArgumentFrame,
+              commonRename, combinedRetained, Transform.Frame.append,
+              WireRenaming.appendRight, Region.adjoinMaterialWire]
+        · intro
+          simp [argumentSourceRename, argumentFrame, mappedArgumentFrame,
+            commonRename, combinedRetained, Transform.Frame.append,
+            WireRenaming.appendRight, Region.adjoinMaterialWire]
+      have argumentSelectedCommutes :
+          argumentSourceRename (argumentFrame.append retained).selected =
+            mappedArgumentFrame.selected := by
+        simp [argumentSourceRename, argumentFrame, mappedArgumentFrame,
+          combinedRetained, Transform.Frame.append,
+          Region.adjoinMaterialWire]
       have targetKeepCommutes : ∀ {signature}
           (wire : Var ((regionCommon ++ regionLocals) ++ retained)
             signature),
@@ -977,13 +1143,16 @@ theorem accumulateHostedTargetWith
             Region.adjoinMaterialWire]
       obtain ⟨mappedSource, mappedResult, mappedEvidence, mappedSites,
           mappedSourceEq, mappedArgumentEq,
+          mappedSourceArgumentEq,
           ⟨mappedResultIso⟩, ⟨mappedEndpointIso⟩⟩ :=
         targetItemsReindex (mappedData := combinedData)
           (baseOperation := targetBaseOperation)
           (external := targetExternal)
-          childFormalEvidence childFormalSites values
-          commonRename sourceRename targetSourceRename keepCommutes
-          targetKeepCommutes selectedCommutes targetNaturality
+          childFormalEvidence childFormalSites values sourceValues
+          (argumentFrame.append retained) mappedArgumentFrame
+          commonRename sourceRename targetSourceRename argumentSourceRename
+          keepCommutes targetKeepCommutes selectedCommutes
+          argumentKeepCommutes argumentSelectedCommutes targetNaturality
           (targetNaturality.appendAssoc formalFrame formalData regionLocals
             retained)
       let formalSource : Region formalSourceWires :=
@@ -1028,7 +1197,8 @@ theorem accumulateHostedTargetWith
       intro patternEq
       cases patternEq
       obtain ⟨childStaged, childHosted, childScope,
-          ⟨childPresentation⟩, childEndpoint⟩ :=
+          ⟨childPresentation⟩, childEndpoint, childSourceSide,
+          _childRetained⟩ :=
         childSemantic rfl
       let staged := Region.adjoinAt regionLocals .nil childStaged
       have stagedSide : Side
@@ -1225,7 +1395,61 @@ theorem accumulateHostedTargetWith
           · intro; simp [combinedRetained, sourceRename,
               Region.adjoinMaterialWire, WireRenaming.appendRight]
         exact ⟨(sourcePresented.trans lifted).trans
-          (RegionIso.ofEq targetEq)⟩⟩
+          (RegionIso.ofEq targetEq)⟩, by
+        let childArgumentSource := Region.ofItems
+          (argumentItemsEdit childFormalSites
+            sourceValues
+            (normalizationOperation patternWires)
+            (({ sourceKeep := (regionFrame.append regionLocals).sourceKeep
+                targetKeep := (regionFrame.append regionLocals).sourceKeep
+                selected := (regionFrame.append regionLocals).selected } :
+              Transform.Frame patternWires
+                (regionCommon ++ regionLocals)
+                (regionSourceWires ++ regionLocals)
+                (regionSourceWires ++ regionLocals)).append retained)
+            PUnit.unit (fun _ _ _ => PUnit.unit)).1
+        have nested := sourceSideAdjoinAt regionLocals
+          (Region.ofItems regionItems)
+          (Region.adjoinAt retained .nil childArgumentSource) childSourceSide
+        let flattened :=
+          (RegionIso.adjoinAtAssoc regionLocals .nil retained .nil
+            childArgumentSource).symm
+        let mappedArgumentSource := Region.ofItems
+          (argumentItemsEdit mappedSites sourceValues
+            (normalizationOperation patternWires) mappedArgumentFrame
+            PUnit.unit (fun _ _ _ => PUnit.unit)).1
+        have mappedArgumentRegionEq :
+            childArgumentSource.renameWires argumentSourceRename =
+              mappedArgumentSource := by
+          unfold childArgumentSource mappedArgumentSource
+          rw [Region.ofItems_renameWires]
+          exact congrArg Region.ofItems mappedSourceArgumentEq
+        let mappedPresentation := RegionIso.adjoinAt combinedRetained .nil
+          (RegionIso.ofEq mappedArgumentRegionEq)
+        let closePresentation := RegionIso.adjoinAtOfItems combinedRetained
+          (argumentItemsEdit mappedSites sourceValues
+            (normalizationOperation patternWires) mappedArgumentFrame
+            PUnit.unit (fun _ _ _ => PUnit.unit)).1
+        let sourcePresentationRaw :=
+          (flattened.trans mappedPresentation).trans closePresentation
+        have sourceAmbientEq :
+            (WireEquiv.refl regionSourceWires).symm.trans
+                (WireEquiv.refl regionSourceWires) =
+              WireEquiv.refl regionSourceWires := by
+          apply WireEquiv.ext
+          intro signature wire
+          rfl
+        let sourcePresentation :=
+          sourcePresentationRaw.castAmbient sourceAmbientEq
+        have moved := sourceSideIso
+          (RegionIso.adjoinAtOfItems regionLocals regionItems).symm
+          sourcePresentation nested
+        simpa only [formalSites, argumentRegionEdit, combinedRetained,
+          formalResult, formalSource, formalEvidence,
+          List.append_assoc, Region.extendHostItems, ItemSeq.renameWires,
+          ItemSeq.append_nil, ItemSeq.nil_append, childArgumentSource,
+          mappedArgumentSource, mappedArgumentFrame, normalizationOperation,
+          Transform.Frame.append] using moved⟩
     case refine_3 =>
       intros
       rename_i itemsCommon itemsSourceWires itemsTargetWires itemsPattern
@@ -1257,6 +1481,57 @@ theorem accumulateHostedTargetWith
         itemRetained tailRetained
       let tailTargetRename := Region.conjoinRightWire formalTargetWires
         itemRetained tailRetained
+      let authoritativeFrame : Transform.Frame patternWires itemsCommon
+          itemsSourceWires itemsSourceWires := {
+        sourceKeep := itemsFrame.sourceKeep
+        targetKeep := itemsFrame.sourceKeep
+        selected := itemsFrame.selected
+      }
+      let itemArgumentFrame := authoritativeFrame.append itemRetained
+      let tailArgumentFrame := authoritativeFrame.append tailRetained
+      let mappedArgumentFrame := authoritativeFrame.append combinedRetained
+      let itemArgumentSourceRename := Region.conjoinLeftWire itemsSourceWires
+        itemRetained tailRetained
+      let tailArgumentSourceRename := Region.conjoinRightWire itemsSourceWires
+        itemRetained tailRetained
+      have itemArgumentKeepCommutes : ∀ {signature}
+          (wire : Var (itemsCommon ++ itemRetained) signature),
+          itemArgumentSourceRename (itemArgumentFrame.sourceKeep wire) =
+            mappedArgumentFrame.sourceKeep (itemCommonRename wire) := by
+        intro signature wire
+        apply Var.appendCases (left := itemsCommon) (right := itemRetained)
+          (motive := fun wire =>
+            itemArgumentSourceRename (itemArgumentFrame.sourceKeep wire) =
+              mappedArgumentFrame.sourceKeep (itemCommonRename wire)) <;>
+          intro <;> simp [itemArgumentSourceRename, itemArgumentFrame,
+            mappedArgumentFrame, authoritativeFrame, itemCommonRename,
+            combinedRetained, Transform.Frame.append,
+            WireRenaming.appendRight, Region.conjoinLeftWire]
+      have itemArgumentSelectedCommutes :
+          itemArgumentSourceRename itemArgumentFrame.selected =
+            mappedArgumentFrame.selected := by
+        simp [itemArgumentSourceRename, itemArgumentFrame,
+          mappedArgumentFrame, authoritativeFrame, combinedRetained,
+          Transform.Frame.append, Region.conjoinLeftWire]
+      have tailArgumentKeepCommutes : ∀ {signature}
+          (wire : Var (itemsCommon ++ tailRetained) signature),
+          tailArgumentSourceRename (tailArgumentFrame.sourceKeep wire) =
+            mappedArgumentFrame.sourceKeep (tailCommonRename wire) := by
+        intro signature wire
+        apply Var.appendCases (left := itemsCommon) (right := tailRetained)
+          (motive := fun wire =>
+            tailArgumentSourceRename (tailArgumentFrame.sourceKeep wire) =
+              mappedArgumentFrame.sourceKeep (tailCommonRename wire)) <;>
+          intro <;> simp [tailArgumentSourceRename, tailArgumentFrame,
+            mappedArgumentFrame, authoritativeFrame, tailCommonRename,
+            combinedRetained, Transform.Frame.append,
+            WireRenaming.appendRight, Region.conjoinRightWire]
+      have tailArgumentSelectedCommutes :
+          tailArgumentSourceRename tailArgumentFrame.selected =
+            mappedArgumentFrame.selected := by
+        simp [tailArgumentSourceRename, tailArgumentFrame,
+          mappedArgumentFrame, authoritativeFrame, combinedRetained,
+          Transform.Frame.append, Region.conjoinRightWire]
       have itemKeepCommutes : ∀ {signature}
           (wire : Var (itemsCommon ++ itemRetained) signature),
           itemSourceRename
@@ -1345,33 +1620,41 @@ theorem accumulateHostedTargetWith
             Region.conjoinRightWire]
       obtain ⟨mappedItemSource, mappedItemResult, mappedItemEvidence,
           mappedItemSites, mappedItemSourceEq, mappedItemArgumentEq,
+          mappedItemSourceArgumentEq,
           ⟨mappedItemPresentation⟩,
           ⟨mappedItemEndpointPresentation⟩⟩ :=
         targetItemsReindex (mappedData := combinedData)
           (baseOperation := targetBaseOperation)
           (external := targetExternal)
-          itemFormalEvidence itemFormalSites values
-          itemCommonRename itemSourceRename itemTargetRename itemKeepCommutes
-          itemTargetKeepCommutes itemSelectedCommutes targetNaturality
+          itemFormalEvidence itemFormalSites values sourceValues
+          itemArgumentFrame mappedArgumentFrame itemCommonRename
+          itemSourceRename itemTargetRename itemArgumentSourceRename
+          itemKeepCommutes itemTargetKeepCommutes itemSelectedCommutes
+          itemArgumentKeepCommutes itemArgumentSelectedCommutes targetNaturality
           (targetNaturality.conjoinLeft formalFrame formalData itemRetained
             tailRetained)
       obtain ⟨mappedTailSource, mappedTailResult, mappedTailEvidence,
           mappedTailSites, mappedTailSourceEq, mappedTailArgumentEq,
+          mappedTailSourceArgumentEq,
           ⟨mappedTailPresentation⟩,
           ⟨mappedTailEndpointPresentation⟩⟩ :=
         targetItemsReindex (mappedData := combinedData)
           (baseOperation := targetBaseOperation)
           (external := targetExternal)
-          tailFormalEvidence tailFormalSites values
-          tailCommonRename tailSourceRename tailTargetRename tailKeepCommutes
-          tailTargetKeepCommutes tailSelectedCommutes targetNaturality
+          tailFormalEvidence tailFormalSites values sourceValues
+          tailArgumentFrame mappedArgumentFrame tailCommonRename
+          tailSourceRename tailTargetRename tailArgumentSourceRename
+          tailKeepCommutes tailTargetKeepCommutes tailSelectedCommutes
+          tailArgumentKeepCommutes tailArgumentSelectedCommutes targetNaturality
           (targetNaturality.conjoinRight formalFrame formalData itemRetained
             tailRetained)
       obtain ⟨combinedResult, combinedEvidence, combinedSites,
-          combinedArgumentEq, ⟨combinedPresentation⟩,
+          combinedArgumentEq, combinedSourceArgumentEq,
+          ⟨combinedPresentation⟩,
           ⟨combinedEndpointPresentation⟩⟩ :=
         targetItemsAppend mappedItemEvidence mappedItemSites
-          mappedTailEvidence mappedTailSites values
+          mappedTailEvidence mappedTailSites values sourceValues
+          mappedArgumentFrame
       have mappedItemCoherence : mappedItemSource =
           (argumentItemsEdit mappedItemSites values
             (normalizationOperation targetArguments) combinedFrame PUnit.unit
@@ -1431,10 +1714,12 @@ theorem accumulateHostedTargetWith
       intro patternEq
       cases patternEq
       obtain ⟨itemStaged, itemHosted, itemScope,
-          ⟨itemPresentation⟩, itemEndpoint⟩ :=
+          ⟨itemPresentation⟩, itemEndpoint, itemSourceSide,
+          itemRetainedOk⟩ :=
         itemSemantic rfl
       obtain ⟨tailStaged, tailHosted, tailScope,
-          ⟨tailPresentation⟩, tailEndpoint⟩ :=
+          ⟨tailPresentation⟩, tailEndpoint, tailSourceSide,
+          tailRetainedOk⟩ :=
         tailSemantic rfl
       let staged := itemStaged.conjoin tailStaged
       have stagedSide : Side
@@ -1580,7 +1865,54 @@ theorem accumulateHostedTargetWith
         exact ⟨by
           simpa only [itemRaw, tailRaw, itemTargetSource, tailTargetSource,
             combinedTargetSource, Transform.ItemsEdit.run, itemsEdit,
-            combinedRetained] using chained⟩⟩
+            combinedRetained] using chained⟩, by
+        let itemArgumentItems :=
+          (argumentItemsEdit itemFormalSites sourceValues
+            (normalizationOperation patternWires) itemArgumentFrame PUnit.unit
+            (fun _ _ _ => PUnit.unit)).1
+        let tailArgumentItems :=
+          (argumentItemsEdit tailFormalSites sourceValues
+            (normalizationOperation patternWires) tailArgumentFrame PUnit.unit
+            (fun _ _ _ => PUnit.unit)).1
+        have combinedSource := sourceSideConjoin itemSourceSide tailSourceSide
+        let flattened := RegionIso.conjoinAdjoinAt itemRetained tailRetained
+          (Region.ofItems itemArgumentItems) (Region.ofItems tailArgumentItems)
+        have ofItemsRenameEq : ∀ {sourceWires targetWires : List Sig}
+            (source : ItemSeq sourceWires)
+            (rename : WireRenaming sourceWires targetWires),
+            (Region.ofItems source).renameWires rename =
+              Region.ofItems (source.renameWires rename) := by
+          intro sourceWires targetWires source rename
+          unfold Region.ofItems Region.renameWires
+          congr 1
+          simp only [ItemSeq.renameWires_comp]
+          apply congrArg (fun mapped => source.renameWires mapped)
+          apply WireRenaming.ext
+          intro signature wire
+          simp [WireRenaming.comp, WireRenaming.appendRight]
+        have materialEq :
+            ((Region.ofItems itemArgumentItems).renameWires
+                itemArgumentSourceRename).conjoin
+              ((Region.ofItems tailArgumentItems).renameWires
+                tailArgumentSourceRename) =
+              Region.ofItems
+                (argumentItemsEdit combinedSites sourceValues
+                  (normalizationOperation patternWires) mappedArgumentFrame
+                  PUnit.unit (fun _ _ _ => PUnit.unit)).1 := by
+          rw [ofItemsRenameEq, ofItemsRenameEq,
+            mappedItemSourceArgumentEq, mappedTailSourceArgumentEq,
+            Region.ofItems_conjoin, combinedSourceArgumentEq]
+        let materialPresentation := RegionIso.adjoinAt combinedRetained .nil
+          (RegionIso.ofEq materialEq)
+        have moved := sourceSideIso
+          (RegionIso.ofEq
+            (Region.singleton_conjoin_ofItems item tail).symm)
+          (flattened.trans materialPresentation) combinedSource
+        simpa only [combinedRetained, itemArgumentItems, tailArgumentItems,
+          itemArgumentFrame, tailArgumentFrame, mappedArgumentFrame,
+          authoritativeFrame] using moved,
+        retainedAppend itemRetained tailRetained itemRetainedOk
+          tailRetainedOk⟩
     case refine_4 =>
       intros
       rename_i itemCommon itemSourceWires itemTargetWires itemArguments
@@ -1674,7 +2006,9 @@ theorem accumulateHostedTargetWith
         by rfl, ?_⟩
       intro patternEq
       cases patternEq
-      exact ⟨staged, hosted, sideRefl staged, ⟨formalPresentation⟩, by
+      refine ⟨staged, hosted, sideRefl staged, ⟨formalPresentation⟩,
+        ?_, ?_, retainedNil⟩
+      ·
         intro bridge alignment
         let material : Region (formalTargetWires ++ []) :=
           Region.ofItems (formalSource.renameWires
@@ -1730,7 +2064,44 @@ theorem accumulateHostedTargetWith
             ((RegionIso.adjoinAtNil material).trans
               (RegionIso.adjoinAtOfItems []
                 (formalSource.renameWires
-                  (bridge.sourceToTarget.appendRight []))))⟩
+                  (bridge.sourceToTarget.appendRight []))))
+      · let sourceMaterial : Region itemSourceWires :=
+          Region.singleton (.atom (itemFrame.sourceKeep atomHead)
+            (atomPorts.map fun wire => itemFrame.sourceKeep wire))
+        let authoritativeFrame : Transform.Frame patternWires itemCommon
+            itemSourceWires itemSourceWires := {
+          sourceKeep := itemFrame.sourceKeep
+          targetKeep := itemFrame.sourceKeep
+          selected := itemFrame.selected
+        }
+        let targetMaterial := Region.ofItems
+          (argumentItemsEdit formalSites sourceValues
+            (normalizationOperation patternWires)
+            (authoritativeFrame.append [])
+            PUnit.unit (fun _ _ _ => PUnit.unit)).1
+        have targetEq : sourceMaterial.renameWires
+              (WireEquiv.appendNil itemSourceWires).symm.toRenaming =
+            targetMaterial := by
+          change sourceMaterial.renameWires
+              (WireEquiv.appendNil itemSourceWires).symm.toRenaming =
+            Region.ofItems (.cons
+              (.atom ((authoritativeFrame.append []).sourceKeep mappedHead)
+                (mappedPorts.map fun wire =>
+                  (authoritativeFrame.append []).sourceKeep wire)) .nil)
+          rw [Region.singleton_renameWires]
+          change Region.singleton _ = Region.singleton _
+          apply congrArg Region.singleton
+          simp only [Item.renameWires]
+          congr 1 <;>
+            simp [authoritativeFrame, mappedHead, mappedPorts, commonAppend,
+              commonEquiv,
+              Transform.Frame.append, WireRenaming.appendRight,
+              WireEquiv.appendNil_symm_apply, Vars.map_map]
+        let sourcePresentation :=
+          (RegionIso.adjoinAtNilRenamed sourceMaterial).trans
+            (RegionIso.adjoinAt [] .nil (RegionIso.ofEq targetEq))
+        exact sourceSideIso (RegionIso.refl _) sourcePresentation
+          (sourceSideRefl sourceMaterial)
     case refine_5 =>
       intros
       rename_i itemCommon itemSourceWires itemTargetWires evidencePattern
@@ -1839,8 +2210,9 @@ theorem accumulateHostedTargetWith
         by rfl, ?_⟩
       intro patternEq
       cases patternEq
-      exact ⟨staged, hosted, sideRefl staged, ⟨formalPresentation⟩, by
-        intro bridge alignment
+      refine ⟨staged, hosted, sideRefl staged, ⟨formalPresentation⟩,
+        ?_, ?_, retainedNil⟩
+      · intro bridge alignment
         let material : Region (formalTargetWires ++ []) :=
           Region.ofItems (formalSource.renameWires
             (bridge.sourceToTarget.appendRight []))
@@ -1883,7 +2255,45 @@ theorem accumulateHostedTargetWith
             ((RegionIso.adjoinAtNil material).trans
               (RegionIso.adjoinAtOfItems []
                 (formalSource.renameWires
-                  (bridge.sourceToTarget.appendRight []))))⟩
+                  (bridge.sourceToTarget.appendRight []))))
+      · let sourceMaterial : Region itemSourceWires :=
+          Region.singleton (.identity identitySignature identityArity
+            (fun position => itemFrame.sourceKeep
+              (identityPorts position)))
+        let authoritativeFrame : Transform.Frame patternWires itemCommon
+            itemSourceWires itemSourceWires := {
+          sourceKeep := itemFrame.sourceKeep
+          targetKeep := itemFrame.sourceKeep
+          selected := itemFrame.selected
+        }
+        let targetMaterial := Region.ofItems
+          (argumentItemsEdit formalSites sourceValues
+            (normalizationOperation patternWires)
+            (authoritativeFrame.append [])
+            PUnit.unit (fun _ _ _ => PUnit.unit)).1
+        have targetEq : sourceMaterial.renameWires
+              (WireEquiv.appendNil itemSourceWires).symm.toRenaming =
+            targetMaterial := by
+          change sourceMaterial.renameWires
+              (WireEquiv.appendNil itemSourceWires).symm.toRenaming =
+            Region.ofItems (.cons
+              (.identity identitySignature identityArity fun position =>
+                (authoritativeFrame.append []).sourceKeep
+                  (mappedPorts position)) .nil)
+          rw [Region.singleton_renameWires]
+          change Region.singleton _ = Region.singleton _
+          apply congrArg Region.singleton
+          simp only [Item.renameWires]
+          congr 1
+          funext position
+          simp [authoritativeFrame, mappedPorts, commonAppend, commonEquiv,
+            Transform.Frame.append, WireRenaming.appendRight,
+            WireEquiv.appendNil_symm_apply]
+        let sourcePresentation :=
+          (RegionIso.adjoinAtNilRenamed sourceMaterial).trans
+            (RegionIso.adjoinAt [] .nil (RegionIso.ofEq targetEq))
+        exact sourceSideIso (RegionIso.refl _) sourcePresentation
+          (sourceSideRefl sourceMaterial)
     case refine_7 =>
       intros
       rename_i itemCommon itemSourceWires itemTargetWires itemPattern
@@ -1904,6 +2314,16 @@ theorem accumulateHostedTargetWith
       let targetEquiv := WireEquiv.appendNil formalTargetWires
       let targetAppend : WireRenaming formalTargetWires
           (formalTargetWires ++ []) := targetEquiv.symm.toRenaming
+      let argumentEquiv := WireEquiv.appendNil itemSourceWires
+      let argumentSourceRename : WireRenaming itemSourceWires
+          (itemSourceWires ++ []) := argumentEquiv.symm.toRenaming
+      let argumentFrame : Transform.Frame patternWires itemCommon
+          itemSourceWires itemSourceWires := {
+        sourceKeep := itemFrame.sourceKeep
+        targetKeep := itemFrame.sourceKeep
+        selected := itemFrame.selected
+      }
+      let mappedArgumentFrame := argumentFrame.append []
       let childFrame := formalFrame.append []
       let childData := targetOperation.appendData formalFrame formalData []
       have keepCommutes : ∀ {signature} (wire : Var itemCommon signature),
@@ -1935,17 +2355,38 @@ theorem accumulateHostedTargetWith
           exact WireEquiv.appendNil_symm_apply itemCommon wire]
         simp [childFrame, Transform.Frame.append,
           WireRenaming.appendRight]
+      have argumentKeepCommutes : ∀ {signature}
+          (wire : Var itemCommon signature),
+          argumentSourceRename (argumentFrame.sourceKeep wire) =
+            mappedArgumentFrame.sourceKeep (commonRename wire) := by
+        intro signature wire
+        rw [show argumentSourceRename (argumentFrame.sourceKeep wire) =
+            (argumentFrame.sourceKeep wire).appendLeft [] by
+          exact WireEquiv.appendNil_symm_apply itemSourceWires
+            (argumentFrame.sourceKeep wire)]
+        rw [show commonRename wire = wire.appendLeft [] by
+          exact WireEquiv.appendNil_symm_apply itemCommon wire]
+        simp [mappedArgumentFrame, argumentFrame, Transform.Frame.append,
+          WireRenaming.appendRight]
+      have argumentSelectedCommutes :
+          argumentSourceRename argumentFrame.selected =
+            mappedArgumentFrame.selected := by
+        exact WireEquiv.appendNil_symm_apply itemSourceWires
+          argumentFrame.selected
       obtain ⟨mappedChildSource, mappedChildResult, mappedChildEvidence,
           mappedChildSites, mappedChildSourceEq,
           mappedChildArgumentEq,
+          mappedChildSourceArgumentEq,
           ⟨mappedChildPresentation⟩,
           ⟨mappedChildEndpointPresentation⟩⟩ :=
         targetRegionReindex (mappedData := childData)
           (baseOperation := targetBaseOperation)
           (external := targetExternal)
-          childFormalEvidence childFormalSites values
-          commonRename sourceRename targetAppend keepCommutes
-          targetKeepCommutes selectedCommutes targetNaturality
+          childFormalEvidence childFormalSites values sourceValues
+          argumentFrame mappedArgumentFrame commonRename sourceRename
+          targetAppend argumentSourceRename keepCommutes targetKeepCommutes
+          selectedCommutes argumentKeepCommutes argumentSelectedCommutes
+          targetNaturality
           (targetNaturality.appendNil formalFrame formalData)
       have mappedChildCoherence : mappedChildSource =
           (argumentRegionEdit mappedChildSites values
@@ -2002,7 +2443,7 @@ theorem accumulateHostedTargetWith
       intro patternEq
       cases patternEq
       obtain ⟨childStaged, childHosted, childScope,
-          ⟨childPresentation⟩, childEndpoint⟩ :=
+          ⟨childPresentation⟩, childEndpoint, childSourceSide⟩ :=
         childSemantic rfl
       let staged := Region.singleton (.cut childStaged)
       have liftHosted : ∀ (childBefore childAfter : Region itemCommon),
@@ -2304,78 +2745,101 @@ theorem accumulateHostedTargetWith
         apply WireEquiv.ext
         intro signature wire
         exact commonEquiv.right_inv wire
-      exact ⟨staged, hosted, sideCut childScope,
-        ⟨closed.castAmbient ambientEq⟩, by
-          intro bridge alignment
-          obtain ⟨childEndpointIso⟩ := childEndpoint bridge alignment
-          let lifted := RegionIso.singletonCutCongr childEndpointIso
-          let renamedFormalSource := formalSource.renameWires
-            (bridge.sourceToTarget.appendRight [])
-          let material := Region.ofItems renamedFormalSource
-          let collapsedRename : WireRenaming formalSourceWires
-              formalTargetWires :=
-            WireRenaming.comp targetEquiv.toRenaming
-              (WireRenaming.comp (bridge.sourceToTarget.appendRight [])
-                sourceRename)
-          have collapsedRenameEq : collapsedRename =
-              bridge.sourceToTarget := by
-            apply WireRenaming.ext
-            intro signature wire
-            simp [collapsedRename, sourceRename, sourceEquiv,
-              WireRenaming.comp, WireRenaming.appendRight,
-              WireEquiv.appendNil_symm_apply,
-              WireEquiv.appendNil_apply]
-            exact WireEquiv.appendNil_apply formalTargetWires
-              (bridge.sourceToTarget wire)
-          have childTransport :
-              ((childFormalSource.renameWires sourceRename).renameWires
-                  (bridge.sourceToTarget.appendRight [])).renameWires
-                    targetEquiv.toRenaming =
-                childFormalSource.renameWires bridge.sourceToTarget := by
-            simpa only [Region.renameWires_comp, collapsedRename] using
-              congrArg (fun rename => childFormalSource.renameWires rename)
-                collapsedRenameEq
-          have targetEq :
+      refine ⟨staged, hosted, sideCut childScope,
+        ⟨closed.castAmbient ambientEq⟩, ?_, ?_, retainedNil⟩
+      · intro bridge alignment
+        obtain ⟨childEndpointIso⟩ := childEndpoint bridge alignment
+        let lifted := RegionIso.singletonCutCongr childEndpointIso
+        let renamedFormalSource := formalSource.renameWires
+          (bridge.sourceToTarget.appendRight [])
+        let material := Region.ofItems renamedFormalSource
+        let collapsedRename : WireRenaming formalSourceWires
+            formalTargetWires :=
+          WireRenaming.comp targetEquiv.toRenaming
+            (WireRenaming.comp (bridge.sourceToTarget.appendRight [])
+              sourceRename)
+        have collapsedRenameEq : collapsedRename =
+            bridge.sourceToTarget := by
+          apply WireRenaming.ext
+          intro signature wire
+          simp [collapsedRename, sourceRename, sourceEquiv,
+            WireRenaming.comp, WireRenaming.appendRight,
+            WireEquiv.appendNil_symm_apply,
+            WireEquiv.appendNil_apply]
+          exact WireEquiv.appendNil_apply formalTargetWires
+            (bridge.sourceToTarget wire)
+        have childTransport :
+            ((childFormalSource.renameWires sourceRename).renameWires
+                (bridge.sourceToTarget.appendRight [])).renameWires
+                  targetEquiv.toRenaming =
+              childFormalSource.renameWires bridge.sourceToTarget := by
+          simpa only [Region.renameWires_comp, collapsedRename] using
+            congrArg (fun rename => childFormalSource.renameWires rename)
+              collapsedRenameEq
+        have targetEq :
+            Region.singleton (.cut
+                (childFormalSource.renameWires bridge.sourceToTarget)) =
+              material.renameWires targetEquiv.toRenaming := by
+          unfold material renamedFormalSource formalSource formalItemSource
+          rw [← mappedChildSourceEq]
+          simp only [ItemSeq.renameWires, Item.renameWires,
+            Region.singleton, Region.ofItems, Region.renameWires]
+          apply congrArg (Region.mk [])
+          apply congrArg (fun item => ItemSeq.cons item .nil)
+          apply congrArg Item.cut
+          simp only [Region.renameWires_comp]
+          apply congrArg (fun rename : WireRenaming formalSourceWires
+            (formalTargetWires ++ []) =>
+              childFormalSource.renameWires rename)
+          apply WireRenaming.ext
+          intro signature wire
+          apply Var.eq_of_index_eq
+          apply Fin.ext
+          simp [sourceRename, sourceEquiv, targetEquiv,
+            Region.singleton, Region.ofItems, Region.renameWires,
+            ItemSeq.renameWires, Item.renameWires,
+            Region.renameWires_comp, WireRenaming.comp,
+            WireRenaming.appendRight, WireEquiv.appendNil_apply,
+            WireEquiv.appendNil_symm_apply] <;> omega
+        have sourceEq :
+            (Region.singleton (.cut
+              (regionEdit itemData childEvidence childSites).endpoint)).renameWires
+                alignment.ambient.toRenaming =
               Region.singleton (.cut
-                  (childFormalSource.renameWires bridge.sourceToTarget)) =
-                material.renameWires targetEquiv.toRenaming := by
-            unfold material renamedFormalSource formalSource formalItemSource
-            rw [← mappedChildSourceEq]
-            simp only [ItemSeq.renameWires, Item.renameWires,
-              Region.singleton, Region.ofItems, Region.renameWires]
-            apply congrArg (Region.mk [])
-            apply congrArg (fun item => ItemSeq.cons item .nil)
-            apply congrArg Item.cut
-            simp only [Region.renameWires_comp]
-            apply congrArg (fun rename : WireRenaming formalSourceWires
-              (formalTargetWires ++ []) =>
-                childFormalSource.renameWires rename)
-            apply WireRenaming.ext
-            intro signature wire
-            apply Var.eq_of_index_eq
-            apply Fin.ext
-            simp [sourceRename, sourceEquiv, targetEquiv,
-              Region.singleton, Region.ofItems, Region.renameWires,
-              ItemSeq.renameWires, Item.renameWires,
-              Region.renameWires_comp, WireRenaming.comp,
-              WireRenaming.appendRight, WireEquiv.appendNil_apply,
-              WireEquiv.appendNil_symm_apply] <;> omega
-          have sourceEq :
-              (Region.singleton (.cut
-                (regionEdit itemData childEvidence childSites).endpoint)).renameWires
-                  alignment.ambient.toRenaming =
-                Region.singleton (.cut
-                  ((regionEdit itemData childEvidence childSites).endpoint.renameWires
-                    alignment.ambient.toRenaming)) := by
-            simp [Region.singleton_renameWires, Item.renameWires,
-              WireRenaming.appendRight]
-          refine ⟨?_⟩
-          simpa only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
-            WireEquiv.trans_refl] using
-            (((RegionIso.ofEq sourceEq).trans lifted).trans
-              (RegionIso.ofEq targetEq)).trans
-              ((RegionIso.adjoinAtNil material).trans
-                (RegionIso.adjoinAtOfItems [] renamedFormalSource))⟩
+                ((regionEdit itemData childEvidence childSites).endpoint.renameWires
+                  alignment.ambient.toRenaming)) := by
+          simp [Region.singleton_renameWires, Item.renameWires,
+            WireRenaming.appendRight]
+        refine ⟨?_⟩
+        simpa only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
+          WireEquiv.trans_refl] using
+          (((RegionIso.ofEq sourceEq).trans lifted).trans
+            (RegionIso.ofEq targetEq)).trans
+            ((RegionIso.adjoinAtNil material).trans
+              (RegionIso.adjoinAtOfItems [] renamedFormalSource))
+      · let childSource :=
+          (argumentRegionEdit childFormalSites sourceValues
+            (normalizationOperation patternWires) argumentFrame PUnit.unit
+            (fun _ _ _ => PUnit.unit)).1
+        let mappedSource :=
+          (argumentRegionEdit mappedChildSites sourceValues
+            (normalizationOperation patternWires) mappedArgumentFrame
+            PUnit.unit (fun _ _ _ => PUnit.unit)).1
+        let sourceMaterial := Region.singleton (.cut childSource)
+        let targetMaterial := Region.singleton (.cut mappedSource)
+        have mappedEq : sourceMaterial.renameWires argumentSourceRename =
+            targetMaterial := by
+          simp only [sourceMaterial, targetMaterial,
+            Region.singleton_renameWires, Item.renameWires]
+          rw [mappedChildSourceArgumentEq]
+        let presentation :=
+          (RegionIso.adjoinAtNilRenamed sourceMaterial).trans
+            (RegionIso.adjoinAt [] .nil (RegionIso.ofEq mappedEq))
+        have moved := sourceSideIso (RegionIso.refl _) presentation
+          (sourceSideCut childSourceSide)
+        simpa [formalSites, formalItemSites, formalSource,
+          formalItemSource, argumentItemsEdit, argumentItemEdit,
+          childSource, mappedSource, targetMaterial] using moved
   obtain ⟨retained, formalSource, formalResult, formalEvidence,
       formalSites, formalCoherence, semantic⟩ :=
     foldedFamilyWithPattern
@@ -2383,10 +2847,8 @@ theorem accumulateHostedTargetWith
     formalSites, formalCoherence, ?_⟩
   exact semantic rfl
 
-/-- Accumulate the hosted transformation and its literal formal target through
-one authoritative traversal.  Endpoint validity is deliberately outside this
-interface: callers provide it only when they apply the returned `HostedStrict`.
--/
+/-- Accumulate the hosted transformation and literal target through one
+authoritative traversal; callers provide endpoint validity when applying it. -/
 theorem accumulateHostedTarget
     {targetArguments patternWires outer before after targetInserted
       originalSourceWires originalTargetWires : List Sig}
@@ -2480,7 +2942,7 @@ theorem accumulateHostedTarget
               True ∧
                 Nonempty (RegionIso (WireEquiv.refl itemCommon) staged
                   (Region.adjoinAt retained .nil formalResult)) ∧
-                  ∀ (bridge : TargetFrameBridge selectedTargetFrame
+                  (∀ (bridge : TargetFrameBridge selectedTargetFrame
                         (fun _ _ => False) selectedTargetData)
                     (alignment : TargetAmbientBridge itemFrame
                       selectedTargetFrame (fun _ _ _ => True)
@@ -2496,7 +2958,8 @@ theorem accumulateHostedTarget
                           application siteData)).endpoint.renameWires
                           alignment.ambient.toRenaming)
                       (.mk retained (formalSource.renameWires
-                        (bridge.sourceToTarget.appendRight retained))))) := by
+                        (bridge.sourceToTarget.appendRight retained))))) ∧
+                  True ∧ True) := by
     intro itemCommon itemSourceWires itemTargetWires itemFrame itemOperation
       itemData application siteData selectedTargetSourceWires
       selectedTargetWires selectedTargetFrame selectedTargetData
@@ -2506,20 +2969,29 @@ theorem accumulateHostedTarget
     exact ⟨retained, formalSource, formalResult, formalEvidence, formalSites,
       coherence, staged, hosted, True.intro, presentation, by
         intro bridge _alignment
-        exact False.elim bridge.data_selects⟩
+        exact False.elim bridge.data_selects, True.intro, True.intro⟩
   obtain ⟨retained, formalSource, formalResult, formalEvidence, formalSites,
-      coherence, staged, hosted, _unit, presentation, _endpoint⟩ :=
+      coherence, staged, hosted, _unit, presentation, _endpoint,
+      _sourceSide, _retained⟩ :=
     accumulateHostedTargetWith evidence sites targetValues targetData
+      pattern.boundaryWire
       (fun {_} _ _ => True)
       (fun _ => True.intro)
       (fun _ _ _ _ => True.intro)
       (fun _ _ => True.intro)
       (fun _ => True.intro)
+      (fun {_} _ _ => True)
+      (fun _ => True.intro)
+      (fun _ _ _ _ => True.intro)
+      (fun _ _ => True.intro)
+      (fun _ => True.intro)
+      (fun _ _ _ => True.intro)
       (fun _ _ => False)
       (fun _ _ impossible _ => False.elim impossible)
       (fun _ _ _ => True)
       (fun _ _ _ _ _ => True.intro)
-      targetNaturality selectedWithUnit
+      targetNaturality (fun _ => True) True.intro
+      (fun _ _ _ _ => True.intro) selectedWithUnit
   exact ⟨retained, formalSource, formalResult, formalEvidence, formalSites,
     coherence, staged, hosted, presentation⟩
 

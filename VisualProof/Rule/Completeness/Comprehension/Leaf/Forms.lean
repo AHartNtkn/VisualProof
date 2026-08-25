@@ -607,36 +607,6 @@ def positionalAtomSelection
     Vars wires (positionalAtomWires atomArguments) :=
   .cons head ports
 
-theorem varsExtendHEqRight
-    (initial : Vars context initialSignatures)
-    {firstSignatures secondSignatures : List Sig}
-    (first : Vars context firstSignatures)
-    (second : Vars context secondSignatures)
-    (signaturesEq : firstSignatures = secondSignatures)
-    (equal : HEq first second) :
-    HEq (Vars.extend initial first) (Vars.extend initial second) := by
-  cases signaturesEq
-  have valuesEq : first = second := eq_of_heq equal
-  cases valuesEq
-  rfl
-
-theorem EqualityNormalization.formalPorts_cons_of_nonempty
-    (nonempty : arguments ≠ []) :
-    ∃ (signature : Sig) (rest : List Sig)
-        (head : Var arguments signature) (tail : Vars arguments rest),
-      arguments = signature :: rest ∧
-        HEq (EqualityNormalization.formalPorts arguments)
-          (Vars.cons head tail) := by
-  cases arguments with
-  | nil => exact (nonempty rfl).elim
-  | cons signature rest =>
-      refine ⟨signature, rest, .here,
-        (EqualityNormalization.formalPorts rest).map fun wire => .there wire,
-        rfl, ?_⟩
-      simp only [EqualityNormalization.formalPorts,
-        Erasure.Exposure.identityBoundary, Vars.map]
-      exact HEq.rfl
-
 def positionalAtomCollapse
     (head : Var wires (.rel atomArguments))
     (ports : Vars wires atomArguments) :
@@ -1278,40 +1248,47 @@ end
 
 mutual
   theorem retainedRegionSites_argumentRegionEdit_source
-      (pattern : OpenDiagram arguments)
-      (recordedOperation : Transform.Operation arguments)
-      (frame : Transform.Frame arguments common sourceWires targetWires)
-      (data : recordedOperation.Data frame)
+      (pattern : OpenDiagram recordedArguments)
+      (recordedOperation : Transform.Operation recordedArguments)
+      (recordedFrame : Transform.Frame recordedArguments common
+        recordedSourceWires recordedTargetWires)
+      (data : recordedOperation.Data recordedFrame)
+      (targetFrame : Transform.Frame arguments common sourceWires targetWires)
       (region : Region common)
       (current : Vars external arguments) :
       (argumentRegionEdit
         (retainedRegionSites pattern
-          (recordingOperation recordedOperation external) frame data region)
-        current (normalizationOperation arguments) frame PUnit.unit
+          (recordingOperation recordedOperation external) recordedFrame data
+            region)
+        current (normalizationOperation arguments) targetFrame PUnit.unit
         (fun _ _ _ => PUnit.unit)).1 =
-          region.renameWires frame.sourceKeep := by
+          region.renameWires targetFrame.sourceKeep := by
     cases region with
     | mk locals items =>
         unfold retainedRegionSites argumentRegionEdit Region.renameWires
         exact congrArg (Region.mk locals)
           (retainedItemsSites_argumentItemsEdit_source pattern
-            recordedOperation (frame.append locals)
-            (recordedOperation.appendData frame data locals) items current)
+            recordedOperation (recordedFrame.append locals)
+            (recordedOperation.appendData recordedFrame data locals)
+            (targetFrame.append locals) items current)
   termination_by sizeOf region
 
   theorem retainedItemsSites_argumentItemsEdit_source
-      (pattern : OpenDiagram arguments)
-      (recordedOperation : Transform.Operation arguments)
-      (frame : Transform.Frame arguments common sourceWires targetWires)
-      (data : recordedOperation.Data frame)
+      (pattern : OpenDiagram recordedArguments)
+      (recordedOperation : Transform.Operation recordedArguments)
+      (recordedFrame : Transform.Frame recordedArguments common
+        recordedSourceWires recordedTargetWires)
+      (data : recordedOperation.Data recordedFrame)
+      (targetFrame : Transform.Frame arguments common sourceWires targetWires)
       (items : ItemSeq common)
       (current : Vars external arguments) :
       (argumentItemsEdit
         (retainedItemsSites pattern
-          (recordingOperation recordedOperation external) frame data items)
-        current (normalizationOperation arguments) frame PUnit.unit
+          (recordingOperation recordedOperation external) recordedFrame data
+            items)
+        current (normalizationOperation arguments) targetFrame PUnit.unit
         (fun _ _ _ => PUnit.unit)).1 =
-          items.renameWires frame.sourceKeep := by
+          items.renameWires targetFrame.sourceKeep := by
     cases items with
     | nil =>
         unfold retainedItemsSites argumentItemsEdit ItemSeq.renameWires
@@ -1320,24 +1297,27 @@ mutual
         unfold retainedItemsSites argumentItemsEdit ItemSeq.renameWires
         dsimp only
         rw [retainedItemSites_argumentItemEdit_source pattern
-            recordedOperation frame data item current,
+            recordedOperation recordedFrame data targetFrame item current,
           retainedItemsSites_argumentItemsEdit_source pattern
-            recordedOperation frame data tail current]
+            recordedOperation recordedFrame data targetFrame tail current]
   termination_by sizeOf items
 
   theorem retainedItemSites_argumentItemEdit_source
-      (pattern : OpenDiagram arguments)
-      (recordedOperation : Transform.Operation arguments)
-      (frame : Transform.Frame arguments common sourceWires targetWires)
-      (data : recordedOperation.Data frame)
+      (pattern : OpenDiagram recordedArguments)
+      (recordedOperation : Transform.Operation recordedArguments)
+      (recordedFrame : Transform.Frame recordedArguments common
+        recordedSourceWires recordedTargetWires)
+      (data : recordedOperation.Data recordedFrame)
+      (targetFrame : Transform.Frame arguments common sourceWires targetWires)
       (item : Item common)
       (current : Vars external arguments) :
       (argumentItemEdit
         (retainedItemSites pattern
-          (recordingOperation recordedOperation external) frame data item)
-        current (normalizationOperation arguments) frame PUnit.unit
+          (recordingOperation recordedOperation external) recordedFrame data
+            item)
+        current (normalizationOperation arguments) targetFrame PUnit.unit
         (fun _ _ _ => PUnit.unit)).1 =
-          item.renameWires frame.sourceKeep := by
+          item.renameWires targetFrame.sourceKeep := by
     cases item with
     | atom head ports =>
         unfold retainedItemSites argumentItemEdit Item.renameWires
@@ -1349,7 +1329,7 @@ mutual
         unfold retainedItemSites argumentItemEdit Item.renameWires
         exact congrArg Item.cut
           (retainedRegionSites_argumentRegionEdit_source pattern
-            recordedOperation frame data body current)
+            recordedOperation recordedFrame data targetFrame body current)
   termination_by sizeOf item
 end
 
@@ -1499,6 +1479,43 @@ def atomFormalPrefixRecordingSites
         (atomFormalPrefixRecordingSites frame tail formal retained application)
   termination_by sizeOf hostItems
 
+theorem atomFormalPrefixArgumentItemsEdit_source
+    (recordedFrame : Transform.Frame
+      (positionalAtomWires atomArguments) common
+      recordedSourceWires recordedTargetWires)
+    (targetFrame : Transform.Frame arguments common sourceWires targetWires)
+    (hostItems : ItemSeq common)
+    (formal : Var common (.rel atomArguments))
+    (retained : Vars common atomArguments)
+    (application : Vars common patternArguments)
+    (current : Vars patternArguments arguments) :
+    (argumentItemsEdit
+      (atomFormalPrefixRecordingSites recordedFrame hostItems formal retained
+        application)
+      current (normalizationOperation arguments) targetFrame PUnit.unit
+      (fun _ _ _ => PUnit.unit)).1 =
+        (hostItems.renameWires targetFrame.sourceKeep).append
+          (.cons (.atom targetFrame.selected
+            (current.map fun wire =>
+              targetFrame.sourceKeep
+                (EqualityNormalization.formalSubstitution application wire)))
+            .nil) := by
+  cases hostItems with
+  | nil =>
+      simp only [atomFormalPrefixRecordingSites, argumentItemsEdit,
+        argumentItemEdit, ItemSeq.renameWires, ItemSeq.append, Vars.map_map]
+  | cons item tail =>
+      simp only [atomFormalPrefixRecordingSites, argumentItemsEdit,
+        ItemSeq.renameWires, ItemSeq.append]
+      congr 1
+      · exact retainedItemSites_argumentItemEdit_source
+          (positionalAtomPattern atomArguments)
+          (Leaf.Formal.operation [] atomArguments) recordedFrame PUnit.unit
+          targetFrame item current
+      · exact atomFormalPrefixArgumentItemsEdit_source recordedFrame targetFrame
+          tail formal retained application current
+  termination_by sizeOf hostItems
+
 theorem atomFormalPrefixSource_eq_argumentItemsEdit
     (frame : Transform.Frame (positionalAtomWires atomArguments)
       common sourceWires targetWires)
@@ -1542,7 +1559,7 @@ theorem atomFormalPrefixSource_eq_argumentItemsEdit
       congr 1
       · exact (retainedItemSites_argumentItemEdit_source
           (positionalAtomPattern atomArguments)
-          (Leaf.Formal.operation [] atomArguments) frame PUnit.unit item
+          (Leaf.Formal.operation [] atomArguments) frame PUnit.unit frame item
           values).symm
       · simpa only [atomFormalPrefixSource] using
           atomFormalPrefixSource_eq_argumentItemsEdit frame tail formal retained
@@ -1746,7 +1763,7 @@ theorem identityFormalPrefixSource_eq_argumentItemsEdit
       congr 1
       · exact (retainedItemSites_argumentItemEdit_source
           (positionalIdentityPattern signature arity)
-          (Leaf.Identity.operation signature arity) frame PUnit.unit item
+          (Leaf.Identity.operation signature arity) frame PUnit.unit frame item
           values).symm
       · simpa only [identityFormalPrefixSource] using
           identityFormalPrefixSource_eq_argumentItemsEdit frame tail retained

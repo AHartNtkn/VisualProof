@@ -1059,6 +1059,36 @@ theorem ScopePreservation.conjoin
     rootedTwo := fun wire => (combined.2 wire).2
   }
 
+/-- Adding a canonical host on the left preserves material scope when every
+host incidence is already represented by the material. -/
+theorem ScopePreservation.hostLeft
+    (material host : Region wires)
+    (hostCanonical : host.Canonical)
+    (hostCovered : ∀ {signature} (wire : Var wires signature),
+      host.incidencePaths wire.index.val ≠ [] →
+        material.incidencePaths wire.index.val ≠ []) :
+    ScopePreservation material (host.conjoin material) := by
+  constructor
+  · intro materialCanonical
+    exact (Region.Canonical.conjoin_iff host material).mpr
+      ⟨hostCanonical, materialCanonical⟩
+  · intro signature wire
+    rw [Region.incidencePaths_conjoin]
+    constructor
+    · intro materialNonempty combinedEmpty
+      have mappedEmpty := (List.append_eq_nil_iff.mp combinedEmpty).2
+      exact materialNonempty ((List.map_eq_nil_iff).mp mappedEmpty)
+    · intro combinedNonempty materialEmpty
+      by_cases hostEmpty : host.incidencePaths wire.index.val = []
+      · exact combinedNonempty (by simp [hostEmpty, materialEmpty])
+      · exact (hostCovered wire hostEmpty) materialEmpty
+  · intro signature wire materialRooted
+    rw [Region.incidencePaths_conjoin]
+    apply RegionPath.RootedTwo.of_sublist
+      (List.sublist_append_right _ _)
+    exact (RegionPath.RootedTwo.map_shiftHead_iff host.items.length
+      (material.incidencePaths wire.index.val)).mpr materialRooted
+
 /-- Adjoining an empty host leaves each material incidence path unchanged. -/
 theorem Region.incidencePaths_adjoinAt_nil
     (material : Region (outer ++ hostLocals))

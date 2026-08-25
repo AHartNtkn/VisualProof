@@ -246,6 +246,24 @@ def append (frame : Frame arguments common sourceWires targetWires)
   targetKeep := frame.targetKeep.appendRight locals
   selected := frame.selected.appendLeft locals
 
+/-- Appending no locals commutes with the canonical append-nil embeddings. -/
+theorem appendNil_sourceKeep
+    (frame : Frame arguments common sourceWires targetWires)
+    (wire : Var common signature) :
+    (WireEquiv.appendNil sourceWires).symm.toRenaming
+        (frame.sourceKeep wire) =
+      (frame.append []).sourceKeep
+        ((WireEquiv.appendNil common).symm.toRenaming wire) := by
+  calc
+    _ = (frame.sourceKeep wire).appendLeft [] :=
+      WireEquiv.appendNil_symm_apply sourceWires (frame.sourceKeep wire)
+    _ = (frame.append []).sourceKeep (wire.appendLeft []) := by
+      simp [append, WireRenaming.appendRight]
+    _ = _ := congrArg
+      (fun value : Var (common ++ []) signature =>
+        (frame.append []).sourceKeep value)
+      (WireEquiv.appendNil_symm_apply common wire).symm
+
 end Frame
 
 namespace Values
