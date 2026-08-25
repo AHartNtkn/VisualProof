@@ -1,4 +1,5 @@
 export type GroundPosition = { readonly x: number; readonly z: number }
+export type GroundBounds = { readonly minX: number; readonly maxX: number; readonly minZ: number; readonly maxZ: number }
 
 export type WalkInput = {
   readonly forward?: boolean
@@ -27,5 +28,12 @@ export function stepWalker(
   return {
     x: position.x - Math.sin(yaw) * along + Math.cos(yaw) * across,
     z: position.z - Math.cos(yaw) * along - Math.sin(yaw) * across,
+  }
+}
+
+export function clampGroundPosition(position: GroundPosition, bounds: GroundBounds): GroundPosition {
+  return {
+    x: Math.max(bounds.minX, Math.min(bounds.maxX, position.x)),
+    z: Math.max(bounds.minZ, Math.min(bounds.maxZ, position.z)),
   }
 }

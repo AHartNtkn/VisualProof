@@ -14,6 +14,7 @@ describe('orchard world save', () => {
       sky: '#a9d5ec',
       fogNear: 170,
       fogFar: 780,
+      bounds: { minX: -2000, maxX: 2000, minZ: -2000, maxZ: 2000 },
     })
     expect(world.player).toEqual({ x: 0, y: 1.7, z: 82, yaw: 0, pitch: -0.04 })
     expect(world.trees).toHaveLength(2000)

@@ -7,6 +7,14 @@ export type SavedTerrain = {
   readonly sky: string
   readonly fogNear: number
   readonly fogFar: number
+  readonly bounds: SavedBounds
+}
+
+export type SavedBounds = {
+  readonly minX: number
+  readonly maxX: number
+  readonly minZ: number
+  readonly maxZ: number
 }
 
 export type SavedPlayer = {
@@ -97,6 +105,7 @@ export function parseWorldSave(value: unknown): OrchardWorldSave {
   if (!isRecord(terrainRaw)) throw new Error('invalid orchard save: terrain')
   if (!isRecord(playerRaw)) throw new Error('invalid orchard save: player')
   if (!isRecord(layoutsRaw)) throw new Error('invalid orchard save: layouts')
+  if (!isRecord(terrainRaw['bounds'])) throw new Error('invalid orchard save: terrain.bounds')
   if (!Array.isArray(value['trees'])) throw new Error('invalid orchard save: trees')
 
   const terrain: SavedTerrain = {
@@ -105,6 +114,15 @@ export function parseWorldSave(value: unknown): OrchardWorldSave {
     sky: text(terrainRaw['sky'], 'terrain.sky'),
     fogNear: finite(terrainRaw['fogNear'], 'terrain.fogNear'),
     fogFar: finite(terrainRaw['fogFar'], 'terrain.fogFar'),
+    bounds: {
+      minX: finite(terrainRaw['bounds']['minX'], 'terrain.bounds.minX'),
+      maxX: finite(terrainRaw['bounds']['maxX'], 'terrain.bounds.maxX'),
+      minZ: finite(terrainRaw['bounds']['minZ'], 'terrain.bounds.minZ'),
+      maxZ: finite(terrainRaw['bounds']['maxZ'], 'terrain.bounds.maxZ'),
+    },
+  }
+  if (terrain.bounds.minX > terrain.bounds.maxX || terrain.bounds.minZ > terrain.bounds.maxZ) {
+    throw new Error('invalid orchard save: terrain.bounds order')
   }
   const player: SavedPlayer = {
     x: finite(playerRaw['x'], 'player.x'),

@@ -14,6 +14,9 @@ test('renders exact separate tree counts and lets the player walk', async ({ pag
   await expect(orchard).toHaveAttribute('data-tree-count', '3')
   await expect(orchard).toHaveAttribute('data-entity-count', '219')
   await expect(orchard).toHaveAttribute('data-instanced-count', '0')
+
+  const countScale = page.getByRole('slider', { name: 'Tree count scale' })
+  await expect(countScale).toHaveValue('3')
   await expect(page.getByText('zeroIsNat · step 20')).toBeVisible()
   await expect(page.getByText('Draw calls')).toBeVisible()
 
@@ -29,4 +32,20 @@ test('renders exact separate tree counts and lets the player walk', async ({ pag
   await expect(orchard).toHaveAttribute('data-tree-count', '5')
   await expect(orchard).toHaveAttribute('data-entity-count', '365')
   await expect(orchard).toHaveAttribute('data-instanced-count', '0')
+
+  const countInput = page.getByRole('spinbutton', { name: 'Tree count', exact: true })
+  await countScale.fill('10')
+  await countScale.dispatchEvent('change')
+  await expect(orchard).toHaveAttribute('data-tree-count', '10')
+  await expect(countInput).toHaveValue('10')
+
+  const hundredPreset = page.getByRole('button', { name: '100', exact: true })
+  await hundredPreset.click()
+  await expect(countInput).toBeDisabled()
+  await expect(orchard).toHaveAttribute('data-tree-count', '100')
+  await expect(countInput).toBeEnabled()
+  await expect(countInput).toHaveValue('100')
+  await expect(countScale).toHaveValue('100')
+  await expect(hundredPreset).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('[data-fps]')).toHaveText(/^\d+(?:\.\d)?$/)
 })

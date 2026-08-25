@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { stepWalker } from '../../orchard/walk'
+import { clampGroundPosition, stepWalker } from '../../orchard/walk'
 
 describe('stepWalker', () => {
   it('moves forward and sideways relative to the view yaw', () => {
@@ -24,5 +24,12 @@ describe('stepWalker', () => {
       1,
       0,
     )).toEqual({ x: 4, z: 5 })
+  })
+
+  it('clamps the player to the saved world bounds', () => {
+    expect(clampGroundPosition(
+      { x: 12, z: -9 },
+      { minX: -5, maxX: 8, minZ: -7, maxZ: 10 },
+    )).toEqual({ x: 8, z: -7 })
   })
 })

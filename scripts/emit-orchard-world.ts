@@ -18,6 +18,7 @@ const save: OrchardWorldSave = {
     sky: '#a9d5ec',
     fogNear: 170,
     fogFar: 780,
+    bounds: { minX: -2000, maxX: 2000, minZ: -2000, maxZ: 2000 },
   },
   player: { x: 0, y: 1.7, z: 82, yaw: 0, pitch: -0.04 },
   layouts: {

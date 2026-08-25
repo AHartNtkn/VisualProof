@@ -20,15 +20,17 @@
             <input id="tree-count" name="trees" type="number" min="1" max="2000" step="1" value="50" />
             <button type="submit">Apply tree count</button>
           </div>
+          <label class="scale-label" for="tree-scale">Tree count scale</label>
+          <input id="tree-scale" class="tree-scale" type="range" min="1" max="2000" step="1" value="50" />
         </form>
         <div class="presets" aria-label="Tree count presets">
-          <button type="button" data-preset="10">10</button>
-          <button type="button" data-preset="50">50</button>
-          <button type="button" data-preset="100">100</button>
-          <button type="button" data-preset="250">250</button>
-          <button type="button" data-preset="500">500</button>
-          <button type="button" data-preset="1000">1,000</button>
-          <button type="button" data-preset="2000">2,000</button>
+          <button type="button" data-preset="10" aria-pressed="false">10</button>
+          <button type="button" data-preset="50" aria-pressed="false">50</button>
+          <button type="button" data-preset="100" aria-pressed="false">100</button>
+          <button type="button" data-preset="250" aria-pressed="false">250</button>
+          <button type="button" data-preset="500" aria-pressed="false">500</button>
+          <button type="button" data-preset="1000" aria-pressed="false">1,000</button>
+          <button type="button" data-preset="2000" aria-pressed="false">2,000</button>
         </div>
 
         <dl class="metrics">

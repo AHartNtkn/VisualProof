@@ -1,13 +1,14 @@
 import './style.css'
 import { formatFps, frameTiming } from './frame'
 import { mountOrchardWorld, type OrchardBuildStats } from './render'
-import { stepWalker, type WalkInput } from './walk'
+import { clampGroundPosition, stepWalker, type WalkInput } from './walk'
 import { loadWorldSave } from './world'
 
 const root = document.querySelector<HTMLElement>('[data-orchard]')!
 const viewport = document.querySelector<HTMLElement>('[data-viewport]')!
 const form = document.querySelector<HTMLFormElement>('[data-count-form]')!
 const countInput = document.querySelector<HTMLInputElement>('#tree-count')!
+const countScale = document.querySelector<HTMLInputElement>('#tree-scale')!
 const status = document.querySelector<HTMLElement>('[data-status]')!
 const lookHint = document.querySelector<HTMLElement>('[data-look-hint]')!
 const fpsOut = document.querySelector<HTMLElement>('[data-fps]')!
@@ -26,6 +27,7 @@ let treeCount = Number.isInteger(queryCount) && queryCount >= 1
   ? Math.min(queryCount, MAX_TREES)
   : 50
 countInput.value = String(treeCount)
+countScale.value = String(treeCount)
 
 async function boot(): Promise<void> {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
@@ -34,6 +36,7 @@ async function boot(): Promise<void> {
   root.dataset['worldVersion'] = String(savedWorld.version)
   root.dataset['savedTreeCount'] = String(savedWorld.trees.length)
   countInput.max = String(savedWorld.trees.length)
+  countScale.max = String(savedWorld.trees.length)
   specimen.textContent = Object.values(savedWorld.layouts)[0]!.label
   const keys = new Set<string>()
   let yaw = savedWorld.player.yaw
@@ -43,6 +46,7 @@ async function boot(): Promise<void> {
   let recentFrameMs: number[] = []
   let lastMetricsUpdate = 0
   let latestBuild: OrchardBuildStats | null = null
+  let buildInFlight = false
 
   const resize = (): void => world.resize(viewport.clientWidth, viewport.clientHeight)
   const resizeObserver = new ResizeObserver(resize)
@@ -50,26 +54,46 @@ async function boot(): Promise<void> {
   resize()
 
   const applyCount = async (requested: number): Promise<void> => {
+    if (buildInFlight) return
+    buildInFlight = true
     const count = Math.min(savedWorld.trees.length, Math.max(1, Math.trunc(requested)))
     countInput.value = String(count)
+    countScale.value = String(count)
+    countInput.disabled = true
+    countScale.disabled = true
     applyButton.disabled = true
     for (const button of presetButtons) button.disabled = true
     root.dataset['building'] = 'true'
     status.textContent = `Growing ${count.toLocaleString()} separate trees…`
-    latestBuild = await world.setCount(count)
-    treeCount = count
-    root.dataset['treeCount'] = String(latestBuild.trees)
-    root.dataset['entityCount'] = String(latestBuild.entities)
-    root.dataset['instancedCount'] = String(latestBuild.instanced)
-    root.dataset['building'] = 'false'
-    entitiesOut.textContent = latestBuild.entities.toLocaleString()
-    buildMsOut.textContent = `${latestBuild.buildMs.toFixed(0)} ms`
-    recentFrameMs = []
-    previousFrame = performance.now()
-    status.textContent = `${latestBuild.trees.toLocaleString()} independent trees · ${latestBuild.objects.toLocaleString()} renderer objects · no instancing`
-    history.replaceState(null, '', `?trees=${count}`)
-    applyButton.disabled = false
-    for (const button of presetButtons) button.disabled = false
+    try {
+      latestBuild = await world.setCount(count)
+      treeCount = count
+      root.dataset['treeCount'] = String(latestBuild.trees)
+      root.dataset['entityCount'] = String(latestBuild.entities)
+      root.dataset['instancedCount'] = String(latestBuild.instanced)
+      entitiesOut.textContent = latestBuild.entities.toLocaleString()
+      buildMsOut.textContent = `${latestBuild.buildMs.toFixed(0)} ms`
+      recentFrameMs = []
+      previousFrame = performance.now()
+      status.textContent = `${latestBuild.trees.toLocaleString()} independent trees · ${latestBuild.objects.toLocaleString()} renderer objects · no instancing`
+      history.replaceState(null, '', `?trees=${count}`)
+      for (const button of presetButtons) {
+        button.setAttribute('aria-pressed', String(Number(button.dataset['preset']) === count))
+      }
+    } finally {
+      root.dataset['building'] = 'false'
+      buildInFlight = false
+      countInput.disabled = false
+      countScale.disabled = false
+      applyButton.disabled = false
+      for (const button of presetButtons) button.disabled = false
+    }
+  }
+
+  const requestCount = (requested: number): void => {
+    void applyCount(requested).catch((error: unknown) => {
+      status.textContent = error instanceof Error ? error.message : String(error)
+    })
   }
 
   const frame = (now: number): void => {
@@ -82,7 +106,10 @@ async function boot(): Promise<void> {
       right: keys.has('KeyD') || keys.has('ArrowRight'),
       sprint: keys.has('ShiftLeft') || keys.has('ShiftRight'),
     }
-    player = stepWalker(player, input, timing.movementSeconds, yaw)
+    player = clampGroundPosition(
+      stepWalker(player, input, timing.movementSeconds, yaw),
+      savedWorld.terrain.bounds,
+    )
     world.setPlayer(player.x, player.z, yaw, pitch)
     const rendered = world.render()
     root.dataset['playerX'] = player.x.toFixed(3)
@@ -126,10 +153,18 @@ async function boot(): Promise<void> {
     event.preventDefault()
     const requested = Number(countInput.value)
     if (!Number.isFinite(requested)) return
-    void applyCount(requested)
+    requestCount(requested)
   })
+  countInput.addEventListener('input', () => {
+    const requested = Number(countInput.value)
+    if (Number.isFinite(requested)) {
+      countScale.value = String(Math.min(savedWorld.trees.length, Math.max(1, Math.trunc(requested))))
+    }
+  })
+  countScale.addEventListener('input', () => { countInput.value = countScale.value })
+  countScale.addEventListener('change', () => requestCount(Number(countScale.value)))
   for (const button of presetButtons) {
-    button.addEventListener('click', () => void applyCount(Number(button.dataset['preset'])))
+    button.addEventListener('click', () => requestCount(Number(button.dataset['preset'])))
   }
 
   requestAnimationFrame(frame)

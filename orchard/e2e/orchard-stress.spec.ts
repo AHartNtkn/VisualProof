@@ -11,18 +11,19 @@ type StressRow = {
 }
 
 const enabled = process.env['ORCHARD_STRESS'] === '1'
-const requestedCounts = (process.env['ORCHARD_STRESS_COUNTS'] ?? '10,50,100,250,500,1000')
+const requestedCounts = (process.env['ORCHARD_STRESS_COUNTS'] ?? '10,50,100,250,500,1000,2000')
   .split(',')
   .map(Number)
   .filter((count) => Number.isInteger(count) && count > 0)
+if (requestedCounts.length === 0) throw new Error('ORCHARD_STRESS_COUNTS must contain at least one positive integer')
 
 test.skip(!enabled, 'machine-specific stress sweep; run npm run stress:orchard')
 
 test('measures separate proof-tree rendering across increasing counts', async ({ page }) => {
-  test.setTimeout(10 * 60_000)
+  test.setTimeout(20 * 60_000)
   await page.goto(`/?trees=${requestedCounts[0]}`)
   const orchard = page.locator('[data-orchard]')
-  await expect(orchard).toHaveAttribute('data-ready', 'true', { timeout: 30_000 })
+  await expect(orchard).toHaveAttribute('data-ready', 'true', { timeout: 12 * 60_000 })
 
   const gpu = await page.evaluate(() => {
     const canvas = document.querySelector('canvas')
@@ -38,7 +39,7 @@ test('measures separate proof-tree rendering across increasing counts', async ({
     if (await orchard.getAttribute('data-tree-count') !== String(count)) {
       await page.getByRole('spinbutton', { name: 'Tree count', exact: true }).fill(String(count))
       await page.getByRole('button', { name: 'Apply tree count' }).click()
-      await expect(orchard).toHaveAttribute('data-tree-count', String(count), { timeout: 180_000 })
+      await expect(orchard).toHaveAttribute('data-tree-count', String(count), { timeout: 12 * 60_000 })
     }
     await page.waitForTimeout(2500)
     const numericText = async (selector: string): Promise<number> => {
