@@ -65,6 +65,18 @@ describe('camera state', () => {
     )).toBeCloseTo(FREE_SPEED * 0.05)
   })
 
+  it('moves along horizontal yaw at full speed despite a steep free-flight pitch', () => {
+    const start: FreeCameraState = {
+      mode: 'free',
+      pose: { position: { x: 0, y: 1.7, z: 0 }, yaw: -Math.PI / 2, pitch: 1.3 },
+    }
+    const next = stepCamera(start, { ...noInput, w: true }, 0.05)
+    if (next.mode !== 'free') throw new Error('expected free camera')
+    expect(next.pose.position.x - start.pose.position.x).toBeCloseTo(FREE_SPEED * 0.05)
+    expect(next.pose.position.y).toBe(start.pose.position.y)
+    expect(next.pose.position.z).toBeCloseTo(start.pose.position.z)
+  })
+
   it('clamps free pitch and orbit radius', () => {
     const looked = lookCamera(freeState(), { x: 0, y: -1_000_000 })
     if (looked.mode !== 'free') throw new Error('expected free camera')
@@ -113,6 +125,32 @@ describe('camera state', () => {
       next.pose.position.x - start.pose.position.x,
       next.pose.position.z - start.pose.position.z,
     )).toBeCloseTo(FREE_SPEED * MAX_FRAME_SECONDS)
+  })
+
+  it('ignores non-finite or nonpositive frame time', () => {
+    for (const seconds of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1]) {
+      expect(stepCamera(freeState(), { ...noInput, w: true }, seconds)).toEqual(freeState())
+      expect(stepCamera(orbitState(), { ...noInput, w: true }, seconds)).toEqual(orbitState())
+    }
+  })
+
+  it('returns a finite display direction for a degenerate orbit pose', () => {
+    const display = displayCameraPose({
+      mode: 'orbit',
+      orbitTarget: 'tree-a',
+      pose: { center: { x: 3, y: 4, z: 5 }, radius: 0, azimuth: 0, height: 0 },
+    })
+    expect(display.eye).toEqual({ x: 3, y: 4, z: 5 })
+    expect(Object.values(display.forward).every(Number.isFinite)).toBe(true)
+  })
+
+  it('rejects non-finite world bounds during orbit entry', () => {
+    expect(() => enterOrbit(freeState(), 'tree-a', {
+      center: { x: Number.NaN, y: 8, z: -4 }, radius: 6,
+    })).toThrow('orbit bounds center must be finite')
+    expect(() => enterOrbit(freeState(), 'tree-a', {
+      center: bounds.center, radius: Number.POSITIVE_INFINITY,
+    })).toThrow('orbit bounds radius must be finite and non-negative')
   })
 
   it('applies mouse motion only to a free pose', () => {

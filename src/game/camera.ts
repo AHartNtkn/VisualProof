@@ -49,7 +49,7 @@ function clamp(value: number, low: number, high: number): number {
 }
 
 function clampedFrameSeconds(seconds: number): number {
-  return clamp(seconds, 0, MAX_FRAME_SECONDS)
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, MAX_FRAME_SECONDS) : 0
 }
 
 function axis(positive: boolean, negative: boolean): number {
@@ -72,6 +72,10 @@ function freeForward(pose: FreeCameraPose): Vec3 {
   }
 }
 
+function horizontalForward(yaw: number): Vec3 {
+  return { x: -Math.sin(yaw), y: 0, z: -Math.cos(yaw) }
+}
+
 function orbitEye(pose: OrbitCameraPose): Vec3 {
   return {
     x: pose.center.x + Math.sin(pose.azimuth) * pose.radius,
@@ -86,6 +90,7 @@ function orbitForward(pose: OrbitCameraPose): Vec3 {
   const y = pose.center.y - eye.y
   const z = pose.center.z - eye.z
   const length = Math.hypot(x, y, z)
+  if (length === 0) return { x: 0, y: 0, z: -1 }
   const forward = { x: x / length, y: y / length, z: z / length }
   return freeForward({
     position: eye,
@@ -114,7 +119,7 @@ export function stepCamera(state: CameraState, input: CameraInput, seconds: numb
 
   const movement = unitMovement(axis(input.w, input.s), axis(input.d, input.a), axis(input.space, input.ctrl))
   const speed = FREE_SPEED * (input.shift ? SPRINT_MULTIPLIER : 1) * elapsed
-  const forward = freeForward(state.pose)
+  const forward = horizontalForward(state.pose.yaw)
   const right = { x: Math.cos(state.pose.yaw), y: 0, z: -Math.sin(state.pose.yaw) }
   return {
     mode: 'free',
@@ -146,6 +151,12 @@ export function enterOrbit(
   orbitTarget: string,
   bounds: TreeWorldBounds,
 ): OrbitCameraState {
+  if (!Number.isFinite(bounds.center.x) || !Number.isFinite(bounds.center.y) || !Number.isFinite(bounds.center.z)) {
+    throw new Error('orbit bounds center must be finite')
+  }
+  if (!Number.isFinite(bounds.radius) || bounds.radius < 0) {
+    throw new Error('orbit bounds radius must be finite and non-negative')
+  }
   const eye = displayCameraPose(state).eye
   const x = eye.x - bounds.center.x
   const z = eye.z - bounds.center.z
