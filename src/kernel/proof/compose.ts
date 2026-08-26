@@ -145,6 +145,25 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
         ...step,
         region: mapId(iso.regions, step.region, 'region'),
       }
+    case 'lambdaConversion':
+      return {
+        ...step,
+        node: mapId(iso.nodes, step.node, 'node'),
+        attachments: Object.fromEntries(
+          Object.entries(step.attachments).map(([slot, wire]) => [
+            slot,
+            mapId(iso.wires, wire, 'wire'),
+          ]),
+        ),
+      }
+    case 'lambdaFreeVariableIdentity':
+      return {
+        ...step,
+        action: {
+          ...step.action,
+          node: mapId(iso.nodes, step.action.node, 'node'),
+        },
+      }
     case 'theorem':
       return {
         ...step,

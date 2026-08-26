@@ -6,6 +6,8 @@ import type {
 } from '../diagram/diagram'
 import { derivedScope, isAncestorOrEqual } from '../diagram/regions'
 import type { RelSig, Sig } from '../diagram/sig'
+import type { Term } from '../term/term'
+import type { ConversionCertificate } from '../term/certificate'
 import {
   createIdMintRecorder,
   freezeIdMintLog,
@@ -63,6 +65,12 @@ import {
   type WireJoinInput,
   type WireSeverInput,
 } from '../rules/wire-quantifier'
+import {
+  applyFreeVariableIdentity,
+  applyLambdaConversion,
+  type FreeVariableIdentityAction,
+  type SlotCorrespondence,
+} from '../rules/lambda'
 import { assertProofContext, type ProofContext } from './context'
 import { ProofError } from './error'
 import { applyTheorem, type TheoremApplication } from './theorem'
@@ -79,6 +87,8 @@ export type ProofStep =
   | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate }
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
+  | { readonly rule: 'lambdaConversion'; readonly node: NodeId; readonly term: Term; readonly correspondence: SlotCorrespondence; readonly certificate: ConversionCertificate; readonly attachments: Readonly<Record<number, WireId>> }
+  | { readonly rule: 'lambdaFreeVariableIdentity'; readonly action: FreeVariableIdentityAction }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
   | { readonly rule: 'vacuity'; readonly direction: 'insert' | 'delete'; readonly instance: VacuityInstance }
   | { readonly rule: 'presentation'; readonly input: PresentationInput }
@@ -143,6 +153,8 @@ export function reboundWires(step: ProofStep): readonly WireId[] {
     case 'deiteration':
     case 'doubleCutIntro':
     case 'doubleCutElim':
+    case 'lambdaConversion':
+    case 'lambdaFreeVariableIdentity':
     case 'theorem':
     case 'vacuity':
     case 'presentation':
@@ -265,6 +277,17 @@ function applyStepRaw(
       return applyDoubleCutIntro(diagram, step.sel, reservation)
     case 'doubleCutElim':
       return applyDoubleCutElim(diagram, step.region)
+    case 'lambdaConversion':
+      return applyLambdaConversion(
+        diagram,
+        step.node,
+        step.term,
+        step.correspondence,
+        step.certificate,
+        step.attachments,
+      )
+    case 'lambdaFreeVariableIdentity':
+      return applyFreeVariableIdentity(diagram, step.action)
     case 'theorem':
       return applyTheorem(
         diagram,

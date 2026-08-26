@@ -11,6 +11,7 @@ import {
 import { EMPTY_PROOF_CONTEXT, verifyTheory } from '../../../src/kernel/proof/context'
 import { applyStep, type ProofStep } from '../../../src/kernel/proof/step'
 import { bareWire } from '../../fixtures/pins'
+import { application, bound, free, lambda } from '../../../src/kernel/term/term'
 
 function negativeStart() {
   const builder = new DiagramBuilder()
@@ -186,6 +187,39 @@ describe('proof actions', () => {
       [action],
       EMPTY_PROOF_CONTEXT,
     )).toThrowError(/action 0 .* step 1 \(erasure\) failed/)
+  })
+
+  it('replays Lambda conversion and identity as one durable action', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.term(
+      builder.root,
+      application(lambda(bound(0)), free(0)),
+    )
+    const diagram = builder.build()
+    const action: ProofAction = {
+      label: 'normalize free variable to identity',
+      steps: [
+        {
+          rule: 'lambdaConversion',
+          node,
+          term: free(0),
+          correspondence: { commonArity: 1, left: [0], right: [0] },
+          certificate: {
+            leftSteps: [{ kind: 'beta', path: [] }],
+            rightSteps: [],
+          },
+          attachments: {},
+        },
+        {
+          rule: 'lambdaFreeVariableIdentity',
+          action: { direction: 'toIdentity', node },
+        },
+      ],
+      placements: [],
+    }
+
+    expect(applyAction(diagram, action, EMPTY_PROOF_CONTEXT).nodes[node]?.kind)
+      .toBe('identity')
   })
 
   it('validates placement indices against all introduced nodes', () => {

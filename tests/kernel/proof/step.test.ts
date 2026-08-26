@@ -22,6 +22,7 @@ import {
 import { applyIdentityInsertion } from '../../../src/kernel/rules/identity'
 import {
 } from '../../../src/kernel/rules/identity-rules'
+import { application, bound, free, lambda } from '../../../src/kernel/term/term'
 
 describe('primitive replay', () => {
   it('routes erasure through the direct primitive', () => {
@@ -148,6 +149,37 @@ describe('primitive replay', () => {
     // wire, on top of the two pins that made the relational wire bare.
     expect(Object.values(result.nodes).map((node) => node.kind).sort())
       .toEqual(['atom', 'identity', 'identity', 'identity', 'identity', 'ref'])
+  })
+
+  it('replays dedicated Lambda conversion and free-variable identity steps', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.term(
+      builder.root,
+      application(lambda(bound(0)), free(0)),
+    )
+    const diagram = builder.build()
+    const converted = applyStep(diagram, {
+      rule: 'lambdaConversion',
+      node,
+      term: free(0),
+      correspondence: { commonArity: 1, left: [0], right: [0] },
+      certificate: {
+        leftSteps: [{ kind: 'beta', path: [] }],
+        rightSteps: [],
+      },
+      attachments: {},
+    }, EMPTY_PROOF_CONTEXT)
+    const bridged = applyStep(converted, {
+      rule: 'lambdaFreeVariableIdentity',
+      action: { direction: 'toIdentity', node },
+    }, EMPTY_PROOF_CONTEXT)
+
+    expect(bridged.nodes[node]).toEqual({
+      kind: 'identity',
+      region: diagram.root,
+      sig: IOTA,
+      arity: 2,
+    })
   })
 
 })

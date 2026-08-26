@@ -1,5 +1,9 @@
 import type { Endpoint } from '../diagram/diagram'
 import { portKey } from '../diagram/diagram'
+import type { Term } from '../term/term'
+import { deserializeTerm, serializeTerm } from '../term/serialize'
+import type { PathSeg, ReductionStep } from '../term/reduce'
+import type { ConversionCertificate } from '../term/certificate'
 import {
   dwbFromJson,
   dwbToJson,
@@ -19,6 +23,11 @@ import type {
   WireJoinInput,
   WireSeverInput,
 } from '../rules/wire-quantifier'
+import {
+  validateSlotCorrespondenceCarrier,
+  type FreeVariableIdentityAction,
+  type SlotCorrespondence,
+} from '../rules/lambda'
 import type { PlacementHint, ProofAction, ProofAllocation } from './action'
 import type { ProofStep } from './step'
 import type { Theorem, TheoremApplication } from './theorem'
@@ -62,6 +71,157 @@ function nonNegativeSafeInteger(value: unknown, what: string): number {
     fail(`${what} must be a non-negative safe integer`)
   }
   return value
+}
+
+function nonNegativeSafeIntegerArray(value: unknown, what: string): number[] {
+  if (!Array.isArray(value)) fail(`${what} must be an array`)
+  return value.map((item, index) =>
+    nonNegativeSafeInteger(item, `${what}[${index}]`))
+}
+
+function pathFromJson(value: unknown, what: string): PathSeg[] {
+  return strArray(value, what).map((segment, index) => {
+    if (segment === 'body' || segment === 'fn' || segment === 'argument') {
+      return segment
+    }
+    return fail(
+      `${what}[${index}] is not a path segment (body|fn|argument): '${segment}'`,
+    )
+  })
+}
+
+function termFromJson(value: unknown, what: string): Term {
+  try {
+    return deserializeTerm(str(value, what))
+  } catch (error) {
+    return fail(`${what}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+function reductionStepsToJson(steps: readonly ReductionStep[]): unknown {
+  return steps.map((step) => ({ kind: step.kind, path: [...step.path] }))
+}
+
+function reductionStepsFromJson(value: unknown, what: string): ReductionStep[] {
+  if (!Array.isArray(value)) fail(`${what} must be an array`)
+  return value.map((step, index) => {
+    if (!isRecord(step)) fail(`${what}[${index}] must be an object`)
+    assertOnlyKeys(step, ['kind', 'path'], `${what}[${index}]`)
+    const kind = str(step.kind, `${what}[${index}].kind`)
+    if (kind !== 'beta' && kind !== 'eta') {
+      fail(`${what}[${index}].kind must be beta|eta`)
+    }
+    return {
+      kind,
+      path: pathFromJson(step.path, `${what}[${index}].path`),
+    }
+  })
+}
+
+function conversionCertificateToJson(
+  certificate: ConversionCertificate,
+): unknown {
+  return {
+    leftSteps: reductionStepsToJson(certificate.leftSteps),
+    rightSteps: reductionStepsToJson(certificate.rightSteps),
+  }
+}
+
+function conversionCertificateFromJson(
+  value: unknown,
+  what: string,
+): ConversionCertificate {
+  if (!isRecord(value)) fail(`${what} must be an object`)
+  assertOnlyKeys(value, ['leftSteps', 'rightSteps'], what)
+  return {
+    leftSteps: reductionStepsFromJson(value.leftSteps, `${what}.leftSteps`),
+    rightSteps: reductionStepsFromJson(value.rightSteps, `${what}.rightSteps`),
+  }
+}
+
+function slotCorrespondenceToJson(correspondence: SlotCorrespondence): unknown {
+  return {
+    commonArity: correspondence.commonArity,
+    left: [...correspondence.left],
+    right: [...correspondence.right],
+  }
+}
+
+function slotCorrespondenceFromJson(
+  value: unknown,
+  what: string,
+): SlotCorrespondence {
+  if (!isRecord(value)) fail(`${what} must be an object`)
+  assertOnlyKeys(value, ['commonArity', 'left', 'right'], what)
+  const correspondence: SlotCorrespondence = {
+    commonArity: nonNegativeSafeInteger(
+      value.commonArity,
+      `${what}.commonArity`,
+    ),
+    left: nonNegativeSafeIntegerArray(value.left, `${what}.left`),
+    right: nonNegativeSafeIntegerArray(value.right, `${what}.right`),
+  }
+  try {
+    validateSlotCorrespondenceCarrier(correspondence)
+  } catch (error) {
+    fail(`${what}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  return correspondence
+}
+
+function numericAttachmentsFromJson(
+  value: unknown,
+  what: string,
+): Readonly<Record<number, string>> {
+  if (!isRecord(value)) fail(`${what} must be an object`)
+  const entries: Array<[number, string]> = []
+  for (const [rawSlot, wire] of Object.entries(value)) {
+    const slot = Number(rawSlot)
+    if (
+      !Number.isSafeInteger(slot)
+      || slot < 0
+      || String(slot) !== rawSlot
+    ) {
+      fail(`${what} key '${rawSlot}' must be a non-negative safe integer`)
+    }
+    entries.push([slot, str(wire, `${what}['${rawSlot}']`)])
+  }
+  return Object.fromEntries(entries)
+}
+
+function freeVariableIdentityActionFromJson(
+  value: unknown,
+): FreeVariableIdentityAction {
+  if (!isRecord(value)) fail('lambdaFreeVariableIdentity action must be an object')
+  const direction = str(value.direction, 'lambdaFreeVariableIdentity direction')
+  if (direction === 'toIdentity') {
+    assertOnlyKeys(
+      value,
+      ['direction', 'node'],
+      'lambdaFreeVariableIdentity action',
+    )
+    return { direction, node: str(value.node, 'lambdaFreeVariableIdentity node') }
+  }
+  if (direction === 'toTerm') {
+    assertOnlyKeys(
+      value,
+      ['direction', 'node', 'outputPort'],
+      'lambdaFreeVariableIdentity action',
+    )
+    const outputPort = nonNegativeSafeInteger(
+      value.outputPort,
+      'lambdaFreeVariableIdentity outputPort',
+    )
+    if (outputPort !== 0 && outputPort !== 1) {
+      fail('lambdaFreeVariableIdentity outputPort must be 0|1')
+    }
+    return {
+      direction,
+      node: str(value.node, 'lambdaFreeVariableIdentity node'),
+      outputPort,
+    }
+  }
+  return fail("lambdaFreeVariableIdentity direction must be 'toIdentity'|'toTerm'")
 }
 
 function selectionToJson(selection: SubgraphSelection): unknown {
@@ -389,6 +549,17 @@ export function stepToJson(step: ProofStep): unknown {
       return { rule: step.rule, sel: selectionToJson(step.sel) }
     case 'doubleCutElim':
       return { rule: step.rule, region: step.region }
+    case 'lambdaConversion':
+      return {
+        rule: step.rule,
+        node: step.node,
+        term: serializeTerm(step.term),
+        correspondence: slotCorrespondenceToJson(step.correspondence),
+        certificate: conversionCertificateToJson(step.certificate),
+        attachments: { ...step.attachments },
+      }
+    case 'lambdaFreeVariableIdentity':
+      return { rule: step.rule, action: { ...step.action } }
     case 'theorem':
       return {
         rule: step.rule,
@@ -533,6 +704,32 @@ export function stepFromJson(value: unknown): ProofStep {
     case 'doubleCutElim':
       assertOnlyKeys(value, ['rule', 'region'], 'doubleCutElim step')
       return { rule, region: str(value.region, 'region') }
+    case 'lambdaConversion':
+      assertOnlyKeys(
+        value,
+        ['rule', 'node', 'term', 'correspondence', 'certificate', 'attachments'],
+        'lambdaConversion step',
+      )
+      return {
+        rule,
+        node: str(value.node, 'node'),
+        term: termFromJson(value.term, 'term'),
+        correspondence: slotCorrespondenceFromJson(
+          value.correspondence,
+          'correspondence',
+        ),
+        certificate: conversionCertificateFromJson(
+          value.certificate,
+          'certificate',
+        ),
+        attachments: numericAttachmentsFromJson(value.attachments, 'attachments'),
+      }
+    case 'lambdaFreeVariableIdentity':
+      assertOnlyKeys(value, ['rule', 'action'], 'lambdaFreeVariableIdentity step')
+      return {
+        rule,
+        action: freeVariableIdentityActionFromJson(value.action),
+      }
     case 'theorem': {
       assertOnlyKeys(
         value,

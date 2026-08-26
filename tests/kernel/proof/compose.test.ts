@@ -13,6 +13,7 @@ import { composeActions, mapStepIds } from '../../../src/kernel/proof/compose'
 import { EMPTY_PROOF_CONTEXT } from '../../../src/kernel/proof/context'
 import type { ProofStep } from '../../../src/kernel/proof/step'
 import { bareWire } from '../../fixtures/pins'
+import { free } from '../../../src/kernel/term/term'
 
 function action(label: string, steps: readonly ProofStep[]): ProofAction {
   return { label, steps, placements: [] }
@@ -435,6 +436,31 @@ describe('mapStepIds', () => {
     }, iso)).toEqual({
       rule: 'doubleCutElim',
       region: 'R1',
+    })
+  })
+
+  it('maps Lambda nodes and conversion attachment wires', () => {
+    expect(mapStepIds({
+      rule: 'lambdaConversion',
+      node: 'n0',
+      term: free(0),
+      correspondence: { commonArity: 1, left: [], right: [0] },
+      certificate: { leftSteps: [], rightSteps: [] },
+      attachments: { 0: 'w0' },
+    }, iso)).toEqual({
+      rule: 'lambdaConversion',
+      node: 'N0',
+      term: free(0),
+      correspondence: { commonArity: 1, left: [], right: [0] },
+      certificate: { leftSteps: [], rightSteps: [] },
+      attachments: { 0: 'W0' },
+    })
+    expect(mapStepIds({
+      rule: 'lambdaFreeVariableIdentity',
+      action: { direction: 'toTerm', node: 'n1', outputPort: 1 },
+    }, iso)).toEqual({
+      rule: 'lambdaFreeVariableIdentity',
+      action: { direction: 'toTerm', node: 'N1', outputPort: 1 },
     })
   })
 

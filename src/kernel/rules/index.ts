@@ -38,6 +38,7 @@ export {
   applyParallelSplit,
 } from './wire-content'
 export type { EndSite } from './wire-content'
+export * from './lambda'
 export {
   applyAbstractFormal,
   applyApplyFormal,

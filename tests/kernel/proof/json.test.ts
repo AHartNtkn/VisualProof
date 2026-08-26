@@ -18,6 +18,7 @@ import {
 } from '../../../src/kernel/proof/json'
 import type { ProofStep } from '../../../src/kernel/proof/step'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
+import { application, bound, free, lambda } from '../../../src/kernel/term/term'
 import {
 } from '../../../src/kernel/rules/identity-rules'
 
@@ -170,6 +171,21 @@ describe('step JSON', () => {
       },
       { rule: 'doubleCutIntro', sel: selection },
       { rule: 'doubleCutElim', region: 'r1' },
+      {
+        rule: 'lambdaConversion',
+        node: 'n0',
+        term: application(lambda(bound(0)), free(1)),
+        correspondence: { commonArity: 2, left: [0], right: [0, 1] },
+        certificate: {
+          leftSteps: [],
+          rightSteps: [{ kind: 'beta', path: ['argument'] }],
+        },
+        attachments: { 1: 'w1' },
+      },
+      {
+        rule: 'lambdaFreeVariableIdentity',
+        action: { direction: 'toTerm', node: 'n0', outputPort: 1 },
+      },
       {
         rule: 'theorem',
         name: 'dropQ',
