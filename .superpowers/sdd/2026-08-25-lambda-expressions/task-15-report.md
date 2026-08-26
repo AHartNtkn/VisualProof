@@ -321,7 +321,7 @@ junction; no observation is silently discarded.
 - `git diff --check`
   - passed with no output.
 - `npm test`
-  - 1,278 of 1,280 tests passed; two existing architecture/emission
+  - 1,282 of 1,284 tests passed; two existing architecture/emission
     expectations failed because they require `examples/lambda.json` to be
     absent. Task 15 does not modify that example or either failing test; the
     same mismatch is present at the task's starting commit `f2e5c00a`.
