@@ -106,6 +106,45 @@ describe('lambdaDiagram', () => {
     expect(entityColor(moving, renderTheme(LIGHT.wire, 'light'))).toBe('#f06aa7')
     expect(entityColor(moving, renderTheme(DARK.wire, 'dark'))).toBe('#f06aa7')
   })
+
+  it('carries every sampled stroke lineage, copy, and junction identity into the embedded entities', () => {
+    // Would fail if the WebGL evidence could be reconstructed only from a
+    // parallel motion sample after the embedding had dropped or reassigned a
+    // structural stroke.
+    const source = application(lambda(application(bound(0), bound(0))), lambda(bound(0)))
+    const frame = sampleBetaMotion(
+      planBetaMotion(source, { kind: 'beta', path: [] }),
+      0.44,
+      '#26343a',
+    )
+    const embedded = lambdaDiagram({
+      node: 'term',
+      region: 'region',
+      term: source,
+      interfaceArity: 0,
+      center: v3(0, 0, 0),
+      tangent: v3(0, 1, 0),
+      frame,
+    })
+    const anatomy = embedded.strokes.filter((stroke) => !stroke.strokeId.startsWith('socket:'))
+    expect(anatomy.map((stroke) => ({
+      strokeId: stroke.strokeId,
+      sourceStrokeId: stroke.sourceStrokeId,
+      phase: stroke.phase,
+      lineage: stroke.lineage,
+      copyIndex: stroke.copyIndex,
+      junctions: stroke.junctions,
+      destinationJunctions: stroke.destinationJunctions,
+    }))).toEqual(frame.strokes.map((stroke) => ({
+      strokeId: stroke.id,
+      sourceStrokeId: stroke.originId,
+      phase: frame.phase,
+      lineage: stroke.lineage,
+      copyIndex: stroke.copyIndex,
+      junctions: stroke.points.map(({ junction }) => junction),
+      destinationJunctions: stroke.points.map(({ destinationJunction }) => destinationJunction),
+    })))
+  })
 })
 
 describe('3D scene integration', () => {
@@ -159,9 +198,32 @@ describe('3D scene integration', () => {
     for (const stroke of strokes) for (const point of stroke.pts) {
       expect(Math.abs(dot3(sub3(point, stroke.center), stroke.plane.normal))).toBeLessThan(1e-9)
     }
-    const lambdaEntities = (entities: readonly { kind: string }[]) => entities.filter((entity) => entity.kind === 'lambda')
-    expect(lambdaEntities(sceneAt(planTransition(previous, next, baseColor), 0).entities)).toEqual(lambdaEntities(previous.entities))
-    expect(lambdaEntities(sceneAt(planTransition(previous, next, baseColor), 1).entities)).toEqual(lambdaEntities(next.entities))
+    const transition = planTransition(previous, next, baseColor)
+    const lambdaEntities = (entities: readonly { kind: string }[]) => entities.filter((entity) => entity.kind === 'lambda') as LambdaEntity[]
+    const endpoints = [
+      { progress: 0, staticEntities: lambdaEntities(previous.entities) },
+      { progress: 1, staticEntities: lambdaEntities(next.entities) },
+    ]
+    for (const { progress, staticEntities } of endpoints) {
+      const presented = lambdaEntities(sceneAt(transition, progress).entities)
+      const sampled = sampleBetaMotion(
+        planBetaMotion(source, { kind: 'beta', path: [] }),
+        progress,
+        baseColor,
+      )
+      expect(presented.map(({ strokeId }) => strokeId).sort())
+        .toEqual(sampled.strokes.map(({ id }) => id).sort())
+      expect(presented.map(({ lineage, copyIndex, junctions, destinationJunctions }) => ({
+        lineage, copyIndex, junctions, destinationJunctions,
+      }))).toEqual(sampled.strokes.map((stroke) => ({
+        lineage: stroke.lineage,
+        copyIndex: stroke.copyIndex,
+        junctions: stroke.points.map(({ junction }) => junction),
+        destinationJunctions: stroke.points.map(({ destinationJunction }) => destinationJunction),
+      })))
+      expect(presented.flatMap(({ pts }) => pts).length)
+        .toBe(staticEntities.flatMap(({ pts }) => pts).length)
+    }
   })
 
   it('runs the same structural beta frame backward for reverse history', () => {

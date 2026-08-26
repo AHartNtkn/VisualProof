@@ -42,6 +42,8 @@ export type LambdaStrokeRole =
 export type LambdaStrokePoint = Vec2 & {
   /** Stable source-junction identity used by both renderers. */
   readonly junction: string
+  /** Stable target junction for persistent/copy correspondence. */
+  readonly destinationJunction: string | null
 }
 
 export type LambdaStrokeGeometry =
@@ -186,6 +188,7 @@ type MotionModel = {
   readonly boundStrokes: readonly StrokeModel[]
   readonly targetCopies: ReadonlyMap<number, readonly StrokeModel[]>
   readonly targetOfSource: ReadonlyMap<string, MotionCoord>
+  readonly targetJunctionsBySourceStroke: ReadonlyMap<string, readonly [string, string]>
   readonly sourceArgumentPointByOrigin: ReadonlyMap<string, PointModel>
   readonly copies: readonly OccurrenceCopy[]
   readonly copyStages: ReadonlyMap<number, CopyStage>
@@ -632,6 +635,7 @@ function strokeFrame(
   reflow: number,
   color: string,
   lineage: LambdaStrokeLineage,
+  destinationJunctions: readonly [string, string] | null = null,
 ): LambdaStroke {
   const { maps, offset } = viewAt(view, reflow)
   const from = mapCoord(a, view, reflow), to = mapCoord(b, view, reflow)
@@ -668,8 +672,8 @@ function strokeFrame(
     copyIndex: stroke.copyIndex,
     color,
     points: [
-      { ...from, junction: stroke.a.id },
-      { ...to, junction: stroke.b.id },
+      { ...from, junction: stroke.a.id, destinationJunction: destinationJunctions?.[0] ?? null },
+      { ...to, junction: stroke.b.id, destinationJunction: destinationJunctions?.[1] ?? null },
     ],
     geometry,
   }
@@ -862,6 +866,10 @@ function createMotionModel(
   const targetBinderRight = Math.max(targetBox.right + view.targetOffset, ...socketPoints.map(({ col }) => col))
 
   const persistentPointIds = new Set(pairs.flatMap((pair) => [pair.source.a.id, pair.source.b.id]))
+  const targetJunctionsBySourceStroke = new Map(pairs.map(({ source: sourceStroke, target: targetStroke }) => [
+    sourceStroke.id,
+    [targetStroke.a.id, targetStroke.b.id] as const,
+  ]))
   const persistentJunctions = [...persistentPointIds].map((sourceId): LambdaJunctionCorrespondence => {
     const sourcePoint = source.points.get(sourceId)!
     const destination = targetOfSource.get(sourceId)
@@ -876,7 +884,7 @@ function createMotionModel(
   return {
     motion: {
       source, target, view, pairs, sourceArgument, redexScaffolding, lambdaStroke,
-      boundStrokes, targetCopies, targetOfSource,
+      boundStrokes, targetCopies, targetOfSource, targetJunctionsBySourceStroke,
       sourceArgumentPointByOrigin, copies, copyStages,
       sourceBodyOut: asGrid(sourceCoord(source.points.get(source.nodeOut(body))!), 'source body output'),
       sourceArgumentRoot,
@@ -941,6 +949,7 @@ export function sampleBetaMotion(
         model.view, 0,
         baseColor,
         argumentIds.has(stroke.id) ? 'argument' : redexIds.has(stroke.id) ? 'redex' : 'persistent',
+        model.targetJunctionsBySourceStroke.get(stroke.id) ?? null,
       )),
       sockets: [],
     }
@@ -955,6 +964,7 @@ export function sampleBetaMotion(
         model.view, 1,
         baseColor,
         stroke.copyIndex === null ? 'persistent' : 'copy',
+        [stroke.a.id, stroke.b.id],
       )),
       sockets: [],
     }
@@ -979,7 +989,12 @@ export function sampleBetaMotion(
     b: MotionCoord,
     color: string,
     lineage: LambdaStrokeLineage,
-  ): void => { strokes.push(strokeFrame(source, a, b, model.view, space, color, lineage)) }
+  ): void => {
+    const destinationJunctions = lineage === 'persistent'
+      ? model.targetJunctionsBySourceStroke.get(source.id) ?? null
+      : lineage === 'copy' ? [source.a.id, source.b.id] as const : null
+    strokes.push(strokeFrame(source, a, b, model.view, space, color, lineage, destinationJunctions))
+  }
 
   for (const pair of model.pairs) {
     push(pair.source, movingSource(pair.source.a, space), movingSource(pair.source.b, space), baseColor, 'persistent')

@@ -2,7 +2,12 @@ import type { NodeId, RegionId } from '../kernel/diagram/diagram'
 import type { PathSeg } from '../kernel/term/reduce'
 import type { Term } from '../kernel/term/term'
 import { termGeometry, type NodeGeometry } from '../view/bend'
-import type { LambdaStrokeFrame, LambdaStrokeRole } from '../view/lambda-motion'
+import type {
+  LambdaPhase,
+  LambdaStrokeFrame,
+  LambdaStrokeLineage,
+  LambdaStrokeRole,
+} from '../view/lambda-motion'
 import { lambdaFrameGeometry } from '../view/morph'
 import type { Vec2 } from '../view/vec'
 import {
@@ -35,6 +40,12 @@ export type LambdaEntity = {
   readonly strokeId: string
   readonly sourceStrokeId: string
   readonly role: LambdaStrokeRole
+  readonly phase: LambdaPhase | null
+  /** Structural provenance is populated for beta-motion frames. */
+  readonly lineage: LambdaStrokeLineage | null
+  readonly copyIndex: number | null
+  readonly junctions: readonly [string, string] | null
+  readonly destinationJunctions: readonly [string | null, string | null] | null
   /** Null means the renderer's authoritative term-wire base color. */
   readonly color: string | null
   readonly alpha?: number
@@ -83,7 +94,12 @@ type StaticStroke = {
   readonly strokeId: string
   readonly sourceStrokeId: string
   readonly role: LambdaStrokeRole
+  readonly phase: LambdaPhase | null
   readonly subtermPath: readonly PathSeg[]
+  readonly lineage: LambdaStrokeLineage | null
+  readonly copyIndex: number | null
+  readonly junctions: readonly [string, string] | null
+  readonly destinationJunctions: readonly [string | null, string | null] | null
   readonly color: string | null
   readonly alpha?: number
   readonly points: readonly Vec2[]
@@ -111,7 +127,12 @@ function staticStrokes(geometry: NodeGeometry): StaticStroke[] {
     strokeId: `arc:${index}`,
     sourceStrokeId: `arc:${index}`,
     role: arc.kind === 'lam' ? 'lambda' : arc.kind === 'app' ? 'application' : 'free-rail',
+    phase: null,
     subtermPath: deepestOwner(geometry, 'arc', index),
+    lineage: null,
+    copyIndex: null,
+    junctions: null,
+    destinationJunctions: null,
     color: null,
     points: arcPoints(arc.r, arc.a0, arc.a1),
   }))
@@ -122,19 +143,28 @@ function staticStrokes(geometry: NodeGeometry): StaticStroke[] {
       strokeId: `radial:${index}`,
       sourceStrokeId: `radial:${index}`,
       role: radial.kind === 'var' ? 'variable' : radial.kind === 'port' ? 'free-port' : 'fn-connector',
+      phase: null,
       subtermPath: deepestOwner(geometry, 'radial', index),
+      lineage: null,
+      copyIndex: null,
+      junctions: null,
+      destinationJunctions: null,
       color: null,
       points: [from, to],
     })
   })
   if (geometry.exitArc !== null) out.push({
     strokeId: 'exit:arc', sourceStrokeId: 'exit:arc', role: 'output-arc',
-    subtermPath: deepestOwner(geometry, 'exit', 0), color: null,
+    phase: null, subtermPath: deepestOwner(geometry, 'exit', 0),
+    lineage: null, copyIndex: null, junctions: null, color: null,
+    destinationJunctions: null,
     points: arcPoints(geometry.exitArc.r, geometry.exitArc.a0, geometry.exitArc.a1),
   })
   if (geometry.exitLine !== null) out.push({
     strokeId: 'exit:line', sourceStrokeId: 'exit:line', role: 'output-line',
-    subtermPath: deepestOwner(geometry, 'exit', 0), color: null,
+    phase: null, subtermPath: deepestOwner(geometry, 'exit', 0),
+    lineage: null, copyIndex: null, junctions: null, color: null,
+    destinationJunctions: null,
     points: geometry.exitLine,
   })
   return out
@@ -154,7 +184,12 @@ function frameStrokes(frame: LambdaStrokeFrame): StaticStroke[] {
     strokeId: stroke.id,
     sourceStrokeId: stroke.originId,
     role: stroke.role,
+    phase: frame.phase,
     subtermPath: pathFromOwner(stroke.ownerId),
+    lineage: stroke.lineage,
+    copyIndex: stroke.copyIndex,
+    junctions: [stroke.points[0].junction, stroke.points[1].junction],
+    destinationJunctions: [stroke.points[0].destinationJunction, stroke.points[1].destinationJunction],
     color: stroke.color,
     points: stroke.geometry.kind === 'arc'
       ? arcPoints(stroke.geometry.r, stroke.geometry.a0, stroke.geometry.a1)
@@ -167,7 +202,12 @@ function frameStrokes(frame: LambdaStrokeFrame): StaticStroke[] {
       strokeId: `socket:${socket.copyIndex}`,
       sourceStrokeId: socket.sourceOccurrenceId,
       role: 'argument-connector',
+      phase: frame.phase,
       subtermPath: pathFromOwner(socket.sourceOccurrenceId),
+      lineage: 'argument',
+      copyIndex: socket.copyIndex,
+      junctions: [socket.sourceOccurrenceId, socket.sourceOccurrenceId],
+      destinationJunctions: null,
       color: '#f0bd55',
       alpha: socket.amount,
       points: arcPoints(radius, 0, 2 * Math.PI).map((point) => ({
@@ -202,6 +242,11 @@ export function lambdaDiagram(input: LambdaDiagramInput): LambdaDiagram {
     strokeId: stroke.strokeId,
     sourceStrokeId: stroke.sourceStrokeId,
     role: stroke.role,
+    phase: stroke.phase,
+    lineage: stroke.lineage,
+    copyIndex: stroke.copyIndex,
+    junctions: stroke.junctions,
+    destinationJunctions: stroke.destinationJunctions,
     color: stroke.color,
     ...(stroke.alpha === undefined ? {} : { alpha: stroke.alpha }),
     pts: stroke.points.map((point) => embedLambdaPoint(point, input.center, plane, scale)),

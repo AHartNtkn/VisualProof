@@ -56,6 +56,34 @@ type TwoDFrame = {
   }>>
 }
 
+type StrokeRaster = {
+  readonly screenLength: number
+  readonly matchingPixels: number
+  readonly bestColorDistance: number
+}
+
+type StrokeObservation = {
+  readonly pieceId: string
+  readonly address: string
+  readonly sourceStrokeId: string
+  readonly renderRole: string
+  readonly role: string
+  readonly lineage: 'persistent' | 'redex' | 'argument' | 'copy'
+  readonly copyIndex: number | null
+  readonly rendererOnly: boolean
+  readonly junctions: readonly [string, string]
+  readonly destinations: readonly [string | null, string | null]
+  readonly points: readonly [Point, Point]
+  readonly color: string
+  readonly raster: StrokeRaster
+}
+
+type FrameObservations = {
+  readonly source: 'live-reference-transition' | 'application-2d-paint' | 'presented-webgl-entities'
+  readonly baseColor: string
+  readonly strokes: readonly StrokeObservation[]
+}
+
 type FrameEvidence = {
   readonly progress: number
   readonly sample: 'boundary' | 'midpoint'
@@ -64,6 +92,7 @@ type FrameEvidence = {
   readonly imageSha256: string
   readonly structural: StructuralFrame
   readonly raster: RasterFrame
+  readonly observations: FrameObservations
   readonly twoD?: TwoDFrame
   readonly threeD?: ThreeDFrame
 }
@@ -85,6 +114,7 @@ type Manifest = {
     readonly redex: string
     readonly argument: string
     readonly copies: readonly string[]
+    readonly referenceBase: string
     readonly lightBase: string
     readonly darkBase: string
   }
@@ -93,6 +123,10 @@ type Manifest = {
     readonly source: string
     readonly copyCount: number
     readonly boundaries: readonly number[]
+    readonly correspondence: {
+      readonly argumentStrokeAddresses: readonly string[]
+      readonly argumentRootJunction: string
+    }
     readonly modes: Readonly<Record<'reference' | '2d-light' | '3d-light' | '3d-dark', ModeEvidence>>
   }[]
 }
@@ -175,6 +209,181 @@ function minCentroidSeparation(copies: StructuralFrame['copies']): number {
   return minimum
 }
 
+const semanticStrokes = (frame: FrameEvidence): readonly StrokeObservation[] =>
+  frame.observations.strokes.filter(({ rendererOnly }) => !rendererOnly)
+
+function groupsOf(frame: FrameEvidence): Map<string, StrokeObservation[]> {
+  const groups = new Map<string, StrokeObservation[]>()
+  for (const stroke of semanticStrokes(frame)) {
+    const group = groups.get(stroke.address) ?? []
+    group.push(stroke)
+    groups.set(stroke.address, group)
+  }
+  return groups
+}
+
+function junctionPositions(strokes: readonly StrokeObservation[]): Map<string, Point> {
+  const positions = new Map<string, Point>()
+  for (const stroke of strokes) {
+    stroke.junctions.forEach((junction, index) => {
+      const point = stroke.points[index]!
+      const previous = positions.get(junction)
+      if (previous !== undefined) {
+        expect(pointDistance(previous, point), `junction ${junction} split inside one rendered frame`).toBeLessThan(1e-6)
+      } else positions.set(junction, point)
+    })
+  }
+  return positions
+}
+
+function junctionDestinations(strokes: readonly StrokeObservation[]): Map<string, string> {
+  const destinations = new Map<string, string>()
+  for (const stroke of strokes) stroke.junctions.forEach((junction, index) => {
+    const destination = stroke.destinations[index]
+    if (destination === null || destination === undefined) {
+      throw new Error(`persistent/copy junction ${junction} has no destination correspondence`)
+    }
+    const previous = destinations.get(junction)
+    if (previous !== undefined) expect(destination, `junction ${junction} has conflicting destinations`).toBe(previous)
+    else destinations.set(junction, destination)
+  })
+  return destinations
+}
+
+function pointDistance(left: Point, right: Point): number {
+  return Math.hypot(left[0] - right[0], left[1] - right[1])
+}
+
+function topologyTerminals(strokes: readonly StrokeObservation[]): string[] {
+  const degree = new Map<string, number>()
+  for (const { junctions: [left, right] } of strokes) {
+    if (left === right) continue
+    degree.set(left, (degree.get(left) ?? 0) + 1)
+    degree.set(right, (degree.get(right) ?? 0) + 1)
+  }
+  return [...degree].filter(([, count]) => count % 2 === 1).map(([junction]) => junction).sort()
+}
+
+function componentCount(strokes: readonly StrokeObservation[]): number {
+  const endpoints = strokes.flatMap((stroke, strokeIndex) => stroke.junctions.map((junction, endpointIndex) => ({
+    id: `${strokeIndex}:${endpointIndex}`,
+    junction,
+    point: stroke.points[endpointIndex]!,
+  })))
+  const parent = new Map(endpoints.map(({ id }) => [id, id]))
+  const root = (value: string): string => {
+    const current = parent.get(value)
+    if (current === undefined) throw new Error(`unknown topology endpoint ${value}`)
+    if (current === value) return value
+    const resolved = root(current)
+    parent.set(value, resolved)
+    return resolved
+  }
+  const union = (left: string, right: string): void => {
+    const leftRoot = root(left), rightRoot = root(right)
+    if (leftRoot !== rightRoot) parent.set(rightRoot, leftRoot)
+  }
+  for (let strokeIndex = 0; strokeIndex < strokes.length; strokeIndex += 1) {
+    union(`${strokeIndex}:0`, `${strokeIndex}:1`)
+  }
+  for (let left = 0; left < endpoints.length; left += 1) for (let right = left + 1; right < endpoints.length; right += 1) {
+    const a = endpoints[left]!, b = endpoints[right]!
+    if (pointDistance(a.point, b.point) < 1e-6) union(a.id, b.id)
+  }
+  return new Set([...parent.keys()].map(root)).size
+}
+
+const colorRgb = (hex: string): readonly [number, number, number] => {
+  const value = Number.parseInt(hex.slice(1), 16)
+  return [value >> 16, (value >> 8) & 255, value & 255]
+}
+
+const smoothStage = (value: number): number => {
+  const amount = Math.max(0, Math.min(1, value))
+  return amount * amount * (3 - 2 * amount)
+}
+
+function mixColor(from: string, to: string, amount: number): string {
+  const left = colorRgb(from), right = colorRgb(to), progress = Math.max(0, Math.min(1, amount))
+  const channels = left.map((channel, index) => Math.round(channel + (right[index]! - channel) * progress))
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`
+}
+
+function singleColor(group: readonly StrokeObservation[], context: string): string {
+  const colors = [...new Set(group.map(({ color }) => color.toLowerCase()))]
+  expect(colors, `${context} has inconsistent per-piece colors`).toHaveLength(1)
+  return colors[0]!
+}
+
+const copyPrefix = (copyIndex: number): string => `copy:${copyIndex}:`
+
+function copyRoot(frame: FrameEvidence, copyIndex: number, argumentRootJunction: string): Point {
+  const position = junctionPositions(
+    semanticStrokes(frame).filter(({ copyIndex: index }) => index === copyIndex),
+  ).get(`${copyPrefix(copyIndex)}${argumentRootJunction}`)
+  if (position === undefined) throw new Error(`copy ${copyIndex} has no correspondence-addressable root`)
+  return position
+}
+
+function normalizedStageFraction(point: Point, start: Point, end: Point): { readonly amount: number; readonly offAxis: number } {
+  const delta: Point = [end[0] - start[0], end[1] - start[1]]
+  const norm = delta[0] * delta[0] + delta[1] * delta[1]
+  if (norm < 1e-10) throw new Error('stage endpoints do not move')
+  const relative: Point = [point[0] - start[0], point[1] - start[1]]
+  const amount = (relative[0] * delta[0] + relative[1] * delta[1]) / norm
+  const projected: Point = [start[0] + amount * delta[0], start[1] + amount * delta[1]]
+  return { amount, offAxis: pointDistance(point, projected) / Math.sqrt(norm) }
+}
+
+function explicitSubdivisionJunctions(
+  reference: readonly StrokeObservation[],
+  actual: readonly StrokeObservation[],
+  context: string,
+): void {
+  const referenceJunctions = new Set(reference.flatMap(({ junctions }) => junctions))
+  const occurrences = new Map<string, { readonly point: Point; readonly address: string }[]>()
+  for (const stroke of actual) stroke.junctions.forEach((junction, index) => {
+    if (referenceJunctions.has(junction)) return
+    const values = occurrences.get(junction) ?? []
+    values.push({ point: stroke.points[index]!, address: stroke.address })
+    occurrences.set(junction, values)
+  })
+  for (const [junction, values] of occurrences) {
+    expect(values, `${context} has an unmatched non-degree-two junction ${junction}`).toHaveLength(2)
+    expect(new Set(values.map(({ address }) => address)).size, `${context} subdivision crosses semantic strokes`).toBe(1)
+    expect(values[0]!.address.endsWith(':free-drop'), `${context} has an unrecognized subdivision ${junction}`).toBe(true)
+    expect(junction, `${context} has an unrecognized subdivision identity`).toBe(
+      values[0]!.address.replace(/:free-drop$/u, ':bind'),
+    )
+    expect(pointDistance(values[0]!.point, values[1]!.point), `${context} subdivision ${junction} is split`).toBeLessThan(1e-6)
+  }
+}
+
+function expectedStrokeColor(
+  frame: FrameEvidence,
+  stroke: StrokeObservation,
+  boundaries: readonly number[],
+  palette: Manifest['palette'],
+): string {
+  const [start, split, liftEnd] = boundaries
+  const barEnd = boundaries.at(-2)!
+  const progress = frame.progress
+  const base = frame.observations.baseColor.toLowerCase()
+  if (progress === 0) return base
+  if (stroke.lineage === 'persistent') return base
+  if (progress < split!) {
+    const accent = stroke.lineage === 'redex' ? palette.redex : palette.argument
+    if (stroke.lineage === 'redex' && (stroke.role === 'lambda' || stroke.role === 'variable')) return accent
+    return mixColor(base, accent, smoothStage((progress - start!) / (split! - start!)))
+  }
+  if (stroke.lineage === 'redex') return palette.redex
+  const lift = smoothStage((progress - split!) / (liftEnd! - split!))
+  if (stroke.lineage === 'argument') return mixColor(palette.argument, palette.redex, lift)
+  const copyHue = palette.copies[stroke.copyIndex!]!
+  if (progress < liftEnd!) return mixColor(palette.argument, copyHue, lift)
+  return mixColor(copyHue, base, smoothStage((progress - barEnd) / (1 - barEnd)))
+}
+
 function assertEvidenceFile(path: string, expectedHash: string): void {
   expect(resolve(path).startsWith(`${OUTPUT}/`), `${path} is outside the evidence directory`).toBe(true)
   expect(statSync(path).size, `${path} is empty`).toBeGreaterThan(0)
@@ -233,6 +442,191 @@ describe('rendered Lambda comparison', () => {
             copies: structural.copies.length,
           }))
           expect(flags.slice(1)).toEqual([flags[0], flags[0], flags[0]])
+        }
+      })
+
+      it('retains complete correspondence-addressable topology from each actual renderer witness', () => {
+        for (const sample of requiredSamples) {
+          const reference = at(example.modes.reference.frames, sample.progress)
+          expect(reference.observations.source).toBe('live-reference-transition')
+          const referenceGroups = groupsOf(reference)
+          expect(referenceGroups.size).toBeGreaterThan(0)
+          for (const modeName of ['2d-light', '3d-light', '3d-dark'] as const) {
+            const actual = at(example.modes[modeName].frames, sample.progress)
+            expect(actual.observations.source).toBe(modeName === '2d-light'
+              ? 'application-2d-paint'
+              : 'presented-webgl-entities')
+            expect(new Set(actual.observations.strokes.map(({ pieceId }) => pieceId)).size)
+              .toBe(actual.observations.strokes.length)
+            const rendererOnly = actual.observations.strokes.filter(({ rendererOnly }) => rendererOnly)
+            expect(rendererOnly.every(({ pieceId, sourceStrokeId, renderRole }) => (
+              (sourceStrokeId.startsWith('interface:')
+                && ['free-rail', 'free-port', 'term-output', 'output-arc', 'output-line'].includes(renderRole))
+              || (pieceId.startsWith('3d:socket:') && renderRole === 'argument-connector')
+            ))).toBe(true)
+            const actualGroups = groupsOf(actual)
+            expect([...actualGroups.keys()].sort()).toEqual([...referenceGroups.keys()].sort())
+            for (const [address, referenceGroup] of referenceGroups) {
+              const actualGroup = actualGroups.get(address)!
+              expect(new Set(actualGroup.map(({ role }) => role))).toEqual(new Set(referenceGroup.map(({ role }) => role)))
+              expect(new Set(actualGroup.map(({ lineage }) => lineage))).toEqual(new Set(referenceGroup.map(({ lineage }) => lineage)))
+              expect(new Set(actualGroup.map(({ copyIndex }) => copyIndex))).toEqual(new Set(referenceGroup.map(({ copyIndex }) => copyIndex)))
+              explicitSubdivisionJunctions(referenceGroup, actualGroup, `${modeName} ${address}`)
+              expect(componentCount(actualGroup), `${modeName} ${address} is disconnected`).toBe(1)
+              expect(topologyTerminals(actualGroup), `${modeName} ${address} has a wrong destination`)
+                .toEqual(topologyTerminals(referenceGroup))
+            }
+            const referencePersistentStrokes = semanticStrokes(reference).filter(({ lineage }) => lineage === 'persistent')
+            const actualPersistentStrokes = semanticStrokes(actual).filter(({ lineage }) => lineage === 'persistent')
+            const referencePersistent = junctionPositions(referencePersistentStrokes)
+            const actualPersistent = junctionPositions(actualPersistentStrokes)
+            explicitSubdivisionJunctions(
+              referencePersistentStrokes,
+              actualPersistentStrokes,
+              `${modeName} persistent frame ${sample.progress}`,
+            )
+            const referenceStartStrokes = semanticStrokes(at(example.modes.reference.frames, 0))
+              .filter(({ lineage }) => lineage === 'persistent')
+            const actualStartStrokes = semanticStrokes(at(example.modes[modeName].frames, 0))
+              .filter(({ lineage }) => lineage === 'persistent')
+            const referenceStart = junctionPositions(referenceStartStrokes)
+            const referenceDestinations = junctionDestinations(referenceStartStrokes)
+            const referenceEnd = junctionPositions(semanticStrokes(at(example.modes.reference.frames, 1))
+              .filter(({ lineage }) => lineage === 'persistent'))
+            const actualStart = junctionPositions(actualStartStrokes)
+            const actualDestinations = junctionDestinations(actualStartStrokes)
+            const actualEnd = junctionPositions(semanticStrokes(at(example.modes[modeName].frames, 1))
+              .filter(({ lineage }) => lineage === 'persistent'))
+            expect([...referenceDestinations.keys()].every((junction) => actualDestinations.has(junction)),
+              `${modeName} dropped a persistent source correspondence`).toBe(true)
+            for (const [junction, destination] of referenceDestinations) {
+              expect(actualDestinations.get(junction), `${modeName} ${junction} has a wrong semantic destination`).toBe(destination)
+              const currentIdentity = sample.progress === 1 ? destination : junction
+              const expectedPoint = referencePersistent.get(currentIdentity)
+              const actualPoint = actualPersistent.get(currentIdentity)
+              const referenceFrom = referenceStart.get(junction), referenceTo = referenceEnd.get(destination)
+              const actualFrom = actualStart.get(junction), actualTo = actualEnd.get(destination)
+              expect(referenceFrom, `reference source is missing persistent junction ${junction}`).toBeDefined()
+              expect(referenceTo, `reference target is missing destination ${destination}`).toBeDefined()
+              expect(actualFrom, `${modeName} source is missing persistent junction ${junction}`).toBeDefined()
+              expect(actualTo, `${modeName} target is missing destination ${destination}`).toBeDefined()
+              expect(expectedPoint, `reference frame ${sample.progress} is missing ${currentIdentity}`).toBeDefined()
+              expect(actualPoint, `${modeName} frame ${sample.progress} is missing ${currentIdentity}`).toBeDefined()
+              if (referenceFrom === undefined || referenceTo === undefined || actualFrom === undefined
+                || actualTo === undefined || expectedPoint === undefined || actualPoint === undefined) {
+                throw new Error(`incomplete trajectory for ${junction} -> ${destination}`)
+              }
+              const referenceSpan = pointDistance(referenceFrom, referenceTo)
+              const actualSpan = pointDistance(actualFrom, actualTo)
+              if (referenceSpan < 1e-8) {
+                expect(pointDistance(expectedPoint, referenceFrom), `reference ${junction} unexpectedly moved`).toBeLessThan(1e-6)
+                expect(actualSpan, `${modeName} ${junction} has a destination absent from the reference`).toBeLessThan(1e-8)
+                expect(pointDistance(actualPoint, actualFrom), `${modeName} ${junction} unexpectedly moved`).toBeLessThan(1e-6)
+              } else {
+                expect(actualSpan, `${modeName} ${junction} never moved toward its destination`).toBeGreaterThan(1e-8)
+                const expectedMotion = normalizedStageFraction(expectedPoint, referenceFrom, referenceTo)
+                const actualMotion = normalizedStageFraction(actualPoint, actualFrom, actualTo)
+                expect(expectedMotion.offAxis, `reference ${junction} left its endpoint trajectory`).toBeLessThan(1e-6)
+                expect(actualMotion.offAxis, `${modeName} ${junction} left its endpoint trajectory`).toBeLessThan(1e-6)
+                expect(actualMotion.amount, `${modeName} ${junction} snapped or moved at the wrong rate`)
+                  .toBeCloseTo(expectedMotion.amount, 6)
+              }
+            }
+          }
+        }
+      })
+
+      it('matches complete copy shapes and reference-derived lift/dock trajectories without snaps', () => {
+        if (expected.copies === 0) return
+        const [, split, liftEnd, spaceEnd, dockEnd] = expected.boundaries
+        for (const modeName of MODES) {
+          const frames = example.modes[modeName].frames
+          for (const sample of requiredSamples.filter(({ progress }) => progress >= split!)) {
+            const frame = at(frames, sample.progress)
+            for (let copyIndex = 0; copyIndex < expected.copies; copyIndex += 1) {
+              const copyStrokes = semanticStrokes(frame).filter(({ copyIndex: index }) => index === copyIndex)
+              const origins = [...new Set(copyStrokes.map(({ address }) => address.slice(copyPrefix(copyIndex).length)))].sort()
+              expect(origins).toEqual([...example.correspondence.argumentStrokeAddresses].sort())
+              expect(componentCount(copyStrokes)).toBe(1)
+              if (modeName === 'reference') continue
+              const reference = at(example.modes.reference.frames, sample.progress)
+              const referencePositions = junctionPositions(semanticStrokes(reference).filter(({ copyIndex: index }) => index === copyIndex))
+              const actualPositions = junctionPositions(copyStrokes)
+              const referenceRoot = copyRoot(reference, copyIndex, example.correspondence.argumentRootJunction)
+              const actualRoot = copyRoot(frame, copyIndex, example.correspondence.argumentRootJunction)
+              for (const [junction, expectedPoint] of referencePositions) {
+                const actualPoint = actualPositions.get(junction)
+                expect(actualPoint, `${modeName} dropped copy junction ${junction}`).toBeDefined()
+                if (actualPoint === undefined) throw new Error(`${modeName} dropped copy junction ${junction}`)
+                expect(pointDistance(
+                  [actualPoint[0] - actualRoot[0], actualPoint[1] - actualRoot[1]],
+                  [expectedPoint[0] - referenceRoot[0], expectedPoint[1] - referenceRoot[1]],
+                ), `${modeName} ${junction} changed the complete copy shape`).toBeLessThan(1e-6)
+              }
+            }
+          }
+
+          for (let copyIndex = 0; copyIndex < expected.copies; copyIndex += 1) {
+            for (const [startProgress, midpoint, endProgress] of [
+              [split!, (split! + liftEnd!) / 2, liftEnd!],
+              [spaceEnd!, (spaceEnd! + dockEnd!) / 2, dockEnd!],
+            ] as const) {
+              const referenceStage = [startProgress, midpoint, endProgress].map((progress) => (
+                copyRoot(at(example.modes.reference.frames, progress), copyIndex, example.correspondence.argumentRootJunction)
+              ))
+              const actualStage = [startProgress, midpoint, endProgress].map((progress) => (
+                copyRoot(at(frames, progress), copyIndex, example.correspondence.argumentRootJunction)
+              ))
+              const expectedFraction = normalizedStageFraction(referenceStage[1]!, referenceStage[0]!, referenceStage[2]!)
+              const actualFraction = normalizedStageFraction(actualStage[1]!, actualStage[0]!, actualStage[2]!)
+              expect(actualFraction.amount).toBeCloseTo(expectedFraction.amount, 6)
+              expect(actualFraction.offAxis).toBeLessThan(1e-6)
+            }
+          }
+        }
+      })
+
+      it('matches every lineage color and samples pixels only on Lambda-authored strokes', () => {
+        const liftEnd = expected.boundaries[2]!
+        for (const sample of requiredSamples) {
+          const reference = at(example.modes.reference.frames, sample.progress)
+          const referenceGroups = groupsOf(reference)
+          for (const modeName of MODES) {
+            const frame = at(example.modes[modeName].frames, sample.progress)
+            const groups = groupsOf(frame)
+            for (const [address, referenceGroup] of referenceGroups) {
+              const actualGroup = groups.get(address)
+              expect(actualGroup, `${modeName} is missing semantic stroke group ${address}`).toBeDefined()
+              if (actualGroup === undefined) throw new Error(`${modeName} is missing semantic stroke group ${address}`)
+              const referenceColor = singleColor(referenceGroup, `reference ${address}`)
+              const actualColor = singleColor(actualGroup, `${modeName} ${address}`)
+              expect(referenceColor, `reference ${address} has a wrong stage color`).toBe(
+                expectedStrokeColor(reference, referenceGroup[0]!, expected.boundaries, manifest.palette),
+              )
+              expect(actualColor, `${modeName} ${address} has a wrong stage color`).toBe(
+                expectedStrokeColor(frame, actualGroup[0]!, expected.boundaries, manifest.palette),
+              )
+            }
+            const rasterStrokes = semanticStrokes(frame).filter(({ raster }) => raster.screenLength >= 3)
+            expect(rasterStrokes.length, `${modeName} has no raster-addressable Lambda stroke`).toBeGreaterThan(0)
+            expect(rasterStrokes.reduce((sum, stroke) => sum + stroke.raster.matchingPixels, 0),
+              `${modeName} has no exact structural-color pixels inside Lambda-authored stroke tubes`).toBeGreaterThan(0)
+            expect(Math.min(...rasterStrokes.map(({ raster }) => raster.bestColorDistance)),
+              `${modeName} misses all exact structural colors inside Lambda-authored stroke tubes`)
+              .toBeLessThanOrEqual(modeName.startsWith('3d') ? 72 : 48)
+          }
+        }
+        if (expected.copies > 0) {
+          for (const modeName of MODES) {
+            const frame = at(example.modes[modeName].frames, liftEnd)
+            for (const group of groupsOf(frame).values()) if (group[0]!.lineage === 'copy') {
+              expect(singleColor(group, `${modeName} lifted copy`)).toBe(manifest.palette.copies[group[0]!.copyIndex!]!)
+            }
+            const settled = at(example.modes[modeName].frames, 1)
+            for (const group of groupsOf(settled).values()) if (group[0]!.lineage === 'copy') {
+              expect(singleColor(group, `${modeName} settled copy`)).toBe(settled.observations.baseColor.toLowerCase())
+            }
+          }
         }
       })
 

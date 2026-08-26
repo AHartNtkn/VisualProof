@@ -43,6 +43,9 @@ type Bounds = { readonly x: number; readonly y: number; readonly width: number; 
 type RawStroke = {
   readonly id: string
   readonly originId: string
+  readonly address: string
+  readonly sourceStrokeId: string
+  readonly renderRole: string
   readonly role: string
   readonly lineage: 'persistent' | 'redex' | 'argument' | 'copy'
   readonly copyIndex: number | null
@@ -52,12 +55,23 @@ type RawStroke = {
   readonly length: number
   readonly junctionA: string
   readonly junctionB: string
+  readonly destinationJunctionA: string | null
+  readonly destinationJunctionB: string | null
+  readonly rendererOnly: boolean
+  readonly raster: StrokeRaster
 }
 type RawFrame = {
+  readonly source: 'live-reference-transition' | 'application-2d-paint' | 'presented-webgl-entities'
+  readonly baseColor: string
   readonly phase: string
   readonly copyCount: number
   readonly strokes: readonly RawStroke[]
   readonly endpointStaticError: number
+}
+type StrokeRaster = {
+  readonly screenLength: number
+  readonly matchingPixels: number
+  readonly bestColorDistance: number
 }
 type RasterFrame = {
   readonly nonBackgroundPixels: number
@@ -94,6 +108,11 @@ type BrowserMeasurement = {
   readonly backingDimensions: { readonly width: number; readonly height: number }
   readonly twoD?: TwoDFrame
   readonly threeD?: ThreeDFrame
+}
+type ReferenceLoad = {
+  readonly copyCount: number
+  readonly argumentStrokeAddresses: readonly string[]
+  readonly argumentRootJunction: string
 }
 type StructuralFrame = {
   readonly copyCount: number
@@ -163,10 +182,13 @@ async function sourceHash(): Promise<string> {
 const pointDistance = (left: Point, right: Point): number =>
   Math.hypot(left[0] - right[0], left[1] - right[1])
 
-function strokeDistance(left: RawStroke, right: RawStroke): number {
-  const direct = Math.max(pointDistance(left.a, right.a), pointDistance(left.b, right.b))
-  const reversed = Math.max(pointDistance(left.a, right.b), pointDistance(left.b, right.a))
-  return Math.min(direct, reversed)
+function pointSegmentDistance(point: Point, from: Point, to: Point): number {
+  const delta: Point = [to[0] - from[0], to[1] - from[1]]
+  const norm = delta[0] * delta[0] + delta[1] * delta[1]
+  const amount = norm === 0 ? 0 : Math.max(0, Math.min(1,
+    ((point[0] - from[0]) * delta[0] + (point[1] - from[1]) * delta[1]) / norm,
+  ))
+  return pointDistance(point, [from[0] + delta[0] * amount, from[1] + delta[1] * amount])
 }
 
 function maxTargetError(
@@ -174,11 +196,27 @@ function maxTargetError(
   target: readonly RawStroke[],
   include: (stroke: RawStroke) => boolean,
 ): number {
-  const targetById = new Map(target.map((stroke) => [stroke.id, stroke]))
+  const targetGroups = new Map<string, RawStroke[]>()
+  for (const stroke of target.filter(({ rendererOnly }) => !rendererOnly)) {
+    const group = targetGroups.get(stroke.address) ?? []
+    group.push(stroke)
+    targetGroups.set(stroke.address, group)
+  }
+  const currentGroups = new Map<string, RawStroke[]>()
+  for (const stroke of strokes.filter((candidate) => !candidate.rendererOnly && include(candidate))) {
+    const group = currentGroups.get(stroke.address) ?? []
+    group.push(stroke)
+    currentGroups.set(stroke.address, group)
+  }
   let maximum = 0
-  for (const stroke of strokes.filter(include)) {
-    const match = targetById.get(stroke.id) ?? target.find((candidate) => candidate.originId === stroke.originId)
-    if (match !== undefined) maximum = Math.max(maximum, strokeDistance(stroke, match))
+  for (const [address, group] of currentGroups) {
+    const targetGroup = targetGroups.get(address)
+    if (targetGroup === undefined) throw new Error(`semantic stroke group '${address}' has no final correspondence`)
+    for (const stroke of group) for (const point of [stroke.a, stroke.b]) {
+      maximum = Math.max(maximum, Math.min(...targetGroup.map((candidate) => (
+        pointSegmentDistance(point, candidate.a, candidate.b)
+      ))))
+    }
   }
   return maximum
 }
@@ -204,8 +242,10 @@ function components(strokes: readonly RawStroke[]): number {
 }
 
 function summarize(raw: RawFrame, target: RawFrame): StructuralFrame {
+  const structural = raw.strokes.filter(({ rendererOnly }) => !rendererOnly)
+  const targetStructural = target.strokes.filter(({ rendererOnly }) => !rendererOnly)
   const copies = Array.from({ length: raw.copyCount }, (_, index) => {
-    const strokes = raw.strokes.filter((stroke) => stroke.copyIndex === index && stroke.lineage === 'copy')
+    const strokes = structural.filter((stroke) => stroke.copyIndex === index && stroke.lineage === 'copy')
     const points = strokes.flatMap((stroke) => [stroke.a, stroke.b])
     const centroid: Point = points.length === 0 ? [0, 0] : [
       points.reduce((sum, point) => sum + point[0], 0) / points.length,
@@ -216,21 +256,21 @@ function summarize(raw: RawFrame, target: RawFrame): StructuralFrame {
       strokeCount: strokes.length,
       components: components(strokes),
       centroid: [round(centroid[0]), round(centroid[1])] as const,
-      distanceToTarget: round(maxTargetError(strokes, target.strokes, () => true)),
+      distanceToTarget: round(maxTargetError(strokes, targetStructural, () => true)),
       colors: [...new Set(strokes.map(({ color }) => color.toLowerCase()))].sort(),
     }
   }).filter(({ strokeCount }) => strokeCount > 0)
   return {
     copyCount: raw.copyCount,
-    binderPresent: raw.strokes.some((stroke) => stroke.lineage === 'redex' && stroke.role === 'lambda'),
-    stemCount: raw.strokes.filter((stroke) => stroke.lineage === 'redex' && stroke.role === 'variable').length,
-    argumentCount: raw.strokes.filter((stroke) => stroke.lineage === 'argument').length,
-    argumentSpan: round(raw.strokes.filter((stroke) => stroke.lineage === 'argument')
+    binderPresent: structural.some((stroke) => stroke.lineage === 'redex' && stroke.role === 'lambda'),
+    stemCount: structural.filter((stroke) => stroke.lineage === 'redex' && stroke.role === 'variable').length,
+    argumentCount: structural.filter((stroke) => stroke.lineage === 'argument').length,
+    argumentSpan: round(structural.filter((stroke) => stroke.lineage === 'argument')
       .reduce((sum, stroke) => sum + stroke.length, 0)),
-    persistentTargetError: round(maxTargetError(raw.strokes, target.strokes, (stroke) => stroke.lineage === 'persistent')),
-    copyTargetError: round(maxTargetError(raw.strokes, target.strokes, (stroke) => stroke.lineage === 'copy')),
+    persistentTargetError: round(maxTargetError(structural, targetStructural, (stroke) => stroke.lineage === 'persistent')),
+    copyTargetError: round(maxTargetError(structural, targetStructural, (stroke) => stroke.lineage === 'copy')),
     endpointStaticError: round(raw.endpointStaticError),
-    opaque: raw.strokes.every(({ color }) => /^#[0-9a-f]{6}$/iu.test(color)),
+    opaque: structural.every(({ color }) => /^#[0-9a-f]{6}$/iu.test(color)),
     copies,
   }
 }
@@ -260,7 +300,7 @@ import { convertToWeakHeadNormal } from '/src/app/tactics.ts'
 import { adaptCanvas } from '/src/view/canvas.ts'
 import { fitCamera } from '/src/view/camera.ts'
 import { carryOver, frameBounds, mkEngine } from '/src/view/engine.ts'
-import { planBetaMotion, sampleBetaMotion } from '/src/view/lambda-motion.ts'
+import { planBetaMotion } from '/src/view/lambda-motion.ts'
 import { DARK, LIGHT, paint } from '/src/view/paint.ts'
 import { seedProject, settle } from '/src/view/relax.ts'
 import { renderThemeOf } from '/src/view3d/index.ts'
@@ -288,20 +328,6 @@ const endpoint = stroke => stroke.geometry.kind === 'arc'
 const strokeLength = stroke => stroke.geometry.kind === 'arc'
   ? Math.abs(stroke.geometry.a1 - stroke.geometry.a0) * stroke.geometry.r
   : Math.hypot(stroke.geometry.to.x - stroke.geometry.from.x, stroke.geometry.to.y - stroke.geometry.from.y)
-const rawFrame = (frame, copyCount, endpointStaticError=0) => ({
-  phase: frame.phase,
-  copyCount,
-  endpointStaticError,
-  strokes: frame.strokes.map(stroke => {
-    const [a,b] = endpoint(stroke)
-    return {
-      id: stroke.id, originId: stroke.originId, role: stroke.role, lineage: stroke.lineage,
-      copyIndex: stroke.copyIndex, color: stroke.color.toLowerCase(), a, b,
-      length: strokeLength(stroke),
-      junctionA: stroke.points[0].junction, junctionB: stroke.points[1].junction,
-    }
-  }),
-})
 const rgb = hex => {
   const value = Number.parseInt(hex.slice(1), 16)
   return [value >> 16, (value >> 8) & 255, value & 255]
@@ -324,6 +350,44 @@ const raster = (canvas, background) => {
     }
   }
   return { nonBackgroundPixels, paletteMatches: Object.fromEntries(Object.entries(colors).map(([key,value]) => [key,value.count])) }
+}
+const canonicalJunction = (junction,copyIndex) => {
+  const match=/^copy:(\d+):(.*)$/.exec(junction),source=match===null?junction:match[2]
+  const effective=copyIndex??(match===null?null:Number(match[1]))
+  return effective===null?source:'copy:'+effective+':'+source
+}
+const canonicalRole = (sourceStrokeId,renderRole) => sourceStrokeId.startsWith('interface:')
+  ? renderRole
+  : sourceStrokeId.slice(sourceStrokeId.lastIndexOf(':')+1)
+const observationAddress = (sourceStrokeId,copyIndex) => copyIndex===null
+  ? sourceStrokeId
+  : 'copy:'+copyIndex+':'+sourceStrokeId
+const segmentDistance2 = (point,a,b) => {
+  const dx=b[0]-a[0],dy=b[1]-a[1],norm=dx*dx+dy*dy
+  const t=norm===0?0:Math.max(0,Math.min(1,((point[0]-a[0])*dx+(point[1]-a[1])*dy)/norm))
+  return Math.hypot(point[0]-(a[0]+dx*t),point[1]-(a[1]+dy*t))
+}
+const authoredRaster = (canvas,screenPoints,color,tolerance) => {
+  const context=document.createElement('canvas').getContext('2d')
+  context.canvas.width=canvas.width;context.canvas.height=canvas.height;context.drawImage(canvas,0,0)
+  const data=context.getImageData(0,0,canvas.width,canvas.height).data,target=rgb(color)
+  let screenLength=0,bestColorDistance=Infinity,matchingPixels=0
+  const seen=new Set()
+  for(let index=1;index<screenPoints.length;index++){
+    const a=screenPoints[index-1],b=screenPoints[index]
+    screenLength+=Math.hypot(b[0]-a[0],b[1]-a[1])
+    const x0=Math.max(0,Math.floor(Math.min(a[0],b[0])-3)),x1=Math.min(canvas.width-1,Math.ceil(Math.max(a[0],b[0])+3))
+    const y0=Math.max(0,Math.floor(Math.min(a[1],b[1])-3)),y1=Math.min(canvas.height-1,Math.ceil(Math.max(a[1],b[1])+3))
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+      if(segmentDistance2([x+.5,y+.5],a,b)>2.75)continue
+      const key=y*canvas.width+x;if(seen.has(key))continue;seen.add(key)
+      const offset=key*4;if(data[offset+3]<8)continue
+      const distance=Math.hypot(data[offset]-target[0],data[offset+1]-target[1],data[offset+2]-target[2])
+      bestColorDistance=Math.min(bestColorDistance,distance)
+      if(distance<=tolerance)matchingPixels++
+    }
+  }
+  return {screenLength,matchingPixels,bestColorDistance}
 }
 const shapeBounds = (shapes, view) => {
   const points = []
@@ -354,6 +418,76 @@ const shapeError = (moving, staticShapes) => {
     else error=Math.max(error,Math.hypot(a.from.x-b.from.x,a.from.y-b.from.y),Math.hypot(a.to.x-b.to.x,a.to.y-b.to.y))
   }
   return error
+}
+const smoothStage = value => {const x=Math.max(0,Math.min(1,value));return x*x*(3-2*x)}
+const localToIntrinsic = (point,progress) => {
+  const view=state.plan.model.view,times=state.plan.times
+  const space=smoothStage((progress-times.liftEnd)/(times.spaceEnd-times.liftEnd))
+  const mix=(a,b)=>a+(b-a)*space
+  const cols=mix(view.sourceGrid.cols,view.targetGrid.cols)
+  const rows=mix(view.sourceGrid.rows,view.targetGrid.rows)
+  const offset=mix(view.sourceOffset,view.targetOffset)
+  let angle=Math.atan2(point[1],point[0]);if(angle<0)angle+=Math.PI*2
+  const col=((angle-Math.PI/6)/(Math.PI*5/3))*cols-.5+offset
+  return [col,rows+2-Math.hypot(point[0],point[1])]
+}
+const shapeEndpoints = shape => shape.kind==='arc'
+  ? [shape.a0,shape.a1].map(angle=>[shape.center.x+Math.cos(angle)*shape.r,shape.center.y+Math.sin(angle)*shape.r])
+  : [[shape.from.x,shape.from.y],[shape.to.x,shape.to.y]]
+const shapeSamples = shape => shape.kind==='arc'
+  ? Array.from({length:Math.max(2,Math.ceil(Math.abs(shape.a1-shape.a0)*12)+1)},(_,index)=>{
+      const angle=shape.a0+(shape.a1-shape.a0)*index/(Math.max(2,Math.ceil(Math.abs(shape.a1-shape.a0)*12)+1)-1)
+      return [shape.center.x+Math.cos(angle)*shape.r,shape.center.y+Math.sin(angle)*shape.r]
+    })
+  : shapeEndpoints(shape)
+const lambdaSimilarity = (frame,shapes) => {
+  if(frame.strokes.length!==shapes.length)throw Error('2D paint dropped or added a Lambda structural stroke')
+  for(let index=0;index<frame.strokes.length;index++){
+    const local=endpoint(frame.strokes[index]),world=shapeEndpoints(shapes[index])
+    const localDelta=[local[1][0]-local[0][0],local[1][1]-local[0][1]],worldDelta=[world[1][0]-world[0][0],world[1][1]-world[0][1]]
+    const localLength=Math.hypot(...localDelta),worldLength=Math.hypot(...worldDelta)
+    if(localLength<1e-7||worldLength<1e-7)continue
+    const scale=worldLength/localLength
+    const theta=Math.atan2(worldDelta[1],worldDelta[0])-Math.atan2(localDelta[1],localDelta[0])
+    const c=Math.cos(theta),s=Math.sin(theta)
+    const transformed=[scale*(local[0][0]*c-local[0][1]*s),scale*(local[0][0]*s+local[0][1]*c)]
+    return {scale,theta,center:[world[0][0]-transformed[0],world[0][1]-transformed[1]]}
+  }
+  throw Error('2D Lambda frame has no nondegenerate stroke for normalization')
+}
+const inverseSimilarity = (point,transform) => {
+  const x=(point[0]-transform.center[0])/transform.scale,y=(point[1]-transform.center[1])/transform.scale
+  const c=Math.cos(transform.theta),s=Math.sin(transform.theta)
+  return [x*c+y*s,-x*s+y*c]
+}
+const raw2dFrame = (frame,shapes,canvas,view,progress,baseColor,endpointStaticError) => {
+  const transform=lambdaSimilarity(frame,shapes)
+  const origins=new Set(frame.strokes.map(stroke=>stroke.originId))
+  return {
+    source:'application-2d-paint',baseColor:baseColor.toLowerCase(),phase:frame.phase,
+    copyCount:state.plan.copyCount,endpointStaticError,
+    strokes:frame.strokes.map((stroke,index)=>{
+      const shape=shapes[index],worldEndpoints=shapeEndpoints(shape)
+      const localEndpoints=worldEndpoints.map(point=>inverseSimilarity(point,transform))
+      const expected=endpoint(stroke)
+      for(let point=0;point<2;point++)if(Math.hypot(localEndpoints[point][0]-expected[point][0],localEndpoints[point][1]-expected[point][1])>1e-7)throw Error('2D paint geometry diverged from its structural stroke')
+      const screenPoints=shapeSamples(shape).map(point=>[point[0]*view.scale+view.offsetX,point[1]*view.scale+view.offsetY])
+      const freeDrop=stroke.originId.endsWith(':variable')?stroke.originId.slice(0,-':variable'.length)+':free-drop':stroke.originId
+      const sourceStrokeId=origins.has(freeDrop)?freeDrop:stroke.originId,rendererOnly=sourceStrokeId.startsWith('interface:')
+      const [a,b]=localEndpoints.map(point=>localToIntrinsic(point,progress))
+      return {
+        id:'2d:'+stroke.id,originId:sourceStrokeId,address:observationAddress(sourceStrokeId,stroke.copyIndex),
+        sourceStrokeId,renderRole:stroke.role,role:canonicalRole(sourceStrokeId,stroke.role),
+        lineage:stroke.lineage,copyIndex:stroke.copyIndex,color:stroke.color.toLowerCase(),a,b,
+        length:Math.hypot(a[0]-b[0],a[1]-b[1]),
+        junctionA:canonicalJunction(stroke.points[0].junction,stroke.copyIndex),
+        junctionB:canonicalJunction(stroke.points[1].junction,stroke.copyIndex),
+        destinationJunctionA:stroke.points[0].destinationJunction===null?null:canonicalJunction(stroke.points[0].destinationJunction,stroke.copyIndex),
+        destinationJunctionB:stroke.points[1].destinationJunction===null?null:canonicalJunction(stroke.points[1].destinationJunction,stroke.copyIndex),
+        rendererOnly,raster:authoredRaster(canvas,screenPoints,stroke.color,48),
+      }
+    }),
+  }
 }
 const project = (point, pose, width, height) => {
   const eye=eyeOf(pose), fwd=norm3(sub3(pose.target,eye)), right=norm3(cross3(fwd,{x:0,y:1,z:0})), up=cross3(right,fwd)
@@ -387,6 +521,39 @@ const threeMetrics = (presented, theme, pose, canvas) => {
   for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const i=(y*canvas.width+x)*4,p=[data[i],data[i+1],data[i+2]],fromBg=Math.hypot(p[0]-bg[0],p[1]-bg[1],p[2]-bg[2]);total++;if(fromBg>30&&Math.min(...authored.map(color=>Math.hypot(p[0]-color[0],p[1]-color[1],p[2]-color[2])))<=72)colored++;if(fromBg>30)bestBasePixelDistance=Math.min(bestBasePixelDistance,Math.hypot(p[0]-base[0],p[1]-base[1],p[2]-base[2]))}
   const planarFootprint=lambdas.some(entity=>entity.pts.length>4&&visualBounds.width>8&&visualBounds.height>8)
   return { strokeOnly:lambdas.length>0&&lambdas.every(entity=>!('fill'in entity)&&entity.pts.length>=2),planarFootprint,maxPlanarityError,maxNormalError,maxAttachmentGap,entityColorMismatches,bestBasePixelDistance,lambdaFillRatio:total===0?1:colored/total,visualBounds }
+}
+const raw3dFrame = (presented,theme,pose,canvas,progress,endpointStaticError) => {
+  const entities=presented.entities.filter(entity=>entity.kind==='lambda')
+  const origins=new Set(entities.map(entity=>entity.sourceStrokeId))
+  const phase=entities.find(entity=>entity.phase!==null)?.phase
+  if(phase===undefined)throw Error('presented WebGL Lambda entities lost their structural phase')
+  return {
+    source:'presented-webgl-entities',baseColor:theme.baseWire.toLowerCase(),phase,
+    copyCount:state.plan.copyCount,endpointStaticError,
+    strokes:entities.map(entity=>{
+      if(entity.lineage===null||entity.junctions===null)throw Error('presented WebGL Lambda entity lost structural provenance')
+      const local=point=>{
+        const delta=sub3(point,entity.center)
+        return [dot3(delta,entity.plane.right)/entity.scale,dot3(delta,entity.plane.up)/entity.scale]
+      }
+      const localPoints=entity.pts.map(local),a=localToIntrinsic(localPoints[0],progress),b=localToIntrinsic(localPoints.at(-1),progress)
+      const freeDrop=entity.sourceStrokeId.endsWith(':variable')?entity.sourceStrokeId.slice(0,-':variable'.length)+':free-drop':entity.sourceStrokeId
+      const sourceStrokeId=origins.has(freeDrop)?freeDrop:entity.sourceStrokeId,rendererOnly=sourceStrokeId.startsWith('interface:')||entity.strokeId.startsWith('socket:')
+      const color=entityColor(entity,theme).toLowerCase()
+      const destinations=entity.destinationJunctions
+      return {
+        id:'3d:'+entity.strokeId,originId:sourceStrokeId,address:observationAddress(sourceStrokeId,entity.copyIndex),
+        sourceStrokeId,renderRole:entity.role,role:canonicalRole(sourceStrokeId,entity.role),
+        lineage:entity.lineage,copyIndex:entity.copyIndex,color,a,b,
+        length:Math.hypot(a[0]-b[0],a[1]-b[1]),
+        junctionA:canonicalJunction(entity.junctions[0],entity.copyIndex),
+        junctionB:canonicalJunction(entity.junctions[1],entity.copyIndex),rendererOnly,
+        destinationJunctionA:destinations===null||destinations[0]===null?null:canonicalJunction(destinations[0],entity.copyIndex),
+        destinationJunctionB:destinations===null||destinations[1]===null?null:canonicalJunction(destinations[1],entity.copyIndex),
+        raster:authoredRaster(canvas,entity.pts.map(point=>project(point,pose,900,900)),color,72),
+      }
+    }),
+  }
 }
 
 async function load(source){
@@ -451,7 +618,7 @@ function set2d(progress,themeName='light'){
   const normalizedVisibility=Object.fromEntries(Object.entries(copyVisibility).map(([color,value])=>[color,{strokeCount:value.strokeCount,visibleStrokeCount:value.visibleStrokeCount,bounds:{x:value.minX,y:value.minY,width:value.maxX-value.minX,height:value.maxY-value.minY}}]))
   const staticShapes=paint(state.engine,currentTheme).filter(shape=>shape.kind==='arc'||shape.kind==='segment')
   const endpointStaticError=progress===1?shapeError(moving,staticShapes):0
-  return{raw:rawFrame(frame,state.plan.copyCount,endpointStaticError),raster:raster(canvas2,currentTheme.canvas),visualBounds:shapeBounds(moving,state.view),sourceDimensions:{width:900,height:900},backingDimensions:{width:canvas2.width,height:canvas2.height},twoD:{maxAttachmentGap,frameHalf:state.engine.frame.half,sourceFrameHalf:state.sourceEngine.frame.half,viewScale:state.view.scale,sourceScale:state.sourceEngine.scale,targetScale:state.engine.scale,copyVisibility:normalizedVisibility}}
+  return{raw:raw2dFrame(frame,moving,canvas2,state.view,progress,currentTheme.wire,endpointStaticError),raster:raster(canvas2,currentTheme.canvas),visualBounds:shapeBounds(moving,state.view),sourceDimensions:{width:900,height:900},backingDimensions:{width:canvas2.width,height:canvas2.height},twoD:{maxAttachmentGap,frameHalf:state.engine.frame.half,sourceFrameHalf:state.sourceEngine.frame.half,viewScale:state.view.scale,sourceScale:state.sourceEngine.scale,targetScale:state.engine.scale,copyVisibility:normalizedVisibility}}
 }
 
 function set3d(progress,themeName='light'){
@@ -466,16 +633,16 @@ function set3d(progress,themeName='light'){
   renderer3.setEntities(presented.entities);renderer3.setPose(state.pose);renderer3.render()
   const canvas=host3.querySelector('canvas')
   const metrics=threeMetrics(presented,theme,state.pose,canvas)
-  const frame=sampleBetaMotion(state.plan,progress,currentTheme.wire)
   const targetLambdas=state.targetScene.entities.filter(entity=>entity.kind==='lambda')
   const movingLambdas=presented.entities.filter(entity=>entity.kind==='lambda')
   let endpointStaticError=0
   if(progress===1){
-    const targetByKey=new Map(targetLambdas.map(entity=>[entity.key,entity]))
-    for(const entity of movingLambdas){const target=targetByKey.get(entity.key);if(!target){endpointStaticError=Infinity;break}for(let i=0;i<entity.pts.length;i++)endpointStaticError=Math.max(endpointStaticError,dist3(entity.pts[i],target.pts[i]))}
+    const movingPoints=movingLambdas.flatMap(entity=>entity.pts),targetPoints=targetLambdas.flatMap(entity=>entity.pts)
+    const directed=(from,to)=>Math.max(...from.map(point=>Math.min(...to.map(candidate=>dist3(point,candidate)))))
+    endpointStaticError=Math.max(directed(movingPoints,targetPoints),directed(targetPoints,movingPoints))
   }
   const {visualBounds,...threeD}=metrics
-  return{raw:rawFrame(frame,state.plan.copyCount,endpointStaticError),raster:raster(canvas,currentTheme.canvas),visualBounds,sourceDimensions:{width:900,height:900},backingDimensions:{width:canvas.width,height:canvas.height},threeD}
+  return{raw:raw3dFrame(presented,theme,state.pose,canvas,progress,endpointStaticError),raster:raster(canvas,currentTheme.canvas),visualBounds,sourceDimensions:{width:900,height:900},backingDimensions:{width:canvas.width,height:canvas.height},threeD}
 }
 
 window.__lambdaComparison={load,set2d,set3d}
@@ -508,12 +675,16 @@ async function startHarnessServer(): Promise<{ server: ViteDevServer; url: strin
   return { server, url: `http://127.0.0.1:${address.port}/__lambda_comparison__.html` }
 }
 
-async function referenceLoad(page: Page, source: string): Promise<{ copyCount: number }> {
+async function referenceLoad(page: Page, source: string): Promise<ReferenceLoad> {
   return page.evaluate((value) => {
     const win = window as unknown as {
       __lambdaDemo: {
         setPosition(value: number): void
-        sequence: { plans: readonly { copyCount: number }[] }
+        sequence: {
+          terms: readonly Record<string, unknown>[]
+          models: readonly { lines: readonly Record<string, unknown>[]; points: Map<string, Record<string, unknown>>; nodeOut: Map<string, string> }[]
+          plans: readonly { copyCount: number; argumentId: string; argumentNodeIds: Set<string> }[]
+        }
       }
     }
     const input = document.querySelector('#input')
@@ -525,7 +696,53 @@ async function referenceLoad(page: Page, source: string): Promise<{ copyCount: n
     load.click()
     const plan = win.__lambdaDemo.sequence.plans[0]
     if (plan === undefined) throw new Error('corrected Lambda demo produced no first beta step')
-    return { copyCount: plan.copyCount }
+    const sourceTerm = win.__lambdaDemo.sequence.terms[0]!
+    const sourceModel = win.__lambdaDemo.sequence.models[0]!
+    const paths = new Map<string, string>()
+    const visit = (node: Record<string, unknown>, path: string): void => {
+      paths.set(String(node['id']), path)
+      if (node['kind'] === 'lam') visit(node['body'] as Record<string, unknown>, `${path}/body`)
+      if (node['kind'] === 'app') {
+        visit(node['fn'] as Record<string, unknown>, `${path}/fn`)
+        visit(node['arg'] as Record<string, unknown>, `${path}/argument`)
+      }
+    }
+    visit(sourceTerm, 'root')
+    const roleOf = (line: Record<string, unknown>): string => {
+      const node = (() => {
+        const id = String(line['originSourceId'] ?? line['ownerId'] ?? '')
+        const find = (value: Record<string, unknown>): Record<string, unknown> | null => {
+          if (String(value['id']) === id) return value
+          if (value['kind'] === 'lam') return find(value['body'] as Record<string, unknown>)
+          if (value['kind'] === 'app') return find(value['fn'] as Record<string, unknown>) ?? find(value['arg'] as Record<string, unknown>)
+          return null
+        }
+        return find(sourceTerm)
+      })()
+      if (line['role'] === 'arg-connector') return 'argument-connector'
+      return line['role'] === 'variable' && node?.['kind'] === 'var' && node['binding'] === null
+        ? 'free-drop'
+        : String(line['role'])
+    }
+    const addressOf = (line: Record<string, unknown>): string => {
+      const sourceId = String(line['originSourceId'] ?? line['ownerId'])
+      const path = paths.get(sourceId)
+      if (path === undefined) throw new Error(`reference stroke ${String(line['id'])} has no semantic source path`)
+      return `${path}:${roleOf(line)}`
+    }
+    const argumentStrokeAddresses = sourceModel.lines
+      .filter((line) => plan.argumentNodeIds.has(String(line['ownerId'])))
+      .map(addressOf)
+      .sort()
+    const rootPointId = sourceModel.nodeOut.get(plan.argumentId)
+    const rootPoint = rootPointId === undefined ? undefined : sourceModel.points.get(rootPointId)
+    const rootOwner = rootPoint === undefined ? undefined : paths.get(String(rootPoint['ownerId']))
+    if (rootPoint === undefined || rootOwner === undefined) throw new Error('reference argument has no correspondence root')
+    return {
+      copyCount: plan.copyCount,
+      argumentStrokeAddresses,
+      argumentRootJunction: `${rootOwner}:out`,
+    }
   }, source)
 }
 
@@ -536,6 +753,11 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
       __lambdaDemo: {
         setPosition(value: number): void
         sequence: {
+          terms: readonly Record<string, unknown>[]
+          models: readonly {
+            points: Map<string, Record<string, unknown>>
+            lines: readonly Record<string, unknown>[]
+          }[]
           plans: readonly {
             copyCount: number
             lambdaId: string
@@ -543,6 +765,7 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
             argumentNodeIds: Set<string>
             occurrences: readonly { sourceVarId: string }[]
           }[]
+          view: { minCol: number; maxCol: number; minRow: number; maxRow: number }
           transitions: readonly {
             phase(value: number): string
             draw(painter: unknown, value: number): void
@@ -555,11 +778,47 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
     if (!(canvas instanceof HTMLCanvasElement)) throw new Error('corrected Lambda demo canvas is unavailable')
     const plan = win.__lambdaDemo.sequence.plans[0]!
     const transition = win.__lambdaDemo.sequence.transitions[0]!
-    const rawLines: RawStroke[] = []
-    const normalize = (point: { col: number; row: number }, frame: { minCol: number; maxCol: number; minRow: number; maxRow: number }): Point => [
-      (point.col - frame.minCol) / Math.max(1, frame.maxCol - frame.minCol),
-      (point.row - frame.minRow) / Math.max(1, frame.maxRow - frame.minRow),
-    ]
+    const sourceTerm = win.__lambdaDemo.sequence.terms[0]!
+    const [sourceModel, targetModel] = win.__lambdaDemo.sequence.models
+    const paths = new Map<string, string>(), sourceNodes = new Map<string, Record<string, unknown>>()
+    const visit = (node: Record<string, unknown>, path: string): void => {
+      const id = String(node['id']); paths.set(id, path); sourceNodes.set(id, node)
+      if (node['kind'] === 'lam') visit(node['body'] as Record<string, unknown>, `${path}/body`)
+      if (node['kind'] === 'app') {
+        visit(node['fn'] as Record<string, unknown>, `${path}/fn`)
+        visit(node['arg'] as Record<string, unknown>, `${path}/argument`)
+      }
+    }
+    visit(sourceTerm, 'root')
+    const sourceIdOf = (record: Record<string, unknown>): string => String(record['originSourceId'] ?? record['ownerId'] ?? '')
+    const roleOf = (line: Record<string, unknown>): string => {
+      const sourceNode = sourceNodes.get(sourceIdOf(line))
+      if (line['role'] === 'arg-connector') return 'argument-connector'
+      return line['role'] === 'variable' && sourceNode?.['kind'] === 'var' && sourceNode['binding'] === null
+        ? 'free-drop'
+        : String(line['role'])
+    }
+    const sourceStrokeIdOf = (line: Record<string, unknown>): string => {
+      const path = paths.get(sourceIdOf(line))
+      if (path === undefined) throw new Error(`reference stroke ${String(line['id'])} has no semantic source path`)
+      return `${path}:${roleOf(line)}`
+    }
+    const pointIdentity = (pointId: string, line: Record<string, unknown>, copyIndex: number | null): string => {
+      const point = sourceModel!.points.get(pointId) ?? targetModel!.points.get(pointId)
+      if (point === undefined) throw new Error(`reference line ${String(line['id'])} has missing junction ${pointId}`)
+      const sourceId = sourceIdOf(point), path = paths.get(sourceId), node = sourceNodes.get(sourceId)
+      if (path === undefined || node === undefined) throw new Error(`reference junction ${pointId} has no semantic source path`)
+      const pointRole = String(point['role'])
+      let suffix = pointRole
+      if (pointRole === 'bind' && node['kind'] === 'var' && node['binding'] === null) suffix = 'free-rail'
+      if ((pointRole === 'left' || pointRole === 'right') && node['kind'] === 'lam') suffix = `lambda:${pointRole}`
+      if (pointRole === 'left' && node['kind'] === 'app') suffix = 'out'
+      if (pointRole === 'right' && node['kind'] === 'app') suffix = 'application:right'
+      const identity = `${path}:${suffix}`
+      const pointCopyIndex = typeof point['copyIndex'] === 'number' ? point['copyIndex'] : copyIndex
+      return pointCopyIndex === null ? identity : `copy:${pointCopyIndex}:${identity}`
+    }
+    const rawLines: Array<RawStroke & { screenPoints: readonly Point[] }> = []
     const occurrenceIds = new Set(plan.occurrences.map(({ sourceVarId }) => sourceVarId))
     const painter = {
       disc() {}, output() {}, socket() {}, label() {},
@@ -570,13 +829,42 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
           : plan.argumentNodeIds.has(owner) ? 'argument'
             : owner === plan.lambdaId || owner === plan.redexId || occurrenceIds.has(owner) ? 'redex'
               : 'persistent'
-        const pa = normalize(a, frame), pb = normalize(b, frame)
+        const pa: Point = [a.col - 2, a.row], pb: Point = [b.col - 2, b.row]
+        const sourceStrokeId = sourceStrokeIdOf(line)
+        const targetLine = targetModel!.lines.find((candidate) => candidate['key'] === line['key'])
+        const destinationJunction = (endpoint: 'a' | 'b'): string | null => targetLine === undefined
+          ? null
+          : pointIdentity(String(targetLine[endpoint]), targetLine, copyIndex)
+        const mapGrid = (point: { col: number; row: number }): Point => {
+          const width = Math.max(1, frame.maxCol - frame.minCol + 1)
+          const angle = Math.PI / 6 + ((point.col - frame.minCol + 0.5) / width) * Math.PI * 5 / 3
+          const rows = Math.max(1, frame.maxRow - frame.minRow)
+          const radius = 1.02 - ((point.row - frame.minRow) / rows) * 0.8
+          const scale = Math.min(canvas.width, canvas.height) * 0.355
+          return [canvas.width * 0.53 + Math.cos(angle) * radius * scale, canvas.height * 0.49 + Math.sin(angle) * radius * scale]
+        }
+        const horizontal = line['kind'] === 'h' || line['kind'] === 'tick'
+        let screenPoints: Point[]
+        if (horizontal) {
+          let from = a.col, to = b.col
+          if (line['role'] === 'lambda') { from -= 0.25; to += 0.25 }
+          else if (line['kind'] === 'tick') { const middle = (from + to) / 2; from = middle - 0.25; to = middle + 0.25 }
+          const count = Math.max(2, Math.ceil(Math.abs(to - from) * 12) + 1)
+          screenPoints = Array.from({ length: count }, (_, index) => mapGrid({ col: from + (to - from) * index / (count - 1), row: a.row }))
+        } else screenPoints = [mapGrid(a), mapGrid(b)]
         rawLines.push({
-          id: String(line['id']), originId: String(line['originKey'] ?? line['id']),
-          role: String(line['role']), lineage, copyIndex,
+          id: `reference:${String(line['id'])}`, originId: sourceStrokeId,
+          address: copyIndex === null ? sourceStrokeId : `copy:${copyIndex}:${sourceStrokeId}`,
+          sourceStrokeId, renderRole: String(line['role']), role: roleOf(line), lineage, copyIndex,
           color: String(style.color ?? '#b8cbd2').toLowerCase(), a: pa, b: pb,
           length: Math.hypot(pa[0] - pb[0], pa[1] - pb[1]),
-          junctionA: String(line['a']), junctionB: String(line['b']),
+          junctionA: pointIdentity(String(line['a']), line, copyIndex),
+          junctionB: pointIdentity(String(line['b']), line, copyIndex),
+          destinationJunctionA: destinationJunction('a'),
+          destinationJunctionB: destinationJunction('b'),
+          rendererOnly: false,
+          raster: { screenLength: 0, matchingPixels: 0, bestColorDistance: Infinity },
+          screenPoints,
         })
       },
     }
@@ -597,9 +885,40 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
       }
     }
     if (nonBackgroundPixels === 0) throw new Error('corrected Lambda demo produced an empty canvas')
+    const distanceToSegment = (point: Point, a: Point, b: Point): number => {
+      const dx = b[0] - a[0], dy = b[1] - a[1], norm = dx * dx + dy * dy
+      const amount = norm === 0 ? 0 : Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / norm))
+      return Math.hypot(point[0] - (a[0] + dx * amount), point[1] - (a[1] + dy * amount))
+    }
+    const observedLines: RawStroke[] = rawLines.map(({ screenPoints, ...line }) => {
+      const target = rgb(line.color), seen = new Set<number>()
+      let screenLength = 0, matchingPixels = 0, bestColorDistance = Infinity
+      for (let part = 1; part < screenPoints.length; part += 1) {
+        const a = screenPoints[part - 1]!, b = screenPoints[part]!
+        screenLength += Math.hypot(b[0] - a[0], b[1] - a[1])
+        const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0]) - 3)), x1 = Math.min(canvas.width - 1, Math.ceil(Math.max(a[0], b[0]) + 3))
+        const y0 = Math.max(0, Math.floor(Math.min(a[1], b[1]) - 3)), y1 = Math.min(canvas.height - 1, Math.ceil(Math.max(a[1], b[1]) + 3))
+        for (let y = y0; y <= y1; y += 1) for (let x = x0; x <= x1; x += 1) {
+          if (distanceToSegment([x + 0.5, y + 0.5], a, b) > 2.75) continue
+          const pixel = y * canvas.width + x
+          if (seen.has(pixel)) continue
+          seen.add(pixel)
+          const offset = pixel * 4
+          if (data[offset + 3]! < 8) continue
+          const distance = Math.hypot(data[offset]! - target[0]!, data[offset + 1]! - target[1]!, data[offset + 2]! - target[2]!)
+          bestColorDistance = Math.min(bestColorDistance, distance)
+          if (distance <= 48) matchingPixels += 1
+        }
+      }
+      return { ...line, raster: { screenLength, matchingPixels, bestColorDistance } }
+    })
     const rect = canvas.getBoundingClientRect()
     return {
-      raw: { phase: transition.phase(value).replaceAll(' ', '-'), copyCount: plan.copyCount, strokes: rawLines, endpointStaticError: 0 },
+      raw: {
+        source: 'live-reference-transition', baseColor: '#b8cbd2',
+        phase: transition.phase(value).replaceAll(' ', '-'), copyCount: plan.copyCount,
+        strokes: observedLines, endpointStaticError: 0,
+      },
       raster: { nonBackgroundPixels, paletteMatches: Object.fromEntries(Object.entries(colors).map(([key, candidate]) => [key, candidate.count])) },
       visualBounds: { x: minX * rect.width / canvas.width, y: minY * rect.height / canvas.height, width: (maxX - minX + 1) * rect.width / canvas.width, height: (maxY - minY + 1) * rect.height / canvas.height },
       sourceDimensions: { width: rect.width, height: rect.height },
@@ -737,6 +1056,25 @@ async function captureMode(
     imageSha256: string
     structural: StructuralFrame
     raster: RasterFrame
+    observations: {
+      source: RawFrame['source']
+      baseColor: string
+      strokes: Array<{
+        pieceId: string
+        address: string
+        sourceStrokeId: string
+        renderRole: string
+        role: string
+        lineage: RawStroke['lineage']
+        copyIndex: number | null
+        rendererOnly: boolean
+        junctions: readonly [string, string]
+        destinations: readonly [string | null, string | null]
+        points: readonly [Point, Point]
+        color: string
+        raster: StrokeRaster
+      }>
+    }
     twoD?: TwoDFrame
     threeD?: ThreeDFrame
   }>
@@ -769,6 +1107,34 @@ async function captureMode(
       imageSha256: sha256(await readFile(image)),
       structural: summarize(measurement.raw, final),
       raster: measurement.raster,
+      observations: {
+        source: measurement.raw.source,
+        baseColor: measurement.raw.baseColor,
+        strokes: measurement.raw.strokes.map((stroke) => ({
+          pieceId: stroke.id,
+          address: stroke.address,
+          sourceStrokeId: stroke.sourceStrokeId,
+          renderRole: stroke.renderRole,
+          role: stroke.role,
+          lineage: stroke.lineage,
+          copyIndex: stroke.copyIndex,
+          rendererOnly: stroke.rendererOnly,
+          junctions: [stroke.junctionA, stroke.junctionB] as const,
+          destinations: [stroke.destinationJunctionA, stroke.destinationJunctionB] as const,
+          points: [
+            [round(stroke.a[0]), round(stroke.a[1])] as const,
+            [round(stroke.b[0]), round(stroke.b[1])] as const,
+          ] as const,
+          color: stroke.color,
+          raster: {
+            screenLength: round(stroke.raster.screenLength),
+            matchingPixels: stroke.raster.matchingPixels,
+            bestColorDistance: round(Number.isFinite(stroke.raster.bestColorDistance)
+              ? stroke.raster.bestColorDistance
+              : 999),
+          },
+        })),
+      },
       ...(measurement.twoD === undefined ? {} : { twoD: measurement.twoD }),
       ...(measurement.threeD === undefined ? {} : { threeD: measurement.threeD }),
     })
@@ -833,6 +1199,10 @@ async function main(): Promise<void> {
         source: example.source,
         copyCount: example.copies,
         boundaries: [...example.boundaries],
+        correspondence: {
+          argumentStrokeAddresses: reference.argumentStrokeAddresses,
+          argumentRootJunction: reference.argumentRootJunction,
+        },
         overview,
         overviewSha256: sha256(await readFile(overview)),
         modes,
