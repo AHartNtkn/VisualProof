@@ -301,7 +301,7 @@ export class MotionCoordinator {
     const sourceNode = sourceEngine.d.nodes[conversion.node]
     const targetNode = targetEngine.d.nodes[conversion.node]
     if (sourceNode?.kind !== 'term' || targetNode?.kind !== 'term') return null
-    const plan = planBetaMotion(sourceNode.term, reduction)
+    const plan = planBetaMotion(sourceNode.term, reduction, sourceNode.freeArity)
     if (!termEq(plan.target, conversion.term) || !termEq(plan.target, targetNode.term)) {
       throw new Error('Lambda motion target does not match the committed beta conversion')
     }

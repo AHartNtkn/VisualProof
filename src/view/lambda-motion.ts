@@ -1,5 +1,5 @@
 import { applyStepAt, type PathSeg, type ReductionStep } from '../kernel/term/reduce'
-import { application, bound, free, lambda, termEq, type Term } from '../kernel/term/term'
+import { application, bound, free, freeArity, lambda, termEq, type Term } from '../kernel/term/term'
 import { bendMaps, GAP_ANGLE } from './bend'
 import { trompGrid, type TrompGrid } from './tromp'
 import type { Vec2 } from './vec'
@@ -371,9 +371,9 @@ function nodeOutOriginId(node: AnnotatedNode): string {
   return `${nodeOriginId(node)}:out`
 }
 
-function buildStrokeModel(root: AnnotatedNode): StrokeModelSet {
+function buildStrokeModel(root: AnnotatedNode, interfaceArity: number): StrokeModelSet {
   const rendered = plainTerm(root)
-  const grid = trompGrid(rendered)
+  const grid = trompGrid(rendered, interfaceArity)
   const nodesByPath = new Map<string, AnnotatedNode>()
   const pathsByNode = new Map<string, readonly PathSeg[]>()
   const nodeIds = new Set<string>()
@@ -676,8 +676,10 @@ function createMotionModel(
   argument: AnnotatedNode,
   targetReduct: AnnotatedNode,
   copies: readonly OccurrenceCopy[],
+  interfaceArity: number,
 ): { readonly motion: MotionModel; readonly persistentJunctions: readonly LambdaJunctionCorrespondence[] } {
-  const source = buildStrokeModel(sourceRoot), target = buildStrokeModel(targetRoot)
+  const source = buildStrokeModel(sourceRoot, interfaceArity)
+  const target = buildStrokeModel(targetRoot, interfaceArity)
   const view: ViewFrame = {
     cols: Math.max(source.grid.cols, target.grid.cols),
     rows: Math.max(source.grid.rows, target.grid.rows),
@@ -863,7 +865,11 @@ function createMotionModel(
   }
 }
 
-export function planBetaMotion(source: Term, step: ReductionStep): LambdaMotionPlan {
+export function planBetaMotion(
+  source: Term,
+  step: ReductionStep,
+  interfaceArity: number = freeArity(source),
+): LambdaMotionPlan {
   if (step.kind !== 'beta') throw new Error(`Lambda beta motion cannot plan a '${step.kind}' step`)
   const sourceRoot = annotate(source)
   const redex = annotatedAt(sourceRoot, step.path)
@@ -878,7 +884,7 @@ export function planBetaMotion(source: Term, step: ReductionStep): LambdaMotionP
   const kernelTarget = applyStepAt(source, step)
   if (!termEq(target, kernelTarget)) throw new Error('motion correspondence disagrees with kernel beta substitution')
   const { motion, persistentJunctions } = createMotionModel(
-    sourceRoot, targetRoot, redex, binder, body, argument, targetReduct, copies,
+    sourceRoot, targetRoot, redex, binder, body, argument, targetReduct, copies, interfaceArity,
   )
   const times: LambdaStageTimes = copies.length > 0
     ? { split: 0.15, liftEnd: 0.34, spaceEnd: 0.54, dockEnd: 0.82, stemEnd: 0.91, barEnd: 0.965 }

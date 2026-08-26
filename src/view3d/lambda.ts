@@ -1,4 +1,4 @@
-import type { NodeId } from '../kernel/diagram/diagram'
+import type { NodeId, RegionId } from '../kernel/diagram/diagram'
 import type { PathSeg } from '../kernel/term/reduce'
 import type { Term } from '../kernel/term/term'
 import { termGeometry, type NodeGeometry } from '../view/bend'
@@ -24,6 +24,8 @@ export type LambdaEntity = {
   readonly kind: 'lambda'
   readonly key: string
   readonly node: NodeId
+  /** Incident branch whose animated geometry owns this figure's pose. */
+  readonly region: RegionId
   readonly term: Term
   readonly interfaceArity: number
   readonly center: Vec3
@@ -48,6 +50,7 @@ export type LambdaDiagram = {
 
 export type LambdaDiagramInput = {
   readonly node: NodeId
+  readonly region: RegionId
   readonly term: Term
   readonly interfaceArity: number
   readonly center: Vec3
@@ -189,6 +192,7 @@ export function lambdaDiagram(input: LambdaDiagramInput): LambdaDiagram {
     kind: 'lambda',
     key: `t:${input.node}:${encodeURIComponent(stroke.strokeId)}`,
     node: input.node,
+    region: input.region,
     term: input.term,
     interfaceArity: input.interfaceArity,
     center: input.center,

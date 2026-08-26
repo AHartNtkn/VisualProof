@@ -18,6 +18,12 @@ export const TWEEN_MS = 350
 /** Glide time for click-to-focus retargeting. */
 export const FOCUS_MS = 250
 
+/** The exact scene presented by a frame. Rendering and every interaction
+    consumer must share this authority while a structural tween is active. */
+export function presentedScene(target: Scene3, plan: TweenPlan | null, progress: number): Scene3 {
+  return plan === null ? target : sceneAt(plan, progress)
+}
+
 const renderThemeOf = (theme: Theme, diagram: Diagram): RenderTheme => ({
   mode: theme.mode,
   background: theme.canvas,
@@ -33,6 +39,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
   let theme = initial.theme
   let spec: DiagramSpec = diagramSpec(diagram)
   let scene: Scene3 = scene3(diagram)
+  let presented: Scene3 = scene
   const aspectOf = (): number => container.clientWidth / Math.max(1, container.clientHeight)
   let pose: CamPose = fitPose(scene.center, scene.radius, aspectOf())
   let tween: { plan: TweenPlan; poseFrom: CamPose; poseTo: CamPose; start: number } | null = null
@@ -45,7 +52,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
   container.dataset['view3Focus'] = ''
 
   const renderer = mountRender(container, renderThemeOf(theme, diagram))
-  renderer.setEntities(scene.entities)
+  renderer.setEntities(presented.entities)
 
   let pending = false
   const schedule = (): void => {
@@ -76,11 +83,20 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
         // The clean target list, not sceneAt's interpolated frame — that
         // still carries alpha-0 exits, which would otherwise linger in the
         // scene (and stay pickable) forever after the tween ends.
-        renderer.setEntities(scene.entities)
+        presented = presentedScene(scene, null, 1)
+        renderer.setEntities(presented.entities)
         tween = null
       } else {
-        renderer.setEntities(sceneAt(tween.plan, t).entities)
+        presented = presentedScene(scene, tween.plan, t)
+        renderer.setEntities(presented.entities)
         schedule()
+      }
+      if (hoverKey !== null) {
+        if (!presented.entities.some((entity) => entity.key === hoverKey)) {
+          hoverKey = null
+          container.dataset['view3Hover'] = ''
+        }
+        renderer.setHoverKeys(hoverKey === null ? new Set() : expandHover(hoverKey, spec, presented.entities))
       }
     }
     renderer.setPose(pose)
@@ -113,7 +129,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
     const ndcX = ((ev.clientX - rect.left) / rect.width) * 2 - 1
     const ndcY = -(((ev.clientY - rect.top) / rect.height) * 2 - 1)
     const key = renderer.pickAt(ndcX, ndcY)
-    const to = key === null ? scene.center : focusPoint(key, scene.entities)
+    const to = key === null ? presented.center : focusPoint(key, presented.entities)
     if (to === null) return
     glide = { from: pose.target, to, start: performance.now() }
     container.dataset['view3Focus'] = key ?? ''
@@ -137,7 +153,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
     if (key !== hoverKey) {
       hoverKey = key
       container.dataset['view3Hover'] = key ?? ''
-      renderer.setHoverKeys(key === null ? new Set() : expandHover(key, spec, scene.entities))
+      renderer.setHoverKeys(key === null ? new Set() : expandHover(key, spec, presented.entities))
       schedule()
     }
   })
@@ -170,9 +186,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
         // the interpolated frame at its current t, not `scene` (the last
         // COMPLETED scene) — planning from `scene` would pop the display
         // back to that stale geometry for one frame before animating on.
-        const fromScene = tween === null
-          ? scene
-          : sceneAt(tween.plan, Math.min(1, (performance.now() - tween.start) / TWEEN_MS))
+        const fromScene = presented
         tween = { plan: planTransition(fromScene, nextScene, theme.wire), poseFrom: pose, poseTo, start: performance.now() }
         glide = null // the transition's pose tween owns the camera now
         container.dataset['view3Focus'] = ''

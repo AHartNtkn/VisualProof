@@ -3,9 +3,10 @@ import { applyStepAt, type PathSeg, type ReductionStep } from '../kernel/term/re
 import { termEq, type Term } from '../kernel/term/term'
 import { planBetaMotion, sampleBetaMotion, type LambdaMotionPlan } from '../view/lambda-motion'
 import { lambdaDiagram, type LambdaEntity } from './lambda'
-import { add3, dist3, len3, lerp3, norm3, scale3, segClosest, type Vec3 } from './vec3'
+import { add3, dist3, dot3, lerp3, scale3, segClosest, sub3, type Vec3 } from './vec3'
 
 export type FadedEntity = Entity & { alpha?: number }
+export type TweenScene = Omit<Scene3, 'entities'> & { entities: FadedEntity[] }
 export type TweenPlan = {
   moves: { from: Entity; to: Entity }[]
   enters: Entity[]
@@ -17,11 +18,21 @@ export type TweenPlan = {
 
 type LambdaTween = {
   node: string
+  region: string
   motion: LambdaMotionPlan
   from: LambdaEntity
   to: LambdaEntity
+  fromAlong: number
+  toAlong: number
+  attachments: LambdaAttachment[]
   baseColor: string
   reverse: boolean
+}
+
+type LambdaAttachment = {
+  readonly portKey: string
+  readonly strandKey: string
+  readonly endpoint: 'first' | 'last'
 }
 
 /** Arc-length-uniform resampling; endpoints exact. */
@@ -59,12 +70,88 @@ function betaSteps(term: Term, path: readonly PathSeg[] = []): ReductionStep[] {
   return out
 }
 
-function betaMotion(source: Term, target: Term): LambdaMotionPlan | null {
+function betaMotion(source: Term, target: Term, interfaceArity: number): LambdaMotionPlan | null {
   for (const step of betaSteps(source)) {
     if (!termEq(applyStepAt(source, step), target)) continue
-    return planBetaMotion(source, step)
+    return planBetaMotion(source, step, interfaceArity)
   }
   return null
+}
+
+type BranchEntity = Extract<Entity, { kind: 'branch' }>
+
+function branchOf(entities: readonly Entity[], region: string): BranchEntity {
+  const branch = entities.find((entity): entity is BranchEntity => (
+    entity.kind === 'branch' && entity.key === `b:${region}`
+  ))
+  if (branch === undefined) throw new Error(`transition: Lambda region ${region} has no incident branch`)
+  return branch
+}
+
+function polylineFraction(pts: readonly Vec3[], point: Vec3): number {
+  let total = 0
+  const lengths: number[] = []
+  for (let index = 1; index < pts.length; index++) {
+    const length = dist3(pts[index - 1]!, pts[index]!)
+    lengths.push(length)
+    total += length
+  }
+  if (total === 0) return 0
+  let bestDistance = Infinity
+  let bestAlong = 0
+  let before = 0
+  for (let index = 1; index < pts.length; index++) {
+    const a = pts[index - 1]!, b = pts[index]!, length = lengths[index - 1]!
+    const closest = segClosest(point, a, b)
+    const distance = dist3(point, closest)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      const segmentFraction = length === 0 ? 0 : dot3(sub3(closest, a), sub3(b, a)) / (length * length)
+      bestAlong = before + segmentFraction * length
+    }
+    before += length
+  }
+  return bestAlong / total
+}
+
+function pointOnPolyline(pts: readonly Vec3[], fraction: number): Vec3 {
+  const lengths: number[] = []
+  let total = 0
+  for (let index = 1; index < pts.length; index++) {
+    const length = dist3(pts[index - 1]!, pts[index]!)
+    lengths.push(length)
+    total += length
+  }
+  if (total === 0) return pts[0]!
+  const target = Math.max(0, Math.min(1, fraction)) * total
+  let before = 0
+  for (let index = 1; index < pts.length; index++) {
+    const length = lengths[index - 1]!
+    if (target <= before + length || index === pts.length - 1) {
+      return lerp3(pts[index - 1]!, pts[index]!, length === 0 ? 0 : (target - before) / length)
+    }
+    before += length
+  }
+  return pts[pts.length - 1]!
+}
+
+function attachmentsTo(
+  entities: readonly Entity[],
+  anchors: ReadonlyMap<string, Vec3>,
+): LambdaAttachment[] {
+  const attachments: LambdaAttachment[] = []
+  for (const entity of entities) {
+    if (!isStrand(entity)) continue
+    for (const [portKey, anchor] of anchors) {
+      if (dist3(entity.pts[0]!, anchor) < 1e-8) {
+        attachments.push({ portKey, strandKey: entity.key, endpoint: 'first' })
+      }
+      if (dist3(entity.pts[entity.pts.length - 1]!, anchor) < 1e-8) {
+        attachments.push({ portKey, strandKey: entity.key, endpoint: 'last' })
+      }
+    }
+  }
+  return attachments
 }
 
 /** Closest point to `p` on any of the given polylines. */
@@ -101,12 +188,35 @@ export function planTransition(prev: Scene3, next: Scene3, lambdaBaseColor = '#0
   for (const [node, to] of nextLambdas) {
     const from = previousLambdas.get(node)
     if (from === undefined || from.interfaceArity !== to.interfaceArity || termEq(from.term, to.term)) continue
-    const forward = betaMotion(from.term, to.term)
-    const reverse = forward === null ? betaMotion(to.term, from.term) : null
+    const forward = betaMotion(from.term, to.term, from.interfaceArity)
+    const reverse = forward === null ? betaMotion(to.term, from.term, from.interfaceArity) : null
     const motion = forward ?? reverse
-    if (motion !== null) lambdaMoves.push({
-      node, motion, from, to, baseColor: lambdaBaseColor, reverse: forward === null,
-    })
+    if (motion !== null) {
+      if (from.region !== to.region) throw new Error(`transition: Lambda node ${node} changed incident region`)
+      const fromBranch = branchOf(prev.entities, from.region)
+      const toBranch = branchOf(next.entities, to.region)
+      const targetDiagram = lambdaDiagram({
+        node: to.node,
+        region: to.region,
+        term: to.term,
+        interfaceArity: to.interfaceArity,
+        center: to.center,
+        tangent: to.plane.normal,
+        scale: to.scale,
+      })
+      lambdaMoves.push({
+        node,
+        region: from.region,
+        motion,
+        from,
+        to,
+        fromAlong: polylineFraction(fromBranch.pts, from.center),
+        toAlong: polylineFraction(toBranch.pts, to.center),
+        attachments: attachmentsTo(next.entities, targetDiagram.anchors),
+        baseColor: lambdaBaseColor,
+        reverse: forward === null,
+      })
+    }
   }
   const structuralLambdaNodes = new Set(lambdaMoves.map(({ node }) => node))
 
@@ -170,45 +280,9 @@ export function planTransition(prev: Scene3, next: Scene3, lambdaBaseColor = '#0
   }
 }
 
-export function sceneAt(plan: TweenPlan, t: number): { entities: FadedEntity[]; center: Vec3; radius: number } {
+export function sceneAt(plan: TweenPlan, t: number): TweenScene {
   const e = t * t * (3 - 2 * t) // smoothstep
   const entities: FadedEntity[] = []
-  for (const move of plan.lambdaMoves) {
-    if (t === 0) {
-      entities.push(...lambdaDiagram({
-        node: move.node,
-        term: move.from.term,
-        interfaceArity: move.from.interfaceArity,
-        center: move.from.center,
-        tangent: move.from.plane.normal,
-        scale: move.from.scale,
-      }).strokes)
-      continue
-    }
-    if (t === 1) {
-      entities.push(...lambdaDiagram({
-        node: move.node,
-        term: move.to.term,
-        interfaceArity: move.to.interfaceArity,
-        center: move.to.center,
-        tangent: move.to.plane.normal,
-        scale: move.to.scale,
-      }).strokes)
-      continue
-    }
-    const center = lerp3(move.from.center, move.to.center, e)
-    const mixedNormal = lerp3(move.from.plane.normal, move.to.plane.normal, e)
-    const tangent = len3(mixedNormal) < 1e-9 ? move.to.plane.normal : norm3(mixedNormal)
-    entities.push(...lambdaDiagram({
-      node: move.node,
-      term: move.motion.source,
-      interfaceArity: move.from.interfaceArity,
-      center,
-      tangent,
-      scale: move.from.scale + (move.to.scale - move.from.scale) * e,
-      frame: sampleBetaMotion(move.motion, move.reverse ? 1 - t : t, move.baseColor),
-    }).strokes)
-  }
   for (const mv of plan.moves) {
     if (hasPts(mv.from) && hasPts(mv.to)) {
       entities.push({ ...mv.to, pts: mv.from.pts.map((p, i) => lerp3(p, (mv.to as Extract<Entity, { pts: Vec3[] }>).pts[i]!, e)) })
@@ -220,6 +294,47 @@ export function sceneAt(plan: TweenPlan, t: number): { entities: FadedEntity[]; 
   }
   for (const x of plan.exits) entities.push({ ...x, alpha: 1 - e })
   for (const n of plan.enters) entities.push({ ...n, alpha: e })
+
+  const diagrams = new Map<string, ReturnType<typeof lambdaDiagram>>()
+  for (const move of plan.lambdaMoves) {
+    const branch = branchOf(entities, move.region)
+    const branchTangent = sub3(branch.pts[branch.pts.length - 1]!, branch.pts[0]!)
+    const endpoint = t === 0 ? move.from : t === 1 ? move.to : null
+    const diagram = lambdaDiagram({
+      node: move.node,
+      region: move.region,
+      term: endpoint?.term ?? move.motion.source,
+      interfaceArity: move.from.interfaceArity,
+      center: endpoint?.center ?? pointOnPolyline(
+        branch.pts,
+        move.fromAlong + (move.toAlong - move.fromAlong) * e,
+      ),
+      tangent: endpoint?.plane.normal ?? branchTangent,
+      scale: endpoint?.scale ?? move.from.scale + (move.to.scale - move.from.scale) * e,
+      ...(endpoint === null ? {
+        frame: sampleBetaMotion(move.motion, move.reverse ? 1 - t : t, move.baseColor),
+      } : {}),
+    })
+    diagrams.set(move.node, diagram)
+    entities.push(...diagram.strokes)
+  }
+
+  // Structural Lambda anchors and their incident strand endpoints are one
+  // moving junction. Generic wire interpolation supplies the curve interior;
+  // the sampled Lambda frame supplies the exact connected endpoint.
+  for (const move of plan.lambdaMoves) {
+    const anchors = diagrams.get(move.node)!.anchors
+    for (const attachment of move.attachments) {
+      const index = entities.findIndex((entity) => entity.key === attachment.strandKey && isStrand(entity))
+      if (index < 0) continue
+      const strand = entities[index] as Extract<FadedEntity, { kind: 'strand' }>
+      const anchor = anchors.get(attachment.portKey)
+      if (anchor === undefined) throw new Error(`transition: moving Lambda has no ${attachment.portKey} anchor`)
+      const pts = [...strand.pts]
+      pts[attachment.endpoint === 'first' ? 0 : pts.length - 1] = anchor
+      entities[index] = { ...strand, pts }
+    }
+  }
   return {
     entities,
     center: add3(scale3(plan.fromBounds.center, 1 - e), scale3(plan.toBounds.center, e)),

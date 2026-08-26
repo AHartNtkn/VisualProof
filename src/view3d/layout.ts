@@ -42,6 +42,7 @@ export type PlacedRing = {
 }
 export type PlacedLambda = LambdaDiagram & {
   node: NodeId
+  region: RegionId
   term: Term
   interfaceArity: number
   center: Vec3
@@ -315,8 +316,8 @@ export function layoutTree(spec: DiagramSpec): TreeLayout {
       if (n.kind === 'identity') identityAnchor.set(item.id, pos)
       else if (n.kind === 'term') {
         const term = n.term!, interfaceArity = n.interfaceArity!
-        const embedded = lambdaDiagram({ node: item.id, term, interfaceArity, center: pos, tangent: dir })
-        lambdas.set(item.id, { node: item.id, term, interfaceArity, center: pos, axis: dir, ...embedded })
+        const embedded = lambdaDiagram({ node: item.id, region: rid, term, interfaceArity, center: pos, tangent: dir })
+        lambdas.set(item.id, { node: item.id, region: rid, term, interfaceArity, center: pos, axis: dir, ...embedded })
       } else {
         rings.set(item.id, { node: item.id, center: pos, axis: dir, radius: ringRadius(n.portKeys.length), anchors: new Map() })
       }
