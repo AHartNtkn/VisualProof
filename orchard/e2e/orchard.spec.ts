@@ -40,6 +40,69 @@ test('accumulates overlapping glow contributors into bounded order-independent p
   expect.soft(pixels.redGreen[3]).toBe(255)
 })
 
+test('shows tiled ground illumination around a nearby irregular placement', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  const savedWorld = JSON.parse(readFileSync(new URL('../world.json', import.meta.url), 'utf8'))
+  savedWorld.trees = [{
+    ...savedWorld.trees[0],
+    x: 0,
+    z: 64,
+  }]
+  await page.route('**/world.json*', (route) => route.fulfill({ json: savedWorld }))
+  await page.goto('/?trees=1')
+  const orchard = page.locator('[data-orchard]')
+  await expect(orchard).toHaveAttribute('data-ready', 'true')
+  await expect(orchard).toHaveAttribute('data-pending-representations', '0')
+  await page.waitForTimeout(500)
+
+  const screenshot = await page.screenshot()
+  const samples = await page.evaluate(async (encoded) => {
+    const image = new Image()
+    image.src = `data:image/png;base64,${encoded}`
+    await image.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = image.width
+    canvas.height = image.height
+    const context = canvas.getContext('2d')!
+    context.drawImage(image, 0, 0)
+    const rgb = (x: number, y: number) => [...context.getImageData(x, y, 1, 1).data.slice(0, 3)]
+    return { glow: rgb(700, 370), unlitGround: rgb(1100, 600) }
+  }, screenshot.toString('base64'))
+  const luminance = (rgb: readonly number[]) => rgb.reduce((sum, channel) => sum + channel, 0)
+
+  expect(luminance(samples.glow)).toBeGreaterThan(luminance(samples.unlitGround) + 15)
+})
+
+test('keeps dense overlapping ground illumination translucent', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  const savedWorld = JSON.parse(readFileSync(new URL('../world.json', import.meta.url), 'utf8'))
+  savedWorld.trees = savedWorld.trees.slice(0, 10).map((tree: SavedTree) => ({ ...tree, x: 0, z: 64 }))
+  await page.route('**/world.json*', (route) => route.fulfill({ json: savedWorld }))
+  await page.goto('/?trees=10')
+  const orchard = page.locator('[data-orchard]')
+  await expect(orchard).toHaveAttribute('data-ready', 'true')
+  await expect(orchard).toHaveAttribute('data-pending-representations', '0')
+  await page.waitForTimeout(500)
+
+  const screenshot = await page.screenshot()
+  const samples = await page.evaluate(async (encoded) => {
+    const image = new Image()
+    image.src = `data:image/png;base64,${encoded}`
+    await image.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = image.width
+    canvas.height = image.height
+    const context = canvas.getContext('2d')!
+    context.drawImage(image, 0, 0)
+    const rgb = (x: number, y: number) => [...context.getImageData(x, y, 1, 1).data.slice(0, 3)]
+    return { glow: rgb(700, 370), unlitGround: rgb(1100, 600) }
+  }, screenshot.toString('base64'))
+  const luminance = (rgb: readonly number[]) => rgb.reduce((sum, channel) => sum + channel, 0)
+
+  expect(luminance(samples.glow)).toBeGreaterThan(luminance(samples.unlitGround) + 15)
+  expect(Math.max(...samples.glow)).toBeLessThan(220)
+})
+
 test('renders exact separate tree counts and lets the player walk', async ({ page }) => {
   test.setTimeout(45_000)
   const started = performance.now()

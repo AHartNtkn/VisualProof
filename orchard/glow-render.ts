@@ -37,8 +37,12 @@ export function mountGlowRenderer(scene: THREE.Scene, groundY: number): GlowRend
     const material = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
+      opacity: 0.22,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
       toneMapped: false,
     })
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE), material)
