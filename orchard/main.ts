@@ -154,6 +154,10 @@ async function boot(): Promise<void> {
     root.dataset['frameSampleCount'] = String(settled.sampleCount)
     root.dataset['transitionGeneration'] = String(settled.transitionGeneration)
     root.dataset['settledGeneration'] = String(settled.settledGeneration)
+    root.dataset['residencySnapshot'] = JSON.stringify({
+      observedGeneration: settled.transitionGeneration,
+      pendingRepresentations: rendered.pending,
+    })
     root.dataset['fps'] = fps.toFixed(3)
     root.dataset['averageFrameMs'] = average.toFixed(3)
     root.dataset['p95FrameMs'] = p95.toFixed(3)

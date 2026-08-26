@@ -136,6 +136,43 @@ test('reports a complete post-drain frame window and transition build CPU', asyn
   })
 })
 
+test('requires a rendered generation before a synchronous count transition can settle', async ({ page }) => {
+  await page.goto('/?trees=1')
+  const orchard = page.locator('[data-orchard]')
+  await expect(orchard).toHaveAttribute('data-ready', 'true')
+  await expect(orchard).toHaveAttribute('data-pending-representations', '0')
+  const previousGeneration = Number(await orchard.getAttribute('data-transition-generation'))
+  await expect(orchard).toHaveAttribute('data-residency-snapshot', JSON.stringify({
+    observedGeneration: previousGeneration,
+    pendingRepresentations: 0,
+  }))
+
+  const synchronousState = await orchard.evaluate((element) => {
+    const root = element as HTMLElement
+    const input = document.querySelector<HTMLInputElement>('#tree-count')!
+    input.value = '3'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    document.querySelector<HTMLFormElement>('[data-count-form]')!.requestSubmit()
+    return {
+      transitionGeneration: root.dataset['transitionGeneration'],
+      pendingRepresentations: root.dataset['pendingRepresentations'],
+      residencySnapshot: root.dataset['residencySnapshot'],
+    }
+  })
+  expect(synchronousState).toEqual({
+    transitionGeneration: String(previousGeneration + 1),
+    pendingRepresentations: '0',
+    residencySnapshot: JSON.stringify({
+      observedGeneration: previousGeneration,
+      pendingRepresentations: 0,
+    }),
+  })
+  await expect(orchard).toHaveAttribute('data-residency-snapshot', JSON.stringify({
+    observedGeneration: previousGeneration + 1,
+    pendingRepresentations: 0,
+  }))
+})
+
 test('invalidates settled timing when camera work drains within one render frame', async ({ page }) => {
   test.setTimeout(60_000)
   const viewportHeight = 360

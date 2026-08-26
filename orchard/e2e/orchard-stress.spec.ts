@@ -29,6 +29,12 @@ type StressRow = {
 type StressTimeout = Pick<StressRow,
   'mode' | 'trees' | 'visible' | 'resident' | 'full' | 'reduced' | 'marker' | 'culled'
   | 'pendingRepresentations' | 'pointLights' | 'frameSamples' | 'generation'>
+  & { observedGeneration: number }
+
+type ResidencySnapshot = {
+  readonly observedGeneration: number
+  readonly pendingRepresentations: number
+}
 
 const enabled = process.env['ORCHARD_STRESS'] === '1'
 const modeValue = process.env['ORCHARD_STRESS_MODE'] ?? 'game'
@@ -94,11 +100,27 @@ test(`measures ${requestedMode} rendering across increasing counts`, async ({ pa
       await expect(orchard).toHaveAttribute('data-tree-count', String(count), { timeout: 12 * 60_000 })
     }
     try {
-      await expect(orchard).toHaveAttribute('data-pending-representations', '0', { timeout: REPRESENTATION_TIMEOUT_MS })
+      await expect.poll(async () => orchard.evaluate((element): ResidencySnapshot => {
+        const encoded = (element as HTMLElement).dataset['residencySnapshot']
+        const snapshot = JSON.parse(encoded ?? 'null') as Partial<ResidencySnapshot> | null
+        if (snapshot === null
+          || !Number.isInteger(snapshot.observedGeneration)
+          || !Number.isInteger(snapshot.pendingRepresentations)) {
+          throw new Error(`data-residency-snapshot is invalid: ${encoded}`)
+        }
+        return {
+          observedGeneration: snapshot.observedGeneration!,
+          pendingRepresentations: snapshot.pendingRepresentations!,
+        }
+      }), { timeout: REPRESENTATION_TIMEOUT_MS }).toEqual({
+        observedGeneration: targetGeneration,
+        pendingRepresentations: 0,
+      })
     } catch (error) {
       const timeout = await orchard.evaluate((element, mode): StressTimeout => {
         const dataset = (element as HTMLElement).dataset
         const number = (name: string): number => Number(dataset[name])
+        const residency = JSON.parse(dataset['residencySnapshot'] ?? 'null') as ResidencySnapshot | null
         return {
           mode,
           trees: number('logicalCount'),
@@ -112,6 +134,7 @@ test(`measures ${requestedMode} rendering across increasing counts`, async ({ pa
           pointLights: number('pointLightCount'),
           frameSamples: number('frameSampleCount'),
           generation: number('transitionGeneration'),
+          observedGeneration: residency?.observedGeneration ?? Number.NaN,
         }
       }, requestedMode)
       console.log(`ORCHARD_STRESS_TIMEOUT ${JSON.stringify(timeout)}`)
