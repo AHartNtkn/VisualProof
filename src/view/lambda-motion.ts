@@ -155,11 +155,15 @@ type StrokeModelSet = {
 }
 
 type ViewFrame = {
+  /** Common grid used for structural correspondence and parked-copy staging. */
   readonly cols: number
   readonly rows: number
   readonly railRows: number
   readonly sourceOffset: number
   readonly targetOffset: number
+  /** Canonical endpoint grids used by ordinary static term paint. */
+  readonly sourceGrid: Pick<TrompGrid, 'cols' | 'rows' | 'railRows'>
+  readonly targetGrid: Pick<TrompGrid, 'cols' | 'rows' | 'railRows'>
 }
 
 type StrokePair = { readonly source: StrokeModel; readonly target: StrokeModel }
@@ -598,11 +602,26 @@ function interpolateCoord(from: MotionCoord, to: MotionCoord, progress: number):
   throw new Error('incompatible Lambda motion junctions')
 }
 
-function mapCoord(coord: MotionCoord, view: ViewFrame): Vec2 {
-  const maps = bendMaps(view.cols, view.rows, view.railRows)
+function viewAt(view: ViewFrame, reflow: number): {
+  readonly maps: ReturnType<typeof bendMaps>
+  readonly offset: number
+} {
+  const amount = clamp(reflow)
+  return {
+    maps: bendMaps(
+      mix(view.sourceGrid.cols, view.targetGrid.cols, amount),
+      mix(view.sourceGrid.rows, view.targetGrid.rows, amount),
+      mix(view.sourceGrid.railRows, view.targetGrid.railRows, amount),
+    ),
+    offset: mix(view.sourceOffset, view.targetOffset, amount),
+  }
+}
+
+function mapCoord(coord: MotionCoord, view: ViewFrame, reflow: number): Vec2 {
+  const { maps, offset } = viewAt(view, reflow)
   if (coord.kind === 'port') return polar(0, maps.pierceR)
   if (coord.kind === 'gap') return polar(GAP_ANGLE / 2, maps.radius(coord.row))
-  return polar(maps.theta(coord.col), maps.radius(coord.row))
+  return polar(maps.theta(coord.col - offset), maps.radius(coord.row))
 }
 
 function strokeFrame(
@@ -610,10 +629,12 @@ function strokeFrame(
   a: MotionCoord,
   b: MotionCoord,
   view: ViewFrame,
+  reflow: number,
   color: string,
   lineage: LambdaStrokeLineage,
 ): LambdaStroke {
-  const from = mapCoord(a, view), to = mapCoord(b, view)
+  const { maps, offset } = viewAt(view, reflow)
+  const from = mapCoord(a, view, reflow), to = mapCoord(b, view, reflow)
   let geometry: LambdaStrokeGeometry
   if (stroke.drawKind === 'horizontal' || stroke.drawKind === 'output-arc') {
     const rowA = a.kind === 'grid' || a.kind === 'gap' ? a.row : null
@@ -623,13 +644,13 @@ function strokeFrame(
     }
     const angle = (coord: MotionCoord): number => {
       if (coord.kind === 'gap') return GAP_ANGLE / 2
-      if (coord.kind === 'grid') return bendMaps(view.cols, view.rows, view.railRows).theta(coord.col)
+      if (coord.kind === 'grid') return maps.theta(coord.col - offset)
       throw new Error(`arc '${stroke.id}' reaches the output port directly`)
     }
     const first = angle(a), second = angle(b)
     geometry = {
       kind: 'arc',
-      r: bendMaps(view.cols, view.rows, view.railRows).radius(rowA),
+      r: maps.radius(rowA),
       a0: Math.min(first, second), a1: Math.max(first, second),
     }
   } else {
@@ -686,6 +707,8 @@ function createMotionModel(
     railRows: Math.max(source.grid.railRows, target.grid.railRows),
     sourceOffset: (Math.max(source.grid.cols, target.grid.cols) - source.grid.cols) / 2,
     targetOffset: (Math.max(source.grid.cols, target.grid.cols) - target.grid.cols) / 2,
+    sourceGrid: source.grid,
+    targetGrid: target.grid,
   }
   const sourceCoord = (point: PointModel): MotionCoord => shifted(point.coord, view.sourceOffset)
   const targetCoord = (point: PointModel): MotionCoord => shifted(point.coord, view.targetOffset)
@@ -845,8 +868,8 @@ function createMotionModel(
     if (destination === undefined) throw new Error(`persistent junction '${sourceId}' has no destination`)
     return {
       sourceId,
-      source: mapCoord(sourceCoord(sourcePoint), view),
-      target: mapCoord(destination, view),
+      source: mapCoord(sourceCoord(sourcePoint), view, 0),
+      target: mapCoord(destination, view, 1),
     }
   })
 
@@ -915,7 +938,7 @@ export function sampleBetaMotion(
         stroke,
         shifted(stroke.a.coord, model.view.sourceOffset),
         shifted(stroke.b.coord, model.view.sourceOffset),
-        model.view,
+        model.view, 0,
         baseColor,
         argumentIds.has(stroke.id) ? 'argument' : redexIds.has(stroke.id) ? 'redex' : 'persistent',
       )),
@@ -929,7 +952,7 @@ export function sampleBetaMotion(
         stroke,
         shifted(stroke.a.coord, model.view.targetOffset),
         shifted(stroke.b.coord, model.view.targetOffset),
-        model.view,
+        model.view, 1,
         baseColor,
         stroke.copyIndex === null ? 'persistent' : 'copy',
       )),
@@ -956,7 +979,7 @@ export function sampleBetaMotion(
     b: MotionCoord,
     color: string,
     lineage: LambdaStrokeLineage,
-  ): void => { strokes.push(strokeFrame(source, a, b, model.view, color, lineage)) }
+  ): void => { strokes.push(strokeFrame(source, a, b, model.view, space, color, lineage)) }
 
   for (const pair of model.pairs) {
     push(pair.source, movingSource(pair.source.a, space), movingSource(pair.source.b, space), baseColor, 'persistent')
@@ -988,7 +1011,7 @@ export function sampleBetaMotion(
     sockets.push({
       copyIndex: occurrence.copyIndex,
       sourceOccurrenceId: occurrence.sourceVarId,
-      point: mapCoord(socketCoord, model.view),
+      point: mapCoord(socketCoord, model.view, space),
       amount: (1 - dock) * 0.72 + (1 - stem) * 0.18,
     })
   }

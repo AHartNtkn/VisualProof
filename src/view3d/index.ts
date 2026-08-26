@@ -24,7 +24,8 @@ export function presentedScene(target: Scene3, plan: TweenPlan | null, progress:
   return plan === null ? target : sceneAt(plan, progress)
 }
 
-const renderThemeOf = (theme: Theme, diagram: Diagram): RenderTheme => ({
+/** Authoritative bridge from the shared application theme to WebGL colors. */
+export const renderThemeOf = (theme: Theme, diagram: Diagram): RenderTheme => ({
   mode: theme.mode,
   background: theme.canvas,
   line: theme.mode === 'dark' ? '#f2f4f8' : theme.ink,

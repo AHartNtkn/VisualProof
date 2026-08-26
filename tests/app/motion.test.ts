@@ -5,9 +5,30 @@ import * as motion from '../../src/app/interact/motion'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { singleStepAction } from '../../src/kernel/proof/action'
 import { convertToWeakHeadNormal } from '../../src/app/tactics'
-import { mkEngine } from '../../src/view/engine'
-import { LIGHT } from '../../src/view/paint'
-import { seedProject } from '../../src/view/relax'
+import { carryOver, mkEngine } from '../../src/view/engine'
+import { LIGHT, paint, type Shape } from '../../src/view/paint'
+import { seedProject, settle } from '../../src/view/relax'
+
+const lambdaOutline = (shapes: readonly Shape[]): readonly unknown[] => shapes.flatMap<unknown>((shape) => {
+  const rounded = (value: number): number => Number(value.toFixed(10))
+  const point = ({ x, y }: { readonly x: number; readonly y: number }): object => ({
+    x: rounded(x),
+    y: rounded(y),
+  })
+  if (shape.kind === 'arc') {
+    return [{
+      kind: shape.kind,
+      center: point(shape.center),
+      radius: rounded(shape.r),
+      start: rounded(shape.a0),
+      end: rounded(shape.a1),
+    }]
+  }
+  if (shape.kind === 'segment') {
+    return [{ kind: shape.kind, from: point(shape.from), to: point(shape.to) }]
+  }
+  return []
+})
 
 describe('generic diagram motion', () => {
   it('keeps only speed, transition ghosts, and hover timing preferences', () => {
@@ -138,5 +159,84 @@ describe('generic diagram motion', () => {
     ))
     expect(historyPaint.map((shape) => shape.stroke))
       .toEqual(historyFrame.strokes.map(({ color }) => color))
+  })
+
+  it('paints the structural motion at the source and target body transforms at its endpoints', () => {
+    const builder = new DiagramBuilder()
+    const parsed = parseTerm('(\\f. \\x. f (f x)) (\\z. z)')
+    const node = builder.term(builder.root, parsed.term, parsed.freeIdentifiers.length)
+    const beforeDiagram = builder.build()
+    const conversion = convertToWeakHeadNormal(beforeDiagram, node, 8)
+    const before = mkEngine(beforeDiagram, [])
+    seedProject(before)
+    settle(before, 4_000)
+    const after = mkEngine(conversion.diagram, [])
+    const carried = carryOver(before, after)
+    seedProject(after, false, carried)
+    settle(after, 4_000)
+    const coordinator = new motion.MotionCoordinator({
+      preferences: () => motion.defaultMotionPreferences(false),
+      engine: () => after,
+      theme: () => LIGHT,
+    })
+    coordinator.observeSwap(
+      before,
+      after,
+      100,
+      singleStepAction('beta', conversion.step),
+    )
+
+    coordinator.scrubBeta(0)
+    expect(lambdaOutline(coordinator.paint(100)))
+      .toEqual(lambdaOutline(paint(before, LIGHT)))
+
+    coordinator.scrubBeta(1)
+    expect(lambdaOutline(coordinator.paint(100)))
+      .toEqual(lambdaOutline(paint(after, LIGHT)))
+  })
+
+  it('keeps incident 2D wires attached to moving Lambda interface ports', () => {
+    const builder = new DiagramBuilder()
+    const parsed = parseTerm('(\\x. x) a')
+    const node = builder.term(builder.root, parsed.term, parsed.freeIdentifiers.length)
+    const beforeDiagram = builder.build()
+    const conversion = convertToWeakHeadNormal(beforeDiagram, node, 8)
+    const boundary: string[] = []
+    const before = mkEngine(beforeDiagram, boundary)
+    seedProject(before)
+    settle(before, 4_000)
+    const after = mkEngine(conversion.diagram, boundary)
+    const carried = carryOver(before, after)
+    seedProject(after, false, carried)
+    settle(after, 4_000)
+    const coordinator = new motion.MotionCoordinator({
+      preferences: () => motion.defaultMotionPreferences(false),
+      engine: () => after,
+      theme: () => LIGHT,
+    })
+    coordinator.observeSwap(
+      before,
+      after,
+      100,
+      singleStepAction('beta', conversion.step),
+    )
+
+    for (const progress of [0, 0.34, 0.54, 0.82, 1]) {
+      const frame = coordinator.scrubBeta(progress)!
+      const shapes = coordinator.paint(100)
+      const lambda = shapes.filter((shape) => shape.kind === 'arc' || shape.kind === 'segment')
+      const endpoints = shapes.flatMap((shape) => shape.kind === 'bezierPath'
+        ? [shape.cubics[0]!.a, shape.cubics.at(-1)!.b]
+        : [])
+      for (const role of ['free-port', 'output-line'] as const) {
+        const portIndex = frame.strokes.findIndex((stroke) => stroke.role === role)
+        expect(portIndex).toBeGreaterThanOrEqual(0)
+        const port = lambda[portIndex]
+        expect(port?.kind).toBe('segment')
+        if (port?.kind !== 'segment') throw new Error(`${role} did not paint as a segment`)
+        expect(Math.min(...endpoints.map(({ x, y }) => Math.hypot(x - port.to.x, y - port.to.y))))
+          .toBeLessThan(1e-8)
+      }
+    }
   })
 })

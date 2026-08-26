@@ -1,4 +1,4 @@
-import type { Engine } from '../../view/engine'
+import { ascaleOf, type Engine } from '../../view/engine'
 import type { ProofAction } from '../../kernel/proof/action'
 import {
   planBetaMotion,
@@ -9,6 +9,7 @@ import {
 import {
   paint as paintDiagram,
   paintWires,
+  type LambdaPaintTransform,
   type Shape,
   type Theme,
 } from '../../view/paint'
@@ -63,7 +64,10 @@ type ActiveBeta = {
   readonly baseColor: string
   readonly node: string | null
   readonly direction: 'forward' | 'reverse'
+  readonly sourceEngine: Engine | null
+  readonly targetEngine: Engine | null
   frame: LambdaStrokeFrame
+  semanticProgress: number
   startedAt: number | null
 }
 
@@ -182,7 +186,10 @@ export class MotionCoordinator {
       baseColor,
       node,
       direction: 'forward',
+      sourceEngine: null,
+      targetEngine: null,
       frame: sampleBetaMotion(plan, 0, baseColor),
+      semanticProgress: 0,
       startedAt: null,
     }
     return plan
@@ -191,6 +198,10 @@ export class MotionCoordinator {
   #sampleBeta(progress: number): LambdaStrokeFrame | null {
     if (this.#beta === null) return null
     this.#beta.startedAt = null
+    this.#beta.semanticProgress = this.#semanticProgress(
+      this.#beta.direction,
+      progress,
+    )
     this.#beta.frame = this.#frameAt(
       this.#beta.plan,
       this.#beta.baseColor,
@@ -227,11 +238,16 @@ export class MotionCoordinator {
     const frames = active?.node === null || active === null
       ? new Map<string, LambdaStrokeFrame>()
       : new Map([[active.node, active.frame]])
+    const transform = active === null ? null : this.#paintTransform(active)
+    const transforms = active?.node === null || active === null || transform === null
+      ? new Map<string, LambdaPaintTransform>()
+      : new Map([[active.node, transform]])
     return paintDiagram(
       this.#options.engine(),
       this.#options.theme(),
       paintWires,
       frames,
+      transforms,
     )
   }
 
@@ -277,6 +293,7 @@ export class MotionCoordinator {
       active.direction,
       progress,
     )
+    active.semanticProgress = this.#semanticProgress(active.direction, progress)
     if (progress >= 1) this.settleBeta()
   }
 
@@ -310,12 +327,15 @@ export class MotionCoordinator {
       baseColor: this.#options.theme().wire,
       node: conversion.node,
       direction,
+      sourceEngine,
+      targetEngine,
       frame: this.#frameAt(
         plan,
         this.#options.theme().wire,
         direction,
         0,
       ),
+      semanticProgress: direction === 'forward' ? 0 : 1,
       startedAt: now,
     }
   }
@@ -326,9 +346,42 @@ export class MotionCoordinator {
     direction: 'forward' | 'reverse',
     presentationProgress: number,
   ): LambdaStrokeFrame {
-    const semanticProgress = direction === 'forward'
-      ? presentationProgress
-      : 1 - presentationProgress
+    const semanticProgress = this.#semanticProgress(direction, presentationProgress)
     return sampleBetaMotion(plan, semanticProgress, baseColor)
+  }
+
+  #semanticProgress(
+    direction: 'forward' | 'reverse',
+    presentationProgress: number,
+  ): number {
+    return direction === 'forward' ? presentationProgress : 1 - presentationProgress
+  }
+
+  #paintTransform(active: ActiveBeta): LambdaPaintTransform | null {
+    if (active.node === null || active.sourceEngine === null || active.targetEngine === null) return null
+    const source = active.sourceEngine.bodies.get(active.node)
+    const target = active.targetEngine.bodies.get(active.node)
+    if (source?.kind !== 'term' || target?.kind !== 'term') return null
+    const start = active.plan.times.liftEnd
+    const end = active.plan.times.spaceEnd
+    const reflow = end === start
+      ? 1
+      : smoothstep((active.semanticProgress - start) / (end - start))
+    const angleDelta = Math.atan2(
+      Math.sin(target.theta - source.theta),
+      Math.cos(target.theta - source.theta),
+    )
+    const mix = (from: number, to: number): number => from + (to - from) * reflow
+    return {
+      center: {
+        x: mix(source.pos.x, target.pos.x),
+        y: mix(source.pos.y, target.pos.y),
+      },
+      theta: source.theta + angleDelta * reflow,
+      scale: mix(
+        ascaleOf(source.kind) * active.sourceEngine.scale,
+        ascaleOf(target.kind) * active.targetEngine.scale,
+      ),
+    }
   }
 }

@@ -5,7 +5,7 @@ import type { NodeGeometry } from './bend'
 import { ARGUMENT_COLOR, type LambdaStrokeFrame } from './lambda-motion'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, localToWorld, resolvedFrameSlot } from './engine'
-import { computeLegs, legPaths } from './wires'
+import { computeLegs } from './wires'
 import type { Leg } from './engine'
 
 /**
@@ -88,6 +88,16 @@ export type Shape =
       constant size under zoom, unlike world-scaled circles. */
   | { readonly kind: 'dot'; readonly center: Vec2; readonly rPx: number; readonly fill: string }
   | { readonly kind: 'label'; readonly center: Vec2; readonly text: string; readonly color: string; readonly r: number; readonly font: string }
+
+export type LambdaPaintTransform = {
+  readonly center: Vec2
+  readonly theta: number
+  readonly scale: number
+}
+
+type LambdaWireAnchors = ReadonlyMap<string, Vec2>
+
+const lambdaWireAnchorKey = (body: string, key: string): string => `${body}\0${key}`
 
 const FRAME_STROKE_W = 2
 const DISC_RIM_W = 1.4
@@ -266,7 +276,11 @@ function cutDepth(d: Diagram, rid: RegionId): number {
     and junction dots. Exported (and overridable via
     paint's `wires` parameter) so wire-rendering experiments can substitute
     their own pass without duplicating the rest of the painter. */
-export function paintWires(e: Engine, st: Theme): Shape[] {
+export function paintWires(
+  e: Engine,
+  st: Theme,
+  lambdaAnchors: LambdaWireAnchors = new Map(),
+): Shape[] {
   const fb = frameBounds(e)
   if (fb === null) throw new Error('paintWires requires a settled engine: call settleStep/settle first')
   const glow = (c: string): string | null => (st.wireGlow ? c : null)
@@ -281,9 +295,34 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   // extra to draw at a branch — no dot is painted there (USER 2026-07-07: branch
   // points are unmarked).
   // wires (Hobby-chain strokes) — the ACTUAL wire network, junctions included
-  for (const { wid, pts, cubics } of legPaths(e)) {
-    const stroke = wireStroke(wid)
-    shapes.push({ kind: 'bezierPath', cubics, pts, stroke, width: st.wireW, glow: glow(stroke) })
+  for (const { leg, pts, cubics } of computeLegs(e)) {
+    const from = leg.from.key === null ? undefined : lambdaAnchors.get(lambdaWireAnchorKey(leg.from.body, leg.from.key))
+    const to = leg.to.key === null ? undefined : lambdaAnchors.get(lambdaWireAnchorKey(leg.to.body, leg.to.key))
+    const movedPts = (from === undefined && to === undefined) ? pts : pts.map((point) => ({ ...point }))
+    const movedCubics = (from === undefined && to === undefined) ? cubics : cubics.map((cubic) => ({ ...cubic }))
+    if (from !== undefined && movedCubics.length > 0) {
+      const first = movedCubics[0]!
+      const delta = { x: from.x - first.a.x, y: from.y - first.a.y }
+      movedCubics[0] = {
+        ...first,
+        a: from,
+        c1: { x: first.c1.x + delta.x, y: first.c1.y + delta.y },
+      }
+      movedPts[0] = from
+    }
+    if (to !== undefined && movedCubics.length > 0) {
+      const index = movedCubics.length - 1
+      const last = movedCubics[index]!
+      const delta = { x: to.x - last.b.x, y: to.y - last.b.y }
+      movedCubics[index] = {
+        ...last,
+        c2: { x: last.c2.x + delta.x, y: last.c2.y + delta.y },
+        b: to,
+      }
+      movedPts[movedPts.length - 1] = to
+    }
+    const stroke = wireStroke(leg.wid)
+    shapes.push({ kind: 'bezierPath', cubics: movedCubics, pts: movedPts, stroke, width: st.wireW, glow: glow(stroke) })
   }
   // An unattached boundary wire is already a formal port: paint it exactly at
   // its canonical frame slot rather than inventing a floating existential body.
@@ -309,8 +348,9 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
 export function paint(
   e: Engine,
   st: Theme,
-  wires: (e: Engine, st: Theme) => Shape[] = paintWires,
+  wires: (e: Engine, st: Theme, lambdaAnchors?: LambdaWireAnchors) => Shape[] = paintWires,
   lambdaFrames: ReadonlyMap<NodeId, LambdaStrokeFrame> = new Map(),
+  lambdaTransforms: ReadonlyMap<NodeId, LambdaPaintTransform> = new Map(),
 ): Shape[] {
   const fb = frameBounds(e)
   if (fb === null) throw new Error('paint requires a settled engine: call settleStep/settle first')
@@ -330,6 +370,26 @@ export function paint(
     return owner === undefined ? st.wire : hues.get(owner) ?? st.wire
   }
   const shapes: Shape[] = []
+  const lambdaAnchors = new Map<string, Vec2>()
+  for (const [node, frame] of lambdaFrames) {
+    const body = e.bodies.get(node)
+    if (body?.kind !== 'term') continue
+    const transform = lambdaTransforms.get(node)
+    const center = transform?.center ?? body.pos
+    const theta = transform?.theta ?? body.theta
+    const scale = transform?.scale ?? ascaleOf(body.kind) * e.scale
+    for (const stroke of frame.strokes) {
+      const key = stroke.id === 'interface:output:line'
+        ? 'out'
+        : /^interface:free:(\d+):port-stem$/.exec(stroke.id)?.[1]
+      if (key === undefined) continue
+      const portKey = key === 'out' ? key : `f:${key}`
+      lambdaAnchors.set(
+        lambdaWireAnchorKey(node, portKey),
+        transformLambdaPoint(stroke.points[1], center, theta, scale),
+      )
+    }
+  }
 
   // sheet frame
   shapes.push({ kind: 'frame', x: fb.minX, y: fb.minY, w: fb.maxX - fb.minX, h: fb.maxY - fb.minY, cornerW: FRAME_CORNER_W, fill: st.paper, stroke: st.frame, width: FRAME_STROKE_W })
@@ -344,7 +404,7 @@ export function paint(
     shapes.push({ kind: 'circle', center: g.center, r: g.radius, fill, stroke: st.ink, width: st.rimW, insetColor: st.insetColor, glow: null })
   }
 
-  for (const s of wires(e, st)) shapes.push(s) // no spread: big diagrams overflow the arg stack
+  for (const s of wires(e, st, lambdaAnchors)) shapes.push(s) // no spread: big diagrams overflow the arg stack
 
   // Atom/ref argument positions are ordered by their relation signatures, so a
   // two-or-more-argument node gets a rim pip at a:0. Identity anchors are
@@ -383,11 +443,12 @@ export function paint(
     const stroke = b.kind === 'term' ? st.wire : bodyStroke(b)
     const lambdaFrame = node?.kind === 'term' ? lambdaFrames.get(b.id) : undefined
     if (lambdaFrame !== undefined) {
+      const transform = lambdaTransforms.get(b.id)
       shapes.push(...paintLambdaFrame(
         lambdaFrame,
-        b.pos,
-        b.theta,
-        ascale,
+        transform?.center ?? b.pos,
+        transform?.theta ?? b.theta,
+        transform?.scale ?? ascale,
         st.wireW,
         st.wireGlow,
       ))

@@ -14,6 +14,7 @@ import {
 } from '../../src/view/lambda-motion'
 import { lambdaFrameGeometry } from '../../src/view/morph'
 import { paintLambdaFrame } from '../../src/view/paint'
+import { termGeometry, type NodeGeometry } from '../../src/view/bend'
 
 const ROOT_BETA: ReductionStep = { kind: 'beta', path: [] }
 const BASE = '#26343a'
@@ -84,6 +85,22 @@ const endpointPositions = (strokes: readonly LambdaStroke[]): Map<string, { x: n
 const colorsOf = (frame: ReturnType<typeof sampleBetaMotion>, lineage: LambdaStroke['lineage']): Set<string> => (
   new Set(frame.strokes.filter((stroke) => stroke.lineage === lineage).map((stroke) => stroke.color))
 )
+
+const clean = (value: number): number => Number(value.toFixed(10))
+const cleanAngle = (value: number): number => clean((value % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI))
+const paintGeometry = (geometry: NodeGeometry): unknown => ({
+  outerRadius: clean(geometry.outerRadius),
+  arcs: geometry.arcs.map(({ r, a0, a1, kind }) => ({ r: clean(r), a0: cleanAngle(a0), a1: cleanAngle(a1), kind })),
+  radials: geometry.radials.map(({ angle, r0, r1 }) => ({ angle: cleanAngle(angle), r0: clean(r0), r1: clean(r1) })),
+  portAnchors: Object.fromEntries(Object.entries(geometry.portAnchors)
+    .map(([key, { x, y }]) => [key, { x: clean(x), y: clean(y) }])),
+  exitArc: geometry.exitArc === null ? null : {
+    r: clean(geometry.exitArc.r),
+    a0: cleanAngle(geometry.exitArc.a0),
+    a1: cleanAngle(geometry.exitArc.a1),
+  },
+  exitLine: geometry.exitLine?.map(({ x, y }) => ({ x: clean(x), y: clean(y) })) ?? null,
+})
 
 describe('corrected structural beta motion', () => {
   for (const fixture of cases) {
@@ -264,6 +281,15 @@ describe('corrected structural beta motion', () => {
     const settled = sampleBetaMotion(plan, 1, BASE)
     expect(settled.strokes.map(({ id }) => id))
       .toEqual(plan.model.target.strokes.map(({ id }) => id))
+  })
+
+  it('reaches the ordinary canonical target paint geometry before structural motion settles', () => {
+    for (const fixture of cases) {
+      const parsed = parseTerm(fixture.source)
+      const plan = planBetaMotion(parsed.term, ROOT_BETA, parsed.freeIdentifiers.length)
+      expect(paintGeometry(lambdaFrameGeometry(sampleBetaMotion(plan, 1, BASE))), fixture.name)
+        .toEqual(paintGeometry(termGeometry(plan.target, parsed.freeIdentifiers.length)))
+    }
   })
 
   it('rejects a consumed surviving-owner stroke outside the explicit classifications', async () => {
