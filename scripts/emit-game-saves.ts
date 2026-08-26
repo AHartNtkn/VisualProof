@@ -10,7 +10,7 @@ import { mkReplay } from '../src/app/replay'
 import { diagramToJson } from '../src/kernel/diagram/json'
 import { verifyTheory } from '../src/kernel/proof/context'
 import { buildFregeTheory } from '../src/theories/frege'
-import { orchardPlacements } from '../orchard/placement'
+import { orchardPlacements } from '../src/game/render/placement'
 import { publishGeneratedSaves } from './game-save-publication'
 
 const counts = [1, 10, 50, 100, 250, 500, 1000, 2000] as const

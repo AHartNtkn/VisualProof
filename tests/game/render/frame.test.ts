@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SettledFrameTelemetry, formatFps, frameTiming, percentile } from '../../orchard/frame'
+import { SettledFrameTelemetry, formatFps, frameTiming, percentile } from '../../../src/game/render/frame'
 
 describe('frameTiming', () => {
   it('reports the full frame duration while bounding only movement catch-up', () => {

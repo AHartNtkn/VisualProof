@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { deriveTreeLods } from '../../orchard/lod-assets'
-import type { Scene3 } from '../../src/view3d/scene'
+import { deriveTreeLods } from '../../../src/game/render/lod-assets'
+import type { Scene3 } from '../../../src/view3d/scene'
 
 const full: Scene3 = {
   center: { x: 0, y: 5, z: 0 }, radius: 6,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fixedCellCoordinate, SpatialIndex } from '../../orchard/spatial-index'
+import { fixedCellCoordinate, SpatialIndex } from '../../../src/game/render/spatial-index'
 
 type Item = { id: string; x: number; z: number }
 

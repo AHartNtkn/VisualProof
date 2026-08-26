@@ -1,26 +1,14 @@
 import * as THREE from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
-import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
-import type { WireId } from '../src/kernel/diagram/diagram'
-import type { Entity } from '../src/view3d/scene'
-import { mountGlowRenderer } from './glow-render'
+import type { WireId } from '../../kernel/diagram/diagram'
+import type { Entity } from '../../view3d/scene'
 import { GlowTilePlan, type DirtyGlowTile } from './glow-tiles'
 import { projectedDiameterPx, selectLod, type LodLevel } from './lod-policy'
 import { SpatialIndex } from './spatial-index'
-import {
-  disposeTreeObject,
-  makeBatchedTreeObject,
-  makeMarkerObject,
-  makeRawTreeObject,
-  type OrchardMaterialSource,
-} from './tree-objects'
-import type { OrchardWorldSave, SavedTree, SavedTreeLayout } from './world'
+import { disposeTreeObject, type TreeMaterialSource } from './tree-objects'
+import type { TreePlacement } from './placement'
+import type { TreeLodAssets, TreeRenderAsset } from './types'
 
-const MAX_PIXEL_RATIO = 1.5
 const MAX_REPRESENTATION_OPERATIONS = 12
 const SPATIAL_CELL_SIZE = 128
 
@@ -28,7 +16,7 @@ export type RenderMode = 'game' | 'raw'
 export type AntialiasingMethod = 'smaa' | 'off'
 type ResidentLod = Exclude<LodLevel, 'culled'>
 
-export type OrchardFrameStats = {
+export type GameFrameStats = {
   readonly antialiasingMethod: AntialiasingMethod
   readonly drawCalls: number
   readonly triangles: number
@@ -61,29 +49,22 @@ export type OrchardBuildStats = {
   readonly buildMs: number
 }
 
-export type OrchardWorld = {
-  readonly canvas: HTMLCanvasElement
-  setCount(count: number): Promise<OrchardBuildStats>
-  setTrees(trees: readonly SavedTree[]): Promise<OrchardBuildStats>
-  setMode(mode: RenderMode): void
-  setAntialiasing(enabled: boolean): AntialiasingMethod
-  setPlayer(x: number, z: number, yaw: number, pitch: number): void
-  resize(width: number, height: number): void
-  render(): OrchardFrameStats
-  dispose(): void
+export type RenderTree = {
+  readonly id: string
+  readonly diagramJson: string
+  readonly placement: TreePlacement
 }
 
 export type TreeObjectBuilder = (
-  layout: SavedTreeLayout,
-  saved: SavedTree,
-  index: number,
+  asset: TreeRenderAsset,
+  tree: RenderTree,
   lod: ResidentLod,
   raw: boolean,
 ) => THREE.Group
 
 type TreeRenderState = {
-  saved: SavedTree
-  index: number
+  tree: RenderTree
+  asset: TreeRenderAsset
   sphere: THREE.Sphere
   desired: LodLevel
   resident: LodLevel
@@ -95,6 +76,7 @@ type TreeRenderState = {
   queued: boolean
   operationNode: RepresentationOperationNode | null
   active: boolean
+  suspended: boolean
   needsReplacement: boolean
 }
 
@@ -125,7 +107,7 @@ export type RepresentationWork = {
   readonly examined: number
 }
 
-export class OrchardWorldLifecycle {
+export class GameWorldLifecycle {
   private disposed = false
 
   public constructor(private readonly releases: readonly (() => void)[]) {}
@@ -156,16 +138,16 @@ export type TreeRuntimeSnapshot = {
   readonly failureCount: number
 }
 
-export function treeWorldSphere(saved: SavedTree, layout: SavedTreeLayout): THREE.Sphere {
+export function treeWorldSphere(tree: RenderTree, asset: TreeRenderAsset): THREE.Sphere {
   const center = new THREE.Vector3(
-    layout.bounds.center.x,
-    layout.bounds.center.y,
-    layout.bounds.center.z,
+    asset.bounds.center.x,
+    asset.bounds.center.y,
+    asset.bounds.center.z,
   )
-  center.applyAxisAngle(new THREE.Vector3(0, 1, 0), saved.yaw)
-  center.x += saved.x
-  center.z += saved.z
-  return new THREE.Sphere(center, layout.bounds.radius)
+  center.applyAxisAngle(new THREE.Vector3(0, 1, 0), tree.placement.yaw)
+  center.x += tree.placement.x
+  center.z += tree.placement.z
+  return new THREE.Sphere(center, asset.bounds.radius)
 }
 
 function objectCardinality(object: THREE.Group): {
@@ -184,14 +166,26 @@ function objectCardinality(object: THREE.Group): {
   return { nodes, instanced, pointLights }
 }
 
-function sameSavedTree(left: SavedTree, right: SavedTree): boolean {
-  return left.layout === right.layout
-    && left.x === right.x
-    && left.z === right.z
-    && left.yaw === right.yaw
+function sameRenderTree(left: RenderTree, right: RenderTree): boolean {
+  return left.diagramJson === right.diagramJson
+    && left.placement.index === right.placement.index
+    && left.placement.x === right.placement.x
+    && left.placement.z === right.placement.z
+    && left.placement.yaw === right.placement.yaw
 }
 
-export class OrchardTreeRuntime {
+export type LodUpdate = { readonly visited: number; readonly lodMs: number }
+
+export type GameTreeRuntimeApi = {
+  setTrees(trees: readonly RenderTree[]): OrchardBuildStats
+  suspend(treeId: string): void
+  resume(tree: RenderTree): void
+  residentObjects(treeId?: string): readonly THREE.Object3D[]
+  updateGame(camera: THREE.PerspectiveCamera, fogFar: number, viewportHeight: number): LodUpdate
+  processOperations(budget?: number): RepresentationWork
+}
+
+export class GameTreeRuntime implements GameTreeRuntimeApi {
   private readonly states = new Map<string, TreeRenderState>()
   private readonly spatial = new SpatialIndex<SpatialTree>(SPATIAL_CELL_SIZE)
   private readonly glowPlan = new GlowTilePlan(SPATIAL_CELL_SIZE)
@@ -199,7 +193,7 @@ export class OrchardTreeRuntime {
   private operationTail: RepresentationOperationNode | null = null
   private readonly tracked = new Set<TreeRenderState>()
   private readonly failures = new Map<string, RepresentationFailure>()
-  private readonly maxRadius: number
+  private maxRadius = 0
   private readonly lodCounts: Record<LodLevel, number> = { full: 0, reduced: 0, marker: 0, culled: 0 }
   private mode: RenderMode = 'game'
   private logicalEntities = 0
@@ -213,33 +207,34 @@ export class OrchardTreeRuntime {
   private disposed = false
 
   public constructor(
-    private readonly layouts: Readonly<Record<string, SavedTreeLayout>>,
+    private readonly resolveAsset: (diagramJson: string) => TreeRenderAsset,
     private readonly parent: THREE.Group,
     private readonly buildObject: TreeObjectBuilder,
     private readonly releaseObject: (object: THREE.Group) => void = disposeTreeObject,
-  ) {
-    this.maxRadius = Object.values(layouts).reduce((maximum, layout) => Math.max(maximum, layout.bounds.radius), 0)
-  }
+  ) {}
 
-  public setTrees(trees: readonly SavedTree[]): OrchardBuildStats {
+  public setTrees(trees: readonly RenderTree[]): OrchardBuildStats {
     this.assertActive()
     const started = performance.now()
-    const incoming = new Map<string, { readonly saved: SavedTree; readonly index: number }>()
-    trees.forEach((tree, index) => {
+    const incoming = new Map<string, { readonly tree: RenderTree; readonly asset: TreeRenderAsset }>()
+    trees.forEach((tree) => {
       if (incoming.has(tree.id)) throw new Error(`duplicate active tree id '${tree.id}'`)
-      if (this.layouts[tree.layout] === undefined) throw new Error(`unknown active tree layout '${tree.layout}'`)
-      incoming.set(tree.id, { saved: tree, index })
+      if (tree.placement.id !== tree.id) {
+        throw new Error(`tree '${tree.id}' placement id must match its tree id`)
+      }
+      incoming.set(tree.id, { tree, asset: this.resolveAsset(tree.diagramJson) })
     })
 
     for (const [id, state] of this.states) {
       if (!incoming.has(id)) this.removeState(state)
     }
 
-    for (const { saved, index } of incoming.values()) {
-      const current = this.states.get(saved.id)
-      if (current === undefined) this.insertState(saved, index)
-      else this.updateState(current, saved, index)
+    for (const { tree, asset } of incoming.values()) {
+      const current = this.states.get(tree.id)
+      if (current === undefined) this.insertState(tree, asset)
+      else this.updateState(current, tree, asset)
     }
+    this.recomputeMaxRadius()
 
     return {
       trees: this.states.size,
@@ -257,7 +252,7 @@ export class OrchardTreeRuntime {
     for (const state of this.states.values()) {
       this.clearFailure(state)
       this.setDesired(state, mode === 'raw' ? 'full' : 'culled')
-      this.enqueueState(state, true)
+      if (!state.suspended) this.enqueueState(state, true)
     }
   }
 
@@ -265,11 +260,57 @@ export class OrchardTreeRuntime {
     return this.mode
   }
 
+  public suspend(treeId: string): void {
+    this.assertActive()
+    const state = this.states.get(treeId)
+    if (state === undefined || state.suspended) return
+    state.suspended = true
+    this.cancelStateOperation(state)
+    this.detachResidentObject(state)
+    this.tracked.delete(state)
+  }
+
+  public resume(tree: RenderTree): void {
+    this.assertActive()
+    if (tree.placement.id !== tree.id) {
+      throw new Error(`tree '${tree.id}' placement id must match its tree id`)
+    }
+    const asset = this.resolveAsset(tree.diagramJson)
+    const state = this.states.get(tree.id)
+    if (state === undefined) {
+      this.insertState(tree, asset)
+      this.recomputeMaxRadius()
+      return
+    }
+    this.updateState(state, tree, asset)
+    state.suspended = false
+    this.recomputeMaxRadius()
+    if (state.object !== null
+      && !state.needsReplacement
+      && state.resident === state.desired
+      && state.desired !== 'culled') {
+      this.attachResidentObject(state)
+      return
+    }
+    if (state.desired !== 'culled') this.enqueueState(state)
+  }
+
+  public residentObjects(treeId?: string): readonly THREE.Object3D[] {
+    this.assertActive()
+    if (treeId !== undefined) {
+      const object = this.states.get(treeId)?.object
+      return object?.parent === this.parent ? [object] : []
+    }
+    return [...this.states.values()]
+      .map(({ object }) => object)
+      .filter((object): object is THREE.Group => object?.parent === this.parent)
+  }
+
   public updateGame(
     camera: THREE.PerspectiveCamera,
     fogFar: number,
     viewportHeight: number,
-  ): { readonly visited: number; readonly lodMs: number } {
+  ): LodUpdate {
     this.assertActive()
     const started = performance.now()
     if (this.mode !== 'game') return { visited: 0, lodMs: performance.now() - started }
@@ -291,7 +332,7 @@ export class OrchardTreeRuntime {
     const verticalFov = THREE.MathUtils.degToRad(camera.fov)
 
     for (const state of visitedStates) {
-      if (!state.active) continue
+      if (!state.active || state.suspended) continue
       let desired: LodLevel = 'culled'
       if (candidateStates.has(state)) {
         const inFog = state.sphere.distanceToPoint(camera.position) <= fogFar
@@ -392,13 +433,12 @@ export class OrchardTreeRuntime {
     this.representedEntities = 0
   }
 
-  private insertState(saved: SavedTree, index: number): void {
-    const layout = this.layouts[saved.layout]!
+  private insertState(tree: RenderTree, asset: TreeRenderAsset): void {
     const desired: LodLevel = this.mode === 'raw' ? 'full' : 'culled'
     const state: TreeRenderState = {
-      saved,
-      index,
-      sphere: treeWorldSphere(saved, layout),
+      tree,
+      asset,
+      sphere: treeWorldSphere(tree, asset),
       desired,
       resident: 'culled',
       object: null,
@@ -409,55 +449,56 @@ export class OrchardTreeRuntime {
       queued: false,
       operationNode: null,
       active: true,
+      suspended: false,
       needsReplacement: false,
     }
-    this.states.set(saved.id, state)
+    this.states.set(tree.id, state)
     this.lodCounts[desired]++
-    this.logicalEntities += layout.lods.full.entities.length
+    this.logicalEntities += asset.lods.full.entities.length
     this.indexState(state)
     this.setGlow(state)
     if (desired !== 'culled') this.enqueueState(state)
   }
 
-  private updateState(state: TreeRenderState, saved: SavedTree, index: number): void {
-    const previous = state.saved
-    const previousLayout = this.layouts[previous.layout]!
-    const nextLayout = this.layouts[saved.layout]!
-    const layoutChanged = previous.layout !== saved.layout
-    state.index = index
-    if (sameSavedTree(previous, saved)) {
-      if (state.object !== null) this.applyPlacement(state.object, saved, index)
+  private updateState(state: TreeRenderState, tree: RenderTree, asset: TreeRenderAsset): void {
+    const previous = state.tree
+    const previousAsset = state.asset
+    const assetChanged = previous.diagramJson !== tree.diagramJson
+    if (sameRenderTree(previous, tree)) {
+      if (state.object !== null) this.applyPlacement(state.object, tree)
       return
     }
 
-    state.saved = saved
-    state.sphere = treeWorldSphere(saved, nextLayout)
+    state.tree = tree
+    state.asset = asset
+    state.sphere = treeWorldSphere(tree, asset)
     this.clearFailure(state)
     this.indexState(state)
     this.setGlow(state)
-    if (layoutChanged) {
-      this.logicalEntities += nextLayout.lods.full.entities.length - previousLayout.lods.full.entities.length
-      this.detachSelectedObject(state)
-      this.enqueueState(state, true)
+    if (assetChanged) {
+      this.logicalEntities += asset.lods.full.entities.length - previousAsset.lods.full.entities.length
+      state.needsReplacement = true
+      this.detachResidentObject(state)
+      if (!state.suspended) this.enqueueState(state)
     } else if (state.object !== null) {
-      this.applyPlacement(state.object, saved, index)
-    } else if (state.desired !== 'culled') {
+      this.applyPlacement(state.object, tree)
+    } else if (!state.suspended && state.desired !== 'culled') {
       this.enqueueState(state)
     }
   }
 
   private removeState(state: TreeRenderState): void {
-    this.states.delete(state.saved.id)
-    this.spatial.remove(state.saved.id)
-    this.glowPlan.remove(state.saved.id)
-    this.logicalEntities -= this.layouts[state.saved.layout]!.lods.full.entities.length
+    this.states.delete(state.tree.id)
+    this.spatial.remove(state.tree.id)
+    this.glowPlan.remove(state.tree.id)
+    this.logicalEntities -= state.asset.lods.full.entities.length
     this.lodCounts[state.desired]--
     this.clearFailure(state)
     state.active = false
     this.cancelStateOperation(state)
     this.tracked.delete(state)
     if (state.object !== null) {
-      this.detachSelectedObject(state)
+      this.detachResidentObject(state)
       const object = state.object
       state.object = null
       state.resident = 'culled'
@@ -468,7 +509,7 @@ export class OrchardTreeRuntime {
 
   private indexState(state: TreeRenderState): void {
     this.spatial.insert({
-      id: state.saved.id,
+      id: state.tree.id,
       x: state.sphere.center.x,
       z: state.sphere.center.z,
       state,
@@ -476,11 +517,11 @@ export class OrchardTreeRuntime {
   }
 
   private setGlow(state: TreeRenderState): void {
-    const glow = this.layouts[state.saved.layout]!.glow
+    const glow = state.asset.glow
     this.glowPlan.set({
-      id: state.saved.id,
-      x: state.saved.x,
-      z: state.saved.z,
+      id: state.tree.id,
+      x: state.tree.placement.x,
+      z: state.tree.placement.z,
       radius: glow.radius,
       color: glow.color,
       opacity: glow.opacity,
@@ -493,20 +534,21 @@ export class OrchardTreeRuntime {
     state.desired = desired
     this.lodCounts[desired]++
     this.clearFailure(state)
-    this.detachSelectedObject(state)
-    this.tracked.add(state)
+    this.detachResidentObject(state)
+    if (!state.suspended) this.tracked.add(state)
   }
 
   private enqueueState(state: TreeRenderState, force = false): void {
     if (!state.active) return
     if (force) {
       state.needsReplacement = true
-      this.detachSelectedObject(state)
+      this.detachResidentObject(state)
     }
     if (state.queued) return
     if (!state.needsReplacement && state.resident === state.desired && state.object !== null) return
     if (!state.needsReplacement && state.desired === 'culled' && state.object === null) return
-    if (!force && this.failures.get(state.saved.id)?.desired === state.desired) return
+    if (state.suspended) return
+    if (!force && this.failures.get(state.tree.id)?.desired === state.desired) return
     state.queued = true
     state.operationNode = this.appendOperation({ kind: 'state', state })
     this.pending++
@@ -548,7 +590,7 @@ export class OrchardTreeRuntime {
     node.next = null
   }
 
-  private detachSelectedObject(state: TreeRenderState): void {
+  private detachResidentObject(state: TreeRenderState): void {
     if (state.object === null || state.representedEntities === 0 && state.object.parent === null) return
     state.object.visible = false
     state.object.removeFromParent()
@@ -567,23 +609,21 @@ export class OrchardTreeRuntime {
 
   private replaceStateObject(state: TreeRenderState): void {
     if (state.object !== null) {
-      this.detachSelectedObject(state)
+      this.detachResidentObject(state)
       this.releaseObject(state.object)
       state.object = null
       state.resident = 'culled'
     }
     state.needsReplacement = false
-    if (state.desired === 'culled') return
+    if (state.desired === 'culled' || state.suspended) return
     try {
-      const layout = this.layouts[state.saved.layout]!
       const object = this.buildObject(
-        layout,
-        state.saved,
-        state.index,
+        state.asset,
+        state.tree,
         state.desired,
         this.mode === 'raw',
       )
-      this.applyPlacement(object, state.saved, state.index)
+      this.applyPlacement(object, state.tree)
       object.visible = true
       this.parent.add(object)
       const cardinality = objectCardinality(object)
@@ -592,7 +632,9 @@ export class OrchardTreeRuntime {
       state.objectNodes = cardinality.nodes
       state.objectInstanced = cardinality.instanced
       state.objectPointLights = cardinality.pointLights
-      state.representedEntities = state.desired === 'marker' ? 0 : layout.lods[state.desired].entities.length
+      state.representedEntities = state.desired === 'marker'
+        ? 0
+        : state.asset.lods[state.desired].entities.length
       this.resident++
       this.objects += cardinality.nodes
       this.instanced += cardinality.instanced
@@ -600,7 +642,7 @@ export class OrchardTreeRuntime {
       this.representedEntities += state.representedEntities
       this.clearFailure(state)
     } catch (error) {
-      this.failures.set(state.saved.id, {
+      this.failures.set(state.tree.id, {
         desired: state.desired,
         message: error instanceof Error ? error.message : String(error),
       })
@@ -608,28 +650,56 @@ export class OrchardTreeRuntime {
   }
 
   private clearFailure(state: TreeRenderState): void {
-    this.failures.delete(state.saved.id)
+    this.failures.delete(state.tree.id)
   }
 
-  private applyPlacement(object: THREE.Group, saved: SavedTree, index: number): void {
-    object.position.set(saved.x, 0, saved.z)
-    object.rotation.y = saved.yaw
-    object.userData['treeId'] = saved.id
-    object.userData['treeIndex'] = index
+  private applyPlacement(object: THREE.Group, tree: RenderTree): void {
+    object.position.set(tree.placement.x, 0, tree.placement.z)
+    object.rotation.y = tree.placement.yaw
+    object.userData['treeId'] = tree.id
+    object.userData['treeIndex'] = tree.placement.index
     object.traverse((child) => {
       if (child === object) return
-      child.userData['treeId'] = saved.id
-      child.userData['treeIndex'] = index
+      child.userData['treeId'] = tree.id
+      child.userData['treeIndex'] = tree.placement.index
     })
   }
 
+  private attachResidentObject(state: TreeRenderState): void {
+    const object = state.object
+    if (object === null || object.parent === this.parent || state.resident === 'culled') return
+    object.visible = true
+    this.parent.add(object)
+    const cardinality = objectCardinality(object)
+    state.objectNodes = cardinality.nodes
+    state.objectInstanced = cardinality.instanced
+    state.objectPointLights = cardinality.pointLights
+    state.representedEntities = state.resident === 'marker'
+      ? 0
+      : state.asset.lods[state.resident].entities.length
+    this.resident++
+    this.objects += cardinality.nodes
+    this.instanced += cardinality.instanced
+    this.pointLights += cardinality.pointLights
+    this.representedEntities += state.representedEntities
+  }
+
+  private recomputeMaxRadius(): void {
+    this.maxRadius = [...this.states.values()].reduce(
+      (maximum, state) => Math.max(maximum, state.asset.bounds.radius),
+      0,
+    )
+  }
+
   private pruneTracked(state: TreeRenderState): void {
-    if (state.active && (state.desired !== 'culled' || state.object !== null || state.queued)) return
+    if (state.active
+      && !state.suspended
+      && (state.desired !== 'culled' || state.object !== null || state.queued)) return
     this.tracked.delete(state)
   }
 
   private assertActive(): void {
-    if (this.disposed) throw new Error('orchard tree runtime is disposed')
+    if (this.disposed) throw new Error('game tree runtime is disposed')
   }
 }
 
@@ -662,27 +732,27 @@ function textTexture(text: string, color: string): { texture: THREE.CanvasTextur
   return { texture, aspect: canvas.width / canvas.height }
 }
 
-/** Saved bloom is a bounded radiance contribution: multiplier = 1 + bloom, for [1, 2]× authored color. */
+/** Authored bloom is a bounded radiance contribution: multiplier = 1 + bloom, for [1, 2]× color. */
 function bloomRadiance(color: string, bloom: number): THREE.Color {
   return new THREE.Color(color).multiplyScalar(1 + bloom)
 }
 
-export function makeOrchardMaterialSource(
-  layout: SavedTreeLayout,
+export function makeTreeMaterialSource(
+  asset: TreeRenderAsset,
   lineMaterials: Set<LineMaterial>,
   textures: Set<THREE.Texture>,
   spriteMaterials: Set<THREE.SpriteMaterial>,
   resolution: () => { readonly width: number; readonly height: number },
-): OrchardMaterialSource {
+): TreeMaterialSource {
   const lines = new Map<string, LineMaterial>()
   const sprites = new Map<string, THREE.SpriteMaterial>()
-  const hues = new Map<WireId, string>(layout.hues)
+  const hues = new Map<WireId, string>(asset.hues)
   const colorFor = (entity: Entity): string => {
-    if (entity.kind === 'branch') return entity.polarity === 0 ? layout.palette.branch : layout.palette.cutBranch
-    if (entity.kind === 'strand') return hues.get(entity.wire) ?? layout.palette.baseWire
-    if (entity.kind === 'ring' && entity.headWire !== null) return hues.get(entity.headWire) ?? layout.palette.baseWire
-    if (entity.kind === 'pip' && entity.ownerWire !== null) return hues.get(entity.ownerWire) ?? layout.palette.baseWire
-    return layout.palette.branch
+    if (entity.kind === 'branch') return entity.polarity === 0 ? asset.palette.branch : asset.palette.cutBranch
+    if (entity.kind === 'strand') return hues.get(entity.wire) ?? asset.palette.baseWire
+    if (entity.kind === 'ring' && entity.headWire !== null) return hues.get(entity.headWire) ?? asset.palette.baseWire
+    if (entity.kind === 'pip' && entity.ownerWire !== null) return hues.get(entity.ownerWire) ?? asset.palette.baseWire
+    return asset.palette.branch
   }
   const line = (
     entity: Extract<Entity, { kind: 'branch' | 'ring' | 'strand' }>,
@@ -692,7 +762,7 @@ export function makeOrchardMaterialSource(
     const key = `${entity.kind}:${color}:${width}`
     let material = lines.get(key)
     if (material === undefined) {
-      material = new LineMaterial({ color: bloomRadiance(color, layout.glow.bloom), linewidth: width, worldUnits: true })
+      material = new LineMaterial({ color: bloomRadiance(color, asset.glow.bloom), linewidth: width, worldUnits: true })
       const size = resolution()
       material.resolution.set(size.width, size.height)
       lines.set(key, material)
@@ -700,15 +770,15 @@ export function makeOrchardMaterialSource(
     }
     return material
   }
-  const marker = (saved: SavedTreeLayout['lods']['marker']): THREE.SpriteMaterial => {
-    const key = `marker:${saved.color}`
+  const marker = (markerAsset: TreeLodAssets['marker']): THREE.SpriteMaterial => {
+    const key = `marker:${markerAsset.color}`
     let material = sprites.get(key)
     if (material === undefined) {
       const texture = discTexture('#ffffff')
       textures.add(texture)
       material = new THREE.SpriteMaterial({
         map: texture,
-        color: bloomRadiance(saved.color, layout.glow.bloom),
+        color: bloomRadiance(markerAsset.color, asset.glow.bloom),
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
@@ -728,7 +798,7 @@ export function makeOrchardMaterialSource(
       textures.add(texture)
       material = new THREE.SpriteMaterial({
         map: texture,
-        color: bloomRadiance('#ffffff', layout.glow.bloom),
+        color: bloomRadiance('#ffffff', asset.glow.bloom),
         transparent: true,
         depthTest: entity.kind !== 'pip',
       })
@@ -739,178 +809,4 @@ export function makeOrchardMaterialSource(
     return material
   }
   return { line, sprite, marker }
-}
-
-export function mountOrchardWorld(
-  container: HTMLElement,
-  world: OrchardWorldSave,
-): OrchardWorld {
-  const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
-  renderer.outputColorSpace = THREE.SRGBColorSpace
-  renderer.shadowMap.enabled = false
-  renderer.info.autoReset = false
-  renderer.domElement.setAttribute('aria-label', 'Walkable proof-tree orchard')
-  container.appendChild(renderer.domElement)
-
-  const scene = new THREE.Scene()
-  scene.background = new THREE.Color(world.terrain.sky)
-  scene.fog = new THREE.Fog(world.terrain.sky, world.terrain.fogNear, world.terrain.fogFar)
-  const camera = new THREE.PerspectiveCamera(67, 1, 0.08, 1800)
-  camera.rotation.order = 'YXZ'
-  const composer = new EffectComposer(renderer)
-  const renderPass = new RenderPass(scene, camera)
-  const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.65, 0.45, 0.55)
-  const smaaPass = new SMAAPass(1, 1)
-  const outputPass = new OutputPass()
-  composer.addPass(renderPass)
-  composer.addPass(bloomPass)
-  composer.addPass(smaaPass)
-  composer.addPass(outputPass)
-  let antialiasingMethod: AntialiasingMethod = 'smaa'
-
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(world.terrain.size, world.terrain.size),
-    new THREE.MeshBasicMaterial({ color: world.terrain.ground }),
-  )
-  ground.rotation.x = -Math.PI / 2
-  ground.position.y = -0.035
-  scene.add(ground)
-  const glowRenderer = mountGlowRenderer(scene, ground.position.y)
-  const activeGlowTiles = new Set<string>()
-
-  const trees = new THREE.Group()
-  trees.name = 'separate-proof-trees'
-  scene.add(trees)
-  const lineMaterials = new Set<LineMaterial>()
-  const textures = new Set<THREE.Texture>()
-  const spriteMaterials = new Set<THREE.SpriteMaterial>()
-  let size = { width: 1, height: 1 }
-  const materialsByLayout = new Map<string, OrchardMaterialSource>()
-  for (const [layoutId, layout] of Object.entries(world.layouts)) {
-    materialsByLayout.set(layoutId, makeOrchardMaterialSource(
-      layout,
-      lineMaterials,
-      textures,
-      spriteMaterials,
-      () => size,
-    ))
-  }
-  const runtime = new OrchardTreeRuntime(
-    world.layouts,
-    trees,
-    (layout, saved, index, lod, raw) => {
-      const placement = {
-        id: saved.id,
-        index,
-        x: saved.x,
-        z: saved.z,
-        yaw: saved.yaw,
-      }
-      const materials = materialsByLayout.get(saved.layout)!
-      if (raw) return makeRawTreeObject(layout, placement, materials)
-      if (lod === 'marker') return makeMarkerObject(layout, placement, materials)
-      return makeBatchedTreeObject(layout, lod, placement, materials)
-    },
-  )
-
-  const syncGlow = (): void => {
-    const dirty = runtime.flushGlow()
-    for (const record of dirty) {
-      if (record.contributors.length === 0) activeGlowTiles.delete(record.key)
-      else activeGlowTiles.add(record.key)
-    }
-    glowRenderer.sync(dirty)
-  }
-
-  const resize = (width: number, height: number): void => {
-    size = { width, height }
-    const pixelRatio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO)
-    renderer.setPixelRatio(pixelRatio)
-    renderer.setSize(width, height, false)
-    composer.setPixelRatio(pixelRatio)
-    composer.setSize(width, height)
-    bloomPass.setSize(width * pixelRatio, height * pixelRatio)
-    camera.aspect = width / Math.max(1, height)
-    camera.updateProjectionMatrix()
-    for (const material of lineMaterials) material.resolution.set(width, height)
-  }
-
-  const setTrees = async (savedTrees: readonly SavedTree[]): Promise<OrchardBuildStats> => runtime.setTrees(savedTrees)
-  const lifecycle = new OrchardWorldLifecycle([
-    () => runtime.dispose(),
-    () => { for (const material of lineMaterials) material.dispose() },
-    () => { for (const material of spriteMaterials) material.dispose() },
-    () => { for (const texture of textures) texture.dispose() },
-    () => glowRenderer.dispose(),
-    () => activeGlowTiles.clear(),
-    () => ground.geometry.dispose(),
-    () => (ground.material as THREE.Material).dispose(),
-    () => bloomPass.dispose(),
-    () => smaaPass.dispose(),
-    () => outputPass.dispose(),
-    () => composer.dispose(),
-    () => renderer.dispose(),
-    () => renderer.domElement.remove(),
-  ])
-
-  return {
-    canvas: renderer.domElement,
-    async setCount(count) {
-      if (!Number.isInteger(count) || count < 0 || count > world.trees.length) {
-        throw new Error(`tree count must be between 0 and ${world.trees.length}`)
-      }
-      return setTrees(world.trees.slice(0, count))
-    },
-    setTrees,
-    setMode(mode) {
-      runtime.setMode(mode)
-    },
-    setAntialiasing(enabled) {
-      smaaPass.enabled = enabled
-      antialiasingMethod = enabled ? 'smaa' : 'off'
-      return antialiasingMethod
-    },
-    setPlayer(x, z, yaw, pitch) {
-      camera.position.set(x, world.player.y, z)
-      camera.rotation.x = pitch
-      camera.rotation.y = yaw
-    },
-    resize,
-    render() {
-      const lod = runtime.updateGame(camera, world.terrain.fogFar, size.height)
-      const representationWork = runtime.processOperations()
-      syncGlow()
-      renderer.info.reset()
-      composer.render()
-      const current = runtime.snapshot()
-      return {
-        antialiasingMethod,
-        drawCalls: renderer.info.render.calls,
-        triangles: renderer.info.render.triangles,
-        geometries: renderer.info.memory.geometries,
-        objects: current.objects,
-        instanced: current.instanced,
-        logical: current.logical,
-        visible: current.visible,
-        resident: current.resident,
-        full: current.full,
-        reduced: current.reduced,
-        marker: current.marker,
-        culled: current.culled,
-        pending: current.pending,
-        glowTiles: activeGlowTiles.size,
-        pointLights: current.pointLights,
-        representedEntities: current.representedEntities,
-        representationOperations: representationWork.completed,
-        buildMs: current.buildMs,
-        lodMs: lod.lodMs,
-        error: current.error,
-        representationErrors: current.failureCount,
-      }
-    },
-    dispose() {
-      lifecycle.dispose()
-    },
-  }
 }

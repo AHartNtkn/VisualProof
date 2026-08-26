@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GlowTilePlan } from '../../orchard/glow-tiles'
+import { GlowTilePlan } from '../../../src/game/render/glow-tiles'
 
 describe('GlowTilePlan', () => {
   it('dirties every overlapped tile for arbitrary inserts, moves, and removals', () => {

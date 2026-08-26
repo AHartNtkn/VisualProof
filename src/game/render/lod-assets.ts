@@ -1,7 +1,7 @@
-import type { Scene3 } from '../src/view3d/scene'
-import type { SavedTreeLods } from './world'
+import type { Scene3 } from '../../view3d/scene'
+import type { TreeLodAssets } from './types'
 
-export function deriveTreeLods(full: Scene3): SavedTreeLods {
+export function deriveTreeLods(full: Scene3): TreeLodAssets {
   return {
     full,
     reduced: { ...full, entities: full.entities.filter((entity) => entity.kind === 'branch') },

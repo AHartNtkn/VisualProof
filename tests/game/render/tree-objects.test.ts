@@ -8,14 +8,13 @@ import {
   makeBatchedTreeObject,
   makeMarkerObject,
   makeRawTreeObject,
-  type OrchardMaterialSource,
-} from '../../orchard/tree-objects'
-import type { Entity } from '../../src/view3d/scene'
-import type { TreePlacement } from '../../orchard/placement'
-import type { SavedTreeLayout } from '../../orchard/world'
+  type TreeMaterialSource,
+} from '../../../src/game/render/tree-objects'
+import type { TreePlacement } from '../../../src/game/render/placement'
+import type { TreeRenderAsset } from '../../../src/game/render/types'
+import type { Entity } from '../../../src/view3d/scene'
 
-const layout: SavedTreeLayout = {
-  label: 'literal tree fixture',
+const asset: TreeRenderAsset = {
   bounds: { center: { x: 0, y: 2, z: 0 }, radius: 4 },
   lods: {
     full: {
@@ -69,13 +68,13 @@ const layout: SavedTreeLayout = {
   hues: [['w', '#00aaff']],
   palette: { branch: '#ffffff', cutBranch: '#777777', baseWire: '#eeeeee' },
   widths: { branch: 0.10, curve: 0.05 },
-  glow: { color: '#ffffff', radius: 4, opacity: 0.2, bloom: 0.5 },
+  glow: { color: '#ffffff', radius: 32, opacity: 0.65, bloom: 0.8 },
 }
 
 const placement: TreePlacement = { id: 'tree-a', index: 0, x: 10, z: 20, yaw: 0.5 }
 
 function fixtureMaterials(): {
-  source: OrchardMaterialSource
+  source: TreeMaterialSource
   materials: Set<THREE.Material>
   textures: Set<THREE.Texture>
 } {
@@ -145,9 +144,9 @@ function segmentsOf(line: LineSegments2): number[][] {
   ])
 }
 
-describe('orchard tree representations', () => {
-  it('uses exact saved world-unit widths for raw full-detail entities', () => {
-    const group = makeRawTreeObject(layout, placement, fixtureMaterials().source)
+describe('game tree representations', () => {
+  it('uses exact derived world-unit widths for raw full-detail entities', () => {
+    const group = makeRawTreeObject(asset, placement, fixtureMaterials().source)
     const lines = group.children.filter((child): child is Line2 => child instanceof Line2)
 
     expect(lines).toHaveLength(6)
@@ -158,11 +157,11 @@ describe('orchard tree representations', () => {
     expect(group.children.some((child) => child instanceof THREE.PointLight)).toBe(false)
   })
 
-  it('keeps raw full geometry and sprites unique for every saved entity and tree', () => {
+  it('keeps raw full geometry and sprites unique for every derived entity and tree', () => {
     const source = fixtureMaterials().source
-    const a = makeRawTreeObject(layout, placement, source)
+    const a = makeRawTreeObject(asset, placement, source)
     const b = makeRawTreeObject(
-      layout,
+      asset,
       { id: 'tree-b', index: 1, x: -10, z: -20, yaw: 1 },
       source,
     )
@@ -188,7 +187,7 @@ describe('orchard tree representations', () => {
   })
 
   it('preserves every full polyline segment exactly once with hand-derived entity ranges', () => {
-    const group = makeBatchedTreeObject(layout, 'full', placement, fixtureMaterials().source)
+    const group = makeBatchedTreeObject(asset, 'full', placement, fixtureMaterials().source)
     const lines = group.children.filter((child): child is LineSegments2 => child instanceof LineSegments2)
     const actualSegments = lines.flatMap(segmentsOf).map((segment) => segment.join(','))
 
@@ -228,9 +227,9 @@ describe('orchard tree representations', () => {
 
   it('allocates different batched geometry buffers for different tree IDs', () => {
     const source = fixtureMaterials().source
-    const a = makeBatchedTreeObject(layout, 'full', placement, source)
+    const a = makeBatchedTreeObject(asset, 'full', placement, source)
     const b = makeBatchedTreeObject(
-      layout,
+      asset,
       'full',
       { id: 'tree-b', index: 1, x: -10, z: -20, yaw: 1 },
       source,
@@ -250,8 +249,8 @@ describe('orchard tree representations', () => {
     }
   })
 
-  it('uses only saved reduced branches and batches them into polarity draws', () => {
-    const group = makeBatchedTreeObject(layout, 'reduced', placement, fixtureMaterials().source)
+  it('uses only derived reduced branches and batches them into polarity draws', () => {
+    const group = makeBatchedTreeObject(asset, 'reduced', placement, fixtureMaterials().source)
     const lines = group.children.filter((child): child is LineSegments2 => child instanceof LineSegments2)
 
     expect(group.children).toHaveLength(2)
@@ -264,8 +263,8 @@ describe('orchard tree representations', () => {
     ])
   })
 
-  it('creates one additive saved-color and saved-size marker sprite', () => {
-    const group = makeMarkerObject(layout, placement, fixtureMaterials().source)
+  it('creates one additive derived-color and derived-size marker sprite', () => {
+    const group = makeMarkerObject(asset, placement, fixtureMaterials().source)
 
     expect(group.children).toHaveLength(1)
     const marker = group.children[0]!
@@ -279,7 +278,7 @@ describe('orchard tree representations', () => {
 
   it('disposes each owned geometry once without disposing shared materials or textures', () => {
     const resources = fixtureMaterials()
-    const group = makeBatchedTreeObject(layout, 'full', placement, resources.source)
+    const group = makeBatchedTreeObject(asset, 'full', placement, resources.source)
     const lines = group.children.filter((child): child is LineSegments2 => child instanceof LineSegments2)
     const sharedGeometry = lines[0]!.geometry
     group.add(new LineSegments2(sharedGeometry, lines[0]!.material))

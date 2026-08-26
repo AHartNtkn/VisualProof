@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { projectedDiameterPx, selectLod } from '../../orchard/lod-policy'
+import { projectedDiameterPx, selectLod } from '../../../src/game/render/lod-policy'
 
 describe('projected tree LOD', () => {
   it('uses projected size rather than raw distance', () => {

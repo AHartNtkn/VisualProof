@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assertStressResidency, type StressResidency } from '../../orchard/stress-validation'
+import { assertStressResidency, type StressResidency } from '../../../src/game/render/stress-validation'
 
 const validGame: StressResidency = {
   mode: 'game',

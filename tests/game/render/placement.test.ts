@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { orchardPlacements } from '../../orchard/placement'
+import { orchardPlacements } from '../../../src/game/render/placement'
 
 describe('orchardPlacements', () => {
   it('lays out stable tree records progressively from the world center', () => {

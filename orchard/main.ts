@@ -1,6 +1,7 @@
 import './style.css'
-import { SettledFrameTelemetry, formatFps, frameTiming, percentile, type SettledFrameSnapshot } from './frame'
-import { mountOrchardWorld, type OrchardFrameStats, type RenderMode } from './render'
+import { SettledFrameTelemetry, formatFps, frameTiming, percentile, type SettledFrameSnapshot } from '../src/game/render/frame'
+import type { GameFrameStats, RenderMode } from '../src/game/render/runtime'
+import { mountStressHarness } from './harness-render'
 import { clampGroundPosition, stepWalker, type WalkInput } from './walk'
 import { loadWorldSave } from './world'
 
@@ -52,7 +53,7 @@ countScale.value = String(treeCount)
 async function boot(): Promise<void> {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   const savedWorld = await loadWorldSave()
-  const world = mountOrchardWorld(viewport, savedWorld)
+  const world = mountStressHarness(viewport, savedWorld)
   const initialAntialiasingMethod = world.setAntialiasing(true)
   root.dataset['worldVersion'] = String(savedWorld.version)
   root.dataset['savedTreeCount'] = String(savedWorld.trees.length)
@@ -130,7 +131,7 @@ async function boot(): Promise<void> {
   }
 
   const mirrorFrameDatasets = (
-    rendered: OrchardFrameStats,
+    rendered: GameFrameStats,
     settled: SettledFrameSnapshot,
     average: number,
     p95: number,
@@ -173,7 +174,7 @@ async function boot(): Promise<void> {
   }
 
   const updateMetricText = (
-    rendered: OrchardFrameStats,
+    rendered: GameFrameStats,
     settled: SettledFrameSnapshot,
     average: number,
     p95: number,

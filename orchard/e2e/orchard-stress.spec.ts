@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { assertStressResidency } from '../stress-validation'
+import { assertStressResidency } from '../../src/game/render/stress-validation'
 import type { SavedTree } from '../world'
 
 type StressRow = {
