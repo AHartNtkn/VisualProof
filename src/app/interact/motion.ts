@@ -1,13 +1,19 @@
 import type { Engine } from '../../view/engine'
+import type { ProofAction } from '../../kernel/proof/action'
 import {
   planBetaMotion,
   sampleBetaMotion,
   type LambdaMotionPlan,
   type LambdaStrokeFrame,
 } from '../../view/lambda-motion'
-import type { Shape, Theme } from '../../view/paint'
+import {
+  paint as paintDiagram,
+  paintWires,
+  type Shape,
+  type Theme,
+} from '../../view/paint'
 import type { ReductionStep } from '../../kernel/term/reduce'
-import type { Term } from '../../kernel/term/term'
+import { termEq, type Term } from '../../kernel/term/term'
 import type { Vec2 } from '../../view/vec'
 
 export type MotionPreferences = {
@@ -44,14 +50,26 @@ export type MotionDebugState = {
   readonly ghosts: number
   readonly pulses: number
   readonly hover: number
+  readonly beta: null | {
+    readonly node: string | null
+    readonly phase: LambdaStrokeFrame['phase']
+  }
 }
 
 type Ghost = { readonly pos: Vec2; readonly discR: number; readonly start: number }
 type Pulse = { readonly id: string; readonly start: number }
-type ActiveBeta = { readonly plan: LambdaMotionPlan; readonly baseColor: string }
+type ActiveBeta = {
+  readonly plan: LambdaMotionPlan
+  readonly baseColor: string
+  readonly node: string | null
+  readonly direction: 'forward' | 'reverse'
+  frame: LambdaStrokeFrame
+  startedAt: number | null
+}
 
 const GHOST_MS = 320
 const PULSE_MS = 450
+const BETA_MS = 1000 / 0.48
 
 const withAlpha = (color: string, alpha: number): string => {
   const byte = Math.max(0, Math.min(255, Math.round(alpha * 255))).toString(16).padStart(2, '0')
@@ -59,9 +77,10 @@ const withAlpha = (color: string, alpha: number): string => {
 }
 
 /**
- * Paint-only motion for whole-diagram replacements. Proof actions commit
- * synchronously; this coordinator only remembers outgoing ghosts, incoming
- * pulses, and hover easing.
+ * Paint-only motion for synchronously committed proof actions. Generic swaps
+ * retain outgoing ghosts and incoming pulses; an exact one-step beta
+ * conversion additionally owns the structural frame sampled by the live 2D
+ * painter until cancellation or settlement.
  */
 export class MotionCoordinator {
   readonly #options: MotionCoordinatorOptions
@@ -76,16 +95,27 @@ export class MotionCoordinator {
     this.#options = options
   }
 
-  observeSwap(before: Engine, after: Engine, now: number): void {
-    if (!this.#options.preferences().transitionGhosts || this.#disposed) return
-    for (const [id, body] of before.bodies) {
-      if (!after.bodies.has(id)) {
-        this.#ghosts.push({ pos: { ...body.pos }, discR: body.discR * before.scale, start: now })
+  observeSwap(
+    before: Engine,
+    after: Engine,
+    now: number,
+    action?: ProofAction,
+    direction: 'forward' | 'reverse' = 'forward',
+  ): void {
+    if (this.#disposed) return
+    if (this.#options.preferences().transitionGhosts) {
+      for (const [id, body] of before.bodies) {
+        if (!after.bodies.has(id)) {
+          this.#ghosts.push({ pos: { ...body.pos }, discR: body.discR * before.scale, start: now })
+        }
+      }
+      for (const id of after.bodies.keys()) {
+        if (!before.bodies.has(id)) this.#pulses.push({ id, start: now })
       }
     }
-    for (const id of after.bodies.keys()) {
-      if (!before.bodies.has(id)) this.#pulses.push({ id, start: now })
-    }
+    this.#beta = action === undefined
+      ? null
+      : this.#betaFromAction(before, after, action, now, direction)
   }
 
   overlays(now: number): readonly Shape[] {
@@ -140,16 +170,33 @@ export class MotionCoordinator {
     return duration === 0 ? 1 : Math.max(0, Math.min(1, (now - this.#hoverSince) / duration))
   }
 
-  beginBeta(source: Term, step: ReductionStep, baseColor: string): LambdaMotionPlan {
+  beginBeta(
+    source: Term,
+    step: ReductionStep,
+    baseColor: string,
+    node: string | null = null,
+  ): LambdaMotionPlan {
     const plan = planBetaMotion(source, step)
-    this.#beta = { plan, baseColor }
+    this.#beta = {
+      plan,
+      baseColor,
+      node,
+      direction: 'forward',
+      frame: sampleBetaMotion(plan, 0, baseColor),
+      startedAt: null,
+    }
     return plan
   }
 
   #sampleBeta(progress: number): LambdaStrokeFrame | null {
-    return this.#beta === null
-      ? null
-      : sampleBetaMotion(this.#beta.plan, progress, this.#beta.baseColor)
+    if (this.#beta === null) return null
+    this.#beta.startedAt = null
+    this.#beta.frame = sampleBetaMotion(
+      this.#beta.plan,
+      progress,
+      this.#beta.baseColor,
+    )
+    return this.#beta.frame
   }
 
   /** Pointer-driven timeline sampling uses the active structural plan verbatim. */
@@ -172,11 +219,34 @@ export class MotionCoordinator {
     return this.#sampleBeta(progress)
   }
 
+  /** The live 2D render path replaces the active term's static anatomy. */
+  paint(now = performance.now()): Shape[] {
+    this.#advanceBeta(now)
+    const active = this.#beta
+    const frames = active?.node === null || active === null
+      ? new Map<string, LambdaStrokeFrame>()
+      : new Map([[active.node, active.frame]])
+    return paintDiagram(
+      this.#options.engine(),
+      this.#options.theme(),
+      paintWires,
+      frames,
+    )
+  }
+
+  /** Commit the sampled endpoint to ordinary static rendering. */
+  settleBeta(): void {
+    this.#beta = null
+  }
+
   debugState(now: number): MotionDebugState {
     return {
       ghosts: this.#ghosts.length,
       pulses: this.#pulses.length,
       hover: this.hoverFraction(now),
+      beta: this.#beta === null
+        ? null
+        : { node: this.#beta.node, phase: this.#beta.frame.phase },
     }
   }
 
@@ -190,5 +260,57 @@ export class MotionCoordinator {
   dispose(): void {
     this.cancel()
     this.#disposed = true
+  }
+
+  #advanceBeta(now: number): void {
+    const active = this.#beta
+    if (active === null || active.startedAt === null) return
+    const elapsed = Math.max(0, now - active.startedAt)
+    const progress = Math.min(
+      1,
+      elapsed / (BETA_MS / this.#options.preferences().speed),
+    )
+    active.frame = sampleBetaMotion(
+      active.plan,
+      active.direction === 'forward' ? progress : 1 - progress,
+      active.baseColor,
+    )
+    if (progress >= 1) this.settleBeta()
+  }
+
+  #betaFromAction(
+    before: Engine,
+    after: Engine,
+    action: ProofAction,
+    now: number,
+    direction: 'forward' | 'reverse',
+  ): ActiveBeta | null {
+    if (action.steps.length !== 1) return null
+    const conversion = action.steps[0]
+    if (
+      conversion?.rule !== 'lambdaConversion'
+      || conversion.certificate.leftSteps.length !== 1
+      || conversion.certificate.rightSteps.length !== 0
+    ) return null
+    const reduction = conversion.certificate.leftSteps[0]!
+    if (reduction.kind !== 'beta') return null
+    const sourceEngine = direction === 'forward' ? before : after
+    const targetEngine = direction === 'forward' ? after : before
+    const sourceNode = sourceEngine.d.nodes[conversion.node]
+    const targetNode = targetEngine.d.nodes[conversion.node]
+    if (sourceNode?.kind !== 'term' || targetNode?.kind !== 'term') return null
+    const plan = planBetaMotion(sourceNode.term, reduction)
+    if (!termEq(plan.target, conversion.term) || !termEq(plan.target, targetNode.term)) {
+      throw new Error('Lambda motion target does not match the committed beta conversion')
+    }
+    const initial = direction === 'forward' ? 0 : 1
+    return {
+      plan,
+      baseColor: this.#options.theme().wire,
+      node: conversion.node,
+      direction,
+      frame: sampleBetaMotion(plan, initial, this.#options.theme().wire),
+      startedAt: now,
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { applyStepAt, type ReductionStep } from '../../src/kernel/term/reduce'
 import { termEq, type Term } from '../../src/kernel/term/term'
@@ -229,6 +229,71 @@ describe('corrected structural beta motion', () => {
 
     const settled = copiesAt(plan, 1)
     for (const copy of settled.values()) expect(new Set(copy.map(({ color }) => color))).toEqual(new Set([BASE]))
+  })
+
+  it('colors the consumed binder redex pink throughout the interior identify stage', () => {
+    const plan = planBetaMotion(term(cases[1].source), ROOT_BETA)
+    const frame = sampleBetaMotion(plan, plan.times.split / 2, BASE)
+    const binder = frame.strokes.find(({ role, ownerId }) => (
+      role === 'lambda' && ownerId === 'root/fn'
+    ))
+    expect(binder).toBeDefined()
+    expect(binder!.color).toBe(REDEX_COLOR)
+  })
+
+  it('requires every consumed stroke to be explicitly classified or structurally paired', () => {
+    for (const fixture of cases) {
+      const plan = planBetaMotion(term(fixture.source), ROOT_BETA)
+      const paired = new Set(plan.model.pairs.map(({ source }) => source.id))
+      const classified = new Set([
+        ...plan.model.sourceArgument,
+        ...plan.model.boundStrokes,
+        ...plan.model.redexScaffolding,
+        plan.model.lambdaStroke,
+      ].map(({ id }) => id))
+      const unclassified = plan.model.source.strokes.filter((stroke) => (
+        !paired.has(stroke.id) && !classified.has(stroke.id)
+      ))
+      expect(unclassified, fixture.name).toEqual([])
+      expect('reflowed' in plan.model, fixture.name).toBe(false)
+    }
+  })
+
+  it('settles to exactly the canonical target stroke set after structural joining', () => {
+    const plan = planBetaMotion(term(cases[2].source), ROOT_BETA)
+    const settled = sampleBetaMotion(plan, 1, BASE)
+    expect(settled.strokes.map(({ id }) => id))
+      .toEqual(plan.model.target.strokes.map(({ id }) => id))
+  })
+
+  it('rejects a consumed surviving-owner stroke outside the explicit classifications', async () => {
+    vi.resetModules()
+    let calls = 0
+    vi.doMock('../../src/view/tromp', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('../../src/view/tromp')>()
+      return {
+        ...actual,
+        trompGrid: (...args: Parameters<typeof actual.trompGrid>) => {
+          const grid = actual.trompGrid(...args)
+          if (calls++ !== 0) return grid
+          return {
+            ...grid,
+            bars: [
+              ...grid.bars,
+              { row: 0, colStart: 0, colEnd: 0, kind: 'lam' as const },
+            ],
+            barOwners: [...grid.barOwners, ['fn', 'body'] as const],
+          }
+        },
+      }
+    })
+    const mocked = await import('../../src/view/lambda-motion')
+    expect(() => mocked.planBetaMotion(
+      term(cases[2].source),
+      ROOT_BETA,
+    )).toThrow(/unclassified consumed strokes.*root\/fn\/body:lambda/i)
+    vi.doUnmock('../../src/view/tromp')
+    vi.resetModules()
   })
 
   it('uses the fifth hue and repeats the corrected palette without changing complete-copy identity', () => {

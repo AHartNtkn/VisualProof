@@ -180,7 +180,6 @@ type MotionModel = {
   readonly redexScaffolding: readonly StrokeModel[]
   readonly lambdaStroke: StrokeModel
   readonly boundStrokes: readonly StrokeModel[]
-  readonly reflowed: readonly StrokeModel[]
   readonly targetCopies: ReadonlyMap<number, readonly StrokeModel[]>
   readonly targetOfSource: ReadonlyMap<string, MotionCoord>
   readonly sourceArgumentPointByOrigin: ReadonlyMap<string, PointModel>
@@ -695,6 +694,28 @@ function createMotionModel(
     if (targetStroke === undefined) removed.push(stroke)
     else pairs.push({ source: stroke, target: targetStroke })
   }
+  // The circular renderer splits a free-variable radial at an intervening
+  // binder row. When beta removes that final split, both source segments are
+  // explicit correspondents of the surviving target radial: the upper segment
+  // stretches to the output and the lower segment contracts at that junction.
+  for (let index = removed.length - 1; index >= 0; index--) {
+    const stroke = removed[index]!
+    if (stroke.role !== 'variable' || stroke.ownerId === null || !target.nodeIds.has(stroke.ownerId)) continue
+    const sourceDrop = source.strokeById.get(`${stroke.ownerId}:free-drop`)
+    const targetDrop = target.strokeById.get(`${stroke.ownerId}:free-drop`)
+    if (
+      sourceDrop === undefined
+      || targetDrop === undefined
+      || sourceDrop.b.id !== stroke.a.id
+      || stroke.b.id !== `${stroke.ownerId}:out`
+      || targetDrop.b.id !== stroke.b.id
+    ) continue
+    pairs.push({
+      source: stroke,
+      target: { ...stroke, a: targetDrop.b, b: targetDrop.b },
+    })
+    removed.splice(index, 1)
+  }
   const argumentIds = new Set<string>()
   const argumentSlots = new Set<number>()
   walkAnnotated(argument, (node) => {
@@ -769,10 +790,6 @@ function createMotionModel(
   const classified = new Set([
     ...sourceArgument, ...boundStrokes, ...redexScaffolding, lambdaStroke,
   ].map(({ id }) => id))
-  const reflowed = removed.filter((stroke) => (
-    !classified.has(stroke.id) && stroke.ownerId !== null && target.nodeIds.has(stroke.ownerId)
-  ))
-  for (const stroke of reflowed) classified.add(stroke.id)
   const unknown = removed.filter((stroke) => !classified.has(stroke.id))
   if (unknown.length > 0) throw new Error(`unclassified consumed strokes: ${unknown.map(({ id }) => id).join(', ')}`)
 
@@ -834,7 +851,7 @@ function createMotionModel(
   return {
     motion: {
       source, target, view, pairs, sourceArgument, redexScaffolding, lambdaStroke,
-      boundStrokes, reflowed, targetCopies, targetOfSource,
+      boundStrokes, targetCopies, targetOfSource,
       sourceArgumentPointByOrigin, copies, copyStages,
       sourceBodyOut: asGrid(sourceCoord(source.points.get(source.nodeOut(body))!), 'source body output'),
       sourceArgumentRoot,
@@ -899,6 +916,20 @@ export function sampleBetaMotion(
       sockets: [],
     }
   }
+  if (p === 1) {
+    return {
+      phase: 'settle',
+      strokes: model.target.strokes.map((stroke) => strokeFrame(
+        stroke,
+        shifted(stroke.a.coord, model.view.targetOffset),
+        shifted(stroke.b.coord, model.view.targetOffset),
+        model.view,
+        baseColor,
+        stroke.copyIndex === null ? 'persistent' : 'copy',
+      )),
+      sockets: [],
+    }
+  }
   const identify = stageProgress(p, 0, times.split)
   const lift = stageProgress(p, times.split, times.liftEnd)
   const space = stageProgress(p, times.liftEnd, times.spaceEnd)
@@ -934,7 +965,7 @@ export function sampleBetaMotion(
       model.lambdaStroke,
       gridCoord(mix(binderLeft, binderCenter, bar), binderRow),
       gridCoord(mix(binderRight, binderCenter, bar), binderRow),
-      mixColor(baseColor, REDEX_COLOR, identify),
+      REDEX_COLOR,
       'redex',
     )
   }
@@ -983,18 +1014,6 @@ export function sampleBetaMotion(
           push(stroke, collapseToBody(sourceCoord(stroke.a)), collapseToBody(sourceCoord(stroke.b)), color, 'argument')
         }
       }
-    }
-  }
-
-  if (space < 0.9999) {
-    for (const stroke of model.reflowed) {
-      push(
-        stroke,
-        interpolateCoord(sourceCoord(stroke.a), gridCoord(model.sourceBodyOut.col, model.sourceBodyOut.row), space),
-        interpolateCoord(sourceCoord(stroke.b), gridCoord(model.sourceBodyOut.col, model.sourceBodyOut.row), space),
-        baseColor,
-        'persistent',
-      )
     }
   }
 

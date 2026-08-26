@@ -33,7 +33,7 @@ import { emptyDiagram } from './edit'
 import { spawnAtomNode, spawnRefNode, spawnTermNode } from '../kernel/diagram/spawn'
 import type { ProofSession, TrackDirection, TrackSession } from './session'
 import {
-  startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide,
+  startSession, applyForward, applyBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide,
   startTrack, applyTrack, undoTrack, redoTrack, moveTrack, declareTrack, adoptTrackTheorem, trackBoundary, currentTrack,
 } from './session'
 import { proofSnapshot as serializeProofSnapshot } from './proof-snapshot'
@@ -647,7 +647,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (!Number.isInteger(n) || n < 1) throw new Error(`${what} must be a positive integer, got '${input.value}'`)
     return n
   }
-  const sync = (surfaceChanged = false, preserveSelection = false): void => {
+  const sync = (
+    surfaceChanged = false,
+    preserveSelection = false,
+    motionTransition?: {
+      readonly action: ProofAction
+      readonly direction: 'forward' | 'reverse'
+    },
+  ): void => {
     const d = currentDiagram()
     if (d !== displayed || surfaceChanged) {
       const priorSelection = preserveSelection ? interaction.selection : []
@@ -660,7 +667,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       if (mainSearch !== null) attachLayoutSearch(next, mainSearch)
       const carried = carryOver(previous, next)
       seedProject(next, false, carried)
-      mainMotion.observeSwap(previous, next, performance.now())
+      mainMotion.observeSwap(
+        previous,
+        next,
+        performance.now(),
+        motionTransition?.action,
+        motionTransition?.direction,
+      )
       engine = next
       if (mode === 'prove' && proof?.kind === 'track') {
         const timeline = proof.track.timeline
@@ -806,6 +819,21 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       replay.layoutIdentityBetween(previousReplayK, replayK) ?? undefined,
     )
     seedProject(next, false, carried)
+    const transitionIndex = Math.min(previousReplayK, replayK)
+    const transition = Math.abs(replayK - previousReplayK) === 1
+      ? replay.transitions[transitionIndex]
+      : undefined
+    if (transition === undefined) mainMotion.observeSwap(prevEngine, next, performance.now())
+    else {
+      const followsRecordedReduction = (replayK > previousReplayK) === (transition.half === 'forward')
+      mainMotion.observeSwap(
+        prevEngine,
+        next,
+        performance.now(),
+        transition.action,
+        followsRecordedReduction ? 'forward' : 'reverse',
+      )
+    }
     engine = next
     seedReplayPlacements(engine, replay, replayK, ctx)
     interaction.reconcileDiagram()
@@ -909,13 +937,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return
     }
     if (proof === null) throw new Error('no active proof')
-    if (proof.kind === 'track') proof = { kind: 'track', track: undoTrack(proof.track) }
-    else {
-      proof = { ...proof, session: proof.side === 'forward' ? undoForward(proof.session) : undoBackward(proof.session) }
-      fixedWorkspace?.reconcile(proof.side)
+    if (proof.kind === 'track') {
+      const timeline = proof.track.timeline
+      const action = timeline.actions[timeline.cursor - 1]
+      proof = { kind: 'track', track: undoTrack(proof.track) }
+      sync(false, false, action === undefined ? undefined : { action, direction: 'reverse' })
       return
     }
-    sync()
+    else {
+      fixedWorkspace?.moveFocusedCursor(proof.session[proof.side].cursor - 1)
+      return
+    }
   })
   const onRedo = guard(() => {
     cancelAuthoring()
@@ -933,13 +965,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return
     }
     if (proof === null) throw new Error('no active proof')
-    if (proof.kind === 'track') proof = { kind: 'track', track: redoTrack(proof.track) }
-    else {
-      proof = { ...proof, session: proof.side === 'forward' ? redoForward(proof.session) : redoBackward(proof.session) }
-      fixedWorkspace?.reconcile(proof.side)
+    if (proof.kind === 'track') {
+      const timeline = proof.track.timeline
+      const action = timeline.actions[timeline.cursor]
+      proof = { kind: 'track', track: redoTrack(proof.track) }
+      sync(false, false, action === undefined ? undefined : { action, direction: 'forward' })
       return
     }
-    sync()
+    else {
+      fixedWorkspace?.moveFocusedCursor(proof.session[proof.side].cursor + 1)
+      return
+    }
   })
   const onAssemble = guard(() => {
     if (proof === null) throw new Error('no active proof')
@@ -961,7 +997,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (proof === null) throw new Error('no active proof')
     if (proof.kind === 'track') {
       proof = { kind: 'track', track: applyTrack(proof.track, action) }
-      sync()
+      sync(false, false, { action, direction: 'forward' })
       refreshChrome()
       return
     } else {
@@ -1254,7 +1290,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const __lap = (k: string): void => { const n = performance.now(); __fp[k] = +(n - __t).toFixed(1); __t = n }
     interaction.advance(true)
     __lap('interactionAdvance')
-    const shapes: Shape[] = paint(engine, theme)
+    const shapes: Shape[] = mainMotion.paint(now)
     __lap('paint')
     for (const id of interaction.pins) {
       const b = engine.bodies.get(id)
@@ -1675,8 +1711,19 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         moveTo: (cursor) => {
           if (proof?.kind !== 'track') return
           cancelAuthoring()
+          const timeline = proof.track.timeline
+          const previous = timeline.cursor
+          const action = Math.abs(cursor - previous) === 1
+            ? timeline.actions[Math.min(cursor, previous)]
+            : undefined
           proof = { kind: 'track', track: moveTrack(proof.track, cursor) }
-          sync()
+          sync(
+            false,
+            false,
+            action === undefined
+              ? undefined
+              : { action, direction: cursor < previous ? 'reverse' : 'forward' },
+          )
         },
       }
     }

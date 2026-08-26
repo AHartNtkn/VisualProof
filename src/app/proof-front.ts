@@ -7,7 +7,7 @@ import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import type { Engine } from '../view/engine'
 import { carryOver, mkEngine } from '../view/engine'
 import type { Shape, Theme } from '../view/paint'
-import { highlightGroup, paint, relationWireHues, wireOverlayShapes } from '../view/paint'
+import { highlightGroup, relationWireHues, wireOverlayShapes } from '../view/paint'
 import { seedBodyPlacement } from '../view/placement'
 import { seedProject } from '../view/relax'
 import type { Vec2 } from '../view/vec'
@@ -240,11 +240,20 @@ export class ProofFrontViewport {
     }
   }
 
-  reconcileDiagram(): void {
+  reconcileDiagram(
+    action?: ProofAction,
+    direction: 'forward' | 'reverse' = 'forward',
+  ): void {
     const next = mkEngine(this.#model.diagram(), this.#model.boundary())
     const carried = carryOver(this.#engine, next)
     seedProject(next, false, carried)
-    this.motion.observeSwap(this.#engine, next, performance.now())
+    this.motion.observeSwap(
+      this.#engine,
+      next,
+      performance.now(),
+      action,
+      direction,
+    )
     this.#engine = next
     this.#rebuilds++
     this.interaction.reconcileDiagram(true)
@@ -265,7 +274,7 @@ export class ProofFrontViewport {
     if (this.#disposed) return
     this.interaction.advance(true)
     const theme = this.#model.theme()
-    const shapes: Shape[] = paint(this.#engine, theme)
+    const shapes: Shape[] = this.motion.paint(now)
     for (const id of this.interaction.pins) {
       const body = this.#engine.bodies.get(id)
       if (body === undefined) continue

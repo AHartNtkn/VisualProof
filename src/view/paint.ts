@@ -306,7 +306,12 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   return shapes
 }
 
-export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Shape[] = paintWires): Shape[] {
+export function paint(
+  e: Engine,
+  st: Theme,
+  wires: (e: Engine, st: Theme) => Shape[] = paintWires,
+  lambdaFrames: ReadonlyMap<NodeId, LambdaStrokeFrame> = new Map(),
+): Shape[] {
   const fb = frameBounds(e)
   if (fb === null) throw new Error('paint requires a settled engine: call settleStep/settle first')
   const hues = relationWireHues(e.d, st.relationHueLightness)
@@ -376,6 +381,18 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     if (g === null) continue
     const ascale = ascaleOf(b.kind) * e.scale
     const stroke = b.kind === 'term' ? st.wire : bodyStroke(b)
+    const lambdaFrame = node?.kind === 'term' ? lambdaFrames.get(b.id) : undefined
+    if (lambdaFrame !== undefined) {
+      shapes.push(...paintLambdaFrame(
+        lambdaFrame,
+        b.pos,
+        b.theta,
+        ascale,
+        st.wireW,
+        st.wireGlow,
+      ))
+      continue
+    }
     shapes.push(...anatomyOutline(e, b, g, stroke, st.wireW, glow(stroke)))
     if (node?.kind === 'atom' && pipArity(b) >= 2) {
       shapes.push(pipAt(b, g.arcs[0]!.r * ascale, stroke))
