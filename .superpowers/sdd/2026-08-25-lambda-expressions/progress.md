@@ -103,3 +103,4 @@ Task 13: Ruling: extend the existing formal occurrence surface with a proof-rele
 Task 13: fix round 1/5 (2 open — Fusion omits descendant-region consumers; AnchoredWire descendant-root wire/item addresses omit the `anchorLocals.length + selected.locals.length` prefix and can target the wrong carrier; review commit d35578c8)
 Task 13: fix round 1/5 (2 addressed, 0 open — Fusion supports ancestor bridge scope with same-region or descendant consumers; nested descendant-root addresses include both local prefixes while true cut locals remain unshifted; commits c52b7208..03a20e37)
 Task 13: complete (commits f36bce00..03a20e37, review clean)
+Task 14: fix round 1/5 (3 open — browser coverage must assert canonical nameless term payloads after entry/persistence/replay; undo/redo must assert diagram state and cap incidences; 3D must prove Lambda-specific visible pixels in addition to GPU picking; review commit 658aa62a)
