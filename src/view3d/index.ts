@@ -9,6 +9,8 @@ import { lerp3, type Vec3 } from './vec3'
 import { expandHover, focusPoint } from './pick'
 import { mountRender, type RenderTheme } from './render'
 
+export * from './lambda'
+
 export type View3State = { diagram: Diagram; theme: Theme }
 export type View3 = { update(s: View3State): void; dispose(): void }
 
@@ -171,7 +173,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
         const fromScene = tween === null
           ? scene
           : sceneAt(tween.plan, Math.min(1, (performance.now() - tween.start) / TWEEN_MS))
-        tween = { plan: planTransition(fromScene, nextScene), poseFrom: pose, poseTo, start: performance.now() }
+        tween = { plan: planTransition(fromScene, nextScene, theme.wire), poseFrom: pose, poseTo, start: performance.now() }
         glide = null // the transition's pose tween owns the camera now
         container.dataset['view3Focus'] = ''
         spec = nextSpec

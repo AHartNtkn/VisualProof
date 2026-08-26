@@ -36,7 +36,7 @@ export type Renderer3 = {
   dispose(): void
 }
 
-type LineKind = 'branch' | 'ring' | 'strand'
+type LineKind = 'branch' | 'ring' | 'strand' | 'lambda'
 type SpriteKind = 'label' | 'pip'
 
 type LineRec = {
@@ -56,7 +56,7 @@ type SpriteRec = {
   hoverTex: THREE.Texture
 }
 
-const LINE_W: Record<LineKind, number> = { branch: 3.5, ring: 2.2, strand: 2.2 }
+const LINE_W: Record<LineKind, number> = { branch: 3.5, ring: 2.2, strand: 2.2, lambda: 2.2 }
 /** Pips live on this extra layer so render() can draw them a second time
     above the bloom composite: the bloom pass is additive, and a filled disc
     receives the blurred copy of its own full-intensity interior — clipping
@@ -101,7 +101,16 @@ function textTexture(text: string, color: string): { tex: THREE.CanvasTexture; w
 }
 
 const isLineEntity = (e: FadedEntity): e is FadedEntity & { kind: LineKind; pts: import('./vec3').Vec3[] } =>
-  e.kind === 'branch' || e.kind === 'ring' || e.kind === 'strand'
+  e.kind === 'branch' || e.kind === 'ring' || e.kind === 'strand' || e.kind === 'lambda'
+
+export function entityColor(e: Entity, theme: RenderTheme): string {
+  if (e.kind === 'lambda') return e.color ?? theme.baseWire
+  if (e.kind === 'strand') return theme.hues.get(e.wire) ?? theme.baseWire
+  if (e.kind === 'ring' && e.headWire !== null) return theme.hues.get(e.headWire) ?? theme.baseWire
+  if (e.kind === 'pip' && e.ownerWire !== null) return theme.hues.get(e.ownerWire) ?? theme.baseWire
+  if (e.kind === 'branch' && e.polarity === 1) return theme.lineAlt
+  return theme.line
+}
 
 export function mountRender(container: HTMLElement, theme: RenderTheme): Renderer3 {
   let th = theme
@@ -138,11 +147,7 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
   // HEAD wire's hue (matching the 2D painter's bodyStroke); refs (null
   // headWire) and structural entities keep the line color.
   const colorOf = (e: Entity): string => {
-    if (e.kind === 'strand') return th.hues.get(e.wire) ?? th.baseWire
-    if (e.kind === 'ring' && e.headWire !== null) return th.hues.get(e.headWire) ?? th.baseWire
-    if (e.kind === 'pip' && e.ownerWire !== null) return th.hues.get(e.ownerWire) ?? th.baseWire
-    if (e.kind === 'branch' && e.polarity === 1) return th.lineAlt
-    return th.line
+    return entityColor(e, th)
   }
 
   const disposeLine = (r: LineRec): void => {
@@ -262,6 +267,8 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
           lr.obj.computeLineDistances()
           lr.pickGeo.setFromPoints(e.pts.map((p) => new THREE.Vector3(p.x, p.y, p.z)))
           lr.mat.opacity = e.alpha ?? 1
+          lr.baseColor = colorOf(e)
+          lr.mat.color.set(hoverKeys.has(k) ? th.hover : lr.baseColor)
           continue
         }
         const sr = spriteRecs.get(k)!
