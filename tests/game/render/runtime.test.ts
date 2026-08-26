@@ -220,6 +220,56 @@ describe('game tree runtime', () => {
     expect(runtime.residentObjects('changing')).toEqual([factory.groups[1]])
   })
 
+  it('rebuilds a suspended game object through the Raw representation builder', () => {
+    const parent = new THREE.Group()
+    const factory = objectBuilder()
+    const runtime = new GameTreeRuntime(resolve({ a: asset() }), parent, factory.build)
+    const active = tree('mode-change', 0, -20)
+    const camera = new THREE.PerspectiveCamera(67, 16 / 9, 0.08, 1800)
+    camera.position.set(0, 1.7, 0)
+    camera.lookAt(0, 1.7, -1)
+    runtime.setTrees([active])
+    runtime.updateGame(camera, 100, 720)
+    runtime.processOperations(12)
+    expect(factory.groups[0]!.userData['representation']).toBe('full')
+    runtime.suspend(active.id)
+
+    runtime.setMode('raw')
+    runtime.resume(active)
+
+    expect(runtime.residentObjects(active.id)).toEqual([])
+    expect(runtime.snapshot()).toMatchObject({ resident: 0, pending: 1 })
+    runtime.processOperations(12)
+    expect(factory.groups).toHaveLength(2)
+    expect(factory.groups[1]!.userData['representation']).toBe('raw')
+  })
+
+  it('rebuilds a suspended Raw object when Game LOD management resumes', () => {
+    const parent = new THREE.Group()
+    const factory = objectBuilder()
+    const runtime = new GameTreeRuntime(resolve({ a: asset() }), parent, factory.build)
+    const active = tree('mode-change', 0, -20)
+    const camera = new THREE.PerspectiveCamera(67, 16 / 9, 0.08, 1800)
+    camera.position.set(0, 1.7, 0)
+    camera.lookAt(0, 1.7, -1)
+    runtime.setMode('raw')
+    runtime.setTrees([active])
+    runtime.processOperations(12)
+    expect(factory.groups[0]!.userData['representation']).toBe('raw')
+    runtime.suspend(active.id)
+
+    runtime.setMode('game')
+    runtime.resume(active)
+
+    expect(runtime.residentObjects(active.id)).toEqual([])
+    expect(runtime.snapshot()).toMatchObject({ resident: 0, pending: 1 })
+    runtime.updateGame(camera, 100, 720)
+    runtime.processOperations(12)
+    expect(factory.groups).toHaveLength(2)
+    expect(factory.groups[1]!.userData['representation']).toBe('full')
+    expect(runtime.residentObjects(active.id)).toEqual([factory.groups[1]])
+  })
+
   it('hides and detaches a removed tree immediately, then releases its geometry from the queue', () => {
     const parent = new THREE.Group()
     const factory = objectBuilder()

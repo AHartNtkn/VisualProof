@@ -252,7 +252,7 @@ export class GameTreeRuntime implements GameTreeRuntimeApi {
     for (const state of this.states.values()) {
       this.clearFailure(state)
       this.setDesired(state, mode === 'raw' ? 'full' : 'culled')
-      if (!state.suspended) this.enqueueState(state, true)
+      this.enqueueState(state, true)
     }
   }
 
@@ -292,7 +292,7 @@ export class GameTreeRuntime implements GameTreeRuntimeApi {
       this.attachResidentObject(state)
       return
     }
-    if (state.desired !== 'culled') this.enqueueState(state)
+    if (state.desired !== 'culled' || state.needsReplacement) this.enqueueState(state)
   }
 
   public residentObjects(treeId?: string): readonly THREE.Object3D[] {
