@@ -2,6 +2,8 @@ import * as THREE from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import type { WireId } from '../src/kernel/diagram/diagram'
 import type { Entity } from '../src/view3d/scene'
+import { mountGlowRenderer } from './glow-render'
+import { GlowTilePlan } from './glow-tiles'
 import { makeTreeObject, type OrchardMaterialSource } from './tree-objects'
 import type { OrchardWorldSave } from './world'
 
@@ -139,15 +141,16 @@ export function mountOrchardWorld(
   scene.fog = new THREE.Fog(world.terrain.sky, world.terrain.fogNear, world.terrain.fogFar)
   const camera = new THREE.PerspectiveCamera(67, 1, 0.08, 1800)
   camera.rotation.order = 'YXZ'
-  scene.add(new THREE.AmbientLight('#ffffff', 0.025))
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(world.terrain.size, world.terrain.size),
-    new THREE.MeshLambertMaterial({ color: world.terrain.ground }),
+    new THREE.MeshBasicMaterial({ color: world.terrain.ground }),
   )
   ground.rotation.x = -Math.PI / 2
   ground.position.y = -0.035
   scene.add(ground)
+  const glowPlan = new GlowTilePlan(128)
+  const glowRenderer = mountGlowRenderer(scene, ground.position.y)
 
   const trees = new THREE.Group()
   trees.name = 'separate-proof-trees'
@@ -185,6 +188,7 @@ export function mountOrchardWorld(
       }
       while (groups.length > count) {
         const group = groups.pop()!
+        glowPlan.remove(group.name)
         trees.remove(group)
         disposeTree(group)
       }
@@ -203,9 +207,18 @@ export function mountOrchardWorld(
           }, materialsByLayout.get(saved.layout)!)
           groups.push(group)
           trees.add(group)
+          glowPlan.set({
+            id: saved.id,
+            x: saved.x,
+            z: saved.z,
+            radius: layout.glow.radius,
+            color: layout.glow.color,
+            opacity: layout.glow.opacity,
+          })
         }
         if (groups.length < count) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
       }
+      glowRenderer.sync(glowPlan.flushDirty())
       let instanced = 0
       let objects = 0
       for (const group of groups) group.traverse((object) => {
@@ -244,6 +257,7 @@ export function mountOrchardWorld(
       for (const material of lineMaterials) material.dispose()
       for (const material of spriteMaterials) material.dispose()
       for (const texture of textures) texture.dispose()
+      glowRenderer.dispose()
       ground.geometry.dispose()
       ;(ground.material as THREE.Material).dispose()
       renderer.dispose()
