@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { IOTA, relSig } from '../../src/kernel/diagram/sig'
+import { parseTerm } from '../../src/kernel/term'
 import { parseFormula } from '../../src/formula/parse'
 import {
   FORMULA_UNICODE_SYMBOLS,
@@ -148,6 +149,20 @@ describe('parseFormula', () => {
     expect(application.body.body.kind).toBe('atom')
     if (application.body.body.kind !== 'atom') throw new Error('expected atom')
     expect(application.body.body.args[0]?.kind).toBe('term')
+  })
+
+  it('accepts a closed lambda term with a primed binder', () => {
+    const formula = parseFormula("forall P : i -> o. P(λx'. x')")
+
+    expect(formula.kind).toBe('quantifier')
+    if (formula.kind !== 'quantifier' || formula.body.kind !== 'atom') {
+      throw new Error('expected quantified atom')
+    }
+    const operand = formula.body.args[0]
+    expect(operand?.kind).toBe('term')
+    if (operand?.kind !== 'term') throw new Error('expected term operand')
+    expect(operand.parsed.term).toEqual(parseTerm('\\x. x').term)
+    expect(operand.parsed.freeIdentifiers).toEqual([])
   })
 
   it('requires every term free identifier to resolve to an enclosing individual binding', () => {

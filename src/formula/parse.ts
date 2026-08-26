@@ -32,7 +32,7 @@ function tokenize(source: string): readonly Token[] {
 
     if (/[A-Za-z_]/u.test(character)) {
       index += 1
-      while (index < source.length && /[A-Za-z0-9_]/u.test(source[index]!)) index += 1
+      while (index < source.length && /[A-Za-z0-9_']/u.test(source[index]!)) index += 1
       const text = source.slice(start, index)
       tokens.push({ kind: text === 'forall' ? 'forall' : text === 'exists' ? 'exists' : 'identifier', text, start, end: index })
       continue
