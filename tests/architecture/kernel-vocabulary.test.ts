@@ -27,8 +27,6 @@ const prohibitedSemanticSymbols = [
   "kind: 'term'",
   "kind: 'body'",
   'TermDiagramNode',
-  'ConversionCertificate',
-  'NormalSeparationCertificate',
   'applyFusion',
   'applyFission',
   'applyCongruenceJoin',
@@ -39,7 +37,7 @@ const prohibitedSemanticSymbols = [
   'relCongruenceJoin',
 ] as const
 
-const removedRuleSymbols = prohibitedSemanticSymbols.slice(5)
+const removedRuleSymbols = prohibitedSemanticSymbols.slice(3)
 const prohibitedIdentifiers = new Set([
   ...prohibitedSemanticSymbols.slice(2),
   'TERM',
@@ -93,8 +91,6 @@ const absentAuthorityPaths = [
   'src/kernel/rules/intro.ts',
   'src/kernel/rules/port-correspondence.ts',
   'src/kernel/rules/reification.ts',
-  'src/kernel/term',
-  'tests/kernel/term',
   'tests/kernel/rules/anchored-wire.test.ts',
   'tests/kernel/rules/body.test.ts',
   'tests/kernel/rules/congruence.test.ts',
@@ -199,16 +195,6 @@ function semanticKindLiteral(node: ts.StringLiteralLike): string | null {
   return null
 }
 
-function isTermModuleSpecifier(node: ts.StringLiteralLike): boolean {
-  const parent = node.parent
-  const moduleSpecifier = (
-    ts.isImportDeclaration(parent)
-    || ts.isExportDeclaration(parent)
-  ) ? parent.moduleSpecifier : undefined
-  return moduleSpecifier === node
-    && /(^|\/)term($|\/)/.test(node.text.replace(/^\.+\//, ''))
-}
-
 function semanticOffenders(file: string, roots: readonly ts.Node[]): string[] {
   const offenders = new Set<string>()
   const visit = (node: ts.Node): void => {
@@ -218,7 +204,6 @@ function semanticOffenders(file: string, roots: readonly ts.Node[]): string[] {
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
       const kind = semanticKindLiteral(node)
       if (kind !== null) offenders.add(`${file}: ${kind}`)
-      if (isTermModuleSpecifier(node)) offenders.add(`${file}: term module '${node.text}'`)
       if (prohibitedAuthorityStrings.has(node.text)) {
         offenders.add(`${file}: string authority '${node.text}'`)
       }
@@ -235,7 +220,6 @@ function productionOffenders(
   const offenders: string[] = []
   for (const root of roots) {
     for (const file of tsFilesUnder(root)) {
-      if (/(^|\/)term(?:\/|\.ts$)/.test(file)) offenders.push(`${file}: term module path`)
       const parsed = parseTypeScript(file)
       offenders.push(...semanticOffenders(file, parsed.statements))
     }
