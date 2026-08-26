@@ -83,3 +83,53 @@
 **Approval:** Rejected.
 
 **Reasoning:** Finding 3 is genuinely resolved and much of finding 1 is materially stronger, but the suite still passes missing visible copy bars and independently mispainted role/lineage strokes. The new reference raster witness also reimplements authority-owned paint geometry. Those are Important correctness failures in Task 15's core visual-comparison evidence.
+
+## Re-review — fix round 2/5
+
+### Prior-finding verdicts
+
+1. **NOT ADDRESSED at the acceptance level.** The production defect from round 1 is repaired: the current duplication frames visibly contain both copy Lambda bars at `p=.54` and `p=1` in 2D, 3D light, and 3D dark. The manifest measures reference bars at `58.573/41.192px`, 2D at `59.917/48.746px`, and perspective-projected 3D at `18.988–38.354/15.653–30.861px`; each has nonzero extent and clears its independent pixel threshold. The new shared geometry owner also keeps the bars circular in 2D/WebGL and preserves separate semantic junction points.
+
+   The consumer still does not make full curves authoritative enough to reject a nearby wrong model. It accepts each correspondence group's aggregate length and extent anywhere in the interval `0.25x`–`4x` of the reference (`tests/visual/lambda-reference.test.ts:650-668`), although the current correct evidence occupies only `0.689x`–`2.142x`. Interior shape is compared only when both groups contain exactly one renderer piece (`tests/visual/lambda-reference.test.ts:669-672`); every renderer-local multi-piece address skips it. Current evidence has such groups throughout deletion (`root/fn/body:free-drop`) and capture avoidance (`copy:0:root/argument:free-drop`), so their interiors can be materially wrong while aggregate length/extent and topology pass.
+
+   A concrete copied-manifest mutation scaled the duplication 2D copy-0 Lambda bar's normalized points, length, and extent to `17%` of the current bar, leaving it only `25.9%` of the live reference. All 60 behavioral tests passed; the only failed assertion was the sandbox-blocked `git` freshness subprocess. This is precisely a materially collapsed visible bar admitted by the stated lower bound. Use correspondence- and renderer-derived scale normalization with materially tighter bounds, compare composed interiors for multi-piece semantic groups, and tie curve endpoints/interiors to their semantic junction frame.
+
+2. **NOT ADDRESSED.** The aggregate whole-frame color assertion is gone, and every currently independent raster group clears its own `max(3, ceil(0.2 * screenLength))` threshold. The eight currently excused semantic strokes have explicit later-authored witnesses, and those listed occluders pass their own color thresholds. This is a substantial improvement.
+
+   The exact-overlap and occlusion exceptions are nevertheless centerline-only and discard the evidence needed to prove full painted-tube coverage. `equivalentPolylines` accepts up to `0.75px` centerline displacement, and grouping also accepts one-way 98% centerline coverage without considering either member's width (`scripts/capture-lambda-comparison.ts:419-428`, `scripts/capture-lambda-comparison.ts:462-467`). The group then serializes only the top stroke's width and centerline and assigns that same evidence to every member, dropping each earlier member's width (`scripts/capture-lambda-comparison.ts:470-499`). The separate occlusion witness likewise samples only 33 centerline points (`scripts/capture-lambda-comparison.ts:430-442`); the consumer reproduces only centerline coverage (`tests/visual/lambda-reference.test.ts:778-811`). A narrower or 0.75px-offset later stroke can therefore leave visible wrong-colored sidebands from an earlier wider stroke while the earlier semantic stroke is treated as completely overdrawn. Retain each member's authored centerline and width and require containment of its entire half-width-plus-AA tube, not merely its centerline; the same full-tube criterion must drive minimal occluder selection and replay.
+
+3. **ADDRESSED.** Reference geometry now comes from proxying the live corrected Painter and intercepting its actual `beginPath`, `moveTo`, `lineTo`, `arc`, `closePath`, and `stroke` calls (`scripts/capture-lambda-comparison.ts:946-1048`). The capture retains the command arguments, per-command transforms, actual line width/cap/join, and CSS/device points, and uses those intercepted device points directly (`scripts/capture-lambda-comparison.ts:1051-1078`). No copied `mapGrid`, tick padding, or `tickScale` reconstruction remains. The consumer also requires every nondegenerate reference stroke and every Lambda bar to carry the expected live command evidence.
+
+### Issues
+
+#### Critical (Must Fix)
+
+- None.
+
+#### Important (Should Fix)
+
+1. The unresolved curve-comparison acceptance gap in verdict 1 permits materially collapsed and malformed correspondence curves.
+
+2. The unresolved width-blind overlap/occlusion model in verdict 2 does not independently establish the visible color of every semantic painted tube.
+
+3. `src/view3d/render.ts:323-342` — the Lambda restoration pass runs after the composer in both themes, but pips are restored after it only when the dark-theme bloom pass is installed. In light mode the composer first draws Lambda below pips by render order, then `restoreLayer(LAMBDA_LAYER)` draws Lambda again with no subsequent pip pass. A coincident Lambda stroke can therefore cover an identity pip, contrary to the pip-above-lines invariant documented at `src/view3d/render.ts:203-214`. Restore the pip layer after the Lambda layer in both themes; bloom should determine why the pip is restored, not whether the new later Lambda pass can cover it.
+
+#### Minor (Nice to Have)
+
+- None.
+
+### Confirmed strengths and validation
+
+- Directly inspected all five current overview sheets and the eight original duplication frames at `p=.54`/`p=1`. Copy separation, deletion contraction, nested connectivity, current copy colors, and both theme renderings are visibly credible. The duplication copy bars are no longer collapsed.
+- The current 3D entities remain line-only, exactly planar, and branch-normal. The manifest reports maximum planarity error `0`, branch-normal error `2.220446049250313e-16`, no entity-color/attachment mismatches, both theme base-color distance `0`, and maximum Lambda footprint fill ratio `0.1121`. Stable per-entity Lambda render order and disabled depth testing fix the coincident-lineage ordering itself; the issue above is specifically the later light-theme restoration ordering relative to pips.
+- Current live-reference capture remains tied to the exact corrected authority, and the manifest is tied to application commit `2c05404d10d0f91f23f84887a02053e900a665f9` with the exact five examples, required boundaries/midpoints, modes, images, and hashes.
+- `npx vitest run tests/visual/lambda-reference.test.ts`: 61/61 passed on the authoritative manifest. No additional permission-dependent check was used after the no-escalation directive.
+- The two reported full-suite failures remain final-integration expectation migrations and were not introduced or aggravated by this fix.
+
+### Re-review assessment
+
+**Task quality:** Needs fixes
+
+**Approval:** Rejected.
+
+**Reasoning:** The actual copy bars and live-reference instrumentation are repaired, and the current evidence looks materially better. Approval remains blocked because the machine consumer still accepts a concretely collapsed bar and width-incomplete color occlusion, while the new WebGL restoration pass can reverse pip layering in light mode.
