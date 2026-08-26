@@ -1,4 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import type { SavedTree } from '../world'
+
+const THREE_FOV_RADIANS = 67 * Math.PI / 180
 
 test('accumulates overlapping glow contributors into bounded order-independent pixels', async ({ page }) => {
   await page.goto('/?trees=1')
@@ -50,6 +54,12 @@ test('renders exact separate tree counts and lets the player walk', async ({ pag
   await expect(orchard).toHaveAttribute('data-tree-count', '3')
   await expect(orchard).toHaveAttribute('data-entity-count', '219')
   await expect(orchard).toHaveAttribute('data-instanced-count', '0')
+  await expect(orchard).toHaveAttribute('data-render-mode', 'game')
+  await expect(orchard).toHaveAttribute('data-point-light-count', '0')
+  await expect(orchard).toHaveAttribute('data-full-count', /\d+/)
+  await expect(orchard).toHaveAttribute('data-reduced-count', /\d+/)
+  await expect(orchard).toHaveAttribute('data-marker-count', /\d+/)
+  await expect(orchard).toHaveAttribute('data-culled-count', /\d+/)
 
   const countScale = page.getByRole('slider', { name: 'Tree count scale' })
   await expect(countScale).toHaveValue('3')
@@ -74,15 +84,75 @@ test('renders exact separate tree counts and lets the player walk', async ({ pag
   await countScale.dispatchEvent('change')
   await expect(orchard).toHaveAttribute('data-tree-count', '10')
   await expect(countInput).toHaveValue('10')
-  await expect(page.locator('[data-status]')).toContainText('10 independent trees · 740 renderer objects')
+  await expect(page.locator('[data-status]')).toContainText('10 logical')
 
   const hundredPreset = page.getByRole('button', { name: '100', exact: true })
   await hundredPreset.click()
-  await expect(countInput).toBeDisabled()
   await expect(orchard).toHaveAttribute('data-tree-count', '100')
   await expect(countInput).toBeEnabled()
   await expect(countInput).toHaveValue('100')
   await expect(countScale).toHaveValue('100')
   await expect(hundredPreset).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('[data-fps]')).toHaveText(/^\d+(?:\.\d)?$/)
+  await expect(page.locator('dd[data-fps]')).toHaveText(/^\d+(?:\.\d)?$/)
+
+  expect(Number(await orchard.getAttribute('data-resident-count'))).toBeLessThan(100)
+  await page.getByRole('radio', { name: 'Raw full detail' }).check()
+  await expect(orchard).toHaveAttribute('data-render-mode', 'raw')
+  await expect(orchard).toHaveAttribute('data-pending-representations', '0', { timeout: 30_000 })
+  await expect(orchard).toHaveAttribute('data-full-count', '100')
+  await page.getByRole('radio', { name: 'Game LOD' }).check()
+  await expect(orchard).toHaveAttribute('data-render-mode', 'game')
+  await expect(orchard).toHaveAttribute('data-pending-representations', '0', { timeout: 30_000 })
+  const gameGeometries = Number(await orchard.getAttribute('data-geometries'))
+
+  await page.getByRole('spinbutton', { name: 'Tree count', exact: true }).fill('3')
+  await page.getByRole('button', { name: 'Apply tree count' }).click()
+  await expect(orchard).toHaveAttribute('data-tree-count', '3')
+  await expect(orchard).toHaveAttribute('data-pending-representations', '0', { timeout: 30_000 })
+  expect(Number(await orchard.getAttribute('data-resident-count'))).toBeLessThanOrEqual(3)
+  expect(Number(await orchard.getAttribute('data-geometries'))).toBeLessThan(gameGeometries)
+})
+
+test('updates LOD and glow for irregular saved placements without page errors', async ({ page }) => {
+  test.setTimeout(45_000)
+  const viewportHeight = 360
+  await page.setViewportSize({ width: 800, height: viewportHeight })
+  const pageErrors: Error[] = []
+  page.on('pageerror', (error) => pageErrors.push(error))
+  const savedWorld = JSON.parse(readFileSync(new URL('../world.json', import.meta.url), 'utf8'))
+  const transitionTree = savedWorld.trees[0] as SavedTree
+  const transitionLayout = savedWorld.layouts[transitionTree.layout]
+  const projectionScale = transitionLayout.bounds.radius * viewportHeight / Math.tan(THREE_FOV_RADIANS / 2)
+  const fullPromotionDepth = projectionScale / (140 * 1.15)
+  const fullDemotionDepth = projectionScale / (140 * 0.85)
+  const threeSecondWalk = 6 * 3
+  const transitionDepth = (fullPromotionDepth + fullDemotionDepth - threeSecondWalk) / 2
+  if (!(transitionDepth <= fullPromotionDepth && transitionDepth + threeSecondWalk >= fullDemotionDepth)) {
+    throw new Error('saved layout radius cannot cross the full LOD band in a three-second walk')
+  }
+  savedWorld.trees = savedWorld.trees.slice(0, 3).map((tree: SavedTree, index: number) => ({
+    ...tree,
+    x: [savedWorld.player.x, 127, -129][index],
+    z: [savedWorld.player.z - transitionDepth, 0, -129][index],
+  }))
+  await page.route('**/world.json*', (route) => route.fulfill({ json: savedWorld }))
+  await page.goto('/?trees=3')
+
+  const orchard = page.locator('[data-orchard]')
+  await expect(orchard).toHaveAttribute('data-ready', 'true')
+  await expect(orchard).toHaveAttribute('data-tree-count', '3')
+  await expect(orchard).toHaveAttribute('data-point-light-count', '0')
+  expect(Number(await orchard.getAttribute('data-glow-tile-count'))).toBeGreaterThan(1)
+
+  const lodCounts = () => orchard.evaluate((element) => [
+    element.getAttribute('data-full-count'),
+    element.getAttribute('data-reduced-count'),
+    element.getAttribute('data-marker-count'),
+  ].join(':'))
+  const initialLods = await lodCounts()
+  await page.keyboard.down('s')
+  await page.waitForTimeout(3_000)
+  await page.keyboard.up('s')
+  await expect.poll(lodCounts).not.toBe(initialLods)
+  expect(pageErrors).toEqual([])
 })

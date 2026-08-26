@@ -1,18 +1,50 @@
 import * as THREE from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import type { WireId } from '../src/kernel/diagram/diagram'
 import type { Entity } from '../src/view3d/scene'
 import { mountGlowRenderer } from './glow-render'
-import { GlowTilePlan } from './glow-tiles'
-import { disposeTreeObject, makeRawTreeObject, type OrchardMaterialSource } from './tree-objects'
-import type { OrchardWorldSave, SavedTreeLayout } from './world'
+import { GlowTilePlan, type DirtyGlowTile } from './glow-tiles'
+import { projectedDiameterPx, selectLod, type LodLevel } from './lod-policy'
+import { SpatialIndex } from './spatial-index'
+import {
+  disposeTreeObject,
+  makeBatchedTreeObject,
+  makeMarkerObject,
+  makeRawTreeObject,
+  type OrchardMaterialSource,
+} from './tree-objects'
+import type { OrchardWorldSave, SavedTree, SavedTreeLayout } from './world'
 
 const MAX_PIXEL_RATIO = 1.5
+const MAX_REPRESENTATION_OPERATIONS = 12
+const SPATIAL_CELL_SIZE = 128
+
+export type RenderMode = 'game' | 'raw'
+type ResidentLod = Exclude<LodLevel, 'culled'>
 
 export type OrchardFrameStats = {
   readonly drawCalls: number
   readonly triangles: number
   readonly geometries: number
+  readonly objects: number
+  readonly instanced: number
+  readonly logical: number
+  readonly visible: number
+  readonly resident: number
+  readonly full: number
+  readonly reduced: number
+  readonly marker: number
+  readonly culled: number
+  readonly pending: number
+  readonly glowTiles: number
+  readonly pointLights: 0
+  readonly representedEntities: number
+  readonly buildMs: number
+  readonly lodMs: number
+  readonly error: string | null
 }
 
 export type OrchardBuildStats = {
@@ -26,10 +58,484 @@ export type OrchardBuildStats = {
 export type OrchardWorld = {
   readonly canvas: HTMLCanvasElement
   setCount(count: number): Promise<OrchardBuildStats>
+  setTrees(trees: readonly SavedTree[]): Promise<OrchardBuildStats>
+  setMode(mode: RenderMode): void
   setPlayer(x: number, z: number, yaw: number, pitch: number): void
   resize(width: number, height: number): void
   render(): OrchardFrameStats
   dispose(): void
+}
+
+export type TreeObjectBuilder = (
+  layout: SavedTreeLayout,
+  saved: SavedTree,
+  index: number,
+  lod: ResidentLod,
+  raw: boolean,
+) => THREE.Group
+
+type TreeRenderState = {
+  saved: SavedTree
+  index: number
+  sphere: THREE.Sphere
+  desired: LodLevel
+  resident: LodLevel
+  object: THREE.Group | null
+  objectNodes: number
+  objectInstanced: number
+  representedEntities: number
+  queued: boolean
+  active: boolean
+  needsReplacement: boolean
+  failedDesired: LodLevel | null
+}
+
+type SpatialTree = {
+  readonly id: string
+  readonly x: number
+  readonly z: number
+  readonly state: TreeRenderState
+}
+
+type RepresentationOperation =
+  | { readonly kind: 'state'; readonly state: TreeRenderState }
+  | { readonly kind: 'retired'; readonly object: THREE.Group }
+
+export type TreeRuntimeSnapshot = {
+  readonly logical: number
+  readonly logicalEntities: number
+  readonly visible: number
+  readonly resident: number
+  readonly full: number
+  readonly reduced: number
+  readonly marker: number
+  readonly culled: number
+  readonly pending: number
+  readonly objects: number
+  readonly instanced: number
+  readonly representedEntities: number
+  readonly buildMs: number
+  readonly error: string | null
+}
+
+export function treeWorldSphere(saved: SavedTree, layout: SavedTreeLayout): THREE.Sphere {
+  const center = new THREE.Vector3(
+    layout.bounds.center.x,
+    layout.bounds.center.y,
+    layout.bounds.center.z,
+  )
+  center.applyAxisAngle(new THREE.Vector3(0, 1, 0), saved.yaw)
+  center.x += saved.x
+  center.z += saved.z
+  return new THREE.Sphere(center, layout.bounds.radius)
+}
+
+function objectCardinality(object: THREE.Group): { readonly nodes: number; readonly instanced: number } {
+  let nodes = 0
+  let instanced = 0
+  object.traverse((child) => {
+    nodes++
+    if ((child as THREE.InstancedMesh).isInstancedMesh === true) instanced++
+  })
+  return { nodes, instanced }
+}
+
+function sameSavedTree(left: SavedTree, right: SavedTree): boolean {
+  return left.layout === right.layout
+    && left.x === right.x
+    && left.z === right.z
+    && left.yaw === right.yaw
+}
+
+export class OrchardTreeRuntime {
+  private readonly states = new Map<string, TreeRenderState>()
+  private readonly spatial = new SpatialIndex<SpatialTree>(SPATIAL_CELL_SIZE)
+  private readonly glowPlan = new GlowTilePlan(SPATIAL_CELL_SIZE)
+  private readonly operations: RepresentationOperation[] = []
+  private readonly tracked = new Set<TreeRenderState>()
+  private readonly maxRadius: number
+  private readonly lodCounts: Record<LodLevel, number> = { full: 0, reduced: 0, marker: 0, culled: 0 }
+  private mode: RenderMode = 'game'
+  private logicalEntities = 0
+  private pending = 0
+  private resident = 0
+  private objects = 0
+  private instanced = 0
+  private representedEntities = 0
+  private buildMs = 0
+  private lastError: string | null = null
+  private disposed = false
+
+  public constructor(
+    private readonly layouts: Readonly<Record<string, SavedTreeLayout>>,
+    private readonly parent: THREE.Group,
+    private readonly buildObject: TreeObjectBuilder,
+    private readonly releaseObject: (object: THREE.Group) => void = disposeTreeObject,
+  ) {
+    this.maxRadius = Object.values(layouts).reduce((maximum, layout) => Math.max(maximum, layout.bounds.radius), 0)
+  }
+
+  public setTrees(trees: readonly SavedTree[]): OrchardBuildStats {
+    this.assertActive()
+    const started = performance.now()
+    const incoming = new Map<string, { readonly saved: SavedTree; readonly index: number }>()
+    trees.forEach((tree, index) => {
+      if (incoming.has(tree.id)) throw new Error(`duplicate active tree id '${tree.id}'`)
+      if (this.layouts[tree.layout] === undefined) throw new Error(`unknown active tree layout '${tree.layout}'`)
+      incoming.set(tree.id, { saved: tree, index })
+    })
+
+    for (const [id, state] of this.states) {
+      if (!incoming.has(id)) this.removeState(state)
+    }
+
+    for (const { saved, index } of incoming.values()) {
+      const current = this.states.get(saved.id)
+      if (current === undefined) this.insertState(saved, index)
+      else this.updateState(current, saved, index)
+    }
+
+    return {
+      trees: this.states.size,
+      entities: this.logicalEntities,
+      objects: this.objects,
+      instanced: this.instanced,
+      buildMs: performance.now() - started,
+    }
+  }
+
+  public setMode(mode: RenderMode): void {
+    this.assertActive()
+    if (mode === this.mode) return
+    this.mode = mode
+    this.lastError = null
+    for (const state of this.states.values()) {
+      state.failedDesired = null
+      this.setDesired(state, mode === 'raw' ? 'full' : 'culled')
+      this.enqueueState(state, true)
+    }
+  }
+
+  public getMode(): RenderMode {
+    return this.mode
+  }
+
+  public updateGame(
+    camera: THREE.PerspectiveCamera,
+    fogFar: number,
+    viewportHeight: number,
+  ): { readonly visited: number; readonly lodMs: number } {
+    this.assertActive()
+    const started = performance.now()
+    if (this.mode !== 'game') return { visited: 0, lodMs: performance.now() - started }
+
+    camera.updateMatrixWorld()
+    const projectionView = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+    const frustum = new THREE.Frustum().setFromProjectionMatrix(projectionView)
+    const reach = fogFar + this.maxRadius
+    const candidates = this.spatial.query({
+      minX: camera.position.x - reach,
+      maxX: camera.position.x + reach,
+      minZ: camera.position.z - reach,
+      maxZ: camera.position.z + reach,
+    })
+    const candidateStates = new Set(candidates.map(({ state }) => state))
+    const visitedStates = new Set(this.tracked)
+    for (const state of candidateStates) visitedStates.add(state)
+    const cameraSpace = new THREE.Vector3()
+    const verticalFov = THREE.MathUtils.degToRad(camera.fov)
+
+    for (const state of visitedStates) {
+      if (!state.active) continue
+      let desired: LodLevel = 'culled'
+      if (candidateStates.has(state)) {
+        const inFog = state.sphere.distanceToPoint(camera.position) <= fogFar
+        const inView = inFog && frustum.intersectsSphere(state.sphere)
+        cameraSpace.copy(state.sphere.center).applyMatrix4(camera.matrixWorldInverse)
+        const pixels = projectedDiameterPx(state.sphere.radius, -cameraSpace.z, viewportHeight, verticalFov)
+        desired = selectLod(state.desired, pixels, inView)
+      }
+      this.setDesired(state, desired)
+      this.enqueueState(state)
+      this.pruneTracked(state)
+    }
+
+    return { visited: visitedStates.size, lodMs: performance.now() - started }
+  }
+
+  public processOperations(requestedBudget = MAX_REPRESENTATION_OPERATIONS): number {
+    this.assertActive()
+    const started = performance.now()
+    const budget = Math.min(MAX_REPRESENTATION_OPERATIONS, Math.max(0, Math.trunc(requestedBudget)))
+    let processed = 0
+    while (processed < budget && this.operations.length > 0) {
+      const operation = this.operations.shift()!
+      if (operation.kind === 'retired') {
+        this.pending--
+        this.releaseObject(operation.object)
+        processed++
+        continue
+      }
+      const state = operation.state
+      if (!state.queued) continue
+      state.queued = false
+      this.pending--
+      if (!state.active) continue
+      this.replaceStateObject(state)
+      processed++
+      this.pruneTracked(state)
+    }
+    this.buildMs = performance.now() - started
+    return processed
+  }
+
+  public flushGlow(): DirtyGlowTile[] {
+    this.assertActive()
+    return this.glowPlan.flushDirty()
+  }
+
+  public snapshot(): TreeRuntimeSnapshot {
+    return {
+      logical: this.states.size,
+      logicalEntities: this.logicalEntities,
+      visible: this.states.size - this.lodCounts.culled,
+      resident: this.resident,
+      full: this.lodCounts.full,
+      reduced: this.lodCounts.reduced,
+      marker: this.lodCounts.marker,
+      culled: this.lodCounts.culled,
+      pending: this.pending,
+      objects: this.objects,
+      instanced: this.instanced,
+      representedEntities: this.representedEntities,
+      buildMs: this.buildMs,
+      error: this.lastError,
+    }
+  }
+
+  public dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    const objects = new Set<THREE.Group>()
+    for (const state of this.states.values()) {
+      if (state.object !== null) objects.add(state.object)
+      state.object?.removeFromParent()
+      state.object = null
+      state.active = false
+      state.queued = false
+    }
+    for (const operation of this.operations) {
+      if (operation.kind === 'retired') objects.add(operation.object)
+    }
+    this.operations.length = 0
+    this.pending = 0
+    for (const object of objects) this.releaseObject(object)
+    this.states.clear()
+    this.tracked.clear()
+    this.resident = 0
+    this.objects = 0
+    this.instanced = 0
+    this.representedEntities = 0
+  }
+
+  private insertState(saved: SavedTree, index: number): void {
+    const layout = this.layouts[saved.layout]!
+    const desired: LodLevel = this.mode === 'raw' ? 'full' : 'culled'
+    const state: TreeRenderState = {
+      saved,
+      index,
+      sphere: treeWorldSphere(saved, layout),
+      desired,
+      resident: 'culled',
+      object: null,
+      objectNodes: 0,
+      objectInstanced: 0,
+      representedEntities: 0,
+      queued: false,
+      active: true,
+      needsReplacement: false,
+      failedDesired: null,
+    }
+    this.states.set(saved.id, state)
+    this.lodCounts[desired]++
+    this.logicalEntities += layout.lods.full.entities.length
+    this.indexState(state)
+    this.setGlow(state)
+    if (desired !== 'culled') this.enqueueState(state)
+  }
+
+  private updateState(state: TreeRenderState, saved: SavedTree, index: number): void {
+    const previous = state.saved
+    const previousLayout = this.layouts[previous.layout]!
+    const nextLayout = this.layouts[saved.layout]!
+    const layoutChanged = previous.layout !== saved.layout
+    state.index = index
+    if (sameSavedTree(previous, saved)) {
+      if (state.object !== null) this.applyPlacement(state.object, saved, index)
+      return
+    }
+
+    state.saved = saved
+    state.sphere = treeWorldSphere(saved, nextLayout)
+    state.failedDesired = null
+    this.indexState(state)
+    this.setGlow(state)
+    if (layoutChanged) {
+      this.logicalEntities += nextLayout.lods.full.entities.length - previousLayout.lods.full.entities.length
+      this.detachSelectedObject(state)
+      this.enqueueState(state, true)
+    } else if (state.object !== null) {
+      this.applyPlacement(state.object, saved, index)
+    } else if (state.desired !== 'culled') {
+      this.enqueueState(state)
+    }
+  }
+
+  private removeState(state: TreeRenderState): void {
+    this.states.delete(state.saved.id)
+    this.spatial.remove(state.saved.id)
+    this.glowPlan.remove(state.saved.id)
+    this.logicalEntities -= this.layouts[state.saved.layout]!.lods.full.entities.length
+    this.lodCounts[state.desired]--
+    state.active = false
+    this.cancelStateOperation(state)
+    this.tracked.delete(state)
+    if (state.object !== null) {
+      this.detachSelectedObject(state)
+      const object = state.object
+      state.object = null
+      state.resident = 'culled'
+      this.operations.push({ kind: 'retired', object })
+      this.pending++
+    }
+  }
+
+  private indexState(state: TreeRenderState): void {
+    this.spatial.insert({
+      id: state.saved.id,
+      x: state.sphere.center.x,
+      z: state.sphere.center.z,
+      state,
+    })
+  }
+
+  private setGlow(state: TreeRenderState): void {
+    const glow = this.layouts[state.saved.layout]!.glow
+    this.glowPlan.set({
+      id: state.saved.id,
+      x: state.saved.x,
+      z: state.saved.z,
+      radius: glow.radius,
+      color: glow.color,
+      opacity: glow.opacity,
+    })
+  }
+
+  private setDesired(state: TreeRenderState, desired: LodLevel): void {
+    if (state.desired === desired) return
+    this.lodCounts[state.desired]--
+    state.desired = desired
+    this.lodCounts[desired]++
+    state.failedDesired = null
+    this.detachSelectedObject(state)
+    this.tracked.add(state)
+  }
+
+  private enqueueState(state: TreeRenderState, force = false): void {
+    if (!state.active) return
+    if (force) {
+      state.needsReplacement = true
+      this.detachSelectedObject(state)
+    }
+    if (state.queued) return
+    if (!state.needsReplacement && state.resident === state.desired && state.object !== null) return
+    if (!state.needsReplacement && state.desired === 'culled' && state.object === null) return
+    if (!force && state.failedDesired === state.desired) return
+    state.queued = true
+    this.operations.push({ kind: 'state', state })
+    this.pending++
+    this.tracked.add(state)
+  }
+
+  private cancelStateOperation(state: TreeRenderState): void {
+    if (!state.queued) return
+    state.queued = false
+    this.pending--
+  }
+
+  private detachSelectedObject(state: TreeRenderState): void {
+    if (state.object === null || state.representedEntities === 0 && state.object.parent === null) return
+    state.object.visible = false
+    state.object.removeFromParent()
+    if (state.objectNodes > 0) {
+      this.objects -= state.objectNodes
+      this.instanced -= state.objectInstanced
+      this.resident--
+      this.representedEntities -= state.representedEntities
+      state.objectNodes = 0
+      state.objectInstanced = 0
+      state.representedEntities = 0
+    }
+  }
+
+  private replaceStateObject(state: TreeRenderState): void {
+    if (state.object !== null) {
+      this.detachSelectedObject(state)
+      this.releaseObject(state.object)
+      state.object = null
+      state.resident = 'culled'
+    }
+    state.needsReplacement = false
+    if (state.desired === 'culled') return
+    try {
+      const layout = this.layouts[state.saved.layout]!
+      const object = this.buildObject(
+        layout,
+        state.saved,
+        state.index,
+        state.desired,
+        this.mode === 'raw',
+      )
+      this.applyPlacement(object, state.saved, state.index)
+      object.visible = true
+      this.parent.add(object)
+      const cardinality = objectCardinality(object)
+      state.object = object
+      state.resident = state.desired
+      state.objectNodes = cardinality.nodes
+      state.objectInstanced = cardinality.instanced
+      state.representedEntities = state.desired === 'marker' ? 0 : layout.lods[state.desired].entities.length
+      this.resident++
+      this.objects += cardinality.nodes
+      this.instanced += cardinality.instanced
+      this.representedEntities += state.representedEntities
+      state.failedDesired = null
+    } catch (error) {
+      state.failedDesired = state.desired
+      this.lastError = error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  private applyPlacement(object: THREE.Group, saved: SavedTree, index: number): void {
+    object.position.set(saved.x, 0, saved.z)
+    object.rotation.y = saved.yaw
+    object.userData['treeId'] = saved.id
+    object.userData['treeIndex'] = index
+    object.traverse((child) => {
+      if (child === object) return
+      child.userData['treeId'] = saved.id
+      child.userData['treeIndex'] = index
+    })
+  }
+
+  private pruneTracked(state: TreeRenderState): void {
+    if (state.active && (state.desired !== 'culled' || state.object !== null || state.queued)) return
+    this.tracked.delete(state)
+  }
+
+  private assertActive(): void {
+    if (this.disposed) throw new Error('orchard tree runtime is disposed')
+  }
 }
 
 function discTexture(color: string): THREE.CanvasTexture {
@@ -138,6 +644,7 @@ export function mountOrchardWorld(
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.shadowMap.enabled = false
+  renderer.info.autoReset = false
   renderer.domElement.setAttribute('aria-label', 'Walkable proof-tree orchard')
   container.appendChild(renderer.domElement)
 
@@ -146,6 +653,11 @@ export function mountOrchardWorld(
   scene.fog = new THREE.Fog(world.terrain.sky, world.terrain.fogNear, world.terrain.fogFar)
   const camera = new THREE.PerspectiveCamera(67, 1, 0.08, 1800)
   camera.rotation.order = 'YXZ'
+  const composer = new EffectComposer(renderer)
+  const renderPass = new RenderPass(scene, camera)
+  const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.65, 0.45, 0.55)
+  composer.addPass(renderPass)
+  composer.addPass(bloomPass)
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(world.terrain.size, world.terrain.size),
@@ -154,8 +666,8 @@ export function mountOrchardWorld(
   ground.rotation.x = -Math.PI / 2
   ground.position.y = -0.035
   scene.add(ground)
-  const glowPlan = new GlowTilePlan(128)
   const glowRenderer = mountGlowRenderer(scene, ground.position.y)
+  const activeGlowTiles = new Set<string>()
 
   const trees = new THREE.Group()
   trees.name = 'separate-proof-trees'
@@ -174,75 +686,60 @@ export function mountOrchardWorld(
       () => size,
     ))
   }
-  const groups: THREE.Group[] = []
+  const runtime = new OrchardTreeRuntime(
+    world.layouts,
+    trees,
+    (layout, saved, index, lod, raw) => {
+      const placement = {
+        id: saved.id,
+        index,
+        x: saved.x,
+        z: saved.z,
+        yaw: saved.yaw,
+      }
+      const materials = materialsByLayout.get(saved.layout)!
+      if (raw) return makeRawTreeObject(layout, placement, materials)
+      if (lod === 'marker') return makeMarkerObject(layout, placement, materials)
+      return makeBatchedTreeObject(layout, lod, placement, materials)
+    },
+  )
+  let disposed = false
+
+  const syncGlow = (): void => {
+    const dirty = runtime.flushGlow()
+    for (const record of dirty) {
+      if (record.contributors.length === 0) activeGlowTiles.delete(record.key)
+      else activeGlowTiles.add(record.key)
+    }
+    glowRenderer.sync(dirty)
+  }
 
   const resize = (width: number, height: number): void => {
     size = { width, height }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
+    const pixelRatio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO)
+    renderer.setPixelRatio(pixelRatio)
     renderer.setSize(width, height, false)
+    composer.setPixelRatio(pixelRatio)
+    composer.setSize(width, height)
+    bloomPass.setSize(width * pixelRatio, height * pixelRatio)
     camera.aspect = width / Math.max(1, height)
     camera.updateProjectionMatrix()
     for (const material of lineMaterials) material.resolution.set(width, height)
   }
 
+  const setTrees = async (savedTrees: readonly SavedTree[]): Promise<OrchardBuildStats> => runtime.setTrees(savedTrees)
+
   return {
     canvas: renderer.domElement,
     async setCount(count) {
-      const started = performance.now()
       if (!Number.isInteger(count) || count < 0 || count > world.trees.length) {
         throw new Error(`tree count must be between 0 and ${world.trees.length}`)
       }
-      while (groups.length > count) {
-        const group = groups.pop()!
-        glowPlan.remove(group.name)
-        trees.remove(group)
-        disposeTreeObject(group)
-      }
-      while (groups.length < count) {
-        const end = Math.min(count, groups.length + 12)
-        while (groups.length < end) {
-          const index = groups.length
-          const saved = world.trees[index]!
-          const layout = world.layouts[saved.layout]!
-          const group = makeRawTreeObject(layout, {
-            id: saved.id,
-            index,
-            x: saved.x,
-            z: saved.z,
-            yaw: saved.yaw,
-          }, materialsByLayout.get(saved.layout)!)
-          groups.push(group)
-          trees.add(group)
-          glowPlan.set({
-            id: saved.id,
-            x: saved.x,
-            z: saved.z,
-            radius: layout.glow.radius,
-            color: layout.glow.color,
-            opacity: layout.glow.opacity,
-          })
-        }
-        if (groups.length < count) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-      }
-      glowRenderer.sync(glowPlan.flushDirty())
-      let instanced = 0
-      let objects = 0
-      for (const group of groups) group.traverse((object) => {
-        objects++
-        if ((object as THREE.InstancedMesh).isInstancedMesh === true) instanced++
-      })
-      let entities = 0
-      for (let index = 0; index < count; index++) {
-        const saved = world.trees[index]!
-        entities += world.layouts[saved.layout]!.lods.full.entities.length
-      }
-      return {
-        trees: count,
-        entities,
-        objects,
-        instanced,
-        buildMs: performance.now() - started,
-      }
+      return setTrees(world.trees.slice(0, count))
+    },
+    setTrees,
+    setMode(mode) {
+      runtime.setMode(mode)
     },
     setPlayer(x, z, yaw, pitch) {
       camera.position.set(x, world.player.y, z)
@@ -251,21 +748,47 @@ export function mountOrchardWorld(
     },
     resize,
     render() {
-      renderer.render(scene, camera)
+      const lod = runtime.updateGame(camera, world.terrain.fogFar, size.height)
+      runtime.processOperations()
+      syncGlow()
+      renderer.info.reset()
+      composer.render()
+      const current = runtime.snapshot()
       return {
         drawCalls: renderer.info.render.calls,
         triangles: renderer.info.render.triangles,
         geometries: renderer.info.memory.geometries,
+        objects: current.objects,
+        instanced: current.instanced,
+        logical: current.logical,
+        visible: current.visible,
+        resident: current.resident,
+        full: current.full,
+        reduced: current.reduced,
+        marker: current.marker,
+        culled: current.culled,
+        pending: current.pending,
+        glowTiles: activeGlowTiles.size,
+        pointLights: 0,
+        representedEntities: current.representedEntities,
+        buildMs: current.buildMs,
+        lodMs: lod.lodMs,
+        error: current.error,
       }
     },
     dispose() {
-      for (const group of groups) disposeTreeObject(group)
+      if (disposed) return
+      disposed = true
+      runtime.dispose()
       for (const material of lineMaterials) material.dispose()
       for (const material of spriteMaterials) material.dispose()
       for (const texture of textures) texture.dispose()
       glowRenderer.dispose()
+      activeGlowTiles.clear()
       ground.geometry.dispose()
       ;(ground.material as THREE.Material).dispose()
+      bloomPass.dispose()
+      composer.dispose()
       renderer.dispose()
       renderer.domElement.remove()
     },
