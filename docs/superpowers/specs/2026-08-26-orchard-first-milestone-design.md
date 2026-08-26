@@ -90,15 +90,16 @@ The exact database contains these responsibilities:
 
 - one metadata row with slot ID, display name, and update timestamp;
 - one camera row with position, yaw, and pitch;
-- content-addressed diagram rows containing kernel diagram JSON;
-- one row per tree containing tree ID, diagram digest, `x`, `z`, and `yaw`.
+- immutable shared diagram rows containing kernel diagram JSON;
+- one row per tree containing tree ID, diagram key, `x`, `z`, and `yaw`.
 
-Diagram rows are keyed by a BLAKE3 digest of the canonical stored JSON. Trees
-with identical diagrams share one diagram row. When one tree changes, a
+Trees with byte-identical deterministic diagram JSON share one immutable
+diagram row. A tree refers to that row by an opaque store key; a hash alone is
+never accepted as proof that two diagrams are equal. When one tree changes, a
 transaction inserts its new diagram row if necessary, updates that tree's
-digest, and updates slot metadata. Camera persistence updates only the camera
-row and metadata. This makes persistence cost proportional to the changed
-tree rather than the whole orchard.
+diagram key, and updates slot metadata. Camera persistence updates only the
+camera row and metadata. This makes persistence cost proportional to the
+changed tree rather than the whole orchard.
 
 The Rust persistence library supplies the same operations to Tauri commands,
 fixture generation, and Rust tests:
@@ -116,12 +117,8 @@ Writes use SQLite transactions. Frontend writes are ordered per slot;
 successive pending camera poses and tree snapshots for the same tree may
 coalesce to the newest state before their transaction begins.
 
-A name is trimmed, must contain 1 through 80 Unicode code points, and may not
-contain control characters. Slot creation fails on an invalid name rather
-than rewriting it.
-
 Loading checks the exact current table and column structure, finite placement
-and camera numbers, unique IDs, valid diagram digests, and every diagram
+and camera numbers, unique IDs, valid diagram references, and every diagram
 through the kernel JSON parser before mounting the world. An invalid slot
 stays on the start menu with a concrete load error. There is no partially
 loaded world.
@@ -137,7 +134,7 @@ After loading, the frontend holds:
 type GameTree = {
   readonly id: string
   readonly diagram: Diagram
-  readonly diagramDigest: string
+  readonly diagramKey: string
   readonly placement: { readonly x: number; readonly z: number; readonly yaw: number }
 }
 
@@ -147,7 +144,7 @@ type GameWorld = {
 }
 ```
 
-The loader parses each distinct diagram digest once and shares the immutable
+The loader parses each distinct diagram key once and shares the immutable
 diagram value among trees that reference it. A kernel move creates a new
 diagram value for only the targeted tree.
 
@@ -172,21 +169,22 @@ mechanisms from the stress application:
 - dirty glow tiles, bloom, and zero analytic point lights;
 - settled-frame and representation telemetry.
 
-Derived render assets are cached by diagram digest. The generated stress
+Derived render assets are cached by diagram key. The generated stress
 saves therefore derive the large tree once per loaded save even when 2,000
 tree rows refer to it. Render assets are never an authority in the save.
 
 Every full-detail entity object retains `treeId` and its existing stable
 entity key. Batched and reduced representations retain tree identity but need
-not provide proof-entity interaction. Interaction eligibility is determined
-by world-space reach, not by which representation happens to be resident.
-When interaction requires geometry that is not currently present, the
-renderer derives or promotes the relevant tree's interaction geometry without
-changing camera state or the orbit target.
+not provide proof-entity interaction. The `100`-unit reach is calibrated at
+the farthest comfortable full-detail distance, so raycasting uses ordinary
+visible branch geometry. There is no hidden picking representation, temporary
+interaction geometry, or interaction-triggered LOD change. Interaction checks
+only ray distance, and rendering chooses LOD normally.
 
-The renderer can update any tree from a sequence of `Scene3` frames. Only a
-tree currently changing receives per-frame dynamic geometry. This is a render
-role, not a different tree population or model.
+The renderer can update any tree from a sequence of derived tree render
+snapshots. A tree currently changing receives per-frame dynamic geometry.
+This is a render role, not a different tree population or model, and multiple
+trees may hold that role concurrently.
 
 ## Camera and Input
 
@@ -249,15 +247,14 @@ save error, and retries the newest tree state on the next persistence attempt.
 
 ## Tween
 
-The old and new diagrams pass through `scene3`, `planTransition`, and
-`sceneAt`. The tween lasts the existing `350` milliseconds. Terrain, camera,
-and all other tree representations continue normally during the tween.
+The old and new diagrams produce derived tree render snapshots, which pass
+through the existing transition planner and interpolator. The tween lasts the
+existing `350` milliseconds. Terrain, camera, and all other tree
+representations continue normally during the tween.
 
 If another valid use targets the same tree during its tween, the next plan
-starts from the currently displayed interpolated scene. If it targets a
-different tree, the current tween reaches its clean target immediately before
-the next tree begins, preserving the one-changing-tree-at-a-time renderer law
-without dropping the tool use.
+starts from that tree's currently displayed interpolated geometry. Different
+trees own independent tweens and may animate concurrently.
 
 On completion the renderer installs the clean target scene so zero-alpha
 entities do not remain pickable.
@@ -287,10 +284,9 @@ identity belongs to this milestone.
 
 ## Generated Saves and Stress Authority
 
-The existing TypeScript proof tooling serializes the verified `zeroIsNat`
-step-20 kernel diagram and deterministic placements into a generation
-manifest. An offline Rust binary reads that manifest and uses the production
-save store to emit these ordinary databases:
+Offline generation combines the existing TypeScript proof and placement
+authorities with the production Rust save store to emit these ordinary
+databases:
 
 - one large editable tree;
 - 10 large trees;
@@ -306,7 +302,6 @@ algorithm. The saves contain kernel diagrams and placements, not a serialized
 render world. Each stress test loads a different database rather than changing
 tree count at runtime.
 
-The manifest is an ephemeral generator input, never a runtime world format.
 The generated databases are derived artifacts and are regenerated by the
 required TypeScript-plus-Rust toolchain after changes to the save store,
 diagram serialization, large-tree source, or placement algorithm.
@@ -323,7 +318,8 @@ diagram serialization, large-tree source, or placement algorithm.
 - branch-key decoding and real kernel double-cut introduction on the blank
   seedling and a nested branch of `zeroIsNat` step 20;
 - `350` ms tween endpoints and interruption continuity;
-- diagram-digest render-cache sharing and one-tree invalidation.
+- shared-diagram render-cache reuse and one-tree invalidation;
+- independent concurrent tweens on different trees.
 
 ### Rust persistence tests
 
