@@ -19,6 +19,7 @@
     "tauri": "tauri",
     "dev:game": "tauri dev",
     "build:game:desktop": "tauri build",
+    "emit:game-saves": "tsx scripts/emit-game-saves.ts",
     "orchard": "vite orchard",
     "emit:orchard-world": "tsx scripts/emit-orchard-world.ts",
     "prebuild:orchard": "npm run emit:orchard-world",
