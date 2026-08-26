@@ -121,12 +121,22 @@ describe('generic diagram motion', () => {
       'reverse',
     )
     expect(coordinator.debugState(100).beta?.phase).toBe('settle')
-    const historyFrame = coordinator.historyBeta(0.54)
-    expect(historyFrame).not.toBeNull()
+    const plan = planBetaMotion(parsed.term, { kind: 'beta', path: [] })
+    expect(coordinator.historyBeta(0))
+      .toEqual(sampleBetaMotion(plan, 1, LIGHT.wire))
+    expect(coordinator.scrubBeta(0.25))
+      .toEqual(sampleBetaMotion(plan, 0.75, LIGHT.wire))
+    expect(coordinator.playBeta(0.54))
+      .toEqual(sampleBetaMotion(plan, 1 - 0.54, LIGHT.wire))
+    expect(coordinator.historyBeta(1))
+      .toEqual(sampleBetaMotion(plan, 0, LIGHT.wire))
+    expect(coordinator.stepBeta())
+      .toEqual(sampleBetaMotion(plan, 0, LIGHT.wire))
+    const historyFrame = coordinator.historyBeta(0.54)!
     const historyPaint = coordinator.paint(100).flatMap((shape) => (
       shape.kind === 'arc' || shape.kind === 'segment' ? [shape] : []
     ))
     expect(historyPaint.map((shape) => shape.stroke))
-      .toEqual(historyFrame!.strokes.map(({ color }) => color))
+      .toEqual(historyFrame.strokes.map(({ color }) => color))
   })
 })

@@ -191,10 +191,11 @@ export class MotionCoordinator {
   #sampleBeta(progress: number): LambdaStrokeFrame | null {
     if (this.#beta === null) return null
     this.#beta.startedAt = null
-    this.#beta.frame = sampleBetaMotion(
+    this.#beta.frame = this.#frameAt(
       this.#beta.plan,
-      progress,
       this.#beta.baseColor,
+      this.#beta.direction,
+      progress,
     )
     return this.#beta.frame
   }
@@ -270,10 +271,11 @@ export class MotionCoordinator {
       1,
       elapsed / (BETA_MS / this.#options.preferences().speed),
     )
-    active.frame = sampleBetaMotion(
+    active.frame = this.#frameAt(
       active.plan,
-      active.direction === 'forward' ? progress : 1 - progress,
       active.baseColor,
+      active.direction,
+      progress,
     )
     if (progress >= 1) this.settleBeta()
   }
@@ -303,14 +305,30 @@ export class MotionCoordinator {
     if (!termEq(plan.target, conversion.term) || !termEq(plan.target, targetNode.term)) {
       throw new Error('Lambda motion target does not match the committed beta conversion')
     }
-    const initial = direction === 'forward' ? 0 : 1
     return {
       plan,
       baseColor: this.#options.theme().wire,
       node: conversion.node,
       direction,
-      frame: sampleBetaMotion(plan, initial, this.#options.theme().wire),
+      frame: this.#frameAt(
+        plan,
+        this.#options.theme().wire,
+        direction,
+        0,
+      ),
       startedAt: now,
     }
+  }
+
+  #frameAt(
+    plan: LambdaMotionPlan,
+    baseColor: string,
+    direction: 'forward' | 'reverse',
+    presentationProgress: number,
+  ): LambdaStrokeFrame {
+    const semanticProgress = direction === 'forward'
+      ? presentationProgress
+      : 1 - presentationProgress
+    return sampleBetaMotion(plan, semanticProgress, baseColor)
   }
 }
