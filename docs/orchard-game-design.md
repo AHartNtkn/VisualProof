@@ -28,9 +28,11 @@ Accept orders from a catalog; grow the ordered tree; deliver it by iterating a c
 
 - **Movement** is creative-mode flight (Minecraft creative / Halo Forge monitor), not full six-axis. The stress-test demo's flat walking is throwaway.
 - **Orbit view.** Focusing a tree opens an orbit view like the proof assistant's existing 3D view. It is a convenience only. Hard law: **every edit must be performable from any perspective** — there is no dedicated proof mode, because iterating trees into each other requires acting across the world view.
+- **Orbit target.** The tree currently being orbited is the orbit target; an orbit target exists only in orbit mode. Free motion has none. While orbiting, only parts of the orbit target receive world interaction, so a background tree cannot intercept or receive an action.
 - **The cutting** is the one universal verb for iteration everywhere: within a tree (deeper copies), between trees (citation), and into pots (delivery). Physically: clip a copy, carry it, insert it at a legal spot. The kernel validates every insertion.
-- **Tools** are intuitive physical actions that may each span several rules (e.g. one eraser-like tool covering aspects of multiple deletion rules). Tools attempt; the kernel validates; tools never propose moves. The tool taxonomy and its gestures are deferred to implementation (see below).
-- **Undo** is a hotkeyed (Ctrl+Z) per-tree tool, scoped to the tree currently selected or in focus — never a global stack, so repeated undo cannot spill into edits on a distant tree. World operations (spawning, deleting trees) are not undo targets; they have their own inverse actions.
+- **Tools** are intuitive physical actions that may each span several rules (e.g. one eraser-like tool covering aspects of multiple deletion rules). Tools attempt; the kernel validates; tools never propose moves. Using a tool never changes camera state or the orbit target. Each tool owns its own gesture and physical interaction; no milestone binding establishes a universal tool gesture. The tool taxonomy and its gestures are otherwise deferred to implementation (see below).
+- **Interaction reach.** Orbit entry and tool use are limited by an independently tuned world-space reach. Interaction never depends on render LOD, even when its initial reach is calibrated near a full-detail distance.
+- **Undo** is a hotkeyed (Ctrl+Z) per-tree tool, scoped to the current orbit target — never a global stack, so repeated undo cannot spill into edits on a distant tree. World operations (spawning, deleting trees) are not undo targets; they have their own inverse actions.
 - **Fences and signs** are semantically inert world objects for player organization only. Signs are the home for player-typed text. The game never interprets either.
 
 ## Progression and economy
@@ -54,8 +56,9 @@ No runtime puzzle generation, ever — it has been investigated repeatedly and d
 
 - **Codebase:** an isolated branch of the VisualProofAssistant repo, sharing `src/kernel` and `src/view3d`, merged-into as those improve; full separation into its own repo later. The proof assistant itself is an investigation platform with no maintenance obligation.
 - **Shell:** a standalone Tauri app, scaffolded from the start of implementation (save-file I/O, window/input behavior, and packaging proven in the real shell throughout). Web tech inside: Vite + three.js, unchanged.
-- **Saves:** unlimited named save slots backed by files, Skyrim-style.
-- **Scale:** only one tree changes at a time, so the existing `src/view3d/transition.ts` tween machinery suffices for growth animation; the orchard stress-test rig (`orchard/`) has proven static rendering, LOD, and culling to 2000 trees. The missing engineering (known, not yet built): kernel + view3d running live in the app, 3D picking, and one live tree among baked ones.
+- **Saves:** unlimited named save slots backed by files, Skyrim-style. The save format always has one exact current shape: no format versions, version checks, migrations, legacy readers, or fallback parsing. Runtime worlds are constructed only by loading ordinary saves; developer and stress fixtures use the same persistence authority.
+- **Scale:** only one generic tree changes at a time, so the existing `src/view3d/transition.ts` tween machinery suffices for growth animation. The established stress workload has proven static rendering, LOD, and culling to 2000 trees; generated game saves preserve that workload against the production renderer. Every tree uses the same kernel-backed model and can take the temporary per-frame render role when it changes.
+- **Renderer authority:** `game/` is the sole 3D world frontend. Performance workloads are ordinary generated game saves, and stress tests exercise the same production renderer used by play.
 
 ## Deferred to implementation, by design
 
