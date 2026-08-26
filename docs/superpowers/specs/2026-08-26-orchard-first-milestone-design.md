@@ -134,7 +134,7 @@ After loading, the frontend holds:
 type GameTree = {
   readonly id: string
   readonly diagram: Diagram
-  readonly diagramKey: string
+  readonly diagramJson: string
   readonly placement: { readonly x: number; readonly z: number; readonly yaw: number }
 }
 
@@ -144,9 +144,10 @@ type GameWorld = {
 }
 ```
 
-The loader parses each distinct diagram key once and shares the immutable
-diagram value among trees that reference it. A kernel move creates a new
-diagram value for only the targeted tree.
+The loader joins the database's local diagram references to their exact JSON,
+parses each distinct JSON value once, and shares the immutable diagram value
+among trees that contain identical bytes. A kernel move creates a new diagram
+value for only the targeted tree.
 
 New-slot creation first writes the standard one-seedling database, then loads
 it through the same path as every other slot. Stress validation copies a
@@ -169,17 +170,18 @@ mechanisms from the stress application:
 - dirty glow tiles, bloom, and zero analytic point lights;
 - settled-frame and representation telemetry.
 
-Derived render assets are cached by diagram key. The generated stress
+Derived render assets are cached by exact diagram JSON. The generated stress
 saves therefore derive the large tree once per loaded save even when 2,000
 tree rows refer to it. Render assets are never an authority in the save.
 
-Every full-detail entity object retains `treeId` and its existing stable
-entity key. Batched and reduced representations retain tree identity but need
-not provide proof-entity interaction. The `100`-unit reach is calibrated at
-the farthest comfortable full-detail distance, so raycasting uses ordinary
-visible branch geometry. There is no hidden picking representation, temporary
-interaction geometry, or interaction-triggered LOD change. Interaction checks
-only ray distance, and rendering chooses LOD normally.
+Ordinary visible tree-part objects retain `treeId` and their existing stable
+entity key. The `100`-unit reach is calibrated at the farthest comfortable
+full-detail distance. Raycasting uses that ordinary visible tree geometry
+without querying or changing LOD state. There is no hidden picking
+representation, temporary interaction geometry, or interaction-triggered LOD
+change. Interaction checks only ray distance, and rendering chooses LOD
+normally. Orbit entry accepts any pointed tree part; the concrete double-cut
+operation accepts only a branch key.
 
 The renderer can update any tree from a sequence of derived tree render
 snapshots. A tree currently changing receives per-frame dynamic geometry.
@@ -200,9 +202,10 @@ menu.
 - `A` and `D` strafe left and right.
 - `Space` and `Ctrl` move up and down.
 - `Shift` increases movement speed.
-- A left-click raycasts through the center reticle. A tree hit within `100`
-  units becomes the orbit target, orbit mode begins, and pointer lock exits.
-- A left-click without an eligible tree changes nothing.
+- A left-click points through the center reticle. A tree under the reticle
+  within `100` units becomes the orbit target, orbit mode begins, and pointer
+  lock exits.
+- A left-click without a tree under the reticle in reach changes nothing.
 
 If the platform's own Escape handling releases pointer lock during free
 flight, camera mode remains free flight and a click-to-resume overlay requests
@@ -256,8 +259,8 @@ If another valid use targets the same tree during its tween, the next plan
 starts from that tree's currently displayed interpolated geometry. Different
 trees own independent tweens and may animate concurrently.
 
-On completion the renderer installs the clean target scene so zero-alpha
-entities do not remain pickable.
+On completion the renderer installs the clean target render snapshot so
+zero-alpha entities do not remain pickable.
 
 ## Start Menu and Feedback
 
