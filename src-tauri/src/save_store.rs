@@ -386,7 +386,7 @@ fn intern_diagram(transaction: &Transaction<'_>, json: &str) -> rusqlite::Result
         [json],
     )?;
     transaction.query_row(
-        "SELECT diagram_key FROM diagrams WHERE diagram_json = ?1",
+        "SELECT diagram_key FROM diagrams WHERE diagram_json COLLATE BINARY = ?1 COLLATE BINARY",
         [json],
         |row| row.get(0),
     )
@@ -511,13 +511,28 @@ fn validate_database(connection: &Connection) -> Result<()> {
 }
 
 fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
-    let table_names = query_strings(
-        connection,
-        "SELECT name FROM sqlite_schema
-         WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    let mut object_statement = connection.prepare(
+        "SELECT type, name FROM sqlite_schema
+         WHERE type IN ('table', 'trigger', 'view') AND name NOT LIKE 'sqlite_%'
+         ORDER BY type, name",
     )?;
-    if table_names != ["camera", "diagrams", "metadata", "trees"] {
+    let objects = object_statement
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let expected_objects = vec![
+        ("table".to_owned(), "camera".to_owned()),
+        ("table".to_owned(), "diagrams".to_owned()),
+        ("table".to_owned(), "metadata".to_owned()),
+        ("table".to_owned(), "trees".to_owned()),
+    ];
+    if objects != expected_objects {
         return Err(rusqlite::Error::InvalidQuery);
+    }
+
+    for table in ["metadata", "camera", "diagrams", "trees"] {
+        validate_table_sql(connection, table)?;
     }
 
     validate_columns(
@@ -579,6 +594,30 @@ fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
         return Err(rusqlite::Error::InvalidQuery);
     }
     Ok(())
+}
+
+fn validate_table_sql(connection: &Connection, table: &str) -> rusqlite::Result<()> {
+    let actual: String = connection.query_row(
+        "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
+        [table],
+        |row| row.get(0),
+    )?;
+    let expected = SCHEMA
+        .split(';')
+        .map(str::trim)
+        .find(|statement| statement.starts_with(&format!("CREATE TABLE {table} ")))
+        .ok_or(rusqlite::Error::InvalidQuery)?;
+    if compact_sql(&actual) == compact_sql(expected) {
+        Ok(())
+    } else {
+        Err(rusqlite::Error::InvalidQuery)
+    }
+}
+
+fn compact_sql(sql: &str) -> String {
+    sql.chars()
+        .filter(|character| !character.is_ascii_whitespace())
+        .collect()
 }
 
 fn validate_columns(
@@ -697,14 +736,6 @@ fn validate_foreign_keys(connection: &Connection) -> rusqlite::Result<()> {
     } else {
         Err(rusqlite::Error::InvalidQuery)
     }
-}
-
-fn query_strings(connection: &Connection, sql: &str) -> rusqlite::Result<Vec<String>> {
-    let mut statement = connection.prepare(sql)?;
-    let values = statement
-        .query_map([], |row| row.get(0))?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(values)
 }
 
 fn table_row_count(connection: &Connection, table: &str) -> Result<i64> {
@@ -839,6 +870,90 @@ mod tests {
             .unwrap();
 
         assert_invalid_list_entry(temp.path(), "foreign.sqlite3");
+    }
+
+    #[test]
+    fn rejects_a_nocase_diagram_collation() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(&SCHEMA.replace(
+                "diagram_json TEXT NOT NULL UNIQUE",
+                "diagram_json TEXT COLLATE NOCASE NOT NULL UNIQUE",
+            ))
+            .unwrap();
+
+        assert!(matches!(
+            validate_database(&connection),
+            Err(SaveStoreError::InvalidStructure)
+        ));
+    }
+
+    #[test]
+    fn rejects_an_extra_trigger() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(&format!(
+                "{SCHEMA}
+                 CREATE TRIGGER mutate_camera AFTER UPDATE ON trees
+                 BEGIN UPDATE camera SET x = x + 1; END;"
+            ))
+            .unwrap();
+
+        assert!(matches!(
+            validate_database(&connection),
+            Err(SaveStoreError::InvalidStructure)
+        ));
+    }
+
+    #[test]
+    fn rejects_an_extra_view() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(&format!(
+                "{SCHEMA}
+                 CREATE VIEW metadata_view AS SELECT * FROM metadata;"
+            ))
+            .unwrap();
+
+        assert!(matches!(
+            validate_database(&connection),
+            Err(SaveStoreError::InvalidStructure)
+        ));
+    }
+
+    #[test]
+    fn rejects_missing_singleton_check_constraints() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(&SCHEMA.replace(
+                "INTEGER PRIMARY KEY CHECK (singleton = 1)",
+                "INTEGER PRIMARY KEY",
+            ))
+            .unwrap();
+
+        assert!(matches!(
+            validate_database(&connection),
+            Err(SaveStoreError::InvalidStructure)
+        ));
+    }
+
+    #[test]
+    fn diagram_interning_uses_bytewise_lookup_even_on_a_nocase_column() {
+        let mut connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE diagrams (
+                   diagram_key INTEGER PRIMARY KEY,
+                   diagram_json TEXT COLLATE NOCASE NOT NULL
+                 );",
+            )
+            .unwrap();
+        let transaction = connection.transaction().unwrap();
+
+        let upper_key = intern_diagram(&transaction, "A").unwrap();
+        let lower_key = intern_diagram(&transaction, "a").unwrap();
+
+        assert_ne!(upper_key, lower_key);
     }
 
     #[test]
