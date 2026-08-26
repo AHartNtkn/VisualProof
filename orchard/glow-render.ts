@@ -53,6 +53,7 @@ export function mountGlowRenderer(scene: THREE.Scene, groundY: number): GlowRend
   const rasterize = (resource: TileResource, record: DirtyGlowTile): void => {
     const context = resource.canvas.getContext('2d')!
     context.clearRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
+    context.globalCompositeOperation = 'lighter'
     for (const contribution of record.contributors) drawGlow(context, contribution, record.x, record.z)
     resource.texture.needsUpdate = true
   }
