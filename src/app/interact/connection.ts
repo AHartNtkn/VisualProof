@@ -32,6 +32,8 @@ export type ConnectionDragOptions = {
   readonly theme: () => Theme
   readonly commit: (gesture: ConnectionGesture, pointer: Vec2) => boolean
   readonly refuse: (text: string, pointer: Vec2) => void
+  /** Limit which physical source ends this controller owns. */
+  readonly acceptSource?: (source: ConnectionEnd) => boolean
   /** Identity dot under a point, when the host wants dot drops recognized
       (construction mode; proving mode passes nothing and sees no change). */
   readonly identityTarget?: (point: Vec2) => NodeId | null
@@ -89,8 +91,10 @@ export class ConnectionDragController {
       viewport,
     )
     if (hit === null) return null
+    const source = wireEnd(hit)
+    if (this.#options.acceptSource?.(source) === false) return null
     const preview: WirePreview = {
-      source: wireEnd(hit),
+      source,
       from: sample.world,
       at: sample.world,
       target: null,

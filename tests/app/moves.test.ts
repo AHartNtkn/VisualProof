@@ -118,6 +118,7 @@ function harness(diagram: Diagram, selection: readonly Hit[] = []) {
     context: () => EMPTY_PROOF_CONTEXT,
     orientation: () => 'forward',
     apply: (action) => { applied.push(action) },
+    commitFission: () => undefined,
     refuse: (text) => { refusals.push(text) },
     theme: () => LIGHT,
     fuel: () => 0,
@@ -150,6 +151,7 @@ function harnessKernel(diagram: Diagram, selection: readonly Hit[] = []) {
       applyAction(diagram, action, EMPTY_PROOF_CONTEXT, 'forward')
       applied.push(action)
     },
+    commitFission: () => undefined,
     refuse: (text) => { refusals.push(text) },
     theme: () => LIGHT,
     fuel: () => 0,
@@ -182,6 +184,7 @@ function lambdaHarness(source: string) {
       diagram = applyAction(diagram, action, EMPTY_PROOF_CONTEXT)
       applied.push(action)
     },
+    commitFission: () => undefined,
     refuse: (text) => { refusals.push(text) },
     theme: () => LIGHT,
     fuel: () => 64,

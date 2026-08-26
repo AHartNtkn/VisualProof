@@ -487,6 +487,29 @@ describe('mapStepIds', () => {
       rule: 'lambdaFreeVariableIdentity',
       action: { direction: 'toTerm', node: 'N1', outputPort: 1 },
     })
+    expect(mapStepIds({
+      rule: 'lambdaFission', node: 'n0', path: ['argument'],
+    }, iso)).toEqual({
+      rule: 'lambdaFission', node: 'N0', path: ['argument'],
+    })
+    expect(mapStepIds({
+      rule: 'lambdaFusion', wire: 'w0',
+    }, iso)).toEqual({
+      rule: 'lambdaFusion', wire: 'W0',
+    })
+    expect(mapStepIds({
+      rule: 'lambdaAnchoredWireSplit',
+      wire: 'w0',
+      witness: 'n0',
+      endpoints: [{ node: 'n1', port: { kind: 'free', index: 0 } }],
+      target: 'r1',
+    }, iso)).toEqual({
+      rule: 'lambdaAnchoredWireSplit',
+      wire: 'W0',
+      witness: 'N0',
+      endpoints: [{ node: 'N1', port: { kind: 'free', index: 0 } }],
+      target: 'R1',
+    })
   })
 
   it('fails loudly when any host id is absent', () => {

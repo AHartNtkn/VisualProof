@@ -5,6 +5,7 @@ import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { derivedScope } from '../kernel/diagram/regions'
 import { diagramToJson } from '../kernel/diagram/json'
 import { applyFold, applyUnfold, definitionSig } from '../kernel/rules/fold'
+import { applyLambdaFission } from '../kernel/rules/lambda'
 import { relationWireHues } from './proof-front'
 import type { ProofContext } from '../kernel/proof/context'
 import type { ProofStep } from '../kernel/proof/step'
@@ -1553,6 +1554,16 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     selection: () => interaction.selection,
     setSelection: (selection) => interaction.setSelection(selection),
     commit: (diagram) => pushEdit(diagram),
+    commitFission: ({ node, path, at }) => {
+      const before = editDiagram
+      const result = applyLambdaFission(before, node, path)
+      const introduced = Object.keys(result.nodes)
+        .find((id) => before.nodes[id] === undefined)
+      if (introduced === undefined) {
+        throw new Error('Lambda fission did not introduce a producer node')
+      }
+      pushEdit(result, { node: introduced, at })
+    },
     refuse,
     setProblem: setFeedbackProblem,
     clearProblem: clearFeedbackProblem,
@@ -1592,6 +1603,16 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     context: () => ctx,
     orientation: () => proofDirection() ?? 'forward',
     apply: applyProofAction,
+    commitFission: ({ node, path, at }) => {
+      const before = currentDiagram()
+      applyProofStep({ rule: 'lambdaFission', node, path })
+      const introduced = Object.keys(currentDiagram().nodes)
+        .find((id) => before.nodes[id] === undefined)
+      if (introduced === undefined) {
+        throw new Error('Lambda fission did not introduce a producer node')
+      }
+      seedBodyPlacement(engine, introduced, at)
+    },
     refuse: (text, pointer) => refuse(text, pointer),
     theme: () => theme,
     fuel: () => readCount(fuel.input, 'fuel'),

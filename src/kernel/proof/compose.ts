@@ -169,6 +169,37 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
           node: mapId(iso.nodes, step.action.node, 'node'),
         },
       }
+    case 'lambdaFission':
+      return {
+        ...step,
+        node: mapId(iso.nodes, step.node, 'node'),
+      }
+    case 'lambdaFusion':
+      return {
+        ...step,
+        wire: mapId(iso.wires, step.wire, 'wire'),
+      }
+    case 'lambdaCongruenceJoin':
+    case 'lambdaHeadStrip':
+      return {
+        ...step,
+        a: mapId(iso.nodes, step.a, 'node'),
+        b: mapId(iso.nodes, step.b, 'node'),
+      }
+    case 'lambdaAnchoredWireSplit':
+      return {
+        ...step,
+        wire: mapId(iso.wires, step.wire, 'wire'),
+        witness: mapId(iso.nodes, step.witness, 'node'),
+        endpoints: step.endpoints.map((endpoint) => mapEndpoint(iso, endpoint)),
+        target: mapId(iso.regions, step.target, 'region'),
+      }
+    case 'lambdaAnchoredWireContract':
+      return {
+        ...step,
+        redundant: mapId(iso.nodes, step.redundant, 'node'),
+        survivor: mapId(iso.nodes, step.survivor, 'node'),
+      }
     case 'theorem':
       return {
         ...step,

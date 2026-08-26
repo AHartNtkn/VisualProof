@@ -73,6 +73,7 @@ function constructHarness(
     selection,
     setSelection: () => undefined,
     commit: (next) => { committed.push(next) },
+    commitFission: () => undefined,
     refuse: (text) => { refusals.push(text) },
     setProblem: () => undefined,
     clearProblem: () => undefined,

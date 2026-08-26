@@ -21,6 +21,7 @@ import {
 } from './interact/motion'
 import { ProofMoveController } from './interact/moves'
 import { ProofSpawnController } from './interact/proof-spawn'
+import { fissionDropPoint, fissionTargetPoint } from './interact/fission'
 import {
   InteractiveViewport,
   type KeySample,
@@ -77,6 +78,14 @@ export type ProofFrontDebugState = {
     readonly r: number
   }[]
   readonly motion: MotionDebugState
+  readonly fissionTargets: readonly {
+    readonly node: string
+    readonly path: readonly string[]
+    readonly x: number
+    readonly y: number
+    readonly dropX: number
+    readonly dropY: number
+  }[]
   readonly interactionOverlays: readonly string[]
 }
 
@@ -162,6 +171,16 @@ export class ProofFrontViewport {
       context: model.context,
       orientation: () => model.side,
       apply: (action) => model.prepareAction(action)(),
+      commitFission: ({ node, path, at }) => {
+        const before = model.diagram()
+        model.prepare({ rule: 'lambdaFission', node, path })()
+        const introduced = Object.keys(model.diagram().nodes)
+          .find((id) => before.nodes[id] === undefined)
+        if (introduced === undefined) {
+          throw new Error('Lambda fission did not introduce a producer node')
+        }
+        seedBodyPlacement(this.#engine, introduced, at)
+      },
       refuse: model.refuse,
       theme: model.theme,
       fuel: model.fuel,
@@ -330,6 +349,21 @@ export class ProofFrontViewport {
         r: region.radius,
       })),
       motion: this.motion.debugState(performance.now()),
+      fissionTargets: [...this.#engine.bodies.values()].flatMap((body) =>
+        body.node?.kind === 'term'
+          ? body.geometry!.occurrences.flatMap((occurrence) => {
+              const point = fissionTargetPoint(this.#engine, body.id, occurrence.path)
+              const drop = fissionDropPoint(this.#engine, this.#model.diagram(), body.id)
+              return point === null || drop === null ? [] : [{
+                node: body.id,
+                path: occurrence.path,
+                x: point.x,
+                y: point.y,
+                dropX: drop.x,
+                dropY: drop.y,
+              }]
+            })
+          : []),
       interactionOverlays: this.#moves.overlay().map((shape) => shape.kind),
     }
   }

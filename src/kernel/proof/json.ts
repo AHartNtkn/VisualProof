@@ -567,6 +567,40 @@ export function stepToJson(step: ProofStep): unknown {
       }
     case 'lambdaFreeVariableIdentity':
       return { rule: step.rule, action: { ...step.action } }
+    case 'lambdaFission':
+      return { rule: step.rule, node: step.node, path: [...step.path] }
+    case 'lambdaFusion':
+      return { rule: step.rule, wire: step.wire }
+    case 'lambdaCongruenceJoin':
+      return {
+        rule: step.rule,
+        a: step.a,
+        b: step.b,
+        certificate: conversionCertificateToJson(step.certificate),
+        correspondence: slotCorrespondenceToJson(step.correspondence),
+      }
+    case 'lambdaHeadStrip':
+      return {
+        rule: step.rule,
+        a: step.a,
+        b: step.b,
+        correspondence: slotCorrespondenceToJson(step.correspondence),
+      }
+    case 'lambdaAnchoredWireSplit':
+      return {
+        rule: step.rule,
+        wire: step.wire,
+        witness: step.witness,
+        endpoints: step.endpoints.map(endpointToJson),
+        target: step.target,
+      }
+    case 'lambdaAnchoredWireContract':
+      return {
+        rule: step.rule,
+        redundant: step.redundant,
+        survivor: step.survivor,
+        certificate: conversionCertificateToJson(step.certificate),
+      }
     case 'theorem':
       return {
         rule: step.rule,
@@ -759,6 +793,70 @@ export function stepFromJson(value: unknown): ProofStep {
       return {
         rule,
         action: freeVariableIdentityActionFromJson(value.action),
+      }
+    case 'lambdaFission':
+      assertOnlyKeys(value, ['rule', 'node', 'path'], 'lambdaFission step')
+      return {
+        rule,
+        node: str(value.node, 'node'),
+        path: pathFromJson(value.path, 'path'),
+      }
+    case 'lambdaFusion':
+      assertOnlyKeys(value, ['rule', 'wire'], 'lambdaFusion step')
+      return { rule, wire: str(value.wire, 'wire') }
+    case 'lambdaCongruenceJoin':
+      assertOnlyKeys(
+        value,
+        ['rule', 'a', 'b', 'certificate', 'correspondence'],
+        'lambdaCongruenceJoin step',
+      )
+      return {
+        rule,
+        a: str(value.a, 'a'),
+        b: str(value.b, 'b'),
+        certificate: conversionCertificateFromJson(value.certificate, 'certificate'),
+        correspondence: slotCorrespondenceFromJson(value.correspondence, 'correspondence'),
+      }
+    case 'lambdaHeadStrip':
+      assertOnlyKeys(
+        value,
+        ['rule', 'a', 'b', 'correspondence'],
+        'lambdaHeadStrip step',
+      )
+      return {
+        rule,
+        a: str(value.a, 'a'),
+        b: str(value.b, 'b'),
+        correspondence: slotCorrespondenceFromJson(value.correspondence, 'correspondence'),
+      }
+    case 'lambdaAnchoredWireSplit':
+      assertOnlyKeys(
+        value,
+        ['rule', 'wire', 'witness', 'endpoints', 'target'],
+        'lambdaAnchoredWireSplit step',
+      )
+      if (!Array.isArray(value.endpoints)) {
+        fail('lambdaAnchoredWireSplit endpoints must be an array')
+      }
+      return {
+        rule,
+        wire: str(value.wire, 'wire'),
+        witness: str(value.witness, 'witness'),
+        endpoints: value.endpoints.map((endpoint, index) =>
+          endpointFromJson(endpoint, `endpoints[${index}]`)),
+        target: str(value.target, 'target'),
+      }
+    case 'lambdaAnchoredWireContract':
+      assertOnlyKeys(
+        value,
+        ['rule', 'redundant', 'survivor', 'certificate'],
+        'lambdaAnchoredWireContract step',
+      )
+      return {
+        rule,
+        redundant: str(value.redundant, 'redundant'),
+        survivor: str(value.survivor, 'survivor'),
+        certificate: conversionCertificateFromJson(value.certificate, 'certificate'),
       }
     case 'theorem': {
       assertOnlyKeys(

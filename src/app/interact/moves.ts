@@ -3,14 +3,15 @@ import { derivedScope } from '../../kernel/diagram/regions'
 import { IOTA, relSig, type Sig } from '../../kernel/diagram/sig'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../kernel/proof/action'
-import type { ProofStep } from '../../kernel/proof/step'
+import { applyStep, type ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
-import { assertProofContext } from '../../kernel/proof/context'
+import { EMPTY_PROOF_CONTEXT, assertProofContext } from '../../kernel/proof/context'
 import { bareWireDeletionSteps, bareWireInsertSteps } from '../../kernel/proof/bare-wire'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
-import { termNodeAt } from '../../kernel/rules/access'
+import { termNodeAt, wireAt } from '../../kernel/rules/access'
 import { mapTermToCommonCarrier } from '../../kernel/rules/lambda'
 import { convertible } from '../../kernel/term/convert'
+import type { ConversionCertificate } from '../../kernel/term/certificate'
 import { parseTerm } from '../../kernel/term/parse'
 import { pkey, type Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
@@ -29,6 +30,8 @@ import { absorbHits, orphanedWires } from '../edit'
 import { buildSelection, regionAt, wireManipulationHitTest, type Hit } from '../hittest'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
 import { CopyDragController } from './copy'
+import { ConnectionDragController, type ConnectionEnd } from './connection'
+import { FissionDragController, type FissionRequest } from './fission'
 import { IdentityOpsController } from './identity-ops'
 import { SlashController } from './slash'
 import { WireOpsDragController } from './wire-ops'
@@ -36,6 +39,158 @@ import { copyDestinationPreview, copySelectionPreview } from './copy-view'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
 export type ProofOrientation = 'forward' | 'backward'
+
+/** Slot correspondence whose shared columns are already carried by one wire. */
+export function proposeAttachedSlotCorrespondence(
+  diagram: Diagram,
+  a: NodeId,
+  b: NodeId,
+) {
+  const left = termNodeAt(diagram, a)
+  const right = termNodeAt(diagram, b)
+  const leftColumns: number[] = Array.from({ length: left.freeArity })
+  const rightColumns: number[] = Array.from({ length: right.freeArity })
+  const usedRight = new Set<number>()
+  let commonArity = 0
+  for (let leftSlot = 0; leftSlot < left.freeArity; leftSlot++) {
+    const leftWire = wireAt(diagram, a, { kind: 'free', index: leftSlot })
+    const rightSlot = Array.from({ length: right.freeArity }, (_, index) => index)
+      .find((candidate) =>
+        !usedRight.has(candidate)
+        && wireAt(diagram, b, { kind: 'free', index: candidate }) === leftWire)
+    if (rightSlot === undefined) continue
+    leftColumns[leftSlot] = commonArity
+    rightColumns[rightSlot] = commonArity
+    usedRight.add(rightSlot)
+    commonArity++
+  }
+  for (let slot = 0; slot < left.freeArity; slot++) {
+    if (leftColumns[slot] === undefined) leftColumns[slot] = commonArity++
+  }
+  for (let slot = 0; slot < right.freeArity; slot++) {
+    if (rightColumns[slot] === undefined) rightColumns[slot] = commonArity++
+  }
+  return { commonArity, left: leftColumns, right: rightColumns }
+}
+
+function outputNodes(diagram: Diagram, wire: WireId): NodeId[] {
+  return diagram.wires[wire]!.endpoints
+    .filter((endpoint) =>
+      endpoint.port.kind === 'output'
+      && diagram.nodes[endpoint.node]?.kind === 'term')
+    .map((endpoint) => endpoint.node)
+}
+
+/** Resolve a term connection gesture to one dedicated replayable Lambda step. */
+export function proofConnectionStep(
+  diagram: Diagram,
+  source: ConnectionEnd,
+  target: ConnectionEnd,
+  orientation: ProofOrientation,
+  fuel: number,
+): ProofStep {
+  if (source.wire === target.wire) {
+    const a = source.endpoint
+    const b = target.endpoint
+    if (
+      a === null
+      || b === null
+      || a.port.kind !== 'output'
+      || b.port.kind !== 'output'
+      || a.node === b.node
+      || diagram.nodes[a.node]?.kind !== 'term'
+      || diagram.nodes[b.node]?.kind !== 'term'
+    ) {
+      throw new Error("release on another term's output strand to compare arguments")
+    }
+    const step: ProofStep = {
+      rule: 'lambdaHeadStrip',
+      a: a.node,
+      b: b.node,
+      correspondence: proposeAttachedSlotCorrespondence(diagram, a.node, b.node),
+    }
+    applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
+    return step
+  }
+
+  const candidates: ProofStep[] = [{
+    rule: 'wireJoin',
+    input: { a: source.wire, b: target.wire },
+  }]
+  const concreteOutput = (end: ConnectionEnd): NodeId | null =>
+    end.endpoint?.port.kind === 'output'
+    && diagram.nodes[end.endpoint.node]?.kind === 'term'
+      ? end.endpoint.node
+      : null
+  const sourceNode = concreteOutput(source)
+  const targetNode = concreteOutput(target)
+  const leftCandidates = sourceNode === null
+    ? outputNodes(diagram, source.wire)
+    : [sourceNode]
+  const rightCandidates = targetNode === null
+    ? outputNodes(diagram, target.wire)
+    : [targetNode]
+  const unambiguous = leftCandidates.length === 1 && rightCandidates.length === 1
+  const convertiblePairs: Array<{
+    readonly a: NodeId
+    readonly b: NodeId
+    readonly certificate: ConversionCertificate
+  }> = []
+  if (unambiguous) {
+    for (const a of leftCandidates) for (const b of rightCandidates) {
+      const left = termNodeAt(diagram, a)
+      const right = termNodeAt(diagram, b)
+      const correspondence = proposeAttachedSlotCorrespondence(diagram, a, b)
+      const result = convertible(
+        mapTermToCommonCarrier(left.term, correspondence.left),
+        mapTermToCommonCarrier(right.term, correspondence.right),
+        fuel,
+      )
+      if (result.status !== 'convertible') continue
+      convertiblePairs.push({ a, b, certificate: result.certificate })
+      candidates.push({
+        rule: 'lambdaCongruenceJoin',
+        a,
+        b,
+        certificate: result.certificate,
+        correspondence,
+      })
+    }
+  }
+  for (const pair of convertiblePairs) {
+    candidates.push({
+      rule: 'lambdaAnchoredWireContract',
+      redundant: pair.a,
+      survivor: pair.b,
+      certificate: pair.certificate,
+    })
+    candidates.push({
+      rule: 'lambdaAnchoredWireContract',
+      redundant: pair.b,
+      survivor: pair.a,
+      certificate: {
+        leftSteps: pair.certificate.rightSteps,
+        rightSteps: pair.certificate.leftSteps,
+      },
+    })
+  }
+  for (const candidate of candidates) {
+    try {
+      applyStep(diagram, candidate, EMPTY_PROOF_CONTEXT, orientation)
+      return candidate
+    } catch {
+      // Several proof justifications can yield the same visible merge.
+    }
+  }
+  if (!unambiguous && (leftCandidates.length > 1 || rightCandidates.length > 1)) {
+    throw new Error(
+      'proof connection is ambiguous; drag from one producer output strand to the other',
+    )
+  }
+  throw new Error(
+    `no valid proof connection joins lines '${source.wire}' and '${target.wire}'`,
+  )
+}
 
 export type ProofDiscovery = {
   readonly sel: SubgraphSelection
@@ -113,6 +268,7 @@ export type ProofMoveControllerOptions = {
   readonly context: () => ProofContext
   readonly orientation: () => ProofOrientation
   readonly apply: (action: ProofAction) => void
+  readonly commitFission: (request: FissionRequest) => void
   readonly refuse: (text: string, pointer: Vec2) => void
   readonly theme: () => Theme
   readonly fuel: () => number
@@ -129,6 +285,8 @@ export class ProofMoveController {
   readonly #options: ProofMoveControllerOptions
   readonly #document: Document
   readonly #identity: IdentityOpsController
+  readonly #connection: ConnectionDragController
+  readonly #fission: FissionDragController
   readonly #wireOps: WireOpsDragController
   readonly #copy: CopyDragController
   readonly #slash: SlashController
@@ -142,6 +300,46 @@ export class ProofMoveController {
     assertProofContext(options.context())
     this.#options = options
     this.#document = options.host.ownerDocument
+    this.#connection = new ConnectionDragController({
+      active: options.active,
+      engine: options.engine,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      acceptSource: (source) => source.endpoint !== null
+        && options.diagram().nodes[source.endpoint.node]?.kind === 'term'
+        && (source.endpoint.port.kind === 'output' || source.endpoint.port.kind === 'free'),
+      commit: (gesture, pointer) => {
+        this.#lastPointer = pointer
+        try {
+          if ('identity' in gesture.target) {
+            throw new Error('term connections land on a line, not an identity dot')
+          }
+          return this.#commit(proofConnectionStep(
+            options.diagram(),
+            gesture.source,
+            gesture.target,
+            options.orientation(),
+            options.fuel(),
+          ))
+        } catch (error) {
+          options.refuse(
+            error instanceof Error ? error.message : String(error),
+            pointer,
+          )
+          return false
+        }
+      },
+      refuse: options.refuse,
+    })
+    this.#fission = new FissionDragController({
+      active: options.active,
+      diagram: options.diagram,
+      engine: options.engine,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      commit: options.commitFission,
+      refuse: options.refuse,
+    })
     this.#identity = new IdentityOpsController({
       active: options.active,
       engine: options.engine,
@@ -226,10 +424,12 @@ export class ProofMoveController {
   passiveSample(sample: PointerSample | null): void {
     if (sample === null) {
       this.#lastWorld = null
+      this.#fission.hover(null)
       return
     }
     this.#lastPointer = sample.client
     this.#lastWorld = sample.world
+    this.#fission.hover(this.#copy.dragging ? null : sample)
   }
 
   claim(sample: PointerSample): PointerClaim | null {
@@ -242,7 +442,13 @@ export class ProofMoveController {
     if (this.#menu !== null) this.#closeMenu()
     if (sample.shiftKey || sample.ctrlKey) return null
     if (sample.button === 2) return this.#slash.claim(sample)
-    return this.#identity.claim(sample) ?? this.#wireOps.claim(sample) ?? this.#copy.claim(sample)
+    const claim = this.#identity.claim(sample)
+      ?? this.#connection.claim(sample)
+      ?? this.#fission.claim(sample)
+      ?? this.#wireOps.claim(sample)
+      ?? this.#copy.claim(sample)
+    if (claim !== null && this.#copy.dragging) this.#fission.hover(null)
+    return claim
   }
 
   contextMenu(sample: PointerSample): boolean {
@@ -285,7 +491,12 @@ export class ProofMoveController {
   doubleClick(sample: PointerSample): boolean {
     this.#context()
     this.#lastPointer = sample.client
-    if (!this.#options.active() || sample.hit?.kind !== 'node') return false
+    if (!this.#options.active()) return false
+    if (sample.hit?.kind === 'wire') {
+      this.#commit({ rule: 'lambdaFusion', wire: sample.hit.id })
+      return true
+    }
+    if (sample.hit?.kind !== 'node') return false
     const node = this.#options.diagram().nodes[sample.hit.id]
     if (node?.kind === 'ref') {
       this.#commit({ rule: 'unfold', nodeId: sample.hit.id })
@@ -375,6 +586,17 @@ export class ProofMoveController {
         'w',
         ['pin0', 'pin1'],
       ).steps)
+      return true
+    }
+    if (
+      (sample.key === 'f' || sample.key === 'F')
+      && !sample.ctrlKey
+      && !sample.altKey
+      && !sample.metaKey
+    ) {
+      const selection = this.#options.selection()
+      if (selection.length !== 1 || selection[0]?.kind !== 'wire') return false
+      this.#commit({ rule: 'lambdaFusion', wire: selection[0].id })
       return true
     }
     if (
@@ -507,6 +729,8 @@ export class ProofMoveController {
     this.#context()
     const result: Shape[] = [
       ...this.#identity.overlay(),
+      ...this.#connection.overlay(),
+      ...this.#fission.overlay(),
       ...this.#wireOps.overlay(),
       ...this.#copy.overlay(),
       ...this.#slash.overlay(),
@@ -539,6 +763,8 @@ export class ProofMoveController {
     this.#cycle = null
     this.#closePrompt()
     this.#identity.cancel()
+    this.#connection.cancel()
+    this.#fission.cancel()
     this.#wireOps.cancel()
     this.#copy.cancel()
     this.#slash.cancel()
@@ -546,11 +772,13 @@ export class ProofMoveController {
 
   dispose(): void {
     this.cancel()
+    this.#fission.dispose()
     this.#copy.dispose()
   }
 
   modifiersChanged(ctrlHeld: boolean): void {
     this.#context()
+    this.#fission.modifiersChanged(ctrlHeld)
     this.#copy.modifiersChanged(ctrlHeld)
   }
 

@@ -182,6 +182,27 @@ describe('primitive replay', () => {
     })
   })
 
+  it('replays dedicated Lambda fission and fusion steps', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.term(
+      builder.root,
+      application(free(0), application(lambda(bound(0)), free(1))),
+    )
+    const diagram = builder.build()
+    const split = applyStep(diagram, {
+      rule: 'lambdaFission',
+      node,
+      path: ['argument'],
+    }, EMPTY_PROOF_CONTEXT)
+    const bridge = Object.keys(split.wires)
+      .find((wire) => diagram.wires[wire] === undefined)!
+
+    expect(applyStep(split, {
+      rule: 'lambdaFusion',
+      wire: bridge,
+    }, EMPTY_PROOF_CONTEXT)).toEqual(diagram)
+  })
+
 })
 
 describe('normalized step receipts', () => {
