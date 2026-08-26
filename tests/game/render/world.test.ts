@@ -138,6 +138,8 @@ import type { GameTree } from '../../../src/game/model'
 import { mountGameWorld } from '../../../src/game/render/world'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { diagramToJson } from '../../../src/kernel/diagram/json'
+import { applyDoubleCutIntro } from '../../../src/kernel/rules/doublecut'
+import { scene3 } from '../../../src/view3d/scene'
 
 beforeEach(() => {
   host.attached = false
@@ -219,5 +221,38 @@ describe('production game world', () => {
     expect(host.smaaDisposals).toBe(1)
     expect(host.outputDisposals).toBe(1)
     expect(host.glowDisposals).toBe(1)
+  })
+
+  it('picks ordinary visible geometry and completes a real 350 ms tree tween', () => {
+    const diagram = new DiagramBuilder().build()
+    const diagramJson = JSON.stringify(diagramToJson(diagram))
+    const tree: GameTree = {
+      id: 'tree-a', diagram, diagramJson,
+      placement: { x: 0, z: -20, yaw: 0 },
+    }
+    const container = {
+      appendChild() { host.attached = true },
+    } as unknown as HTMLElement
+    const world = mountGameWorld(container, [tree])
+    const rendered = scene3(diagram)
+    const branch = rendered.entities[0]!
+    if (!('pts' in branch)) throw new Error('expected branch fixture')
+    const point = branch.pts[0]!
+    const eye = { x: point.x, y: point.y, z: point.z + 20 }
+    world.setCamera({ eye, forward: { x: 0, y: 0, z: -1 } })
+    world.setRenderMode('raw')
+    world.render(0)
+
+    expect(world.pointAt(0, 0, 100, null)).toMatchObject({
+      treeId: 'tree-a', entityKey: 'b:r0',
+    })
+
+    const after = applyDoubleCutIntro(diagram, {
+      region: diagram.root, regions: [], nodes: [], wires: [],
+    })
+    world.beginTreeTween('tree-a', diagram, after, 0)
+    expect(world.render(349).resident).toBe(0)
+    expect(world.render(350).resident).toBe(1)
+    world.dispose()
   })
 })

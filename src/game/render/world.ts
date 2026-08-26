@@ -5,7 +5,11 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import type { Diagram } from '../../kernel/diagram'
+import { diagramToJson } from '../../kernel/diagram'
 import type { GameTree } from '../model'
+import { INTERACTION_REACH } from '../camera'
+import type { PointedTreePart } from '../session'
 import { DARK } from '../../view/paint'
 import { TreeRenderAssetCache } from './assets'
 import { mountGlowRenderer } from './glow-render'
@@ -18,9 +22,14 @@ import {
   type RenderTree,
 } from './runtime'
 import {
+  DynamicTreeObjects,
+} from './dynamic-tree'
+import {
   makeBatchedTreeObject,
+  makeDynamicTreeObject,
   makeMarkerObject,
   makeRawTreeObject,
+  pointAtVisibleParts,
   type TreeMaterialSource,
 } from './tree-objects'
 import type { DisplayCameraPose, TreeRenderAsset } from './types'
@@ -37,6 +46,8 @@ export type GameWorldRenderer = {
   setTrees(trees: readonly GameTree[]): void
   setCamera(pose: DisplayCameraPose): void
   setRenderMode(mode: RenderMode): void
+  pointAt(ndcX: number, ndcY: number, reach: number, orbitTarget: string | null): PointedTreePart | null
+  beginTreeTween(treeId: string, before: Diagram, after: Diagram, now: number): void
   resize(width: number, height: number): void
   render(now: number): GameFrameStats
   dispose(): void
@@ -118,6 +129,7 @@ export function mountGameWorld(
       return makeBatchedTreeObject(asset, lod, tree.placement, materials)
     },
   )
+  const renderTreesById = new Map<string, RenderTree>()
 
   const renderTrees = (trees: readonly GameTree[]): RenderTree[] => trees.map((tree, index) => {
     assetsByJson.set(tree.diagramJson, assetCache.get(tree.diagramJson, tree.diagram))
@@ -129,8 +141,22 @@ export function mountGameWorld(
   })
 
   const setTrees = (trees: readonly GameTree[]): void => {
-    runtime.setTrees(renderTrees(trees))
+    const rendered = renderTrees(trees)
+    renderTreesById.clear()
+    for (const tree of rendered) renderTreesById.set(tree.id, tree)
+    runtime.setTrees(rendered)
   }
+
+  const dynamicTrees = new DynamicTreeObjects(
+    treeObjects,
+    runtime,
+    (snapshot, tree) => {
+      const asset = assetsByJson.get(tree.diagramJson)
+      if (asset === undefined) throw new Error('dynamic tree render asset was not registered')
+      return makeDynamicTreeObject(snapshot, tree.placement, materialsFor(asset))
+    },
+  )
+  const raycaster = new THREE.Raycaster()
 
   const syncGlow = (): void => {
     const dirty = runtime.flushGlow()
@@ -155,6 +181,7 @@ export function mountGameWorld(
   }
 
   const lifecycle = new GameWorldLifecycle([
+    () => dynamicTrees.dispose(),
     () => runtime.dispose(),
     () => { for (const material of lineMaterials) material.dispose() },
     () => { for (const material of spriteMaterials) material.dispose() },
@@ -187,9 +214,33 @@ export function mountGameWorld(
     setRenderMode(mode) {
       runtime.setMode(mode)
     },
+    pointAt(ndcX, ndcY, reach, orbitTarget) {
+      camera.updateMatrixWorld()
+      treeObjects.updateMatrixWorld(true)
+      raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
+      return pointAtVisibleParts(
+        raycaster,
+        [...runtime.residentObjects(), ...dynamicTrees.objects()],
+        Math.min(reach, INTERACTION_REACH),
+        orbitTarget,
+      )
+    },
+    beginTreeTween(treeId, before, after, now) {
+      const current = renderTreesById.get(treeId)
+      if (current === undefined) throw new Error(`unknown rendered tree '${treeId}'`)
+      const beforeJson = JSON.stringify(diagramToJson(before))
+      const afterJson = JSON.stringify(diagramToJson(after))
+      const beforeAsset = assetCache.get(beforeJson, before)
+      const afterAsset = assetCache.get(afterJson, after)
+      assetsByJson.set(beforeJson, beforeAsset)
+      assetsByJson.set(afterJson, afterAsset)
+      const target = { ...current, diagramJson: afterJson }
+      renderTreesById.set(treeId, target)
+      dynamicTrees.begin(target, beforeAsset.lods.full, afterAsset.lods.full, now)
+    },
     resize,
     render(now) {
-      void now
+      dynamicTrees.update(now)
       const lod = runtime.updateGame(camera, FOG_FAR, size.height)
       const representationWork = runtime.processOperations()
       syncGlow()

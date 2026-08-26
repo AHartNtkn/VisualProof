@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   disposeTreeObject,
   makeBatchedTreeObject,
+  makeDynamicTreeObject,
   makeMarkerObject,
   makeRawTreeObject,
   type TreeMaterialSource,
@@ -144,7 +145,36 @@ function segmentsOf(line: LineSegments2): number[][] {
   ])
 }
 
+function materialOf(object: THREE.Object3D): THREE.Material {
+  const material = (object as THREE.Mesh | THREE.Sprite).material
+  if (Array.isArray(material)) throw new Error('expected one material')
+  return material
+}
+
 describe('game tree representations', () => {
+  it('builds temporary per-entity tween geometry with independent fade materials', () => {
+    const resources = fixtureMaterials()
+    const group = makeDynamicTreeObject({
+      ...asset.lods.full,
+      entities: [
+        { ...asset.lods.full.entities[0]!, alpha: 0.25 },
+        { ...asset.lods.full.entities[7]!, alpha: 0.5 },
+      ],
+    }, placement, resources.source)
+
+    expect(group.children.map((child) => child.userData['entityKey']))
+      .toEqual(['b:root', 'l:n'])
+    expect(group.children.map((child) => materialOf(child).opacity))
+      .toEqual([0.25, 0.5])
+    expect(group.children.every((child) => materialOf(child).transparent)).toBe(true)
+
+    const dynamicMaterials = group.children.map(materialOf)
+    expect(dynamicMaterials.every((material) => !resources.materials.has(material))).toBe(true)
+    const dispose = dynamicMaterials.map((material) => vi.spyOn(material, 'dispose'))
+    disposeTreeObject(group)
+    for (const release of dispose) expect(release).toHaveBeenCalledTimes(1)
+  })
+
   it('uses exact derived world-unit widths for raw full-detail entities', () => {
     const group = makeRawTreeObject(asset, placement, fixtureMaterials().source)
     const lines = group.children.filter((child): child is Line2 => child instanceof Line2)
