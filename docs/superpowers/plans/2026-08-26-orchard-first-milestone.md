@@ -462,6 +462,7 @@ git commit -m "feat: load and generate Orchard saves"
 - Create: `tests/game/render/assets.test.ts`
 - Move and adapt: `orchard/render.ts` → `src/game/render/runtime.ts`
 - Move and adapt: `tests/orchard/render-runtime.test.ts` → `tests/game/render/runtime.test.ts`
+- Modify: `scripts/emit-game-saves.ts`
 - Modify: remaining migrated tests and imports
 
 **Interfaces:**
@@ -514,6 +515,8 @@ export type TreeRenderAsset = {
 ```
 
 `TreeRenderAssetCache.get` calls the existing `scene3(diagram)` derived-tree renderer, `deriveTreeLods(full)`, and `relationWireHues` once per exact `diagramJson` key. Its output is referred to below as a tree render snapshot. No runtime module imports theorem construction, replay, fixture emission, or SQLite.
+
+Update `scripts/emit-game-saves.ts` to import `orchardPlacements` from its production path after the move. Regenerate the databases and require byte-identical output so the move cannot strand fixture generation on the retired frontend path.
 
 - [ ] **Step 4: Generalize the LOD runtime around generic tree records**
 
@@ -688,6 +691,7 @@ it('spawns a real empty double cut on the pointed branch of any generic tree', (
 it('rejects non-branches, unknown trees, and pointed parts beyond 100 without mutation', () => {
   const session = gameSession(worldWithTree('tree-a', blankDiagram))
   expect(() => session.applyDoubleCut({ treeId: 'tree-a', entityKey: 'r:n0', distance: 5 })).toThrow(/branch/)
+  expect(() => session.applyDoubleCut({ treeId: 'missing', entityKey: 'b:r0', distance: 5 })).toThrow(/unknown tree/)
   expect(() => session.applyDoubleCut({ treeId: 'tree-a', entityKey: 'b:r0', distance: 100.001 })).toThrow(/reach/)
   expect(session.world.trees.get('tree-a')!.diagram).toBe(blankDiagram)
 })
@@ -907,9 +911,11 @@ git commit -m "feat: integrate Orchard desktop game loop"
 - Create: `src-tauri/capabilities/wdio.json`
 - Modify: `src-tauri/Cargo.toml`
 - Modify: `src-tauri/src/lib.rs`
+- Modify: `game/main.ts`
 - Modify: `package.json`
 - Modify: `package-lock.json`
-- Move/adapt remaining `tests/orchard/*.test.ts` → `tests/game/render/*.test.ts`
+- Delete: `tests/orchard/walk.test.ts`
+- Delete: `tests/orchard/world.test.ts`
 - Delete: tracked `orchard/` frontend, save, config, and E2E files after their production/test responsibilities have moved
 - Delete: `scripts/emit-orchard-world.ts`
 - Delete: obsolete orchard package scripts
@@ -969,9 +975,11 @@ For each of `10, 50, 100, 250, 500, 1000, 2000`:
 
 Do not alter tree count after load and do not inject a constructed world.
 
+In E2E Vite mode only, `game/main.ts` exposes a narrow `setRenderMode('game' | 'raw')` bridge that delegates to the already-mounted production renderer. The native stress test calls that bridge through `browser.tauri.execute()`; it cannot provide trees, geometry, diagrams, or another world authority.
+
 - [ ] **Step 4: Establish `game/` as the sole frontend**
 
-Move every still-relevant pure test and assertion to `tests/game/render`. Use `git rm` for the tracked orchard frontend, render-world JSON, browser configuration, and generator only after the corresponding game-native tests pass. Update scripts to:
+Keep every still-relevant renderer assertion under `tests/game/render`. The flat-walking and serialized-render-world tests have direct replacement coverage in the camera, save-decoder, Rust persistence, and native load suites; they do not move forward as parallel authorities. Use `git rm` for the tracked orchard frontend, render-world JSON, browser configuration, generator, and those two superseded tests only after their replacement suites pass. Update scripts to:
 
 ```json
 {
@@ -983,7 +991,7 @@ Move every still-relevant pure test and assertion to `tests/game/render`. Use `g
 }
 ```
 
-Run `rg` to prove no production or test import refers to `orchard/`, `world.json`, `parseWorldSave`, or the old tree-count runtime.
+Run `rg` to prove no production or test import refers to `orchard/`, `world.json`, `parseWorldSave`, or the old tree-count runtime. Also require camera-focus naming under `game/`, `src/game/`, and `tests/game/` to use `orbitTarget` exclusively.
 
 - [ ] **Step 5: Run full verification**
 
