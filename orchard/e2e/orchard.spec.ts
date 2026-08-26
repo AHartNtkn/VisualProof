@@ -186,7 +186,7 @@ test('shows tiled ground illumination around a nearby irregular placement', asyn
   }, screenshot.toString('base64'))
   const luminance = (rgb: readonly number[]) => rgb.reduce((sum, channel) => sum + channel, 0)
 
-  expect(Math.max(...samples.unlitGround)).toBeLessThan(16)
+  expect(Math.max(...samples.unlitGround)).toBeLessThanOrEqual(2)
   expect(luminance(samples.glow)).toBeGreaterThan(luminance(samples.unlitGround) + 45)
   expect(luminance(samples.glow)).toBeGreaterThan(luminance(samples.unlitGround) * 2.5)
 })

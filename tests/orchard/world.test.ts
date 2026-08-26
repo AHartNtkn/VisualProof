@@ -10,7 +10,7 @@ describe('orchard world save', () => {
     expect(world.version).toBe(2)
     expect(world.terrain).toEqual({
       size: 4000,
-      ground: '#080a0c',
+      ground: '#010101',
       sky: '#000000',
       fogNear: 170,
       fogFar: 780,
