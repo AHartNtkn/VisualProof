@@ -1,0 +1,39 @@
+:root {
+  color: #f7f1df;
+  background: #17251b;
+  font-family: system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+[data-game] {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+}
+
+.start {
+  text-align: center;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2.5rem, 10vw, 6rem);
+}
+
+p {
+  margin-top: 0.75rem;
+  color: #bfd3a6;
+}

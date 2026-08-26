@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Orchard</title>
+  <rect width="512" height="512" rx="96" fill="#17251b"/>
+  <path d="M256 416c-16 0-28-12-28-28V230c0-16 12-28 28-28s28 12 28 28v158c0 16-12 28-28 28Z" fill="#b77b49"/>
+  <path d="M256 262c-94 0-154-67-154-150 94 0 154 67 154 150Zm0 0c94 0 154-67 154-150-94 0-154 67-154 150Z" fill="#91b866"/>
+</svg>

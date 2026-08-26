@@ -16,5 +16,5 @@
     "noImplicitReturns": true,
     "types": ["node"]
   },
-  "include": ["src", "tests", "scripts", "orchard"]
+  "include": ["src", "tests", "scripts", "orchard", "game"]
 }
