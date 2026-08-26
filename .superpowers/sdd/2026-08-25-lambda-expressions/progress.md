@@ -104,3 +104,5 @@ Task 13: fix round 1/5 (2 open — Fusion omits descendant-region consumers; Anc
 Task 13: fix round 1/5 (2 addressed, 0 open — Fusion supports ancestor bridge scope with same-region or descendant consumers; nested descendant-root addresses include both local prefixes while true cut locals remain unshifted; commits c52b7208..03a20e37)
 Task 13: complete (commits f36bce00..03a20e37, review clean)
 Task 14: fix round 1/5 (3 open — browser coverage must assert canonical nameless term payloads after entry/persistence/replay; undo/redo must assert diagram state and cap incidences; 3D must prove Lambda-specific visible pixels in addition to GPU picking; review commit 658aa62a)
+Task 14: fix round 1/5 (3 addressed, 0 open — canonical nameless payloads, structural undo/redo state, and visible Lambda-specific 3D pixels are directly asserted; commits c3293bb0..bdc0a9dc)
+Task 14: complete (commits cf1be213..bdc0a9dc, review clean)
