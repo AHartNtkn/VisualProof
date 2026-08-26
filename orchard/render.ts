@@ -4,8 +4,8 @@ import type { WireId } from '../src/kernel/diagram/diagram'
 import type { Entity } from '../src/view3d/scene'
 import { mountGlowRenderer } from './glow-render'
 import { GlowTilePlan } from './glow-tiles'
-import { makeTreeObject, type OrchardMaterialSource } from './tree-objects'
-import type { OrchardWorldSave } from './world'
+import { disposeTreeObject, makeRawTreeObject, type OrchardMaterialSource } from './tree-objects'
+import type { OrchardWorldSave, SavedTreeLayout } from './world'
 
 const MAX_PIXEL_RATIO = 1.5
 
@@ -30,13 +30,6 @@ export type OrchardWorld = {
   resize(width: number, height: number): void
   render(): OrchardFrameStats
   dispose(): void
-}
-
-type Palette = {
-  readonly branch: string
-  readonly cutBranch: string
-  readonly baseWire: string
-  readonly hues: ReadonlyMap<WireId, string>
 }
 
 function discTexture(color: string): THREE.CanvasTexture {
@@ -69,7 +62,7 @@ function textTexture(text: string, color: string): { texture: THREE.CanvasTextur
 }
 
 function materialsFor(
-  palette: Palette,
+  layout: SavedTreeLayout,
   lineMaterials: Set<LineMaterial>,
   textures: Set<THREE.Texture>,
   spriteMaterials: Set<THREE.SpriteMaterial>,
@@ -77,24 +70,45 @@ function materialsFor(
 ): OrchardMaterialSource {
   const lines = new Map<string, LineMaterial>()
   const sprites = new Map<string, THREE.SpriteMaterial>()
+  const hues = new Map<WireId, string>(layout.hues)
   const colorFor = (entity: Entity): string => {
-    if (entity.kind === 'branch') return entity.polarity === 0 ? palette.branch : palette.cutBranch
-    if (entity.kind === 'strand') return palette.hues.get(entity.wire) ?? palette.baseWire
-    if (entity.kind === 'ring' && entity.headWire !== null) return palette.hues.get(entity.headWire) ?? palette.baseWire
-    if (entity.kind === 'pip' && entity.ownerWire !== null) return palette.hues.get(entity.ownerWire) ?? palette.baseWire
-    return palette.branch
+    if (entity.kind === 'branch') return entity.polarity === 0 ? layout.palette.branch : layout.palette.cutBranch
+    if (entity.kind === 'strand') return hues.get(entity.wire) ?? layout.palette.baseWire
+    if (entity.kind === 'ring' && entity.headWire !== null) return hues.get(entity.headWire) ?? layout.palette.baseWire
+    if (entity.kind === 'pip' && entity.ownerWire !== null) return hues.get(entity.ownerWire) ?? layout.palette.baseWire
+    return layout.palette.branch
   }
-  const line = (entity: Extract<Entity, { kind: 'branch' | 'ring' | 'strand' }>): LineMaterial => {
+  const line = (
+    entity: Extract<Entity, { kind: 'branch' | 'ring' | 'strand' }>,
+    width: number,
+  ): LineMaterial => {
     const color = colorFor(entity)
-    const width = entity.kind === 'branch' ? 3.2 : 2
     const key = `${entity.kind}:${color}:${width}`
     let material = lines.get(key)
     if (material === undefined) {
-      material = new LineMaterial({ color, linewidth: width })
+      material = new LineMaterial({ color, linewidth: width, worldUnits: true })
       const size = resolution()
       material.resolution.set(size.width, size.height)
       lines.set(key, material)
       lineMaterials.add(material)
+    }
+    return material
+  }
+  const marker = (saved: SavedTreeLayout['lods']['marker']): THREE.SpriteMaterial => {
+    const key = `marker:${saved.color}`
+    let material = sprites.get(key)
+    if (material === undefined) {
+      const texture = discTexture('#ffffff')
+      textures.add(texture)
+      material = new THREE.SpriteMaterial({
+        map: texture,
+        color: saved.color,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+      sprites.set(key, material)
+      spriteMaterials.add(material)
     }
     return material
   }
@@ -113,16 +127,7 @@ function materialsFor(
     }
     return material
   }
-  return { line, sprite }
-}
-
-function disposeTree(group: THREE.Group): void {
-  group.traverse((object) => {
-    if ('geometry' in object) {
-      const geometry = (object as THREE.Mesh).geometry
-      if (geometry instanceof THREE.BufferGeometry) geometry.dispose()
-    }
-  })
+  return { line, sprite, marker }
 }
 
 export function mountOrchardWorld(
@@ -161,12 +166,13 @@ export function mountOrchardWorld(
   let size = { width: 1, height: 1 }
   const materialsByLayout = new Map<string, OrchardMaterialSource>()
   for (const [layoutId, layout] of Object.entries(world.layouts)) {
-    materialsByLayout.set(layoutId, materialsFor({
-      branch: layout.palette.branch,
-      cutBranch: layout.palette.cutBranch,
-      baseWire: layout.palette.baseWire,
-      hues: new Map(layout.hues),
-    }, lineMaterials, textures, spriteMaterials, () => size))
+    materialsByLayout.set(layoutId, materialsFor(
+      layout,
+      lineMaterials,
+      textures,
+      spriteMaterials,
+      () => size,
+    ))
   }
   const groups: THREE.Group[] = []
 
@@ -190,7 +196,7 @@ export function mountOrchardWorld(
         const group = groups.pop()!
         glowPlan.remove(group.name)
         trees.remove(group)
-        disposeTree(group)
+        disposeTreeObject(group)
       }
       while (groups.length < count) {
         const end = Math.min(count, groups.length + 12)
@@ -198,7 +204,7 @@ export function mountOrchardWorld(
           const index = groups.length
           const saved = world.trees[index]!
           const layout = world.layouts[saved.layout]!
-          const group = makeTreeObject(layout.lods.full, {
+          const group = makeRawTreeObject(layout, {
             id: saved.id,
             index,
             x: saved.x,
@@ -253,7 +259,7 @@ export function mountOrchardWorld(
       }
     },
     dispose() {
-      for (const group of groups) disposeTree(group)
+      for (const group of groups) disposeTreeObject(group)
       for (const material of lineMaterials) material.dispose()
       for (const material of spriteMaterials) material.dispose()
       for (const texture of textures) texture.dispose()
