@@ -40,3 +40,46 @@
 **Task quality:** Needs fixes
 
 **Reasoning:** The capture mechanism and visible artifacts are credible, and the owning renderer fixes are technically sound, but the machine comparison can still pass the wrong geometry, incomplete 3D structure, and incorrect non-copy color lineage. Those are explicit Task 15 success criteria, so approval is rejected pending the three evidence fixes.
+
+## Re-review — fix round 1/5
+
+### Original-finding verdicts
+
+1. **NOT ADDRESSED.** The fix now retains correspondence-addressable endpoints, junctions, destinations, lineage, and copies, rejects missing semantic groups, constrains persistent endpoint trajectories, and handles the renderer-local free-drop/bind degree-two subdivision explicitly (`tests/visual/lambda-reference.test.ts:338-361`, `tests/visual/lambda-reference.test.ts:450-536`). Those checks are substantive for topology and endpoint motion. They still do not compare the complete rendered stroke geometry. Each observation reduces a rendered curve/polyline to its first and last point (`scripts/capture-lambda-comparison.ts:539-553`), while the “complete copy shape” assertion compares only junction positions relative to the copy root (`tests/visual/lambda-reference.test.ts:539-566`). A zero-length rendered Lambda arc therefore has the same endpoints/topology as the required visible arc and passes.
+
+   The current manifest contains that exact wrong model. For duplication at progress `0.54`, each live-reference `copy:{0,1}:root/argument:lambda` stroke has raster length `58.569319057` and 169/173 matching pixels, while each 2D application stroke has length `0` and only 6/7 pixels at its coincident endpoint; the 3D-light copy-0 stroke also has length `0`, zero matching pixels, and best color distance `97.082439195`. At progress `1`, the reference strokes remain visible at length `41.189699159`, while all application modes report length `0`. The corrected Painter deliberately pads a coincident Lambda line into a visible arc (`/home/ahart/Documents/gameProj/demos/lambda_tromp_reduction_demo_corrected.html:174-185`). Direct inspection of the duplication reference versus 2D/WebGL frames at `06-0.5400.png` and `14-1.0000.png` confirms the missing copy bars. A correct fix must compare full correspondence-addressable curve/polyline geometry, including reference-visible nonzero extent, not only endpoints and graph incidence.
+
+2. **NOT ADDRESSED.** Structural colors are now checked role-by-role and lineage-by-lineage at every required sample (`tests/visual/lambda-reference.test.ts:589-609`), and the per-stroke tubes are Lambda-local. The raster assertion nevertheless aggregates all eligible strokes: one stroke with one matching pixel satisfies the whole frame, and the minimum distance may come from a different stroke (`tests/visual/lambda-reference.test.ts:610-616`). Thus another Lambda stroke, or another lineage, can satisfy an incorrect/invisible redex, argument, copy, or neutralized base stroke.
+
+   This is not hypothetical. The passing current manifest records zero matching pixels for active eligible strokes including one-use 2D-light redex-variable strokes at `0.82` and `0.865`, one-use 3D-dark copy/free-drop at `0.245`, duplication 3D-light copy-0 variable at `0.54`, and capture-avoidance 2D-light redex-variable at `0.82` and `0.865`. Their best distances exceed the applicable 48/72 thresholds. Each eligible semantic stroke (or, if raster overlap makes that impossible, each explicitly justified role/lineage group) must independently prove pixels of its expected color; whole-frame sums and minima cannot establish that.
+
+3. **ADDRESSED.** The capture now passes `presented.entities` directly to WebGL and derives the 3D structural observations from that same object (`scripts/capture-lambda-comparison.ts:525-553`, `scripts/capture-lambda-comparison.ts:629-635`). The observations carry source/destination junctions, source stroke, lineage, copy index, color, and all presented Lambda entities, and throw when provenance is absent. No parallel `sampleBetaMotion` witness remains in the capture. `sceneAt` supplies the sampled structural frame to `lambdaDiagram` at interior and endpoint progress while retaining the endpoint center/normal/scale (`src/view3d/transition.ts:298-316`), and the focused test checks the presented endpoint IDs and provenance one-for-one against the sampled frame (`tests/view3d/lambda.test.ts:201-225`). The endpoint metadata change is runtime-coherent: it changes evidence-bearing stroke decomposition, not canonical endpoint pose or total point count.
+
+### New breakage introduced by this fix
+
+#### Critical (Must Fix)
+
+- None.
+
+#### Important (Should Fix)
+
+1. `scripts/capture-lambda-comparison.ts:838-854` — the new reference-local raster tubes are positioned by a second, hand-coded copy of the corrected demo's `mapGrid`, canvas transform, horizontal/tick padding, and sampling constants. The live authority implements those rules in its `Painter`, including `tickScale` (`/home/ahart/Documents/gameProj/demos/lambda_tromp_reduction_demo_corrected.html:153-157`, `/home/ahart/Documents/gameProj/demos/lambda_tromp_reduction_demo_corrected.html:168-185`); the capture copy already omits `tickScale` from the Lambda padding. Hashing and rerunning the live page does not make this duplicated geometry authoritative, so an authority change can produce live pixels while the evidence tubes remain on the old trajectory. Instrument the live Painter/context or export the exact painted path from the live authority instead of recreating its geometry in the capture.
+
+#### Minor (Nice to Have)
+
+- None.
+
+### Validation and classification
+
+- `npx vitest run tests/visual/lambda-reference.test.ts tests/view3d/lambda.test.ts`: 62/62 passed. The pass alongside the manifest counterexamples demonstrates the two remaining acceptance gaps rather than clearing them.
+- The current manifest names the exact five examples and remains bound to application commit `b7aadf26505ca6f3c69aef1cf0d923487eaa285b`; its live-reference/application source labels and evidence inventory remain intact.
+- The 3D planarity, branch-normal, entity-color, both-theme base-color, and line-only/no-fill checks remain credible. The `48`/`72` color distances are reasonable antialiasing bounds once applied independently to the intended stroke; `strokeOnly` plus the `< 0.3` footprint ratio and direct frames support the no-filled-mesh claim. Neither threshold repairs the aggregate-lineage gap above.
+- The two full-suite failures remain final-integration expectation migrations; this fix does not touch or aggravate their owning files.
+
+### Re-review assessment
+
+**Task quality:** Needs fixes
+
+**Approval:** Rejected.
+
+**Reasoning:** Finding 3 is genuinely resolved and much of finding 1 is materially stronger, but the suite still passes missing visible copy bars and independently mispainted role/lineage strokes. The new reference raster witness also reimplements authority-owned paint geometry. Those are Important correctness failures in Task 15's core visual-comparison evidence.
