@@ -123,10 +123,14 @@ export class DynamicTreeObjects {
     return [...this.groups.values()]
   }
 
-  public dispose(): void {
+  public clear(): void {
     for (const treeId of [...this.groups.keys()]) this.remove(treeId)
     this.targets.clear()
     this.tracks.clear()
+  }
+
+  public dispose(): void {
+    this.clear()
   }
 
   private replace(treeId: string, snapshot: TreeRenderSnapshot, target: RenderTree): void {

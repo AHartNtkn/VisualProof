@@ -232,7 +232,10 @@ export class GameTreeRuntime implements GameTreeRuntimeApi {
     for (const { tree, asset } of incoming.values()) {
       const current = this.states.get(tree.id)
       if (current === undefined) this.insertState(tree, asset)
-      else this.updateState(current, tree, asset)
+      else {
+        this.updateState(current, tree, asset)
+        this.activateState(current)
+      }
     }
     this.recomputeMaxRadius()
 
@@ -283,8 +286,12 @@ export class GameTreeRuntime implements GameTreeRuntimeApi {
       return
     }
     this.updateState(state, tree, asset)
-    state.suspended = false
+    this.activateState(state)
     this.recomputeMaxRadius()
+  }
+
+  private activateState(state: TreeRenderState): void {
+    state.suspended = false
     if (state.object !== null
       && !state.needsReplacement
       && state.resident === state.desired

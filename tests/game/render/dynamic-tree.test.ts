@@ -157,4 +157,30 @@ describe('per-tree dynamic tween tracks', () => {
     expect(runtime.resume.mock.calls).toEqual([[treeA], [treeB]])
     expect(dynamic.objects()).toEqual([])
   })
+
+  it('cancels and disposes every active dynamic role without resuming stale targets', () => {
+    const parent = new THREE.Group()
+    const runtime = { suspend: vi.fn(), resume: vi.fn() }
+    const released: THREE.Group[] = []
+    const dynamic = new DynamicTreeObjects(
+      parent,
+      runtime,
+      (_snapshot, tree) => {
+        const group = new THREE.Group()
+        group.name = tree.id
+        return group
+      },
+      (group) => { released.push(group) },
+    )
+    dynamic.begin(renderTree('a', 'after-a'), branchScene('b:a', 0), branchScene('b:a', 10), 0)
+    dynamic.begin(renderTree('b', 'after-b'), branchScene('b:b', 20), branchScene('b:b', 30), 100)
+
+    dynamic.clear()
+    dynamic.update(TREE_TWEEN_MS + 100)
+
+    expect(released.map(({ name }) => name)).toEqual(['a', 'b'])
+    expect(parent.children).toEqual([])
+    expect(dynamic.objects()).toEqual([])
+    expect(runtime.resume).not.toHaveBeenCalled()
+  })
 })

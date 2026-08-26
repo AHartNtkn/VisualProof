@@ -141,6 +141,7 @@ export function mountGameWorld(
   })
 
   const setTrees = (trees: readonly GameTree[]): void => {
+    dynamicTrees.clear()
     const rendered = renderTrees(trees)
     renderTreesById.clear()
     for (const tree of rendered) renderTreesById.set(tree.id, tree)
@@ -215,13 +216,16 @@ export function mountGameWorld(
       runtime.setMode(mode)
     },
     pointAt(ndcX, ndcY, reach, orbitTarget) {
+      if (!Number.isFinite(reach) || reach !== INTERACTION_REACH) {
+        throw new Error(`interaction reach must be exactly ${INTERACTION_REACH}`)
+      }
       camera.updateMatrixWorld()
       treeObjects.updateMatrixWorld(true)
       raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
       return pointAtVisibleParts(
         raycaster,
         [...runtime.residentObjects(), ...dynamicTrees.objects()],
-        Math.min(reach, INTERACTION_REACH),
+        INTERACTION_REACH,
         orbitTarget,
       )
     },

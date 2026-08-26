@@ -135,6 +135,7 @@ vi.mock('../../../src/game/render/glow-render', () => ({
 }))
 
 import type { GameTree } from '../../../src/game/model'
+import { INTERACTION_REACH } from '../../../src/game/camera'
 import { mountGameWorld } from '../../../src/game/render/world'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { diagramToJson } from '../../../src/kernel/diagram/json'
@@ -253,6 +254,90 @@ describe('production game world', () => {
     world.beginTreeTween('tree-a', diagram, after, 0)
     expect(world.render(349).resident).toBe(0)
     expect(world.render(350).resident).toBe(1)
+    world.dispose()
+  })
+
+  it('rejects caller attempts to lower or bypass the fixed production interaction reach', () => {
+    const diagram = new DiagramBuilder().build()
+    const tree: GameTree = {
+      id: 'tree-a',
+      diagram,
+      diagramJson: JSON.stringify(diagramToJson(diagram)),
+      placement: { x: 0, z: -20, yaw: 0 },
+    }
+    const container = { appendChild() {} } as unknown as HTMLElement
+    const world = mountGameWorld(container, [tree])
+
+    expect(() => world.pointAt(0, 0, INTERACTION_REACH / 2, null))
+      .toThrow('interaction reach must be exactly 100')
+    expect(() => world.pointAt(0, 0, Number.NaN, null))
+      .toThrow('interaction reach must be exactly 100')
+    world.dispose()
+  })
+
+  it('keeps tree removal authoritative when setTrees replaces an active tween', () => {
+    const diagram = new DiagramBuilder().build()
+    const tree: GameTree = {
+      id: 'tree-a',
+      diagram,
+      diagramJson: JSON.stringify(diagramToJson(diagram)),
+      placement: { x: 0, z: -20, yaw: 0 },
+    }
+    const container = { appendChild() {} } as unknown as HTMLElement
+    const world = mountGameWorld(container, [tree])
+    const after = applyDoubleCutIntro(diagram, {
+      region: diagram.root, regions: [], nodes: [], wires: [],
+    })
+    world.setRenderMode('raw')
+    world.render(0)
+    world.beginTreeTween(tree.id, diagram, after, 0)
+
+    world.setTrees([])
+
+    expect(world.render(350)).toMatchObject({ logical: 0, resident: 0, representedEntities: 0 })
+    world.dispose()
+  })
+
+  it('keeps replacement diagram and placement authoritative after cancelling an active tween', () => {
+    const diagram = new DiagramBuilder().build()
+    const original: GameTree = {
+      id: 'tree-a',
+      diagram,
+      diagramJson: JSON.stringify(diagramToJson(diagram)),
+      placement: { x: 0, z: -20, yaw: 0 },
+    }
+    const replacementBuilder = new DiagramBuilder()
+    replacementBuilder.cut(replacementBuilder.root)
+    const replacementDiagram = replacementBuilder.build()
+    const replacement: GameTree = {
+      id: 'tree-a',
+      diagram: replacementDiagram,
+      diagramJson: JSON.stringify(diagramToJson(replacementDiagram)),
+      placement: { x: 50, z: -60, yaw: 0 },
+    }
+    const container = { appendChild() {} } as unknown as HTMLElement
+    const world = mountGameWorld(container, [original])
+    const staleTarget = applyDoubleCutIntro(diagram, {
+      region: diagram.root, regions: [], nodes: [], wires: [],
+    })
+    world.setRenderMode('raw')
+    world.render(0)
+    world.beginTreeTween(original.id, diagram, staleTarget, 0)
+
+    world.setTrees([replacement])
+    const branch = scene3(replacementDiagram).entities[0]!
+    if (!('pts' in branch)) throw new Error('expected replacement branch fixture')
+    const point = branch.pts[0]!
+    world.setCamera({
+      eye: { x: replacement.placement.x + point.x, y: point.y, z: replacement.placement.z + point.z + 20 },
+      forward: { x: 0, y: 0, z: -1 },
+    })
+    world.render(0)
+
+    const completed = world.render(350)
+
+    expect(completed.representedEntities).toBe(scene3(replacementDiagram).entities.length)
+    expect(world.pointAt(0, 0, INTERACTION_REACH, null)).toMatchObject({ treeId: 'tree-a' })
     world.dispose()
   })
 })
