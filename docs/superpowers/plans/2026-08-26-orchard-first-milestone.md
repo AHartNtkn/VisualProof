@@ -379,6 +379,12 @@ Expected: FAIL because `src/game/model.ts` does not exist.
 Use a generic runtime tree with no content-specific kind:
 
 ```ts
+export type FreeCameraPose = {
+  readonly position: { readonly x: number; readonly y: number; readonly z: number }
+  readonly yaw: number
+  readonly pitch: number
+}
+
 export type GameTree = {
   readonly id: string
   readonly diagram: Diagram
@@ -504,6 +510,11 @@ Expected: FAIL because `TreeRenderAssetCache` does not exist.
 Use `git mv` for the listed source and test files. Rename saved-render terminology to derived-render terminology while adapting the moved modules; no production render type implies that it came from a saved layout. Define the production asset independently of persistence:
 
 ```ts
+export type DisplayCameraPose = {
+  readonly eye: Vec3
+  readonly forward: Vec3
+}
+
 export type TreeRenderAsset = {
   readonly bounds: { readonly center: Vec3; readonly radius: number }
   readonly lods: TreeLodAssets
@@ -586,7 +597,7 @@ git commit -m "refactor: promote Orchard renderer to production"
 **Interfaces:**
 - Produces `CameraState = { mode: 'free'; pose: FreeCameraPose } | { mode: 'orbit'; orbitTarget: string; pose: OrbitCameraPose }`.
 - Produces `stepCamera`, `enterOrbit`, `exitOrbit`, and `displayCameraPose`.
-- Consumes generic tree world bounds only when entering orbit.
+- Consumes `FreeCameraPose` from `src/game/model.ts`, `DisplayCameraPose` from `src/game/render/types.ts`, and generic tree world bounds only when entering orbit.
 
 - [ ] **Step 1: Write failing camera tests**
 
