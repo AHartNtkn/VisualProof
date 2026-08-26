@@ -133,3 +133,54 @@
 **Approval:** Rejected.
 
 **Reasoning:** The actual copy bars and live-reference instrumentation are repaired, and the current evidence looks materially better. Approval remains blocked because the machine consumer still accepts a concretely collapsed bar and width-incomplete color occlusion, while the new WebGL restoration pass can reverse pip layering in light mode.
+
+## Re-review — fix round 3/5
+
+### Prior-finding verdicts
+
+1. **NOT ADDRESSED overall.** The cited `17%`/`25.9%` collapsed-bar mutation is now rejected, as is a bowed renderer-local multi-piece free-drop (`tests/visual/lambda-reference.test.ts:476-519`, `tests/visual/lambda-reference.test.ts:706-739`). The new envelopes are materially tighter and are justified against the current correct population: 2D semantic length/extent/error occupy `0.8182`–`1.0054`, `0.9497`–`1.0010`, and at most `0.1660` against limits `0.78`–`1.05`, `0.92`–`1.03`, and `0.20`; projected 3D occupies `0.7500`–`1.0204`, `0.9284`–`1.0053`, and at most `0.2916` against limits `0.70`–`1.08`, `0.89`–`1.04`, and `0.34`. Composing raster groups through semantic terminals also closes the previous multi-piece interior skip.
+
+   The required rendered-curve attachment to the semantic junction frame remains unproved in WebGL. `raw3dFrame` derives the semantic endpoints from `entity.junctionPoints` but the rendered curve from the separate `entity.pts`, and serializes both without checking their relative placement (`scripts/capture-lambda-comparison.ts:657-683`). The consumer then maps each rendered component's own first/last points onto its declared semantic endpoints by construction; for a coincident-endpoint Lambda bar it discards the first point as an arbitrary origin (`tests/visual/lambda-reference.test.ts:355-388`). It finally removes the composed curve's translation, rotation, and scale again (`tests/visual/lambda-reference.test.ts:391-446`). Thus the shape checks are junction-labelled, but not junction-anchored.
+
+   Concrete counterexample: in a copied exact-SHA manifest I translated every `raster.screenPoints` point of duplication `3d-light`, `p=.54`, address `copy:0:root/argument:lambda` by `[40,40]`, leaving its semantic junction, provenance, colors, and lengths unchanged. All **65/65** visual-comparison tests passed. This admits an entire visible copy bar detached by 40 backing pixels from the junction it claims to depict. The 2D capture does directly compare painted endpoints with its structural stroke (`scripts/capture-lambda-comparison.ts:593-601`); WebGL needs the equivalent relation, with an explicit center/offset rule for coincident padded Lambda bars rather than per-component re-anchoring.
+
+2. **ADDRESSED.** Both the application and live-reference capture retain every group member's authored centerline and width. Grouping requires `99.5%` containment of the earlier member's full half-width-plus-`0.75px` AA tube, occlusion witnesses use only later Painter-order tubes, and the greedy witness is pruned to a threshold-minimal union (`scripts/capture-lambda-comparison.ts:426-517`, `scripts/capture-lambda-comparison.ts:1177-1310`). The consumer independently replays the full tube and verifies that removing any listed witness drops coverage below `99.5%` (`tests/visual/lambda-reference.test.ts:1035-1088`). The permanent narrower and `0.75px`-offset counterexamples are rejected (`tests/visual/lambda-reference.test.ts:741-745`). The exact manifest's minimum witness coverage is `0.996212121`, and every exact-overlap member has coverage `1.0`; the 0.5-pixel longitudinal sampling plus two 16-angle radial rings is appropriately tighter than the raster AA allowance.
+
+3. **ADDRESSED.** `render()` now restores the Lambda layer and then the pip layer unconditionally in both themes, while the dark composite continues to supply the bloom beneath the restored pip core (`src/view3d/render.ts:323-340`). The production-renderer probe renders Lambda-only, pip-only, and combined entities through the same WebGL renderer (`scripts/capture-lambda-comparison.ts:781-807`). For both light and dark the exact manifest records combined pixel `[40,168,255]`, exactly equal to pip-only (`pipDistance = 0`) and `227.1299` RGB units from Lambda-only. This directly proves the coincident center is pip-authored after composition.
+
+### Other required checks
+
+- The corrected-reference geometry still comes from intercepted live Painter/context commands and their actual transforms, widths, joins, caps, and sampled arcs. No copied grid mapping, padding, or `tickScale` geometry has returned.
+- There is no aggregate color loophole in the current consumer. Every non-occluded semantic raster group must independently clear its own required pixel count and color distance; an occluded group must name independently passing later-authored tubes and reproduce full-tube coverage (`tests/visual/lambda-reference.test.ts:1035-1098`). The exact manifest's minimum non-occluded matching-pixel margin is `1` and maximum best-color distance is `0`.
+- The 3D evidence remains sourced one-for-one from the exact `presented.entities` object supplied to `renderer3.setEntities` (`scripts/capture-lambda-comparison.ts:757-778`). It retains source/destination IDs, lineage, copies, connections, colors, and complete Lambda entity inventory (`scripts/capture-lambda-comparison.ts:657-688`); no parallel motion witness has returned. The remaining issue is specifically that the rendered `pts` are not checked against those same entities' `junctionPoints`.
+
+### Issues
+
+#### Critical (Must Fix)
+
+- None.
+
+#### Important (Should Fix)
+
+1. `scripts/capture-lambda-comparison.ts:657-683`, `tests/visual/lambda-reference.test.ts:355-446`, `tests/visual/lambda-reference.test.ts:927-940` — WebGL curve placement is normalized independently of its semantic junction placement, so a visibly detached Lambda curve passes. Preserve a common projected semantic frame or serialize a renderer-derived curve-to-junction relation and assert it before shape normalization. For coincident Lambda endpoints, anchor the rendered bar's defined center/offset to that junction; for noncoincident strokes, assert the appropriate rendered endpoints against their projected junctions. The check must not derive the expected attachment from the same rendered endpoints it is validating.
+
+#### Minor (Nice to Have)
+
+- None.
+
+### Validation and rendered inspection
+
+- Exact evidence binding: application commit `e0cac40254212f0def1905c6795ae02558c29091`; corrected authority SHA-256 `23d73a985ba498a811d2fe41a3cf81643a36047a980347a774420d8fcf52bdca` matches the live HTML.
+- `npx vitest run tests/visual/lambda-reference.test.ts`: **65/65 passed** on the authoritative manifest.
+- `npx vitest run tests/view/lambda-motion.test.ts tests/view3d/lambda.test.ts tests/app/motion.test.ts`: **49/49 passed**.
+- The 40-pixel detached-copy mutation also passed **65/65**, establishing the remaining acceptance gap.
+- Reinspected all five exact-SHA overview sheets at original resolution and the duplication reference/2D/3D original frames at `p=.54` plus 3D dark at `p=1`. The current artifacts visibly support complete, noncollapsed copy bars, staged color tracking, attached-looking current geometry, and planar line-only WebGL rendering in both themes. Current images being correct does not close the counterexample above because the acceptance suite would also accept the detached rendering.
+- The two reported full-suite failures remain final-integration expectation migrations; this round changes none of their owning files and does not introduce or aggravate them.
+
+### Re-review assessment
+
+**Task quality:** Needs fixes
+
+**Approval:** Rejected.
+
+**Reasoning:** The scale/interior, full-tube color, and pip-layering fixes are substantive and the exact rendered evidence is visually credible. Approval remains blocked by one Important acceptance failure: WebGL curves can move independently of their claimed semantic junctions and still pass every Task 15 visual-comparison test.
