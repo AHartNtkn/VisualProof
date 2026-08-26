@@ -53,10 +53,12 @@ async function boot(): Promise<void> {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   const savedWorld = await loadWorldSave()
   const world = mountOrchardWorld(viewport, savedWorld)
+  const initialAntialiasingMethod = world.setAntialiasing(true)
   root.dataset['worldVersion'] = String(savedWorld.version)
   root.dataset['savedTreeCount'] = String(savedWorld.trees.length)
   root.dataset['renderMode'] = 'game'
-  root.dataset['antialiasing'] = 'true'
+  root.dataset['antialiasing'] = String(initialAntialiasingMethod === 'smaa')
+  root.dataset['antialiasingMethod'] = initialAntialiasingMethod
   root.dataset['pointLightCount'] = '0'
   countInput.max = String(savedWorld.trees.length)
   countScale.max = String(savedWorld.trees.length)
@@ -72,7 +74,7 @@ async function boot(): Promise<void> {
   let lastMetricsUpdate = 0
   let buildInFlight = false
   let activeMode: RenderMode = 'game'
-  let antialiasing = true
+  let antialiasing = initialAntialiasingMethod === 'smaa'
   let animationFrame = 0
   let disposed = false
 
@@ -135,6 +137,7 @@ async function boot(): Promise<void> {
   ): void => {
     const fps = average > 0 ? 1000 / average : 0
     root.dataset['renderMode'] = activeMode
+    root.dataset['renderedAntialiasingMethod'] = rendered.antialiasingMethod
     root.dataset['logicalCount'] = String(rendered.logical)
     root.dataset['visibleCount'] = String(rendered.visible)
     root.dataset['residentCount'] = String(rendered.resident)
@@ -301,9 +304,10 @@ async function boot(): Promise<void> {
     })
   }
   listen(antialiasingButton, 'click', () => {
-    antialiasing = !antialiasing
-    world.setAntialiasing(antialiasing)
+    const method = world.setAntialiasing(!antialiasing)
+    antialiasing = method === 'smaa'
     root.dataset['antialiasing'] = String(antialiasing)
+    root.dataset['antialiasingMethod'] = method
     antialiasingButton.setAttribute('aria-pressed', String(antialiasing))
     antialiasingButton.textContent = `Antialiasing: ${antialiasing ? 'On' : 'Off'}`
     root.dataset['transitionGeneration'] = String(frameTelemetry.beginTransition())

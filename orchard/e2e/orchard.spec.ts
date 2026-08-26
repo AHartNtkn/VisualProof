@@ -1,8 +1,72 @@
 import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import type { SavedTree } from '../world'
 
 const THREE_FOV_RADIANS = 67 * Math.PI / 180
+
+async function compareFrames(page: Page, onImage: Buffer, offImage: Buffer): Promise<{
+  readonly partialEdgePixelsOn: number
+  readonly partialEdgePixelsOff: number
+  readonly smoothLightingDelta: number
+  readonly smoothLightingPixels: number
+}> {
+  return page.evaluate(async ({ on, off }) => {
+    const decode = async (base64: string): Promise<ImageData> => {
+      const image = new Image()
+      image.src = `data:image/png;base64,${base64}`
+      await image.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = image.width
+      canvas.height = image.height
+      const context = canvas.getContext('2d')!
+      context.drawImage(image, 0, 0)
+      return context.getImageData(0, 0, image.width, image.height)
+    }
+    const [onPixels, offPixels] = await Promise.all([decode(on), decode(off)])
+    const partialEdges = (pixels: ImageData): number => {
+      let count = 0
+      for (let y = 40; y < 340; y++) {
+        for (let x = 0; x < pixels.width; x++) {
+          const offset = (y * pixels.width + x) * 4
+          const value = (pixels.data[offset]! + pixels.data[offset + 1]! + pixels.data[offset + 2]!) / 3
+          if (value >= 5 && value <= 100) count++
+        }
+      }
+      return count
+    }
+    let smoothLightingDelta = 0
+    let smoothLightingPixels = 0
+    const luminanceAt = (pixels: ImageData, x: number, y: number): number => {
+      const offset = (y * pixels.width + x) * 4
+      return (pixels.data[offset]! + pixels.data[offset + 1]! + pixels.data[offset + 2]!) / 3
+    }
+    for (let y = 346; y < 430; y++) {
+      for (let x = 1; x < onPixels.width - 1; x++) {
+        const onNeighborhood: number[] = []
+        const offNeighborhood: number[] = []
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            onNeighborhood.push(luminanceAt(onPixels, x + dx, y + dy))
+            offNeighborhood.push(luminanceAt(offPixels, x + dx, y + dy))
+          }
+        }
+        const onContrast = Math.max(...onNeighborhood) - Math.min(...onNeighborhood)
+        const offContrast = Math.max(...offNeighborhood) - Math.min(...offNeighborhood)
+        if (onContrast <= 3 && offContrast <= 3) {
+          smoothLightingDelta += Math.abs(luminanceAt(onPixels, x, y) - luminanceAt(offPixels, x, y))
+          smoothLightingPixels++
+        }
+      }
+    }
+    return {
+      partialEdgePixelsOn: partialEdges(onPixels),
+      partialEdgePixelsOff: partialEdges(offPixels),
+      smoothLightingDelta: smoothLightingDelta / Math.max(1, smoothLightingPixels),
+      smoothLightingPixels,
+    }
+  }, { on: onImage.toString('base64'), off: offImage.toString('base64') })
+}
 
 test('accumulates overlapping glow contributors into bounded order-independent pixels', async ({ page }) => {
   await page.goto('/?trees=1')
@@ -190,15 +254,45 @@ test('reports a complete post-drain frame window and transition build CPU', asyn
   })
 })
 
-test('toggles FXAA without reallocating the world or resetting the player', async ({ page }) => {
+test('keeps bloom and ground lighting invariant when antialiasing toggles', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto('/?trees=10')
   const orchard = page.locator('[data-orchard]')
   const toggle = page.getByRole('button', { name: 'Antialiasing: On' })
   await expect(orchard).toHaveAttribute('data-ready', 'true')
   await expect(orchard).toHaveAttribute('data-pending-representations', '0')
+  await expect(orchard).toHaveAttribute('data-rendered-antialiasing-method', 'smaa')
+  const onImage = await page.screenshot({ clip: { x: 398, y: 0, width: 882, height: 720 } })
+  await toggle.click()
+  await expect(orchard).toHaveAttribute('data-antialiasing', 'false')
+  await expect(orchard).toHaveAttribute('data-rendered-antialiasing-method', 'off')
+  const offImage = await page.screenshot({ clip: { x: 398, y: 0, width: 882, height: 720 } })
+  const stats = await compareFrames(page, onImage, offImage)
+
+  expect(stats.smoothLightingPixels).toBeGreaterThan(10_000)
+  expect(stats.smoothLightingDelta).toBeLessThan(0.5)
+})
+
+test('toggles SMAA edge coverage without reallocating the world or resetting the player', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  const savedWorld = JSON.parse(readFileSync(new URL('../world.json', import.meta.url), 'utf8'))
+  const layout = savedWorld.layouts[savedWorld.trees[0].layout]
+  layout.lods.full.entities = layout.lods.full.entities.filter((entity: { kind: string }) => entity.kind === 'branch')
+  layout.lods.reduced = layout.lods.full
+  layout.palette = { branch: '#707070', cutBranch: '#707070', baseWire: '#707070' }
+  layout.hues = layout.hues.map(([id]: [string, string]) => [id, '#707070'])
+  layout.glow = { ...layout.glow, radius: 0, opacity: 0, bloom: 0 }
+  savedWorld.trees = [{ ...savedWorld.trees[0], x: 0, z: 64, yaw: 0 }]
+  await page.route('**/world.json*', (route) => route.fulfill({ json: savedWorld }))
+  await page.goto('/?trees=1')
+  const orchard = page.locator('[data-orchard]')
+  const toggle = page.getByRole('button', { name: 'Antialiasing: On' })
+  await expect(orchard).toHaveAttribute('data-ready', 'true')
+  await expect(orchard).toHaveAttribute('data-pending-representations', '0')
   await expect(orchard).toHaveAttribute('data-antialiasing', 'true')
+  await expect(orchard).toHaveAttribute('data-antialiasing-method', 'smaa')
   await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await expect(orchard).toHaveAttribute('data-rendered-antialiasing-method', 'smaa')
 
   const before = await orchard.evaluate((element) => {
     const canvas = document.querySelector<HTMLCanvasElement>('[data-viewport] canvas')!
@@ -216,9 +310,11 @@ test('toggles FXAA without reallocating the world or resetting the player', asyn
 
   await toggle.click()
   await expect(orchard).toHaveAttribute('data-antialiasing', 'false')
+  await expect(orchard).toHaveAttribute('data-antialiasing-method', 'off')
+  await expect(orchard).toHaveAttribute('data-rendered-antialiasing-method', 'off')
   await expect(page.getByRole('button', { name: 'Antialiasing: Off' })).toHaveAttribute('aria-pressed', 'false')
-  await page.waitForTimeout(100)
   const offImage = await page.screenshot({ clip: { x: 398, y: 0, width: 882, height: 720 } })
+  const stats = await compareFrames(page, onImage, offImage)
   const after = await orchard.evaluate((element) => ({
     playerX: (element as HTMLElement).dataset['playerX'],
     playerZ: (element as HTMLElement).dataset['playerZ'],
@@ -232,7 +328,7 @@ test('toggles FXAA without reallocating the world or resetting the player', asyn
     logical: before.logical,
     sameCanvas: true,
   })
-  expect(Buffer.compare(onImage, offImage)).not.toBe(0)
+  expect(stats.partialEdgePixelsOn).toBeGreaterThan(stats.partialEdgePixelsOff)
 })
 
 test('requires a rendered generation before a synchronous count transition can settle', async ({ page }) => {
@@ -391,6 +487,8 @@ test('renders exact separate tree counts and lets the player walk', async ({ pag
   await expect(countInput).toHaveValue('10')
   await expect(page.locator('[data-status]')).toContainText('10 logical')
 
+  await page.getByRole('button', { name: 'Antialiasing: On' }).click()
+  await expect(orchard).toHaveAttribute('data-rendered-antialiasing-method', 'off')
   const hundredPreset = page.getByRole('button', { name: '100', exact: true })
   await hundredPreset.click()
   await expect(orchard).toHaveAttribute('data-tree-count', '100')
@@ -453,6 +551,8 @@ test('updates LOD and glow for irregular saved placements without page errors', 
   await expect(orchard).toHaveAttribute('data-reduced-count', '2')
   await expect(orchard).toHaveAttribute('data-marker-count', '0')
   await expect(orchard).toHaveAttribute('data-culled-count', '0')
+  await page.getByRole('button', { name: 'Antialiasing: On' }).click()
+  await expect(orchard).toHaveAttribute('data-rendered-antialiasing-method', 'off')
   await page.keyboard.down('s')
   await page.waitForTimeout(3_000)
   await page.keyboard.up('s')

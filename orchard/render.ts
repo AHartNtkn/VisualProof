@@ -1,10 +1,10 @@
 import * as THREE from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
+import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
-import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js'
 import type { WireId } from '../src/kernel/diagram/diagram'
 import type { Entity } from '../src/view3d/scene'
 import { mountGlowRenderer } from './glow-render'
@@ -25,9 +25,11 @@ const MAX_REPRESENTATION_OPERATIONS = 12
 const SPATIAL_CELL_SIZE = 128
 
 export type RenderMode = 'game' | 'raw'
+export type AntialiasingMethod = 'smaa' | 'off'
 type ResidentLod = Exclude<LodLevel, 'culled'>
 
 export type OrchardFrameStats = {
+  readonly antialiasingMethod: AntialiasingMethod
   readonly drawCalls: number
   readonly triangles: number
   readonly geometries: number
@@ -64,7 +66,7 @@ export type OrchardWorld = {
   setCount(count: number): Promise<OrchardBuildStats>
   setTrees(trees: readonly SavedTree[]): Promise<OrchardBuildStats>
   setMode(mode: RenderMode): void
-  setAntialiasing(enabled: boolean): void
+  setAntialiasing(enabled: boolean): AntialiasingMethod
   setPlayer(x: number, z: number, yaw: number, pitch: number): void
   resize(width: number, height: number): void
   render(): OrchardFrameStats
@@ -759,10 +761,13 @@ export function mountOrchardWorld(
   const composer = new EffectComposer(renderer)
   const renderPass = new RenderPass(scene, camera)
   const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.65, 0.45, 0.55)
-  const fxaaPass = new ShaderPass(FXAAShader)
+  const smaaPass = new SMAAPass(1, 1)
+  const outputPass = new OutputPass()
   composer.addPass(renderPass)
   composer.addPass(bloomPass)
-  composer.addPass(fxaaPass)
+  composer.addPass(smaaPass)
+  composer.addPass(outputPass)
+  let antialiasingMethod: AntialiasingMethod = 'smaa'
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(world.terrain.size, world.terrain.size),
@@ -826,10 +831,6 @@ export function mountOrchardWorld(
     composer.setPixelRatio(pixelRatio)
     composer.setSize(width, height)
     bloomPass.setSize(width * pixelRatio, height * pixelRatio)
-    fxaaPass.uniforms['resolution']!.value.set(
-      1 / Math.max(1, width * pixelRatio),
-      1 / Math.max(1, height * pixelRatio),
-    )
     camera.aspect = width / Math.max(1, height)
     camera.updateProjectionMatrix()
     for (const material of lineMaterials) material.resolution.set(width, height)
@@ -846,7 +847,8 @@ export function mountOrchardWorld(
     () => ground.geometry.dispose(),
     () => (ground.material as THREE.Material).dispose(),
     () => bloomPass.dispose(),
-    () => fxaaPass.dispose(),
+    () => smaaPass.dispose(),
+    () => outputPass.dispose(),
     () => composer.dispose(),
     () => renderer.dispose(),
     () => renderer.domElement.remove(),
@@ -865,7 +867,9 @@ export function mountOrchardWorld(
       runtime.setMode(mode)
     },
     setAntialiasing(enabled) {
-      fxaaPass.enabled = enabled
+      smaaPass.enabled = enabled
+      antialiasingMethod = enabled ? 'smaa' : 'off'
+      return antialiasingMethod
     },
     setPlayer(x, z, yaw, pitch) {
       camera.position.set(x, world.player.y, z)
@@ -881,6 +885,7 @@ export function mountOrchardWorld(
       composer.render()
       const current = runtime.snapshot()
       return {
+        antialiasingMethod,
         drawCalls: renderer.info.render.calls,
         triangles: renderer.info.render.triangles,
         geometries: renderer.info.memory.geometries,
