@@ -57,6 +57,12 @@ theorem Step.Evidence.sound
         (Lambda.Spawn.sound step model args).mp sourceDenotes
   | lambdaTermLeaf step =>
       exact Lambda.TermLeaf.sound step
+  | lambdaConversion step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.Conversion.sound step model args).mp sourceDenotes
+  | lambdaFreeVariableIdentity step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.FreeVariableIdentity.sound step model args).mp sourceDenotes
 
 theorem Step.sound
     {boundary : List Sig}

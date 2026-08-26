@@ -95,6 +95,16 @@ def Step.Evidence.ForwardExecutable {boundary : List Sig} :
           (output : OpenDiagram boundary),
         Lambda.TermLeaf.runForward source index = some output ∧
           OpenDiagram.Isomorphic output target
+  | source, target, .lambdaConversion _ =>
+      ∃ (index : Lambda.Conversion.ForwardIndex source)
+          (output : OpenDiagram boundary),
+        Lambda.Conversion.runForward source index = some output ∧
+          OpenDiagram.Isomorphic output target
+  | source, target, .lambdaFreeVariableIdentity _ =>
+      ∃ (index : Lambda.FreeVariableIdentity.ForwardIndex source)
+          (output : OpenDiagram boundary),
+        Lambda.FreeVariableIdentity.runForward source index = some output ∧
+          OpenDiagram.Isomorphic output target
 
 /-- Backward execution coverage selected by the authoritative Step evidence. -/
 def Step.Evidence.BackwardExecutable {boundary : List Sig} :
@@ -178,6 +188,16 @@ def Step.Evidence.BackwardExecutable {boundary : List Sig} :
           (output : OpenDiagram boundary),
         Lambda.TermLeaf.runBackward target index = some output ∧
           OpenDiagram.Isomorphic output source
+  | source, target, .lambdaConversion _ =>
+      ∃ (index : Lambda.Conversion.BackwardIndex target)
+          (output : OpenDiagram boundary),
+        Lambda.Conversion.runBackward target index = some output ∧
+          OpenDiagram.Isomorphic output source
+  | source, target, .lambdaFreeVariableIdentity _ =>
+      ∃ (index : Lambda.FreeVariableIdentity.BackwardIndex target)
+          (output : OpenDiagram boundary),
+        Lambda.FreeVariableIdentity.runBackward target index = some output ∧
+          OpenDiagram.Isomorphic output source
 
 theorem Step.forward_execution_complete
     (step : Step source target) :
@@ -229,6 +249,12 @@ theorem Step.forward_execution_complete
   | lambdaTermLeaf evidence =>
       exact ⟨.lambdaTermLeaf evidence,
         (Lambda.TermLeaf.forward_exact _ _).mpr evidence⟩
+  | lambdaConversion evidence =>
+      exact ⟨.lambdaConversion evidence,
+        (Lambda.Conversion.forward_exact _ _).mpr evidence⟩
+  | lambdaFreeVariableIdentity evidence =>
+      exact ⟨.lambdaFreeVariableIdentity evidence,
+        (Lambda.FreeVariableIdentity.forward_exact _ _).mpr evidence⟩
 
 theorem Step.backward_execution_complete
     (step : Step source target) :
@@ -280,5 +306,11 @@ theorem Step.backward_execution_complete
   | lambdaTermLeaf evidence =>
       exact ⟨.lambdaTermLeaf evidence,
         (Lambda.TermLeaf.backward_exact _ _).mpr evidence⟩
+  | lambdaConversion evidence =>
+      exact ⟨.lambdaConversion evidence,
+        (Lambda.Conversion.backward_exact _ _).mpr evidence⟩
+  | lambdaFreeVariableIdentity evidence =>
+      exact ⟨.lambdaFreeVariableIdentity evidence,
+        (Lambda.FreeVariableIdentity.backward_exact _ _).mpr evidence⟩
 
 end VisualProof.Rule

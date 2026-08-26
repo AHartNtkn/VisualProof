@@ -38,6 +38,9 @@ inductive Step.Evidence {boundary : List Sig} :
       Evidence source target
   | lambdaSpawn : Lambda.Spawn source target → Evidence source target
   | lambdaTermLeaf : Lambda.TermLeaf source target → Evidence source target
+  | lambdaConversion : Lambda.Conversion source target → Evidence source target
+  | lambdaFreeVariableIdentity : Lambda.FreeVariableIdentity source target →
+      Evidence source target
 
 /-- The relational view of the proof-relevant one-step evidence. -/
 def Step {boundary : List Sig}
@@ -103,6 +106,14 @@ def lambdaSpawn (step : Lambda.Spawn source target) : Step source target :=
 def lambdaTermLeaf (step : Lambda.TermLeaf source target) : Step source target :=
   ⟨.lambdaTermLeaf step⟩
 
+def lambdaConversion (step : Lambda.Conversion source target) :
+    Step source target :=
+  ⟨.lambdaConversion step⟩
+
+def lambdaFreeVariableIdentity
+    (step : Lambda.FreeVariableIdentity source target) : Step source target :=
+  ⟨.lambdaFreeVariableIdentity step⟩
+
 def Evidence.iso
     {boundary : List Sig}
     {source source' target target' : OpenDiagram boundary}
@@ -151,6 +162,11 @@ def Evidence.iso
       exact .lambdaSpawn (Lambda.Spawn.iso sourceIso step targetIso)
   | lambdaTermLeaf step =>
       exact .lambdaTermLeaf (Lambda.TermLeaf.iso sourceIso step targetIso)
+  | lambdaConversion step =>
+      exact .lambdaConversion (Lambda.Conversion.iso sourceIso step targetIso)
+  | lambdaFreeVariableIdentity step =>
+      exact .lambdaFreeVariableIdentity
+        (Lambda.FreeVariableIdentity.iso sourceIso step targetIso)
 
 theorem iso
     {boundary : List Sig}
