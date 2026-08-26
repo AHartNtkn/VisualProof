@@ -128,6 +128,22 @@ describe('lambdaDiagram', () => {
       }
     }
   })
+
+  it('retains target subterm paths on animated copies for 3D picking', () => {
+    const source = application(
+      lambda(application(bound(0), bound(0))),
+      application(lambda(bound(0)), free(0)),
+    )
+    const plan = planBetaMotion(source, { kind: 'beta', path: [] })
+    const frame = sampleBetaMotion(plan, plan.times.spaceEnd, '#26343a')
+    const copied = lambdaDiagram({
+      node: 'term', region: 'region', term: source, interfaceArity: 1,
+      center: v3(0, 0, 0), tangent: v3(0, 1, 0), frame,
+    }).strokes.filter(({ strokeId }) => strokeId.startsWith('copy:'))
+
+    expect(copied.length).toBeGreaterThan(0)
+    expect(copied.some(({ subtermPath }) => subtermPath.length > 0)).toBe(true)
+  })
 })
 
 describe('3D scene integration', () => {
@@ -176,7 +192,7 @@ describe('3D scene integration', () => {
     expect(anatomy.map((stroke) => stroke.color).sort()).toEqual(frame.strokes.map((stroke) => stroke.color).sort())
     expect(strokes.some((stroke) => stroke.color === '#f06aa7')).toBe(true)
     const expectedSocket = frame.sockets.find((socket) => socket.amount > 0.002)!
-    const socket = strokes.find((stroke) => stroke.strokeId === `socket:${expectedSocket.copyIndex}`)!
+    const socket = strokes.find((stroke) => stroke.strokeId === expectedSocket.id)!
     expect('alpha' in socket ? socket.alpha : undefined).toBeCloseTo(expectedSocket.amount, 12)
     for (const stroke of strokes) for (const point of stroke.pts) {
       expect(Math.abs(dot3(sub3(point, stroke.center), stroke.plane.normal))).toBeLessThan(1e-9)

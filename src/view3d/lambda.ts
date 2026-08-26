@@ -87,28 +87,12 @@ type StaticStroke = {
   readonly points: readonly Vec2[]
 }
 
-function deepestOwner(
-  geometry: NodeGeometry,
-  kind: 'arc' | 'radial' | 'exit',
-  index: number,
-): readonly PathSeg[] {
-  const owners = geometry.occurrences.filter((occurrence) => (
-    kind === 'arc'
-      ? occurrence.arcIndices.includes(index)
-      : kind === 'radial'
-        ? occurrence.radialIndices.includes(index)
-        : occurrence.includeExit
-  ))
-  owners.sort((left, right) => right.path.length - left.path.length)
-  return owners[0]?.path ?? []
-}
-
 function staticStrokes(geometry: NodeGeometry): StaticStroke[] {
   const out: StaticStroke[] = []
   geometry.arcs.forEach((arc, index) => out.push({
     strokeId: `arc:${index}`,
     role: arc.kind === 'lam' ? 'lambda' : arc.kind === 'app' ? 'application' : 'free-rail',
-    subtermPath: deepestOwner(geometry, 'arc', index),
+    subtermPath: arc.ownerPath,
     color: null,
     points: arcPoints(arc.r, arc.a0, arc.a1),
   }))
@@ -118,38 +102,29 @@ function staticStrokes(geometry: NodeGeometry): StaticStroke[] {
     out.push({
       strokeId: `radial:${index}`,
       role: radial.kind === 'var' ? 'variable' : radial.kind === 'port' ? 'free-port' : 'fn-connector',
-      subtermPath: deepestOwner(geometry, 'radial', index),
+      subtermPath: radial.ownerPath,
       color: null,
       points: [from, to],
     })
   })
   if (geometry.exitArc !== null) out.push({
     strokeId: 'exit:arc', role: 'output-arc',
-    subtermPath: deepestOwner(geometry, 'exit', 0), color: null,
+    subtermPath: [], color: null,
     points: arcPoints(geometry.exitArc.r, geometry.exitArc.a0, geometry.exitArc.a1),
   })
   if (geometry.exitLine !== null) out.push({
     strokeId: 'exit:line', role: 'output-line',
-    subtermPath: deepestOwner(geometry, 'exit', 0), color: null,
+    subtermPath: [], color: null,
     points: geometry.exitLine,
   })
   return out
-}
-
-function pathFromOwner(ownerId: string | null): readonly PathSeg[] {
-  if (ownerId === null || ownerId === 'root') return []
-  if (!ownerId.startsWith('root/')) return []
-  const path = ownerId.slice('root/'.length).split('/')
-  return path.every((segment) => segment === 'body' || segment === 'fn' || segment === 'argument')
-    ? path as PathSeg[]
-    : []
 }
 
 function frameStrokes(frame: LambdaStrokeFrame): StaticStroke[] {
   const strokes: StaticStroke[] = frame.strokes.map((stroke) => ({
     strokeId: stroke.id,
     role: stroke.role,
-    subtermPath: pathFromOwner(stroke.ownerId),
+    subtermPath: stroke.subtermPath,
     color: stroke.color,
     points: stroke.geometry.kind === 'arc'
       ? arcPoints(stroke.geometry.r, stroke.geometry.a0, stroke.geometry.a1)
@@ -157,14 +132,13 @@ function frameStrokes(frame: LambdaStrokeFrame): StaticStroke[] {
   }))
   for (const socket of frame.sockets) {
     if (socket.amount <= 0.002) continue
-    const radius = 0.16 + socket.copyIndex * 0.025
     strokes.push({
-      strokeId: `socket:${socket.copyIndex}`,
+      strokeId: socket.id,
       role: 'argument-connector',
-      subtermPath: pathFromOwner(socket.sourceOccurrenceId),
+      subtermPath: socket.subtermPath,
       color: '#f0bd55',
       alpha: socket.amount,
-      points: arcPoints(radius, 0, 2 * Math.PI).map((point) => ({
+      points: arcPoints(socket.radius, 0, 2 * Math.PI).map((point) => ({
         x: point.x + socket.point.x,
         y: point.y + socket.point.y,
       })),

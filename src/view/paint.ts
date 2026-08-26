@@ -250,7 +250,7 @@ export function paintLambdaFrame(
     shapes.push({
       kind: 'circle',
       center: transformLambdaPoint(socket.point, center, theta, scale),
-      r: (0.16 + socket.copyIndex * 0.025) * scale,
+      r: socket.radius * scale,
       fill: null,
       stroke: motionAlpha(ARGUMENT_COLOR, socket.amount),
       width: Math.max(1, width * 0.64),

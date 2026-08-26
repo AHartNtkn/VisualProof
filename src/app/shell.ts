@@ -27,15 +27,25 @@ import { seedActionHistoryPlacements, seedReplayPlacements } from './proof-place
 import type { Library } from './library'
 import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntry, rebuild } from './library'
 import { defineRelation, inferFoldArgs } from './define'
-import type { Replay } from './replay'
 import { mkReplay } from './replay'
 import { emptyDiagram } from './edit'
 import { spawnAtomNode, spawnRefNode, spawnTermNode } from '../kernel/diagram/spawn'
-import type { ProofSession, TrackDirection, TrackSession } from './session'
+import type { TrackDirection } from './session'
 import {
-  startSession, applyForward, applyBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide,
-  startTrack, applyTrack, undoTrack, redoTrack, moveTrack, declareTrack, adoptTrackTheorem, trackBoundary, currentTrack,
+  startSession, applyForward, applyBackward, meet, assembleTheorem, adoptTheorem,
+  startTrack, applyTrack, undoTrack, redoTrack, moveTrack, declareTrack, adoptTrackTheorem,
 } from './session'
+import {
+  diagramForShellSession,
+  editShellSession,
+  enterShellReplay,
+  leaveShellReplay,
+  moveShellReplay,
+  proofForShellSession,
+  proofShellSession,
+  shellSessionBoundary,
+  type ShellSession,
+} from './shell-session'
 import { proofSnapshot as serializeProofSnapshot } from './proof-snapshot'
 import type { Companion } from './companion'
 import { companionFor } from './companion'
@@ -67,11 +77,11 @@ export { theoremActionCountLabel } from './shell-label'
 /**
  * The DOM shell: browser glue over the tested headless core (edit, session,
  * hittest, actions) and the view layer. Every decision branch here calls a
- * tested function; the shell itself owns only browser concerns — mode state,
- * the displayed diagram, selection, pending two-phase actions, physics
- * seeding, domain operations, and chrome wiring. The viewport controller owns
- * every canvas gesture and all transient interaction state.
- * Behavioral coverage is Plan 10d's E2E.
+ * tested function; the shell itself owns only browser concerns — the tagged
+ * session lifecycle, selection, pending two-phase actions, physics seeding,
+ * domain operations, and chrome wiring. The viewport controller owns every
+ * canvas gesture and all transient interaction state.
+ * Browser-level behavior is covered by the end-to-end test suite.
  */
 
 export type ShellOptions = {
@@ -138,22 +148,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let relations: readonly (readonly [string, DiagramWithBoundary])[] = boot.relations
 
   // ---- state ----
-  let mode: 'edit' | 'prove' | 'replay' = 'edit'
-  // Replay mode: step through a bundled theorem's recorded derivation. `replay`
-  // caches every intermediate diagram; `replayK` is the displayed step; the
-  // mode we came from is restored on exit. Read-only — no rule dispatches.
-  let replay: Replay | null = null
-  let replayK = 0
-  let replayReturnMode: 'edit' | 'prove' = 'edit'
+  // The session discriminant owns edit/proof/replay mode and every value that
+  // is valid only in that mode. Replay retains the exact non-replay session it
+  // must restore; no parallel nullable proof/replay/mode state can drift.
+  let shellSession: ShellSession = editShellSession()
   let editDiagram = opts.initialDiagram ?? emptyDiagram()
   const editHistory: Diagram[] = []
   const editFuture: Diagram[] = []
   let goalLhs: DiagramWithBoundary | null = null
   let goalRhs: DiagramWithBoundary | null = null
-  type ActiveProof =
-    | { readonly kind: 'track'; track: TrackSession }
-    | { readonly kind: 'dual'; session: ProofSession; side: 'forward' | 'backward' }
-  let proof: ActiveProof | null = null
   let fixedWorkspace: FixedSideWorkspace | null = null
   let kernelSel: SubgraphSelection | null = null
   let pending: Pending | null = null
@@ -161,16 +164,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // changes (layout never persists). Boundary wiring for proof sides is Task 2;
   // an edit sheet has no boundary, so [] is correct here.
   let themeIndex = 0
-  let theme: Theme = themeCycle[themeIndex] ?? LIGHT
+  const currentTheme = (): Theme => themeCycle[themeIndex] ?? LIGHT
   const motionPreferences = defaultMotionPreferences(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
-  let displayed: Diagram = editDiagram
-  let engine: Engine = mkEngine(displayed, [])
+  let engine: Engine = mkEngine(editDiagram, [])
   if (mainSearch !== null) attachLayoutSearch(engine, mainSearch)
   seedProject(engine)
   const mainMotion = new MotionCoordinator({
     preferences: () => motionPreferences,
     engine: () => engine,
-    theme: () => theme,
+    theme: currentTheme,
   })
   let interaction!: InteractiveViewport
   let construct!: ConstructController
@@ -196,6 +198,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     refusalElement = null
   }
   const refuse = (text: string, pointer: Vec2 = lastPointerClient): void => {
+    const theme = currentTheme()
     window.clearTimeout(refusalTimer)
     const refusal = feedback.refuse({ text, pointer })
     refusalElement?.remove()
@@ -265,6 +268,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
   mainSurface.resize(window.innerWidth, window.innerHeight)
   const applyThemeBackdrop = (): void => {
+    const theme = currentTheme()
     canvas.style.background = theme.canvas
     canvas.ownerDocument.documentElement.style.background = theme.canvas
     canvas.ownerDocument.body.style.background = theme.canvas
@@ -289,54 +293,50 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     out.offsetX = cam.offsetX
     out.offsetY = cam.offsetY
   }
-  const currentDiagram = (): Diagram => {
-    if (mode === 'replay' && replay !== null) return replay.diagramAt(replayK)
-    if (mode === 'prove' && proof !== null) {
-      if (proof.kind === 'track') return currentTrack(proof.track)
-      return currentSide(proof.session, proof.side)
-    }
-    return editDiagram
-  }
+  const currentDiagram = (): Diagram => diagramForShellSession(shellSession, editDiagram)
+  const currentProof = () => proofForShellSession(shellSession)
 
   // Proof and replay boundaries are transported with their current diagrams;
   // an edit sheet has no boundary.
-  const currentBoundary = (): readonly WireId[] => {
-    if (mode === 'replay' && replay !== null) return replay.boundaryAt(replayK)
-    if (mode === 'prove' && proof !== null) {
-      return proof.kind === 'track' ? trackBoundary(proof.track) : sideBoundary(proof.session, proof.side)
-    }
-    return []
-  }
+  const currentBoundary = (): readonly WireId[] => shellSessionBoundary(shellSession)
 
   // ---- 3D view (view-only presentation of the focused diagram) ----
   // three.js is loaded lazily on first use, not bundled into the main
   // chunk, so opening the app never pays for a renderer most sessions
   // never touch.
-  let view3: View3 | null = null
-  let view3Wrap: HTMLDivElement | null = null
-  let view3Loading = false
+  type View3Lifecycle =
+    | { readonly kind: 'closed' }
+    | { readonly kind: 'loading'; readonly wrap: HTMLDivElement }
+    | { readonly kind: 'open'; readonly wrap: HTMLDivElement; readonly view: View3 }
+  let view3State: View3Lifecycle = { kind: 'closed' }
+  const closeView3 = (): void => {
+    if (view3State.kind === 'open') view3State.view.dispose()
+    if (view3State.kind !== 'closed') view3State.wrap.remove()
+    view3State = { kind: 'closed' }
+    canvas.hidden = false
+    view3Btn.textContent = '3D view'
+  }
   function toggleView3(): void {
-    if (view3Loading) return
-    if (view3 === null) {
-      view3Loading = true
+    if (view3State.kind === 'loading') return
+    if (view3State.kind === 'closed') {
       const wrap = document.createElement('div')
       wrap.style.cssText = 'position:fixed;inset:0;'
       // Directly after the canvas, so the chrome (later in the DOM) stays on top.
       canvas.parentElement!.insertBefore(wrap, canvas.nextSibling)
+      view3State = { kind: 'loading', wrap }
       void (async () => {
         const { mountView3 } = await import('../view3d/index')
-        view3 = mountView3(wrap, { diagram: currentDiagram(), theme })
-        view3Wrap = wrap
+        const view = mountView3(wrap, { diagram: currentDiagram(), theme: currentTheme() })
+        if (view3State.kind !== 'loading' || view3State.wrap !== wrap) {
+          view.dispose()
+          wrap.remove()
+          return
+        }
+        view3State = { kind: 'open', wrap, view }
         view3Btn.textContent = '2D view'
-        view3Loading = false
       })()
     } else {
-      view3.dispose()
-      view3 = null
-      view3Wrap?.remove()
-      view3Wrap = null
-      canvas.hidden = false
-      view3Btn.textContent = '3D view'
+      closeView3()
     }
   }
 
@@ -561,6 +561,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // file list (Load/Unload per file — no origin distinction), a detail group per
   // loaded entry, and the Session group for adopted theorems.
   const renderLibrary = (): void => {
+    const theme = currentTheme()
     if (opts.libraryRenderer !== undefined) {
       libraryDiv.replaceChildren()
       opts.libraryRenderer(libraryDiv, {
@@ -656,13 +657,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     },
   ): void => {
     const d = currentDiagram()
-    if (d !== displayed || surfaceChanged) {
+    if (d !== engine.d || surfaceChanged) {
       const priorSelection = preserveSelection ? interaction.selection : []
       interaction.cancelActiveGesture()
       // Diagram identity changed: preserve the transaction's fixed frame and
       // surviving layout, then re-solve THIS diagram's content scale inside it.
       const previous = engine
-      displayed = d
       const next = mkEngine(d, currentBoundary())
       if (mainSearch !== null) attachLayoutSearch(next, mainSearch)
       const carried = carryOver(previous, next)
@@ -675,7 +675,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         motionTransition?.direction,
       )
       engine = next
-      if (mode === 'prove' && proof?.kind === 'track') {
+      const proof = currentProof()
+      if (shellSession.kind === 'prove' && proof?.kind === 'track') {
         const timeline = proof.track.timeline
         const initial = timeline.states[0]
         if (initial === undefined) throw new Error('proof timeline has no initial state')
@@ -693,9 +694,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       pending = null
       if (preserveSelection) {
         interaction.setSelection(priorSelection.filter((hit) =>
-          hit.kind === 'node' ? displayed.nodes[hit.id] !== undefined
-            : hit.kind === 'region' ? displayed.regions[hit.id] !== undefined
-              : displayed.wires[hit.id] !== undefined))
+          hit.kind === 'node' ? engine.d.nodes[hit.id] !== undefined
+            : hit.kind === 'region' ? engine.d.regions[hit.id] !== undefined
+              : engine.d.wires[hit.id] !== undefined))
       }
     }
     refreshChrome()
@@ -703,12 +704,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
   const selectionChanged = (next: readonly Hit[]): void => {
     palettePoint = null
-    if (mode === 'prove') proofMoves.cancel()
+    if (shellSession.kind === 'prove') proofMoves.cancel()
     if (next.length === 0) {
       kernelSel = null
     } else {
       try {
-        kernelSel = buildSelection(displayed, next)
+        kernelSel = buildSelection(engine.d, next)
       } catch (e) {
         kernelSel = null
         refuse(e instanceof Error ? e.message : String(e))
@@ -726,7 +727,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (placement !== undefined) seedBodyPlacement(engine, placement.node, placement.at)
   }
   const requireEdit = (): void => {
-    if (mode !== 'edit') throw new Error('construction is an EDIT-mode operation; switch modes first')
+    if (shellSession.kind !== 'edit') throw new Error('construction is an EDIT-mode operation; switch modes first')
   }
   const formulaEntry = mountFormulaEntry(document.body, (diagram) => {
     requireEdit()
@@ -747,11 +748,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
 
   const proofDirection = (): TrackDirection | null => {
+    const proof = currentProof()
     if (proof === null) return null
     return proof.kind === 'track' ? proof.track.direction : proof.side
   }
 
   const proofStatus = (): string => {
+    const proof = currentProof()
     if (proof === null) return 'no proof'
     if (proof.kind === 'track') return `${theoremActionCountLabel(proof.track.timeline.cursor)} · declare when ready`
     const session = proof.session
@@ -765,19 +768,16 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     cancelAuthoring()
     const thm = ctx.theorems.get(name)
     if (thm === undefined) throw new Error(`unknown theorem '${name}'`)
-    if (mode !== 'replay') replayReturnMode = mode
     mainMotion.cancel()
-    replay = mkReplay(thm.name, ctx)
-    replayK = 0
-    mode = 'replay'
+    const replay = mkReplay(thm.name, ctx)
+    shellSession = enterShellReplay(shellSession, replay)
     if (fixedWorkspace !== null) {
       fixedWorkspace.root.hidden = true
       canvas.hidden = false
     }
     compass.setOpen('library', false)
     interaction.cancelActiveGesture()
-    displayed = replay.diagramAt(0)
-    engine = mkEngine(displayed, replay.boundaryAt(0))
+    engine = mkEngine(replay.diagramAt(0), replay.boundaryAt(0))
     if (mainSearch !== null) attachLayoutSearch(engine, mainSearch)
     // Size the fixed border ONCE from the PROOF-WIDE max content extent (USER RULING
     // 2026-07-06, option (a)): a replay's contents are ALL its steps, so one absolute
@@ -785,8 +785,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // (~150 ms whole-proof scan). Established before seedProject, whose establishFrame
     // then no-ops; every later step carries this same frame via carryOver.
     const steps = Array.from({ length: replay.actionCount + 1 }, (_, k) => ({
-      diagram: replay!.diagramAt(k),
-      boundary: replay!.boundaryAt(k),
+      diagram: replay.diagramAt(k),
+      boundary: replay.boundaryAt(k),
     }))
     establishProofFrame(engine, steps)
     // proof-wide boundary slot-shift: align the fixed slots to where the ports sit,
@@ -805,27 +805,27 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // re-seeding — the whole point of the stepper. currentDiagram() returns the
   // cached diagram object, so an incidental sync() will not rebuild and scramble.
   const gotoReplayStep = (k: number): void => {
-    if (replay === null) return
+    if (shellSession.kind !== 'replay') return
     interaction.cancelActiveGesture()
-    const previousReplayK = replayK
-    replayK = Math.max(0, Math.min(replay.actionCount, k))
+    const previousReplayK = shellSession.cursor
+    shellSession = moveShellReplay(shellSession, k)
+    const { replay, cursor } = shellSession
     const prevEngine = engine
-    displayed = replay.diagramAt(replayK)
-    const next = mkEngine(displayed, replay.boundaryAt(replayK))
+    const next = mkEngine(replay.diagramAt(cursor), replay.boundaryAt(cursor))
     if (mainSearch !== null) attachLayoutSearch(next, mainSearch)
     const carried = carryOver(
       prevEngine,
       next,
-      replay.layoutIdentityBetween(previousReplayK, replayK) ?? undefined,
+      replay.layoutIdentityBetween(previousReplayK, cursor) ?? undefined,
     )
     seedProject(next, false, carried)
-    const transitionIndex = Math.min(previousReplayK, replayK)
-    const transition = Math.abs(replayK - previousReplayK) === 1
+    const transitionIndex = Math.min(previousReplayK, cursor)
+    const transition = Math.abs(cursor - previousReplayK) === 1
       ? replay.transitions[transitionIndex]
       : undefined
     if (transition === undefined) mainMotion.observeSwap(prevEngine, next, performance.now())
     else {
-      const followsRecordedReduction = (replayK > previousReplayK) === (transition.half === 'forward')
+      const followsRecordedReduction = (cursor > previousReplayK) === (transition.half === 'forward')
       mainMotion.observeSwap(
         prevEngine,
         next,
@@ -835,7 +835,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       )
     }
     engine = next
-    seedReplayPlacements(engine, replay, replayK, ctx)
+    seedReplayPlacements(engine, replay, cursor, ctx)
     interaction.reconcileDiagram()
     kernelSel = null
     pending = null
@@ -843,10 +843,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   const exitReplay = (): void => {
-    mode = replayReturnMode
-    replay = null
-    replayK = 0
-    if (mode === 'prove' && proof?.kind === 'dual' && fixedWorkspace !== null) {
+    if (shellSession.kind !== 'replay') return
+    shellSession = leaveShellReplay(shellSession)
+    const proof = currentProof()
+    if (shellSession.kind === 'prove' && proof?.kind === 'dual' && fixedWorkspace !== null) {
       fixedWorkspace.root.hidden = false
       canvas.hidden = true
       refreshChrome()
@@ -859,22 +859,23 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     cancelAuthoring()
     proofMoves.cancel()
     mainMotion.cancel()
-    if (mode === 'replay') {
+    if (shellSession.kind === 'replay') {
       exitReplay()
       return
     }
     fixedWorkspace?.dispose()
     fixedWorkspace = null
-    proof = null
-    mode = 'edit'
+    shellSession = editShellSession()
     canvas.hidden = false
     sync(true)
   })
   const beginTrack = (direction: TrackDirection): void => guard(() => {
     requireEdit()
     proofMoves.cancel()
-    proof = { kind: 'track', track: startTrack(mkDiagramWithBoundary(editDiagram, []), direction, ctx) }
-    mode = 'prove'
+    shellSession = proofShellSession({
+      kind: 'track',
+      track: startTrack(mkDiagramWithBoundary(editDiagram, []), direction, ctx),
+    })
     sync(true)
   })()
   const beginDual = guard(() => {
@@ -882,25 +883,27 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     proofMoves.cancel()
     if (goalLhs === null || goalRhs === null) throw new Error('set both fixed sides before dual proving')
     const session = startSession(goalLhs, goalRhs, ctx)
-    proof = { kind: 'dual', session, side: 'forward' }
-    mode = 'prove'
+    shellSession = proofShellSession({ kind: 'dual', session, side: 'forward' })
     try {
       fixedWorkspace = new FixedSideWorkspace({
         host: document.body,
         session: () => {
+          const proof = currentProof()
           if (proof?.kind !== 'dual') throw new Error('fixed-side workspace has no active session')
           return proof.session
         },
         commit: (next, changedSide) => {
+          const proof = currentProof()
           if (proof?.kind !== 'dual') throw new Error('fixed-side workspace has no active session')
-          proof = { kind: 'dual', session: next, side: changedSide }
+          shellSession = proofShellSession({ kind: 'dual', session: next, side: changedSide })
         },
         context: () => ctx,
-        theme: () => theme,
+        theme: currentTheme,
         motionPreferences: () => motionPreferences,
         fuel: () => readCount(fuel.input, 'fuel'),
         focusChanged: (side) => {
-          if (proof?.kind === 'dual') proof = { ...proof, side }
+          const proof = currentProof()
+          if (proof?.kind === 'dual') shellSession = proofShellSession({ ...proof, side })
           refreshChrome()
         },
         declare: () => onAssemble(),
@@ -908,8 +911,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         changed: refreshChrome,
       })
     } catch (error) {
-      proof = null
-      mode = 'edit'
+      shellSession = editShellSession()
       throw error
     }
     interaction.resetSurface()
@@ -923,7 +925,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   const onUndo = guard(() => {
     cancelAuthoring()
-    if (mode === 'edit') {
+    if (shellSession.kind === 'edit') {
       const prev = editHistory.pop()
       if (prev === undefined) throw new Error('nothing to undo in edit mode')
       editFuture.push(editDiagram)
@@ -931,16 +933,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       sync()
       return
     }
-    if (mode === 'replay' && replay !== null) {
-      if (replayK === 0) throw new Error('nothing to undo in replay')
-      gotoReplayStep(replayK - 1)
+    if (shellSession.kind === 'replay') {
+      if (shellSession.cursor === 0) throw new Error('nothing to undo in replay')
+      gotoReplayStep(shellSession.cursor - 1)
       return
     }
+    const proof = currentProof()
     if (proof === null) throw new Error('no active proof')
     if (proof.kind === 'track') {
       const timeline = proof.track.timeline
       const action = timeline.actions[timeline.cursor - 1]
-      proof = { kind: 'track', track: undoTrack(proof.track) }
+      shellSession = proofShellSession({ kind: 'track', track: undoTrack(proof.track) })
       sync(false, false, action === undefined ? undefined : { action, direction: 'reverse' })
       return
     }
@@ -951,7 +954,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   const onRedo = guard(() => {
     cancelAuthoring()
-    if (mode === 'edit') {
+    if (shellSession.kind === 'edit') {
       const next = editFuture.pop()
       if (next === undefined) throw new Error('nothing to redo in edit mode')
       editHistory.push(editDiagram)
@@ -959,16 +962,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       sync()
       return
     }
-    if (mode === 'replay' && replay !== null) {
-      if (replayK === replay.actionCount) throw new Error('nothing to redo in replay')
-      gotoReplayStep(replayK + 1)
+    if (shellSession.kind === 'replay') {
+      if (shellSession.cursor === shellSession.replay.actionCount) throw new Error('nothing to redo in replay')
+      gotoReplayStep(shellSession.cursor + 1)
       return
     }
+    const proof = currentProof()
     if (proof === null) throw new Error('no active proof')
     if (proof.kind === 'track') {
       const timeline = proof.track.timeline
       const action = timeline.actions[timeline.cursor]
-      proof = { kind: 'track', track: redoTrack(proof.track) }
+      shellSession = proofShellSession({ kind: 'track', track: redoTrack(proof.track) })
       sync(false, false, action === undefined ? undefined : { action, direction: 'forward' })
       return
     }
@@ -978,6 +982,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
   })
   const onAssemble = guard(() => {
+    const proof = currentProof()
     if (proof === null) throw new Error('no active proof')
     const name = nameInput.value.trim() === '' ? 'untitled' : nameInput.value.trim()
     const thm = proof.kind === 'track' ? declareTrack(proof.track, name) : assembleTheorem(proof.session, name)
@@ -986,23 +991,30 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // into the library's Session group; applyLibrary rebuilds the merged context
     // and rebinds the shell's live ctx so saves, future citations, and the panel
     // all see the new theorem.
-    proof = proof.kind === 'track'
+    shellSession = proofShellSession(proof.kind === 'track'
       ? { kind: 'track', track: adoptTrackTheorem(proof.track, thm) }
-      : { ...proof, session: adoptTheorem(proof.session, thm) }
+      : { ...proof, session: adoptTheorem(proof.session, thm) })
     applyLibrary(adoptEntry(library, thm))
   })
 
   // ---- proof actions ----
   const applyProofAction = (action: ProofAction): void => {
+    const proof = currentProof()
     if (proof === null) throw new Error('no active proof')
     if (proof.kind === 'track') {
-      proof = { kind: 'track', track: applyTrack(proof.track, action) }
+      shellSession = proofShellSession({ kind: 'track', track: applyTrack(proof.track, action) })
       sync(false, false, { action, direction: 'forward' })
       refreshChrome()
       return
     } else {
-      proof = { ...proof, session: proof.side === 'forward' ? applyForward(proof.session, action) : applyBackward(proof.session, action) }
-      fixedWorkspace?.reconcile(proof.side)
+      const nextProof = {
+        ...proof,
+        session: proof.side === 'forward'
+          ? applyForward(proof.session, action)
+          : applyBackward(proof.session, action),
+      }
+      shellSession = proofShellSession(nextProof)
+      fixedWorkspace?.reconcile(nextProof.side)
       return
     }
   }
@@ -1020,11 +1032,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
   // ---- domain pointer claims (selection is owned by InteractiveViewport) ----
   const claimPointer = (sample: PointerSample): PointerClaim | null => {
-    return mode === 'prove' ? proofMoves.claim(sample) : construct.claim(sample)
+    return shellSession.kind === 'prove' ? proofMoves.claim(sample) : construct.claim(sample)
   }
 
   // ---- chrome refresh ----
   const refreshChrome = (): void => {
+    const mode = shellSession.kind
+    const proof = currentProof()
+    const replay = shellSession.kind === 'replay' ? shellSession.replay : null
+    const replayK = shellSession.kind === 'replay' ? shellSession.cursor : 0
     const goal = `goal ${goalLhs === null ? 'LHS unset' : 'LHS set'}/${goalRhs === null ? 'RHS unset' : 'RHS set'}`
     if (mode === 'replay' && replay !== null) {
       const rule = replayK === 0 ? '(start)' : replay.labelAt(replayK)
@@ -1054,7 +1070,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // the 3D view has no diagram to present alongside it: disable entry,
     // and leave 3D if a dual proof begins while it's already open.
     view3Btn.disabled = proof?.kind === 'dual'
-    if (proof?.kind === 'dual' && view3 !== null) toggleView3()
+    if (proof?.kind === 'dual' && view3State.kind !== 'closed') closeView3()
     leaveBtn.hidden = mode === 'edit'
     leaveBtn.textContent = mode === 'replay' ? 'Exit replay' : 'Return to editing'
     nameInput.hidden = mode === 'edit'
@@ -1146,7 +1162,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           refreshChrome()
         })))
         if (sel.nodes.length === 1 && sel.regions.length === 0 && sel.wires.length === 0
-          && displayed.nodes[sel.nodes[0]!]?.kind === 'ref') {
+          && engine.d.nodes[sel.nodes[0]!]?.kind === 'ref') {
           menuDiv.append(button('Unfold relation', guard(() => {
             pushEdit(applyUnfold(editDiagram, sel.nodes[0]!, ctx.relations))
           })))
@@ -1164,13 +1180,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // shared hue. Returns the head wire id, or null when the hit is not part of a group.
   const hoverGroupHeadWire = (hit: Hit): WireId | null => {
     if (hit.kind === 'node') {
-      if (displayed.nodes[hit.id]?.kind !== 'atom') return null
-      for (const [wid, w] of Object.entries(displayed.wires)) {
+      if (engine.d.nodes[hit.id]?.kind !== 'atom') return null
+      for (const [wid, w] of Object.entries(engine.d.wires)) {
         if (w.endpoints.some((ep) => ep.node === hit.id && ep.port.kind === 'head')) return wid
       }
       return null
     }
-    if (hit.kind === 'wire') return displayed.wires[hit.id]?.sig.kind === 'rel' ? hit.id : null
+    if (hit.kind === 'wire') return engine.d.wires[hit.id]?.sig.kind === 'rel' ? hit.id : null
     return null
   }
 
@@ -1207,7 +1223,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     companionWrap.style.position = 'fixed'
     companionWrap.style.zIndex = '1'
     companionWrap.style.boxSizing = 'border-box'
-    companionWrap.style.background = theme.canvas
+    companionWrap.style.background = currentTheme().canvas
     if (companionMode === 'split') {
       companionWrap.style.top = '0'
       companionWrap.style.bottom = ''
@@ -1234,6 +1250,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const renderCompanion = (comp: Companion | null, visible: boolean): void => {
     restyleCompanion(visible)
     if (!visible || comp === null) return
+    const theme = currentTheme()
     companionWrap.style.background = theme.canvas
     companionSurface.syncSize()
     const { width: w, height: h } = companionSurface.size()
@@ -1262,21 +1279,26 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
   const frame = (now = performance.now()): void => {
     if (disposed) return
-    if (mode === 'prove' && proof?.kind === 'dual' && fixedWorkspace !== null) {
+    const theme = currentTheme()
+    const proof = currentProof()
+    if (shellSession.kind === 'prove' && proof?.kind === 'dual' && fixedWorkspace !== null) {
       canvas.hidden = true
       restyleCompanion(false)
       fixedWorkspace.frame(now)
       raf = requestAnimationFrame(frame)
       return
     }
-    if (view3 !== null) {
+    if (view3State.kind === 'open') {
       canvas.hidden = true
-      view3.update({ diagram: currentDiagram(), theme })
+      view3State.view.update({ diagram: currentDiagram(), theme })
       raf = requestAnimationFrame(frame)
       return
     }
     canvas.hidden = false
-    const comp = companionFor({ mode, replay })
+    const comp = companionFor({
+      mode: shellSession.kind,
+      replay: shellSession.kind === 'replay' ? shellSession.replay : null,
+    })
     const companionVisible = comp !== null && companionMode !== 'hidden'
     // Split gives the companion the right half, so the main view fits the left
     // half; PiP/hidden leave the main view full-width (PiP overlays a corner).
@@ -1335,7 +1357,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Replay stepping by arrow keys. Inert outside replay mode; ignores keys while
   // a text/number input is focused so field editing is never hijacked.
   const onKeyDown = (e: KeySample): boolean => {
-    if (mode === 'prove' && proof?.kind === 'dual') return false
+    const proof = currentProof()
+    if (shellSession.kind === 'prove' && proof?.kind === 'dual') return false
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       if (e.shiftKey) onRedo()
       else onUndo()
@@ -1359,9 +1382,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       interaction.resetZoom()
       return true
     }
-    if (mode !== 'replay' || replay === null) return false
-    if (e.key === 'ArrowRight') { gotoReplayStep(replayK + 1); return true }
-    if (e.key === 'ArrowLeft') { gotoReplayStep(replayK - 1); return true }
+    if (shellSession.kind !== 'replay') return false
+    if (e.key === 'ArrowRight') { gotoReplayStep(shellSession.cursor + 1); return true }
+    if (e.key === 'ArrowLeft') { gotoReplayStep(shellSession.cursor - 1); return true }
     return false
   }
   // ---- persistence ----
@@ -1423,13 +1446,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let randomBtn!: HTMLButtonElement
   randomBtn = button('Random…', () => generateEntry.open(randomBtn))
   const leaveBtn = button('Return to editing', leaveProof)
-  // Theme toggle: view-only, persists for the session; paint reads `theme`
+  // Theme toggle: view-only, persists for the session; paint reads the selected theme
   // every frame, so flipping it re-styles the next frame with no rebuild.
-  const themeBtn = button(`Theme: ${theme.name}`, () => {
+  const themeBtn = button(`Theme: ${currentTheme().name}`, () => {
     themeIndex = (themeIndex + 1) % themeCycle.length
-    theme = themeCycle[themeIndex]!
     applyThemeBackdrop()
-    themeBtn.textContent = `Theme: ${theme.name}`
+    themeBtn.textContent = `Theme: ${currentTheme().name}`
     renderLibrary()
   })
   // Cycle the companion pane hidden → PiP → split. Session-lifetime, like the
@@ -1557,7 +1579,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     },
     refuse,
     headWireColor: (wire) => {
-      const color = relationWireHues(editDiagram, theme.relationHueLightness).get(wire)
+      const color = relationWireHues(editDiagram, currentTheme().relationHueLightness).get(wire)
       if (color === undefined) throw new Error(`atom option references missing relation wire '${wire}'`)
       return color
     },
@@ -1568,6 +1590,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     diagram: currentDiagram,
     context: () => ctx,
     commit: (action) => {
+      const proof = currentProof()
       if (proof?.kind !== 'track') throw new Error('proof spawning requires an active track proof')
       applyProofAction(action)
       return currentDiagram()
@@ -1575,7 +1598,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     place: (node, at) => seedBodyPlacement(engine, node, at),
     refuse,
     headWireColor: (wire) => {
-      const color = relationWireHues(currentDiagram(), theme.relationHueLightness).get(wire)
+      const color = relationWireHues(currentDiagram(), currentTheme().relationHueLightness).get(wire)
       if (color === undefined) throw new Error(`atom option references missing relation wire '${wire}'`)
       return color
     },
@@ -1583,7 +1606,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   construct = new ConstructController({
     host: document.body,
-    active: () => mode === 'edit',
+    active: () => shellSession.kind === 'edit',
     engine: () => engine,
     viewScale: () => view.scale,
     diagram: () => editDiagram,
@@ -1615,7 +1638,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         )
       }
     },
-    theme: () => theme,
+    theme: currentTheme,
     copy: {
       destination: (sample) => ({
         kind: 'edit', diagram: editDiagram,
@@ -1630,7 +1653,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   proofMoves = new ProofMoveController({
     host: document.body,
-    active: () => mode === 'prove' && proof?.kind === 'track',
+    active: () => shellSession.kind === 'prove' && currentProof()?.kind === 'track',
     diagram: currentDiagram,
     engine: () => engine,
     viewScale: () => view.scale,
@@ -1650,7 +1673,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       seedBodyPlacement(engine, introduced, at)
     },
     refuse: (text, pointer) => refuse(text, pointer),
-    theme: () => theme,
+    theme: currentTheme,
     fuel: () => readCount(fuel.input, 'fuel'),
     openSpawn: (sample, region) => {
       proofSpawn.open({ screen: sample.client, world: sample.world, region })
@@ -1660,12 +1683,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     canvas,
     view,
     engine: () => engine,
-    diagram: () => displayed,
-    selectionEnabled: () => mode !== 'replay',
+    diagram: () => engine.d,
+    selectionEnabled: () => shellSession.kind !== 'replay',
     claim: claimPointer,
-    doubleClick: (sample) => mode === 'prove' && proofMoves.doubleClick(sample),
+    doubleClick: (sample) => shellSession.kind === 'prove' && proofMoves.doubleClick(sample),
     contextMenu: (sample) => {
-      if (mode === 'prove') {
+      if (shellSession.kind === 'prove') {
         proofMoves.contextMenu(sample)
         return
       }
@@ -1691,17 +1714,19 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     inputAllowed: () => true,
   })
   const timelineView = (): TimelineView | null => {
-    if (mode === 'replay' && replay !== null) {
+    if (shellSession.kind === 'replay') {
+      const { replay, cursor: replayK } = shellSession
       return {
-        states: Array.from({ length: replay.actionCount + 1 }, (_, cursor) => replay!.diagramAt(cursor)),
+        states: Array.from({ length: replay.actionCount + 1 }, (_, cursor) => replay.diagramAt(cursor)),
         actions: replay.actions,
         cursor: replayK,
-        boundaryAt: (cursor) => replay!.boundaryAt(cursor),
+        boundaryAt: (cursor) => replay.boundaryAt(cursor),
         inputAllowed: () => true,
         moveTo: gotoReplayStep,
       }
     }
-    if (mode !== 'prove' || proof === null) return null
+    if (shellSession.kind !== 'prove') return null
+    const proof = shellSession.proof
     if (proof.kind === 'track') {
       const active = proof.track
       return {
@@ -1709,14 +1734,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         boundaryAt: (cursor) => active.timeline.boundaries[cursor]!,
         inputAllowed: () => true,
         moveTo: (cursor) => {
-          if (proof?.kind !== 'track') return
+          const current = currentProof()
+          if (current?.kind !== 'track') return
           cancelAuthoring()
-          const timeline = proof.track.timeline
+          const timeline = current.track.timeline
           const previous = timeline.cursor
           const action = Math.abs(cursor - previous) === 1
             ? timeline.actions[Math.min(cursor, previous)]
             : undefined
-          proof = { kind: 'track', track: moveTrack(proof.track, cursor) }
+          shellSession = proofShellSession({ kind: 'track', track: moveTrack(current.track, cursor) })
           sync(
             false,
             false,
@@ -1747,6 +1773,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const renderHistoryPreview = (cursor: number, anchor: { readonly x: number; readonly y: number }): void => {
     const timeline = timelineView()
     if (timeline === null) return
+    const theme = currentTheme()
     const transition = previewTransition(timeline.states, cursor)
     let byAfter = previewCache.get(transition.before)
     if (byAfter === undefined) {
@@ -1852,8 +1879,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     mainMotion.dispose()
     fixedWorkspace?.dispose()
     fixedWorkspace = null
-    view3?.dispose()
-    view3Wrap?.remove()
+    closeView3()
     temporal?.dispose()
     temporal = null
     window.clearTimeout(refusalTimer)
@@ -1887,6 +1913,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         bodies: number
         foldedRefs: string[]
       } {
+        const replay = shellSession.kind === 'replay' ? shellSession.replay : null
+        const replayK = shellSession.kind === 'replay' ? shellSession.cursor : 0
         const endpointKind = replay === null
           ? 'state'
           : replayK === 0
@@ -1897,25 +1925,27 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
                 ? 'meet'
                 : 'state'
         return {
-          mode,
+          mode: shellSession.kind,
           k: replayK,
           n: replay?.actionCount ?? 0,
           meetingIndex: replay?.meetingIndex ?? 0,
           endpointKind,
           label: replay === null ? '' : replayK === 0 ? '(start)' : replay.labelAt(replayK),
           bodies: engine.bodies.size,
-          foldedRefs: [...new Set(Object.values(displayed.nodes)
+          foldedRefs: [...new Set(Object.values(engine.d.nodes)
             .filter((node) => node.kind === 'ref')
             .map((node) => node.defId))],
         }
       },
       proof(): null | { kind: 'track'; direction: TrackDirection } | { kind: 'dual'; side: 'forward' | 'backward' } {
+        const proof = currentProof()
         if (proof === null) return null
         return proof.kind === 'track'
           ? { kind: 'track', direction: proof.track.direction }
           : { kind: 'dual', side: proof.side }
       },
       proofSnapshot() {
+        const proof = currentProof()
         if (proof === null) return null
         return proof.kind === 'track'
           ? serializeProofSnapshot(proof.track.timeline, proof.track.direction)
@@ -1947,7 +1977,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         const t0 = performance.now()
         settleStep(engine, null)
         const t1 = performance.now()
-        paint(engine, theme)
+        paint(engine, currentTheme())
         const t2 = performance.now()
         for (let i = 0; i < 10; i++) settleStep(engine, null)
         const t3 = performance.now()
@@ -1995,6 +2025,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         wires: { id: string; scope: string; endpoints: number }[]
         regions: { id: string; kind: string; parent: string | null }[]
       } {
+        const displayed = engine.d
         return {
           nodes: Object.entries(displayed.nodes).map(([id, node]) => ({
             id,
@@ -2054,7 +2085,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       },
       regions(): { id: string; kind: string; parent: string | null; x: number; y: number; r: number }[] {
         return [...engine.regions.entries()].map(([id, g]) => {
-          const reg = displayed.regions[id]
+          const reg = engine.d.regions[id]
           return { id, kind: reg?.kind ?? '?', parent: reg !== undefined && reg.kind !== 'sheet' ? reg.parent : null, x: g.center.x, y: g.center.y, r: g.radius }
         })
       },
@@ -2097,7 +2128,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
             { end: geometry.leg.to, point: geometry.pts.at(-1) },
           ]
           for (const candidate of candidates) {
-            if (candidate.point === undefined || displayed.nodes[candidate.end.body] === undefined) continue
+            if (candidate.point === undefined || engine.d.nodes[candidate.end.body] === undefined) continue
             const general = hitTest(engine, candidate.point, { scale: view.scale })
             const wire = wireHitTest(engine, candidate.point, { scale: view.scale })
             if (general?.kind === 'node' && general.id === candidate.end.body && wire?.id === geometry.leg.wid) {
@@ -2111,7 +2142,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       // companion is not applicable (EDIT / no session / no replay), else the
       // label, whether it is on-screen, and its engine body count.
       companion(): { visible: boolean; label: string; bodies: number; rebuilds: number; pos: { id: string; x: number; y: number }[] } | null {
-        const c = companionFor({ mode, replay })
+        const c = companionFor({
+          mode: shellSession.kind,
+          replay: shellSession.kind === 'replay' ? shellSession.replay : null,
+        })
         if (c === null) return null
         return {
           visible: companionMode !== 'hidden',
@@ -2133,7 +2167,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       // so history/replay assertions inspect nameless term content rather than
       // inferring it from display labels or node counts.
       displayedJson(): string {
-        return JSON.stringify(diagramToJson(displayed))
+        return JSON.stringify(diagramToJson(engine.d))
       },
       // The EDIT sheet's storage as JSON — e2e/interaction.spec.ts's
       // "plain and Shift drags are selection-only..." test compares

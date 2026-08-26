@@ -9,7 +9,6 @@ import {
   planBetaMotion,
   sampleBetaMotion,
   type LambdaMotionPlan,
-  type LambdaPhase,
   type LambdaStroke,
 } from '../../src/view/lambda-motion'
 import { lambdaFrameGeometry } from '../../src/view/morph'
@@ -30,44 +29,28 @@ const cases = [
   { name: 'capture avoidance', source: '(\\x. \\y. x) y', target: '\\z. y', copies: 1 },
 ] as const
 
-const expectedPhases = (copyCount: number): readonly (readonly [number, LambdaPhase])[] => (
-  copyCount > 0
-    ? [
-        [0, 'identify'],
-        [0.15 - EPSILON, 'identify'], [0.15, 'duplicate'],
-        [0.34 - EPSILON, 'duplicate'], [0.34, 'make-space'],
-        [0.54 - EPSILON, 'make-space'], [0.54, 'substitute'],
-        [0.82 - EPSILON, 'substitute'], [0.82, 'cleanup'],
-        [0.965 - EPSILON, 'cleanup'], [0.965, 'settle'],
-        [1, 'settle'],
-      ]
-    : [
-        [0, 'identify'],
-        [0.15 - EPSILON, 'identify'], [0.15, 'discard'],
-        [0.38 - EPSILON, 'discard'], [0.38, 'make-space'],
-        [0.64 - EPSILON, 'make-space'], [0.64, 'cleanup'],
-        [0.93 - EPSILON, 'cleanup'], [0.93, 'settle'],
-        [1, 'settle'],
-      ]
-)
-
-const origins = (strokes: readonly LambdaStroke[]): string[] => (
-  [...new Set(strokes.map((stroke) => stroke.originId))].sort()
+const origins = (strokes: readonly { readonly originId: string }[]): string[] => (
+  [...new Set(strokes.map(({ originId }) => originId))].sort()
 )
 
 const copiesAt = (plan: LambdaMotionPlan, progress: number): Map<number, LambdaStroke[]> => {
   const copies = new Map<number, LambdaStroke[]>()
   for (const stroke of sampleBetaMotion(plan, progress, BASE).strokes) {
-    if (stroke.copyIndex === null) continue
-    const group = copies.get(stroke.copyIndex) ?? []
+    const match = /^copy:(\d+):/.exec(stroke.id)
+    if (match === null) continue
+    const copyIndex = Number(match[1])
+    const group = copies.get(copyIndex) ?? []
     group.push(stroke)
-    copies.set(stroke.copyIndex, group)
+    copies.set(copyIndex, group)
   }
   return copies
 }
 
-const colorsOf = (frame: ReturnType<typeof sampleBetaMotion>, lineage: LambdaStroke['lineage']): Set<string> => (
-  new Set(frame.strokes.filter((stroke) => stroke.lineage === lineage).map((stroke) => stroke.color))
+const colorsOf = (
+  frame: ReturnType<typeof sampleBetaMotion>,
+  ids: ReadonlySet<string>,
+): Set<string> => (
+  new Set(frame.strokes.filter((stroke) => ids.has(stroke.id)).map((stroke) => stroke.color))
 )
 
 const clean = (value: number): number => Number(value.toFixed(10))
@@ -88,20 +71,24 @@ const paintGeometry = (geometry: NodeGeometry): unknown => ({
 
 describe('corrected structural beta motion', () => {
   for (const fixture of cases) {
-    it(`${fixture.name}: uses the corrected stages and reaches the capture-avoiding target`, () => {
+    it(`${fixture.name}: reaches the capture-avoiding target with the expected copy count`, () => {
       const source = term(fixture.source)
       const plan = planBetaMotion(source, ROOT_BETA)
 
       expect(plan.copyCount).toBe(fixture.copies)
       expect(termEq(plan.target, term(fixture.target))).toBe(true)
       expect(termEq(plan.target, applyStepAt(source, ROOT_BETA))).toBe(true)
-      for (const [progress, phase] of expectedPhases(fixture.copies)) {
-        expect(sampleBetaMotion(plan, progress, BASE).phase, `phase at ${progress}`).toBe(phase)
-      }
     })
 
     it(`${fixture.name}: preserves hue identity immediately before and after every boundary`, () => {
       const plan = planBetaMotion(term(fixture.source), ROOT_BETA)
+      const persistentIds = new Set(plan.model.pairs.map(({ source }) => source.id))
+      const redexIds = new Set([
+        plan.model.lambdaStroke,
+        ...plan.model.boundStrokes,
+        ...plan.model.redexScaffolding,
+      ].map(({ id }) => id))
+      const argumentIds = new Set(plan.model.sourceArgument.map(({ id }) => id))
       const boundaries = [
         plan.times.split,
         plan.times.liftEnd,
@@ -113,11 +100,11 @@ describe('corrected structural beta motion', () => {
       for (const boundary of boundaries) {
         for (const progress of [boundary - EPSILON, boundary + EPSILON]) {
           const frame = sampleBetaMotion(plan, progress, BASE)
-          const persistent = colorsOf(frame, 'persistent')
+          const persistent = colorsOf(frame, persistentIds)
           if (persistent.size > 0) expect(persistent, `persistent at ${progress}`).toEqual(new Set([BASE]))
-          const redex = colorsOf(frame, 'redex')
+          const redex = colorsOf(frame, redexIds)
           if (redex.size > 0) expect(redex, `redex at ${progress}`).toEqual(new Set([REDEX_COLOR]))
-          const argument = colorsOf(frame, 'argument')
+          const argument = colorsOf(frame, argumentIds)
           if (argument.size > 0) {
             expect(argument, `argument at ${progress}`).toEqual(new Set([
               progress < plan.times.split || progress <= plan.times.split + EPSILON
@@ -141,26 +128,27 @@ describe('corrected structural beta motion', () => {
   for (const fixture of cases.filter(({ copies }) => copies > 0)) {
     it(`${fixture.name}: duplicates every argument stroke as complete origin-keyed copies`, () => {
       const plan = planBetaMotion(term(fixture.source), ROOT_BETA)
-      const sourceArgument = sampleBetaMotion(plan, 0.15 - EPSILON, BASE).strokes
-        .filter((stroke) => stroke.lineage === 'argument')
-      const expectedOrigins = origins(sourceArgument)
+      const expectedOrigins = origins(plan.model.sourceArgument)
       expect(expectedOrigins.length).toBeGreaterThan(0)
 
       const copies = copiesAt(plan, 0.34)
       expect([...copies.keys()]).toEqual(Array.from({ length: fixture.copies }, (_, index) => index))
-      for (const copy of copies.values()) {
-        expect(origins(copy)).toEqual(expectedOrigins)
+      for (const [copyIndex, copy] of copies) {
+        const planned = plan.model.targetCopies.get(copyIndex) ?? []
+        expect(origins(planned)).toEqual(expectedOrigins)
+        expect(copy.map(({ id }) => id).sort()).toEqual(planned.map(({ id }) => id).sort())
       }
     })
   }
 
   it('deletion creates no copy and contracts the complete unused argument', () => {
     const plan = planBetaMotion(term(cases[2].source), ROOT_BETA)
+    const argumentIds = new Set(plan.model.sourceArgument.map(({ id }) => id))
     const sourceArgument = sampleBetaMotion(plan, 0.15 - EPSILON, BASE).strokes
-      .filter((stroke) => stroke.lineage === 'argument')
+      .filter((stroke) => argumentIds.has(stroke.id))
     expect(sourceArgument.length).toBeGreaterThan(0)
     expect(copiesAt(plan, 0.15).size).toBe(0)
-    expect(sampleBetaMotion(plan, 0.38, BASE).strokes.some((stroke) => stroke.lineage === 'argument')).toBe(false)
+    expect(sampleBetaMotion(plan, 0.38, BASE).strokes.some((stroke) => argumentIds.has(stroke.id))).toBe(false)
   })
 
   it('parks complete copies separately, docks them at their sockets, then retracts stems before the binder', () => {
@@ -176,19 +164,21 @@ describe('corrected structural beta motion', () => {
     expect(Math.hypot(centers[0]!.x - centers[1]!.x, centers[0]!.y - centers[1]!.y)).toBeGreaterThan(0.01)
 
     const docked = sampleBetaMotion(plan, plan.times.dockEnd, BASE)
+    const dockedCopies = copiesAt(plan, plan.times.dockEnd)
     for (const socket of docked.sockets) {
-      const endpoints = docked.strokes
-        .filter(({ copyIndex }) => copyIndex === socket.copyIndex)
+      const copyIndex = Number(/^socket:(\d+)$/.exec(socket.id)?.[1])
+      const endpoints = (dockedCopies.get(copyIndex) ?? [])
         .flatMap(({ points }) => points)
       expect(endpoints.some((point) => Math.hypot(point.x - socket.point.x, point.y - socket.point.y) < 1e-9)).toBe(true)
     }
     const stemsRetracting = sampleBetaMotion(plan, (plan.times.dockEnd + plan.times.stemEnd) / 2, BASE)
+    const boundIds = new Set(plan.model.boundStrokes.map(({ id }) => id))
     expect(stemsRetracting.sockets.every(({ amount }) => amount > 0)).toBe(true)
-    expect(stemsRetracting.strokes.some(({ role, lineage }) => role === 'variable' && lineage === 'redex')).toBe(true)
+    expect(stemsRetracting.strokes.some(({ id, role }) => role === 'variable' && boundIds.has(id))).toBe(true)
     const binderRetracting = sampleBetaMotion(plan, (plan.times.stemEnd + plan.times.barEnd) / 2, BASE)
     expect(binderRetracting.sockets.every(({ amount }) => amount === 0)).toBe(true)
-    expect(binderRetracting.strokes.some(({ role, lineage }) => role === 'variable' && lineage === 'redex')).toBe(false)
-    expect(binderRetracting.strokes.some(({ role, lineage }) => role === 'lambda' && lineage === 'redex')).toBe(true)
+    expect(binderRetracting.strokes.some(({ id, role }) => role === 'variable' && boundIds.has(id))).toBe(false)
+    expect(binderRetracting.strokes.some(({ id }) => id === plan.model.lambdaStroke.id)).toBe(true)
   })
 
   it('keeps coincident application-copy lambda bars as complete visible arcs in 2D at parking and settle', () => {
@@ -197,7 +187,7 @@ describe('corrected structural beta motion', () => {
 
     for (const progress of [plan.times.spaceEnd, 1]) {
       const frame = sampleBetaMotion(plan, progress, BASE)
-      const copyBars = frame.strokes.filter(({ lineage, role }) => lineage === 'copy' && role === 'lambda')
+      const copyBars = frame.strokes.filter(({ id, role }) => id.startsWith('copy:') && role === 'lambda')
       expect(copyBars).toHaveLength(2)
       for (const bar of copyBars) {
         expect(bar.geometry.kind).toBe('arc')
@@ -221,9 +211,15 @@ describe('corrected structural beta motion', () => {
     expect(new Set(initial.strokes.map(({ color }) => color))).toEqual(new Set([BASE]))
 
     const identified = sampleBetaMotion(plan, 0.15 - EPSILON, BASE)
-    expect(new Set(identified.strokes.filter(({ lineage }) => lineage === 'redex').map(({ color }) => color)))
+    const redexIds = new Set([
+      plan.model.lambdaStroke,
+      ...plan.model.boundStrokes,
+      ...plan.model.redexScaffolding,
+    ].map(({ id }) => id))
+    const argumentIds = new Set(plan.model.sourceArgument.map(({ id }) => id))
+    expect(colorsOf(identified, redexIds))
       .toEqual(new Set([REDEX_COLOR]))
-    expect(new Set(identified.strokes.filter(({ lineage }) => lineage === 'argument').map(({ color }) => color)))
+    expect(colorsOf(identified, argumentIds))
       .toEqual(new Set([ARGUMENT_COLOR]))
 
     const copyStart = copiesAt(plan, 0.15)
@@ -244,9 +240,7 @@ describe('corrected structural beta motion', () => {
   it('colors the consumed binder redex pink throughout the interior identify stage', () => {
     const plan = planBetaMotion(term(cases[1].source), ROOT_BETA)
     const frame = sampleBetaMotion(plan, plan.times.split / 2, BASE)
-    const binder = frame.strokes.find(({ role, ownerId }) => (
-      role === 'lambda' && ownerId === 'root/fn'
-    ))
+    const binder = frame.strokes.find(({ id }) => id === plan.model.lambdaStroke.id)
     expect(binder).toBeDefined()
     expect(binder!.color).toBe(REDEX_COLOR)
   })

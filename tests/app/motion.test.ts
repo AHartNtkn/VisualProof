@@ -104,7 +104,7 @@ describe('generic diagram motion', () => {
       100,
       singleStepAction('beta', conversion.step),
     )
-    expect(coordinator.debugState(100).beta).toMatchObject({ node, phase: 'identify' })
+    expect(coordinator.debugState(100).beta).toEqual({ node })
 
     for (const sample of [
       () => coordinator.scrubBeta(0.075),
@@ -141,7 +141,7 @@ describe('generic diagram motion', () => {
       singleStepAction('beta', conversion.step),
       'reverse',
     )
-    expect(coordinator.debugState(100).beta?.phase).toBe('settle')
+    expect(coordinator.debugState(100).beta).toEqual({ node })
     const plan = planBetaMotion(parsed.term, { kind: 'beta', path: [] })
     expect(coordinator.historyBeta(0))
       .toEqual(sampleBetaMotion(plan, 1, LIGHT.wire))

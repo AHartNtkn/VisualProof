@@ -21,6 +21,7 @@ export type NodeArc = {
   readonly a1: number
   readonly kind: 'lam' | 'app' | 'rail'
   readonly hueRow: number
+  readonly ownerPath: readonly PathSeg[]
 }
 
 export type NodeRadial = {
@@ -29,6 +30,7 @@ export type NodeRadial = {
   readonly r1: number
   readonly kind: 'var' | 'output' | 'port'
   readonly hueRow: number | null
+  readonly ownerPath: readonly PathSeg[]
 }
 
 export type TermOccurrenceHit =
@@ -80,7 +82,7 @@ export function bendMaps(cols: number, rows: number, railRows: number): BendMaps
 
 export function bendGrid(grid: TrompGrid): NodeGeometry {
   const { a0, theta, radius, pierceR } = bendMaps(grid.cols, grid.rows, grid.railRows)
-  const arcs: NodeArc[] = grid.bars.map((bar) => {
+  const arcs: NodeArc[] = grid.bars.map((bar, index) => {
     const pad = bar.kind === 'lam' ? lambdaBarPadding(grid.cols) : 0
     return {
       r: radius(bar.row),
@@ -88,19 +90,23 @@ export function bendGrid(grid: TrompGrid): NodeGeometry {
       a1: theta(bar.colEnd) + pad,
       kind: bar.kind,
       hueRow: bar.row,
+      ownerPath: grid.barOwners[index] ?? [],
     }
   })
-  const radials: NodeRadial[] = grid.stems.map((stem) => ({
+  const radials: NodeRadial[] = grid.stems.map((stem, index) => ({
     angle: theta(stem.col),
     r0: radius(stem.rowTop),
     r1: radius(stem.rowBottom),
     kind: stem.kind,
     hueRow: stem.kind === 'var' ? stem.rowTop : null,
+    ownerPath: grid.stemOwners[index] ?? [],
   }))
   const portAnchors: Record<string, Vec2> = {}
   for (const rail of grid.rails) {
     const angle = theta(rail.stemCol)
-    radials.push({ angle, r0: radius(rail.row), r1: pierceR, kind: 'port', hueRow: null })
+    radials.push({
+      angle, r0: radius(rail.row), r1: pierceR, kind: 'port', hueRow: null, ownerPath: [],
+    })
     portAnchors[`f:${rail.slot}`] = polar(angle, pierceR)
   }
 
@@ -166,7 +172,9 @@ export function termGeometry(term: Term, interfaceArity?: number): NodeGeometry 
 }
 
 const RAIL_R = 2
-const RAIL_ARC: NodeArc = { r: RAIL_R, a0: 0, a1: 2 * Math.PI, kind: 'rail', hueRow: 0 }
+const RAIL_ARC: NodeArc = {
+  r: RAIL_R, a0: 0, a1: 2 * Math.PI, kind: 'rail', hueRow: 0, ownerPath: [],
+}
 
 function rimAnchors(keys: readonly string[]): Record<string, Vec2> {
   const anchors: Record<string, Vec2> = {}

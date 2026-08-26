@@ -53,7 +53,6 @@ export type MotionDebugState = {
   readonly hover: number
   readonly beta: null | {
     readonly node: string | null
-    readonly phase: LambdaStrokeFrame['phase']
   }
 }
 
@@ -263,7 +262,7 @@ export class MotionCoordinator {
       hover: this.hoverFraction(now),
       beta: this.#beta === null
         ? null
-        : { node: this.#beta.node, phase: this.#beta.frame.phase },
+        : { node: this.#beta.node },
     }
   }
 

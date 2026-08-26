@@ -15,17 +15,6 @@ export const COPY_HUES = Object.freeze([
   '#34d399',
 ] as const)
 
-export type LambdaPhase =
-  | 'identify'
-  | 'duplicate'
-  | 'discard'
-  | 'make-space'
-  | 'substitute'
-  | 'cleanup'
-  | 'settle'
-
-export type LambdaStrokeLineage = 'persistent' | 'redex' | 'argument' | 'copy'
-
 export type LambdaStrokeRole =
   | 'lambda'
   | 'application'
@@ -45,26 +34,22 @@ export type LambdaStrokeGeometry =
 
 export type LambdaStroke = {
   readonly id: string
-  /** The corresponding source-argument stroke, or the stroke's own stable id. */
-  readonly originId: string
-  readonly ownerId: string | null
   readonly role: LambdaStrokeRole
-  readonly lineage: LambdaStrokeLineage
-  readonly copyIndex: number | null
+  readonly subtermPath: readonly PathSeg[]
   readonly color: string
   readonly points: readonly [Vec2, Vec2]
   readonly geometry: LambdaStrokeGeometry
 }
 
 export type LambdaSocket = {
-  readonly copyIndex: number
-  readonly sourceOccurrenceId: string
+  readonly id: string
+  readonly radius: number
+  readonly subtermPath: readonly PathSeg[]
   readonly point: Vec2
   readonly amount: number
 }
 
 export type LambdaStrokeFrame = {
-  readonly phase: LambdaPhase
   readonly strokes: readonly LambdaStroke[]
   readonly sockets: readonly LambdaSocket[]
 }
@@ -116,6 +101,7 @@ type StrokeModel = {
   readonly originId: string
   readonly ownerId: string | null
   readonly originOwnerId: string | null
+  readonly ownerPath: readonly PathSeg[]
   readonly role: LambdaStrokeRole
   readonly copyIndex: number | null
   readonly drawKind: StrokeDrawKind
@@ -139,6 +125,7 @@ type StrokeModelSet = {
   readonly strokeById: ReadonlyMap<string, StrokeModel>
   readonly nodeBoxes: ReadonlyMap<string, NodeBox>
   readonly nodeIds: ReadonlySet<string>
+  readonly pathByNodeId: ReadonlyMap<string, readonly PathSeg[]>
   readonly nodeOut: (node: AnnotatedNode) => string
 }
 
@@ -414,6 +401,7 @@ function buildStrokeModel(root: AnnotatedNode, interfaceArity: number): StrokeMo
       id, originId,
       ownerId: owner?.id ?? null,
       originOwnerId: owner === null ? null : nodeOriginId(owner),
+      ownerPath: owner === null ? [] : pathsByNode.get(owner.id)!,
       role, copyIndex: owner?.copyIndex ?? null, drawKind, a, b,
     })
   }
@@ -558,7 +546,7 @@ function buildStrokeModel(root: AnnotatedNode, interfaceArity: number): StrokeMo
   return {
     root, grid, points, pointsByOrigin, strokes,
     strokeById: new Map(strokes.map((stroke) => [stroke.id, stroke])),
-    nodeBoxes, nodeIds,
+    nodeBoxes, nodeIds, pathByNodeId: pathsByNode,
     nodeOut: nodeOutId,
   }
 }
@@ -622,7 +610,6 @@ function strokeFrame(
   view: ViewFrame,
   reflow: number,
   color: string,
-  lineage: LambdaStrokeLineage,
   lambdaPadScale = 1,
 ): LambdaStroke {
   const { maps, offset, lambdaPad } = viewAt(view, reflow)
@@ -654,11 +641,8 @@ function strokeFrame(
   }
   return {
     id: stroke.id,
-    originId: stroke.originId,
-    ownerId: stroke.ownerId,
     role: stroke.role,
-    lineage,
-    copyIndex: stroke.copyIndex,
+    subtermPath: stroke.ownerPath,
     color,
     points: [from, to],
     geometry,
@@ -667,15 +651,6 @@ function strokeFrame(
 
 function copyHue(copyIndex: number): string {
   return COPY_HUES[copyIndex % COPY_HUES.length]!
-}
-
-function phaseAt(copyCount: number, times: LambdaStageTimes, progress: number): LambdaPhase {
-  if (progress < times.split) return 'identify'
-  if (progress < times.liftEnd) return copyCount > 0 ? 'duplicate' : 'discard'
-  if (progress < times.spaceEnd) return 'make-space'
-  if (progress < times.dockEnd) return 'substitute'
-  if (progress < times.barEnd) return 'cleanup'
-  return 'settle'
 }
 
 function createMotionModel(
@@ -901,35 +876,25 @@ export function sampleBetaMotion(
   if (!Number.isFinite(progress)) throw new Error(`Lambda motion progress must be finite, got ${progress}`)
   const p = clamp(progress), { times, copyCount } = plan, model = plan.model
   if (p === 0) {
-    const argumentIds = new Set(model.sourceArgument.map(({ id }) => id))
-    const redexIds = new Set([
-      model.lambdaStroke,
-      ...model.boundStrokes,
-      ...model.redexScaffolding,
-    ].map(({ id }) => id))
     return {
-      phase: 'identify',
       strokes: model.source.strokes.map((stroke) => strokeFrame(
         stroke,
         shifted(stroke.a.coord, model.view.sourceOffset),
         shifted(stroke.b.coord, model.view.sourceOffset),
         model.view, 0,
         baseColor,
-        argumentIds.has(stroke.id) ? 'argument' : redexIds.has(stroke.id) ? 'redex' : 'persistent',
       )),
       sockets: [],
     }
   }
   if (p === 1) {
     return {
-      phase: 'settle',
       strokes: model.target.strokes.map((stroke) => strokeFrame(
         stroke,
         shifted(stroke.a.coord, model.view.targetOffset),
         shifted(stroke.b.coord, model.view.targetOffset),
         model.view, 1,
         baseColor,
-        stroke.copyIndex === null ? 'persistent' : 'copy',
       )),
       sockets: [],
     }
@@ -953,16 +918,15 @@ export function sampleBetaMotion(
     a: MotionCoord,
     b: MotionCoord,
     color: string,
-    lineage: LambdaStrokeLineage,
     lambdaPadScale = 1,
   ): void => {
     strokes.push(strokeFrame(
-      source, a, b, model.view, space, color, lineage, lambdaPadScale,
+      source, a, b, model.view, space, color, lambdaPadScale,
     ))
   }
 
   for (const pair of model.pairs) {
-    push(pair.source, movingSource(pair.source.a, space), movingSource(pair.source.b, space), baseColor, 'persistent')
+    push(pair.source, movingSource(pair.source.a, space), movingSource(pair.source.b, space), baseColor)
   }
 
   const binderRow = mix(model.sourceLambdaA.row, model.targetBinderRow, space)
@@ -975,7 +939,6 @@ export function sampleBetaMotion(
       gridCoord(mix(binderLeft, binderCenter, bar), binderRow),
       gridCoord(mix(binderRight, binderCenter, bar), binderRow),
       REDEX_COLOR,
-      'redex',
       1 - bar,
     )
   }
@@ -988,10 +951,11 @@ export function sampleBetaMotion(
     const bottom = gridCoord(mix(socketCoord.col, top.col, stem), mix(socketCoord.row, top.row, stem))
     const boundStroke = model.boundStrokes.find(({ ownerId }) => ownerId === occurrence.sourceVarId)
     if (boundStroke === undefined) throw new Error(`missing bound-variable stem ${occurrence.sourceVarId}`)
-    if (stem < 0.9999) push(boundStroke, top, bottom, REDEX_COLOR, 'redex')
+    if (stem < 0.9999) push(boundStroke, top, bottom, REDEX_COLOR)
     sockets.push({
-      copyIndex: occurrence.copyIndex,
-      sourceOccurrenceId: occurrence.sourceVarId,
+      id: `socket:${occurrence.copyIndex}`,
+      radius: 0.16 + occurrence.copyIndex * 0.025,
+      subtermPath: model.source.pathByNodeId.get(occurrence.sourceVarId) ?? [],
       point: mapCoord(socketCoord, model.view, space),
       amount: (1 - dock) * 0.72 + (1 - stem) * 0.18,
     })
@@ -1007,21 +971,21 @@ export function sampleBetaMotion(
   if (p < times.split) {
     const scaffoldColor = mixColor(baseColor, REDEX_COLOR, identify)
     for (const stroke of model.redexScaffolding) {
-      push(stroke, sourceCoord(stroke.a), sourceCoord(stroke.b), scaffoldColor, 'redex')
+      push(stroke, sourceCoord(stroke.a), sourceCoord(stroke.b), scaffoldColor)
     }
     const argumentColor = mixColor(baseColor, ARGUMENT_COLOR, identify)
     for (const stroke of model.sourceArgument) {
-      push(stroke, sourceCoord(stroke.a), sourceCoord(stroke.b), argumentColor, 'argument')
+      push(stroke, sourceCoord(stroke.a), sourceCoord(stroke.b), argumentColor)
     }
   } else {
     if (lift < 0.9999) {
       for (const stroke of model.redexScaffolding) {
-        push(stroke, collapseToBody(sourceCoord(stroke.a)), collapseToBody(sourceCoord(stroke.b)), REDEX_COLOR, 'redex')
+        push(stroke, collapseToBody(sourceCoord(stroke.a)), collapseToBody(sourceCoord(stroke.b)), REDEX_COLOR)
       }
       if (copyCount === 0) {
         const color = mixColor(ARGUMENT_COLOR, REDEX_COLOR, lift)
         for (const stroke of model.sourceArgument) {
-          push(stroke, collapseToBody(sourceCoord(stroke.a)), collapseToBody(sourceCoord(stroke.b)), color, 'argument')
+          push(stroke, collapseToBody(sourceCoord(stroke.a)), collapseToBody(sourceCoord(stroke.b)), color)
         }
       }
     }
@@ -1063,10 +1027,10 @@ export function sampleBetaMotion(
       }
       const color = p < times.liftEnd ? mixColor(ARGUMENT_COLOR, copyHue(copyIndex), lift) : hue
       for (const stroke of model.targetCopies.get(copyIndex) ?? []) {
-        push(stroke, pointAt(stroke.a), pointAt(stroke.b), color, 'copy')
+        push(stroke, pointAt(stroke.a), pointAt(stroke.b), color)
       }
     }
   }
 
-  return { phase: phaseAt(copyCount, times, p), strokes, sockets }
+  return { strokes, sockets }
 }

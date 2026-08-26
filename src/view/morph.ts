@@ -181,6 +181,7 @@ export function lambdaFrameGeometry(frame: LambdaStrokeFrame): NodeGeometry {
         a1: stroke.geometry.a1,
         kind: stroke.role === 'lambda' ? 'lam' : stroke.role === 'application' ? 'app' : 'rail',
         hueRow: stroke.geometry.r,
+        ownerPath: stroke.subtermPath,
       })
       continue
     }
@@ -196,6 +197,7 @@ export function lambdaFrameGeometry(frame: LambdaStrokeFrame): NodeGeometry {
           ? 'port'
           : 'output',
       hueRow: stroke.role === 'variable' ? fromRadius : null,
+      ownerPath: stroke.subtermPath,
     })
   }
 
