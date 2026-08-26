@@ -2128,6 +2128,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       theoryJson(): string {
         return JSON.stringify(theoryToJson(sessionTheory(ctx, { relations })))
       },
+      // The semantic diagram currently presented by the active edit, proof,
+      // or replay surface. Browser coverage uses the same serializer as files
+      // so history/replay assertions inspect nameless term content rather than
+      // inferring it from display labels or node counts.
+      displayedJson(): string {
+        return JSON.stringify(diagramToJson(displayed))
+      },
       // The EDIT sheet's storage as JSON — e2e/interaction.spec.ts's
       // "plain and Shift drags are selection-only..." test compares
       // snapshots across drags to assert selection-only gestures never

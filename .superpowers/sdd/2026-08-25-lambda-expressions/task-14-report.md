@@ -19,14 +19,23 @@ therefore required no Lambda case.
   - records a checked `lambdaConversion` to normal form.
 - `e2e/construction.spec.ts`
   - exercises the exact `Lambda expression` row and asserts the complete IOTA
-    incidence structure produced by edit-mode spawning.
+    incidence structure and canonical `A(L(B(0)),F(0))` payload produced by
+    edit-mode spawning.
 - `e2e/interaction.spec.ts`
   - exercises proof-mode Lambda spawning, painted-stroke double-click,
     undo/redo controls, declaration, normal serializer download, normal loader,
-    structural action recovery, and replay.
+    structural action recovery, and replay;
+  - asserts canonical nameless term payloads plus the exact term/cap/two-ended
+    IOTA incidence state after spawn, conversion, undo, redo, load, and replay.
 - `e2e/view3.spec.ts`
   - loads the committed example, replays to the redex, enters 3D, and verifies
-    Lambda hover and focus through real scene projection and GPU picking.
+    Lambda hover and focus through real scene projection and GPU picking;
+  - reads back an isolated projected Lambda carrier from the real canvas and
+    proves both base visibility and the Lambda-specific visible hover response.
+- `src/app/shell.ts`
+  - exposes the diagram currently presented in edit/proof/replay through the
+    existing debug seam using `diagramToJson`, allowing browser assertions to
+    inspect replayed nameless term content directly.
 - `tests/app/pipeline.test.ts`
   - covers library rebuild, save/load, and Lambda replay.
 - `tests/app/session.test.ts`
@@ -51,6 +60,24 @@ therefore required no Lambda case.
 - Focused interaction GREEN: 1 passed.
 - Focused load/3D GREEN: 1 passed.
 - Required browser GREEN: 18 passed.
+
+### Fix round 1
+
+- Added exact browser assertions for `A(L(B(0)),F(0))` after both real menu
+  submissions and persisted reload, and for `F(0)` after conversion and replay.
+- Replaced cursor-only undo/redo checks with complete current-diagram checks:
+  one term, two unary caps, two IOTA wires, two ends per wire, and the exact
+  `out`/`f:0` incidences.
+- Added a canvas readback at a projected Lambda segment selected to be more than
+  four CSS pixels from all non-Lambda scene geometry. The test requires visible
+  pixels against the background and a visible Line2 pixel change on Lambda
+  hover, independently of the invisible picking line.
+- Focused RED: 3 browser scenarios ran; construction and canvas evidence passed,
+  while replay-state inspection failed because the active displayed diagram was
+  not yet exposed by the debug seam.
+- Focused GREEN after adding `displayedJson()`: 3 browser scenarios passed.
+- Full GREEN after the fix: 7 focused Vitest tests and 18 required Playwright
+  tests passed; typecheck and diff check passed.
 
 ## Serialization of the example
 

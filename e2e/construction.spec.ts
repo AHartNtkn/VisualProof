@@ -87,7 +87,7 @@ test('the empty-region cascade spawns a Lambda term with one unary cap per incid
 
   await waitForNodes(page, 3)
   const stored = await page.evaluate(() => JSON.parse(window.__vpaDebug!.editJson()) as {
-    nodes: Record<string, { kind: string; arity?: number; freeArity?: number }>
+    nodes: Record<string, { kind: string; arity?: number; freeArity?: number; term?: string }>
     wires: Record<string, {
       sig: { kind: string }
       endpoints: { node: string; port: string }[]
@@ -98,6 +98,7 @@ test('the empty-region cascade spawns a Lambda term with one unary cap per incid
   const [termId, term] = termEntry!
   const caps = Object.entries(stored.nodes)
     .filter(([, node]) => node.kind === 'identity' && node.arity === 1)
+  expect(term.term).toBe('A(L(B(0)),F(0))')
   expect(term.freeArity).toBe(1)
   expect(caps).toHaveLength(2)
   expect(Object.keys(stored.nodes)).toHaveLength(3)

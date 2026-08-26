@@ -27,6 +27,74 @@ type InteractionDebug = {
   readonly userZoom: number
 }
 
+type StoredNode = {
+  readonly kind: string
+  readonly arity?: number
+  readonly freeArity?: number
+  readonly term?: string
+}
+
+type StoredWire = {
+  readonly sig: { readonly kind: string }
+  readonly endpoints: readonly { readonly node: string; readonly port: string }[]
+}
+
+type StoredDiagram = {
+  readonly nodes: Record<string, StoredNode>
+  readonly wires: Record<string, StoredWire>
+}
+
+type LambdaDiagramState = {
+  readonly term: string | null
+  readonly freeArity: number | null
+  readonly termCount: number
+  readonly unaryCaps: number
+  readonly nodeCount: number
+  readonly wireCount: number
+  readonly termPorts: readonly string[]
+  readonly allWiresAreCappedTwoEndedIota: boolean
+}
+
+function lambdaDiagramState(diagram: StoredDiagram): LambdaDiagramState {
+  const terms = Object.entries(diagram.nodes).filter(([, node]) => node.kind === 'term')
+  const termEntry = terms[0]
+  const capIds = new Set(Object.entries(diagram.nodes)
+    .filter(([, node]) => node.kind === 'identity' && node.arity === 1)
+    .map(([id]) => id))
+  const termId = termEntry?.[0] ?? null
+  const wires = Object.values(diagram.wires)
+  return {
+    term: termEntry?.[1].term ?? null,
+    freeArity: termEntry?.[1].freeArity ?? null,
+    termCount: terms.length,
+    unaryCaps: capIds.size,
+    nodeCount: Object.keys(diagram.nodes).length,
+    wireCount: wires.length,
+    termPorts: termId === null ? [] : wires
+      .flatMap((wire) => wire.endpoints)
+      .filter((endpoint) => endpoint.node === termId)
+      .map((endpoint) => endpoint.port)
+      .sort(),
+    allWiresAreCappedTwoEndedIota: termId !== null && wires.every((wire) => (
+      wire.sig.kind === 'iota'
+      && wire.endpoints.length === 2
+      && wire.endpoints.filter((endpoint) => endpoint.node === termId).length === 1
+      && wire.endpoints.filter((endpoint) => capIds.has(endpoint.node) && endpoint.port === 'i:0').length === 1
+    )),
+  }
+}
+
+const expectedLambdaState = (term: string): LambdaDiagramState => ({
+  term,
+  freeArity: 1,
+  termCount: 1,
+  unaryCaps: 2,
+  nodeCount: 3,
+  wireCount: 2,
+  termPorts: ['f:0', 'out'],
+  allWiresAreCappedTwoEndedIota: true,
+})
+
 type DebugHook = {
   view(): { readonly scale: number; readonly offsetX: number; readonly offsetY: number }
   bodies(): readonly Body[]
@@ -35,19 +103,10 @@ type DebugHook = {
   wireBinds(): readonly { id: string; node: string; x: number; y: number }[]
   editJson(): string
   theoryJson(): string
+  displayedJson(): string
   frameScale(): { readonly scale: number }
   proofSnapshot(): null | {
-    readonly diagram: {
-      readonly nodes: Record<string, {
-        readonly kind: string
-        readonly arity?: number
-        readonly freeArity?: number
-        readonly term?: string
-      }>
-      readonly wires: Record<string, {
-        readonly endpoints: readonly { readonly node: string; readonly port: string }[]
-      }>
-    }
+    readonly diagram: StoredDiagram
     readonly actions: readonly {
       readonly label: string
       readonly steps: readonly { readonly rule: string }[]
@@ -59,6 +118,51 @@ type DebugHook = {
 }
 
 type DebugWindow = Window & { __vpaDebug?: DebugHook }
+
+async function proofLambdaSnapshotState(page: Page): Promise<{
+  readonly cursor: number
+  readonly rules: readonly string[]
+  readonly diagram: LambdaDiagramState
+}> {
+  const snapshot = await page.evaluate(() =>
+    (window as DebugWindow).__vpaDebug!.proofSnapshot())
+  if (snapshot === null) throw new Error('the app has no active proof snapshot')
+  return {
+    cursor: snapshot.cursor,
+    rules: snapshot.actions.flatMap((action) => action.steps.map((step) => step.rule)),
+    diagram: lambdaDiagramState(snapshot.diagram),
+  }
+}
+
+async function replayLambdaState(page: Page): Promise<{
+  readonly actions: number
+  readonly cursor: number
+  readonly terms: number
+  readonly caps: number
+  readonly wireEnds: readonly number[]
+  readonly displayed: LambdaDiagramState
+}> {
+  const state = await page.evaluate(() => {
+    const debug = (window as DebugWindow).__vpaDebug as DebugHook & {
+      replay(): { n: number; k: number }
+      diagram(): {
+        nodes: readonly { kind: string }[]
+        wires: readonly { endpoints: number }[]
+      }
+    }
+    const replay = debug.replay()
+    const diagram = debug.diagram()
+    return {
+      actions: replay.n,
+      cursor: replay.k,
+      terms: diagram.nodes.filter((node) => node.kind === 'term').length,
+      caps: diagram.nodes.filter((node) => node.kind === 'identity').length,
+      wireEnds: diagram.wires.map((wire) => wire.endpoints).sort(),
+      displayed: JSON.parse(debug.displayedJson()) as StoredDiagram,
+    }
+  })
+  return { ...state, displayed: lambdaDiagramState(state.displayed) }
+}
 
 async function openApp(page: Page, files: TheoryFiles): Promise<void> {
   await page.goto('/?debug')
@@ -255,16 +359,11 @@ test('Lambda proof actions survive double-click history and normal save/reload',
   await input.fill('(\\x. x) a')
   await input.press('Enter')
 
-  await expect.poll(() => page.evaluate(() => {
-    const snapshot = (window as DebugWindow).__vpaDebug!.proofSnapshot()
-    return snapshot === null ? null : {
-      cursor: snapshot.cursor,
-      rules: snapshot.actions.flatMap((action) => action.steps.map((step) => step.rule)),
-      terms: Object.values(snapshot.diagram.nodes).filter((node) => node.kind === 'term').length,
-      unaryCaps: Object.values(snapshot.diagram.nodes)
-        .filter((node) => node.kind === 'identity' && node.arity === 1).length,
-    }
-  })).toEqual({ cursor: 1, rules: ['lambdaTermSpawn'], terms: 1, unaryCaps: 2 })
+  await expect.poll(() => proofLambdaSnapshotState(page)).toEqual({
+    cursor: 1,
+    rules: ['lambdaTermSpawn'],
+    diagram: expectedLambdaState('A(L(B(0)),F(0))'),
+  })
 
   const termId = await page.evaluate(() => {
     const snapshot = (window as DebugWindow).__vpaDebug!.proofSnapshot()!
@@ -282,20 +381,24 @@ test('Lambda proof actions survive double-click history and normal save/reload',
   expect(termPoint, 'no painted Lambda stroke resolved through the real 2D hit-test path').not.toBeNull()
   if (termPoint === null) throw new Error('no painted Lambda stroke was pickable')
   await page.mouse.dblclick(termPoint.x, termPoint.y)
-  await expect.poll(() => page.evaluate(() => {
-    const snapshot = (window as DebugWindow).__vpaDebug!.proofSnapshot()!
-    return {
-      cursor: snapshot.cursor,
-      rules: snapshot.actions.flatMap((action) => action.steps.map((step) => step.rule)),
-    }
-  })).toEqual({ cursor: 2, rules: ['lambdaTermSpawn', 'lambdaConversion'] })
+  await expect.poll(() => proofLambdaSnapshotState(page)).toEqual({
+    cursor: 2,
+    rules: ['lambdaTermSpawn', 'lambdaConversion'],
+    diagram: expectedLambdaState('F(0)'),
+  })
 
   await page.locator('.vpa-temporal-undo').click()
-  await expect.poll(() => page.evaluate(() =>
-    (window as DebugWindow).__vpaDebug!.proofSnapshot()!.cursor)).toBe(1)
+  await expect.poll(() => proofLambdaSnapshotState(page)).toEqual({
+    cursor: 1,
+    rules: ['lambdaTermSpawn'],
+    diagram: expectedLambdaState('A(L(B(0)),F(0))'),
+  })
   await page.locator('.vpa-temporal-redo').click()
-  await expect.poll(() => page.evaluate(() =>
-    (window as DebugWindow).__vpaDebug!.proofSnapshot()!.cursor)).toBe(2)
+  await expect.poll(() => proofLambdaSnapshotState(page)).toEqual({
+    cursor: 2,
+    rules: ['lambdaTermSpawn', 'lambdaConversion'],
+    diagram: expectedLambdaState('F(0)'),
+  })
 
   await page.locator('#theorem-name').fill('LambdaWorkflow')
   await page.getByRole('button', { name: 'Declare / assemble + check', exact: true }).click()
@@ -322,8 +425,8 @@ test('Lambda proof actions survive double-click history and normal save/reload',
   ) as {
     theorems: readonly {
       name: string
-      actions: readonly { steps: readonly { rule: string }[] }[]
-      backActions?: readonly { steps: readonly { rule: string }[] }[]
+      actions: readonly { steps: readonly { rule: string; term?: string }[] }[]
+      backActions?: readonly { steps: readonly { rule: string; term?: string }[] }[]
     }[]
   })
   const theorem = loaded.theorems.find((candidate) => candidate.name === 'LambdaWorkflow')
@@ -331,6 +434,8 @@ test('Lambda proof actions survive double-click history and normal save/reload',
   expect(theorem!.actions).toEqual([])
   expect(theorem!.backActions?.flatMap((action) => action.steps.map((step) => step.rule)))
     .toEqual(['lambdaTermSpawn', 'lambdaConversion'])
+  expect(theorem!.backActions?.map((action) => action.steps[0]?.term))
+    .toEqual(['A(L(B(0)),F(0))', 'F(0)'])
 
   await page.locator('#library')
     .getByRole('button', { name: '▸ lambda-round-trip.json', exact: true }).click()
@@ -338,24 +443,14 @@ test('Lambda proof actions survive double-click history and normal save/reload',
     .filter({ hasText: 'LambdaWorkflow' })
     .getByRole('button', { name: '▶ Replay', exact: true })
     .click()
-  await expect.poll(() => page.evaluate(() => {
-    const debug = (window as DebugWindow).__vpaDebug as DebugHook & {
-      replay(): { n: number; k: number }
-      diagram(): {
-        nodes: readonly { kind: string }[]
-        wires: readonly { endpoints: number }[]
-      }
-    }
-    const replay = debug.replay()
-    const diagram = debug.diagram()
-    return {
-      actions: replay.n,
-      cursor: replay.k,
-      terms: diagram.nodes.filter((node) => node.kind === 'term').length,
-      caps: diagram.nodes.filter((node) => node.kind === 'identity').length,
-      wireEnds: diagram.wires.map((wire) => wire.endpoints).sort(),
-    }
-  })).toEqual({ actions: 2, cursor: 0, terms: 1, caps: 2, wireEnds: [2, 2] })
+  await expect.poll(() => replayLambdaState(page)).toEqual({
+    actions: 2,
+    cursor: 0,
+    terms: 1,
+    caps: 2,
+    wireEnds: [2, 2],
+    displayed: expectedLambdaState('F(0)'),
+  })
 })
 
 async function physicsDrag(
