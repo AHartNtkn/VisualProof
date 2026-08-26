@@ -122,7 +122,9 @@ test('shows tiled ground illumination around a nearby irregular placement', asyn
   }, screenshot.toString('base64'))
   const luminance = (rgb: readonly number[]) => rgb.reduce((sum, channel) => sum + channel, 0)
 
-  expect(luminance(samples.glow)).toBeGreaterThan(luminance(samples.unlitGround) + 15)
+  expect(Math.max(...samples.unlitGround)).toBeLessThan(16)
+  expect(luminance(samples.glow)).toBeGreaterThan(luminance(samples.unlitGround) + 45)
+  expect(luminance(samples.glow)).toBeGreaterThan(luminance(samples.unlitGround) * 2.5)
 })
 
 test('keeps dense overlapping ground illumination translucent', async ({ page }) => {
@@ -186,6 +188,51 @@ test('reports a complete post-drain frame window and transition build CPU', asyn
     transition: String(previousGeneration + 1),
     settled: String(previousGeneration + 1),
   })
+})
+
+test('toggles FXAA without reallocating the world or resetting the player', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto('/?trees=10')
+  const orchard = page.locator('[data-orchard]')
+  const toggle = page.getByRole('button', { name: 'Antialiasing: On' })
+  await expect(orchard).toHaveAttribute('data-ready', 'true')
+  await expect(orchard).toHaveAttribute('data-pending-representations', '0')
+  await expect(orchard).toHaveAttribute('data-antialiasing', 'true')
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+
+  const before = await orchard.evaluate((element) => {
+    const canvas = document.querySelector<HTMLCanvasElement>('[data-viewport] canvas')!
+    ;(window as any).__orchardCanvasBeforeToggle = canvas
+    return {
+      playerX: (element as HTMLElement).dataset['playerX'],
+      playerZ: (element as HTMLElement).dataset['playerZ'],
+      logical: (element as HTMLElement).dataset['logicalCount'],
+      contextAntialias: canvas.getContext('webgl2')?.getContextAttributes()?.antialias
+        ?? canvas.getContext('webgl')?.getContextAttributes()?.antialias,
+    }
+  })
+  expect(before.contextAntialias).toBe(false)
+  const onImage = await page.screenshot({ clip: { x: 398, y: 0, width: 882, height: 720 } })
+
+  await toggle.click()
+  await expect(orchard).toHaveAttribute('data-antialiasing', 'false')
+  await expect(page.getByRole('button', { name: 'Antialiasing: Off' })).toHaveAttribute('aria-pressed', 'false')
+  await page.waitForTimeout(100)
+  const offImage = await page.screenshot({ clip: { x: 398, y: 0, width: 882, height: 720 } })
+  const after = await orchard.evaluate((element) => ({
+    playerX: (element as HTMLElement).dataset['playerX'],
+    playerZ: (element as HTMLElement).dataset['playerZ'],
+    logical: (element as HTMLElement).dataset['logicalCount'],
+    sameCanvas: (window as any).__orchardCanvasBeforeToggle === document.querySelector('[data-viewport] canvas'),
+  }))
+
+  expect(after).toEqual({
+    playerX: before.playerX,
+    playerZ: before.playerZ,
+    logical: before.logical,
+    sameCanvas: true,
+  })
+  expect(Buffer.compare(onImage, offImage)).not.toBe(0)
 })
 
 test('requires a rendered generation before a synchronous count transition can settle', async ({ page }) => {

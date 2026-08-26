@@ -2,7 +2,9 @@ import * as THREE from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js'
 import type { WireId } from '../src/kernel/diagram/diagram'
 import type { Entity } from '../src/view3d/scene'
 import { mountGlowRenderer } from './glow-render'
@@ -62,6 +64,7 @@ export type OrchardWorld = {
   setCount(count: number): Promise<OrchardBuildStats>
   setTrees(trees: readonly SavedTree[]): Promise<OrchardBuildStats>
   setMode(mode: RenderMode): void
+  setAntialiasing(enabled: boolean): void
   setPlayer(x: number, z: number, yaw: number, pitch: number): void
   resize(width: number, height: number): void
   render(): OrchardFrameStats
@@ -740,7 +743,7 @@ export function mountOrchardWorld(
   container: HTMLElement,
   world: OrchardWorldSave,
 ): OrchardWorld {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+  const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.shadowMap.enabled = false
@@ -756,8 +759,10 @@ export function mountOrchardWorld(
   const composer = new EffectComposer(renderer)
   const renderPass = new RenderPass(scene, camera)
   const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.65, 0.45, 0.55)
+  const fxaaPass = new ShaderPass(FXAAShader)
   composer.addPass(renderPass)
   composer.addPass(bloomPass)
+  composer.addPass(fxaaPass)
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(world.terrain.size, world.terrain.size),
@@ -821,6 +826,10 @@ export function mountOrchardWorld(
     composer.setPixelRatio(pixelRatio)
     composer.setSize(width, height)
     bloomPass.setSize(width * pixelRatio, height * pixelRatio)
+    fxaaPass.uniforms['resolution']!.value.set(
+      1 / Math.max(1, width * pixelRatio),
+      1 / Math.max(1, height * pixelRatio),
+    )
     camera.aspect = width / Math.max(1, height)
     camera.updateProjectionMatrix()
     for (const material of lineMaterials) material.resolution.set(width, height)
@@ -837,6 +846,7 @@ export function mountOrchardWorld(
     () => ground.geometry.dispose(),
     () => (ground.material as THREE.Material).dispose(),
     () => bloomPass.dispose(),
+    () => fxaaPass.dispose(),
     () => composer.dispose(),
     () => renderer.dispose(),
     () => renderer.domElement.remove(),
@@ -853,6 +863,9 @@ export function mountOrchardWorld(
     setTrees,
     setMode(mode) {
       runtime.setMode(mode)
+    },
+    setAntialiasing(enabled) {
+      fxaaPass.enabled = enabled
     },
     setPlayer(x, z, yaw, pitch) {
       camera.position.set(x, world.player.y, z)

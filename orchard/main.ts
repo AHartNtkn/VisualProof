@@ -38,6 +38,7 @@ const lodMsOut = output('[data-lod-ms]')
 const applyButton = form.querySelector<HTMLButtonElement>('button')!
 const presetButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-preset]')]
 const modeInputs = [...document.querySelectorAll<HTMLInputElement>('input[name="render-mode"]')]
+const antialiasingButton = document.querySelector<HTMLButtonElement>('[data-antialiasing-toggle]')!
 const specimen = document.querySelector<HTMLElement>('.specimen')!
 const MAX_TREES = 2000
 
@@ -55,6 +56,7 @@ async function boot(): Promise<void> {
   root.dataset['worldVersion'] = String(savedWorld.version)
   root.dataset['savedTreeCount'] = String(savedWorld.trees.length)
   root.dataset['renderMode'] = 'game'
+  root.dataset['antialiasing'] = 'true'
   root.dataset['pointLightCount'] = '0'
   countInput.max = String(savedWorld.trees.length)
   countScale.max = String(savedWorld.trees.length)
@@ -70,6 +72,7 @@ async function boot(): Promise<void> {
   let lastMetricsUpdate = 0
   let buildInFlight = false
   let activeMode: RenderMode = 'game'
+  let antialiasing = true
   let animationFrame = 0
   let disposed = false
 
@@ -297,6 +300,14 @@ async function boot(): Promise<void> {
         : 'Switching every logical tree to Raw full detail…'
     })
   }
+  listen(antialiasingButton, 'click', () => {
+    antialiasing = !antialiasing
+    world.setAntialiasing(antialiasing)
+    root.dataset['antialiasing'] = String(antialiasing)
+    antialiasingButton.setAttribute('aria-pressed', String(antialiasing))
+    antialiasingButton.textContent = `Antialiasing: ${antialiasing ? 'On' : 'Off'}`
+    root.dataset['transitionGeneration'] = String(frameTelemetry.beginTransition())
+  })
   listen(window, 'beforeunload', disposeApplication)
 
   world.setPlayer(player.x, player.z, yaw, pitch)

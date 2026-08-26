@@ -16,7 +16,7 @@ const save: OrchardWorldSave = {
   version: 2,
   terrain: {
     size: 4000,
-    ground: '#181a1d',
+    ground: '#080a0c',
     sky: '#000000',
     fogNear: 170,
     fogFar: 780,
