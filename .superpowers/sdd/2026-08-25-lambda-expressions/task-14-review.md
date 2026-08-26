@@ -82,3 +82,53 @@ None.
   — 18 tests passed.
 - `npm run typecheck` — passed.
 - `git diff --check cf1be213..526dfc81` — passed.
+
+---
+
+## Fix round 1 re-review
+
+### Verdict
+
+Approved. All three prior Important findings are substantively resolved, with no
+new Critical, Important, or Minor findings.
+
+### Resolution evidence
+
+1. Canonical nameless payloads are now checked after the real edit-menu entry
+   and proof-menu entry as `A(L(B(0)),F(0))`. The conversion result is checked as
+   `F(0)`, and the normally downloaded/reloaded action payloads are checked for
+   both exact serialized terms. The replayed displayed diagram is also checked
+   structurally with the exact `F(0)` payload.
+
+2. Real undo and redo controls now assert the complete current proof diagram,
+   not only its cursor: exact redex/normal term content, one term node, exactly
+   two unary caps, exactly two `IOTA` wires, two endpoints per wire, one term and
+   one cap incidence per wire, and the exact `f:0`/`out` term ports.
+
+3. The 3D browser test selects a projected Lambda segment isolated by more than
+   four CSS pixels from every non-Lambda scene centerline, reads the real WebGL
+   canvas with hover cleared, and requires visible contrast at that segment. It
+   then hovers the GPU-picked `t:` entity and requires a visible pixel change,
+   which exercises the displayed `Line2` independently of the invisible
+   picking line, before checking focus.
+
+4. `displayedJson()` is inside the existing `?debug`-guarded `__vpaDebug` seam.
+   It serializes the live `displayed` diagram with `diagramToJson`, the same
+   diagram serialization authority used by proof/theory persistence; it adds no
+   production loader, serializer, or alternate state path.
+
+The projected-segment readback also remained stable across five serial repeats.
+The initial 900 ms settle exceeds the 350 ms 3D structural tween, candidate
+selection is derived from the exact loaded/replayed scene and camera fit, and
+the visibility assertion combines geometric isolation, base contrast, visible
+hover delta, GPU key recovery, and focus rather than relying on one pixel or
+metadata alone.
+
+### Re-review validation
+
+- `npx playwright test e2e/view3.spec.ts --grep 'normally loaded Lambda' --repeat-each=5 --workers=1`
+  — 5 tests passed.
+- `npx playwright test e2e/construction.spec.ts e2e/interaction.spec.ts e2e/view3.spec.ts --grep 'Lambda' --workers=1`
+  — 3 tests passed.
+- `npm run typecheck` — passed.
+- `git diff --check 465c138a..c3293bb0` — passed.
