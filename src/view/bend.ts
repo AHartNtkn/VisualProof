@@ -7,6 +7,13 @@ import { polar } from './vec'
 
 /** Total angular width of the C-gap, centered on angle zero. */
 export const GAP_ANGLE = Math.PI / 3
+const LAMBDA_VIEW_PADDING_CELLS = 4
+
+/** Match the corrected circular Painter's quarter-cell extension while
+    retaining the four-cell view margin used around the structural grid. */
+export function lambdaBarPadding(cols: number, scale = 1): number {
+  return (2 * Math.PI - GAP_ANGLE) / (cols + LAMBDA_VIEW_PADDING_CELLS) * 0.25 * scale
+}
 
 export type NodeArc = {
   readonly r: number
@@ -62,7 +69,9 @@ export type BendMaps = {
 export function bendMaps(cols: number, rows: number, railRows: number): BendMaps {
   const a0 = GAP_ANGLE / 2
   const span = 2 * Math.PI - GAP_ANGLE
-  const theta = (col: number): number => a0 + ((col + 0.5) / cols) * span
+  const theta = (col: number): number => (
+    a0 + ((col + LAMBDA_VIEW_PADDING_CELLS / 2 + 0.5) / (cols + LAMBDA_VIEW_PADDING_CELLS)) * span
+  )
   const radiusAtZero = rows + 2
   const radius = (row: number): number => radiusAtZero - row
   const rimR = radius(-railRows)
@@ -71,13 +80,16 @@ export function bendMaps(cols: number, rows: number, railRows: number): BendMaps
 
 export function bendGrid(grid: TrompGrid): NodeGeometry {
   const { a0, theta, radius, pierceR } = bendMaps(grid.cols, grid.rows, grid.railRows)
-  const arcs: NodeArc[] = grid.bars.map((bar) => ({
-    r: radius(bar.row),
-    a0: theta(bar.colStart),
-    a1: theta(bar.colEnd),
-    kind: bar.kind,
-    hueRow: bar.row,
-  }))
+  const arcs: NodeArc[] = grid.bars.map((bar) => {
+    const pad = bar.kind === 'lam' ? lambdaBarPadding(grid.cols) : 0
+    return {
+      r: radius(bar.row),
+      a0: theta(bar.colStart) - pad,
+      a1: theta(bar.colEnd) + pad,
+      kind: bar.kind,
+      hueRow: bar.row,
+    }
+  })
   const radials: NodeRadial[] = grid.stems.map((stem) => ({
     angle: theta(stem.col),
     r0: radius(stem.rowTop),

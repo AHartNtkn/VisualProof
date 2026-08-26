@@ -6,10 +6,12 @@ Task 15 is complete. The live corrected reference, the application 2D canvas,
 and the application WebGL renderer now have deterministic rendered comparison
 evidence for all five required beta-reduction examples. The capture and manifest
 test cover phase boundaries, midpoints, correspondence-addressable source and
-destination junctions, complete topology, lineage, geometry, exact staged
-colors, 2D wire attachment, endpoint settlement, and the light/dark 3D Lambda
-carrier. The 3D evidence is extracted from the exact `presented.entities` array
-passed to WebGL, not from a second motion sample.
+destination junctions, complete topology, lineage, full painted curves, exact
+staged colors, 2D wire attachment, endpoint settlement, and the light/dark 3D
+Lambda carrier. Reference geometry comes from instrumenting the live corrected
+Painter and its actual `CanvasRenderingContext2D` calls. The 3D evidence is
+extracted from the exact `presented.entities` array passed to WebGL, not from a
+second motion sample.
 
 Evidence is generated under `/tmp/vpa-lambda-comparison`; the manifest is
 `/tmp/vpa-lambda-comparison/manifest.json`. The directory contains 284 frame
@@ -38,15 +40,18 @@ application commit and authoritative source hash, every image/contact-sheet
 SHA-256, source and backing dimensions, and the exact crop transform. Every
 frame also records its witness source, supplied term-wire base, and every
 Lambda stroke's piece ID, semantic source address, source/destination junction
-pair, normalized structural endpoints, lineage, copy index, role, exact color,
-renderer-local classification, and authored-stroke raster tube. The test
+pair, normalized structural endpoints, full resampled curve, lineage, copy
+index, role, exact color, renderer-local classification, exact backing-canvas
+centerline/width, and authored-stroke raster tube. Reference strokes also
+retain the live path commands, device/CSS points, transform, line width, cap,
+and join. The test
 rejects a changed reference, stale application evidence, missing samples,
 missing modes, changed files, and output outside the selected `/tmp`
 directory.
 
 ## Machine comparison results
 
-All 51 manifest tests pass. The comparisons require:
+All 61 manifest tests pass. The comparisons require:
 
 - exact example, mode, boundary, midpoint, phase, and copy-count coverage;
 - matching structural event flags across reference, 2D, and 3D;
@@ -60,6 +65,9 @@ All 51 manifest tests pass. The comparisons require:
 - complete copy source-address sets and connected shapes, every reference copy
   junction present in each renderer, reference-matched relative geometry, and
   normalized midpoint progress through lift and dock;
+- complete correspondence-addressable polylines with nonzero reference-visible
+  length/extent, length and extent ratios within `0.25`–`4`, at least two raw
+  points, and singleton interior-shape error below `0.18`;
 - connected complete copies, parked-copy separation greater than `0.025`,
   target/docking errors below `1e-7`, ordered stem/binder cleanup, and final
   static endpoint error below `1e-7`;
@@ -67,9 +75,14 @@ All 51 manifest tests pass. The comparisons require:
   span, followed by complete disappearance rather than opacity fading;
 - exact redex `#f06aa7`, argument `#f0bd55`, and per-copy lineage colors on
   every semantic stroke at every sample, including exact renderer-base-aware
-  identify and settle channel rounding; raster pixels must occur inside
-  Lambda-authored stroke tubes within RGB distance 48 in 2D/reference and 72
-  in WebGL;
+  identify and settle channel rounding; each non-occluded semantic group must
+  independently supply at least `max(3, ceil(0.2 × screenLength))` pixels from
+  its own half-width-plus-`0.75px` AA tube within RGB distance 48 in
+  2D/reference and 72 in WebGL;
+- explicit Painter-order witnesses for fully overdrawn semantic paths: later
+  authored tubes must cover at least 98% of the exact centerline, every listed
+  occluder must independently pass its own pixel/color threshold, and removing
+  any listed path must reduce coverage by more than `0.01`;
 - canonical 2D fixed-frame camera fit and complete copy-stroke visibility;
 - 2D incident-wire attachment below `1e-8` at every sample.
 
@@ -80,10 +93,13 @@ error.
 For both light and dark 3D captures, every frame is stroke-only, has a visible
 planar footprint, and uses the authored term-wire base color. Maximum measured
 planarity error was `0`; maximum branch-normal error was
-`2.220446049250313e-16`; maximum attachment error and entity-color mismatch
-count were both `0`. The maximum Lambda-colored footprint ratio was
-`0.1364141414141414`, below the no-filled-surface threshold `0.3`. The maximum
-base-color raster distance was `49.13247398615299`, below tolerance 72.
+`2.220446049250313e-16`; maximum attachment error, entity-color mismatch count,
+and base-color raster distance were all `0`. The maximum Lambda-colored
+footprint ratio was `0.11205189146365617`, below the no-filled-surface threshold
+`0.3`. Across 2,157 independently visible semantic stroke observations, the
+minimum expected-color pixel margin was `1`, the minimum exclusive-pixel margin
+was `3`, and the maximum best-color distance was `0`. All explicitly overdrawn
+semantic paths measured complete (`1.0`) tube coverage.
 
 ## Direct inspection
 
@@ -96,7 +112,12 @@ I inspected each final overview sheet at original resolution:
 - **duplication:** the cyan and blue complete copies are simultaneously visible
   and spatially distinct before docking, remain tied to their own lineages,
   reach their two destinations, and neutralize after cleanup. No copy is
-  clipped in 2D.
+  clipped in 2D. I also inspected the source frames at `p=.54` and `p=1`
+  directly. Both copy Lambda bars are visibly nonzero in 2D and 3D. At those
+  checkpoints the live reference bars measure `58.573/41.192px`, the 2D bars
+  `59.917/48.746px`, and the two perspective-projected 3D bars
+  `18.988–38.354/15.653–30.861px`; their normalized 3D lengths are
+  `0.221704/0.198922` and every bar clears its independent raster threshold.
 - **deletion:** the unused argument visibly contracts through the discard
   midpoint and vanishes structurally; it does not fade in place. Surviving
   geometry reaches its target before the binder is removed.
@@ -165,6 +186,28 @@ junction; no observation is silently discarded.
    painted/projected path. Exact per-stroke structural colors are asserted at
    every sample, and raster corroboration is restricted to those Lambda-owned
    tubes.
+8. A coincident application-copy Lambda bar had correct semantic endpoints but
+   zero painted extent. The circular geometry owner now gives Lambda bars the
+   corrected Painter's quarter-cell padding, including reflowed motion frames.
+   Application copy bars remain nonzero at parking and settle in both the 2D
+   paint list and the embedded 3D polyline.
+9. Reference raster tubes were reconstructed from a copied grid transform. The
+   capture now proxies the live corrected Painter and temporarily instruments
+   its real canvas context, retaining the actual commands, transforms,
+   line-width state, CSS/device coordinates, padding, and arc sampling. No
+   copied reference grid or padding implementation remains.
+10. Equal `renderOrder` values let Three.js camera-depth sorting reverse
+    coincident Lambda lineages, so a visible copy bar could be repainted pink.
+    WebGL Lambda lines now have stable list-order Painter ordering, disabled
+    depth testing inside their planar carrier, and a line-only restoration
+    layer below identity pips. The copy hue now remains on the copy bar in both
+    themes.
+11. Endpoint-only and pooled raster evidence could miss collapsed curves or let
+    another stroke satisfy a color assertion. The manifest now retains full
+    curve interiors and exact raster centerlines/widths. The consumer compares
+    every reference-visible curve, checks each visible semantic group
+    independently, and accepts complete overdraw only with the explicit,
+    reproducible, contributing-tube witness described above.
 
 ## RED/GREEN evidence
 
@@ -182,13 +225,13 @@ junction; no observation is silently discarded.
   `8.324847037741264`, then passed at all five sampled stages after endpoint
   retargeting.
 - Camera RED/GREEN: all five manifest camera checks failed against the fallback
-  scale `40.5`; the final recapture passes all 51 manifest tests with exact
-  fixed-frame fit.
+  scale `40.5`; the first complete evidence recapture passed 51 manifest tests
+  with exact fixed-frame fit.
 - Evidence-consumer RED/GREEN: the strengthened consumer initially failed 15
   tests because the prior manifest had no addressable observations. The first
   complete recapture then exposed canonical role spelling, a real free-drop
   subdivision, and invalid whole-stroke correspondence assumptions. Explicit
-  semantic grouping and degree-two subdivision evidence brought the full
+  semantic grouping and degree-two subdivision evidence brought that
   five-example consumer to 51/51 without changing its geometry tolerances.
 - Presented-WebGL RED/GREEN: the focused embedding test failed because lineage,
   copy index, phase, and junction identities were absent from Lambda entities;
@@ -201,15 +244,31 @@ junction; no observation is silently discarded.
   asserts each renderer's exact stage color from its supplied base and the
   corrected schedule, including role-specific identify behavior and exact
   neutralization.
+- Full-curve RED/GREEN: the added 2D and 3D copy-bar tests failed with zero
+  sweep/two coincident points at duplication parking and settle. They pass with
+  circular nonzero arcs/polylines after fixing the shared geometry owner. The
+  first full-curve manifest run exposed reference/application extent mismatches
+  until normalization used only semantic geometry and inverted the corrected
+  four-cell bend margin.
+- Live-Painter RED/GREEN: the evidence consumer rejected reference tubes with
+  no live canvas commands. All 527 reference stroke observations now retain
+  real Painter/context paths (minimum two device points; 217 arc strokes), and
+  all five live-Painter checks pass.
+- Independent-raster RED/GREEN: the strengthened consumer first failed 16 old
+  evidence checks and then exposed zero-color copy bars and short overdrawn
+  strokes in fresh captures. Stable WebGL Painter order fixed the copy-bar
+  defect. Exact per-group tubes plus contributing occlusion witnesses brought
+  the final consumer to 61/61 without reducing the pixel, color, curve, or
+  coverage thresholds.
 
 ## Validation
 
-- `npx tsx scripts/capture-lambda-comparison.ts --output /tmp/vpa-lambda-comparison`
+- `npx tsx scripts/capture-lambda-comparison.ts`
   - passed; five examples captured, 284 frame PNGs, complete manifest.
 - `npx vitest run tests/visual/lambda-reference.test.ts`
-  - 1 file passed, 51 tests passed.
+  - 1 file passed, 61 tests passed.
 - `npx vitest run tests/view/lambda-motion.test.ts tests/view3d/lambda.test.ts tests/app/motion.test.ts`
-  - 3 files passed, 47 tests passed.
+  - 3 files passed, 49 tests passed.
 - `npx vitest run --config vitest.physics.config.ts tests/physics/paint.test.ts`
   - 1 file passed, 19 tests passed.
 - `npm run typecheck`
@@ -217,7 +276,7 @@ junction; no observation is silently discarded.
 - `git diff --check`
   - passed with no output.
 - `npm test`
-  - 1,265 of 1,267 tests passed; two existing architecture/emission
+  - 1,278 of 1,280 tests passed; two existing architecture/emission
     expectations failed because they require `examples/lambda.json` to be
     absent. Task 15 does not modify that example or either failing test; the
     same mismatch is present at the task's starting commit `f2e5c00a`.

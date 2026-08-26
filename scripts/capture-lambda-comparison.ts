@@ -58,6 +58,8 @@ type RawStroke = {
   readonly destinationJunctionA: string | null
   readonly destinationJunctionB: string | null
   readonly rendererOnly: boolean
+  readonly curve: StrokeCurve
+  readonly paint: ReferencePaint | null
   readonly raster: StrokeRaster
 }
 type RawFrame = {
@@ -69,9 +71,37 @@ type RawFrame = {
   readonly endpointStaticError: number
 }
 type StrokeRaster = {
+  /** Exact authored/rendered centerline in backing-canvas pixel coordinates. */
+  readonly screenPoints: readonly Point[]
+  readonly lineWidth: number
   readonly screenLength: number
   readonly matchingPixels: number
   readonly bestColorDistance: number
+  readonly eligiblePixels: number
+  readonly requiredMatchingPixels: number
+  readonly groupId: string
+  readonly groupMemberIds: readonly string[]
+  readonly topPieceId: string
+  readonly targetColor: string
+  readonly coverageByMember: Readonly<Record<string, number>>
+  readonly occludedByPieceIds: readonly string[]
+  readonly occlusionCoverage: number
+}
+type StrokeCurve = {
+  readonly normalizedPoints: readonly Point[]
+  readonly normalizedLength: number
+  readonly normalizedExtent: number
+  readonly rawPointCount: number
+}
+type ReferencePaint = {
+  readonly source: 'live-canvas-context'
+  readonly commands: readonly Readonly<Record<string, unknown>>[]
+  readonly devicePoints: readonly Point[]
+  readonly cssPoints: readonly Point[]
+  readonly lineWidth: number
+  readonly lineCap: string
+  readonly lineJoin: string
+  readonly transform: readonly [number, number, number, number, number, number]
 }
 type RasterFrame = {
   readonly nonBackgroundPixels: number
@@ -367,27 +397,106 @@ const segmentDistance2 = (point,a,b) => {
   const t=norm===0?0:Math.max(0,Math.min(1,((point[0]-a[0])*dx+(point[1]-a[1])*dy)/norm))
   return Math.hypot(point[0]-(a[0]+dx*t),point[1]-(a[1]+dy*t))
 }
-const authoredRaster = (canvas,screenPoints,color,tolerance) => {
+const polylineLength = points => points.slice(1).reduce((sum,point,index)=>sum+Math.hypot(point[0]-points[index][0],point[1]-points[index][1]),0)
+const polylineDistance = (point,points) => points.length<2
+  ? points.length===0?Infinity:Math.hypot(point[0]-points[0][0],point[1]-points[0][1])
+  : Math.min(...points.slice(1).map((to,index)=>segmentDistance2(point,points[index],to)))
+const resamplePolyline = (points,count) => {
+  if(points.length===0)return []
+  if(points.length===1)return Array.from({length:count},()=>points[0])
+  const cumulative=[0]
+  for(let index=1;index<points.length;index++)cumulative.push(cumulative[index-1]+Math.hypot(points[index][0]-points[index-1][0],points[index][1]-points[index-1][1]))
+  const total=cumulative.at(-1)
+  if(total<1e-9)return Array.from({length:count},()=>points[0])
+  let segment=1
+  return Array.from({length:count},(_,sample)=>{
+    const target=total*sample/(count-1)
+    while(segment<points.length-1&&cumulative[segment]<target)segment++
+    const span=cumulative[segment]-cumulative[segment-1],amount=span===0?0:(target-cumulative[segment-1])/span
+    return [points[segment-1][0]+(points[segment][0]-points[segment-1][0])*amount,points[segment-1][1]+(points[segment][1]-points[segment-1][1])*amount]
+  })
+}
+const equivalentPolylines = (left,right) => {
+  const leftLength=polylineLength(left),rightLength=polylineLength(right)
+  if(Math.abs(leftLength-rightLength)>Math.max(1,Math.max(leftLength,rightLength)*.02))return false
+  const a=resamplePolyline(left,25),b=resamplePolyline(right,25),reverse=[...b].reverse()
+  const error=points=>Math.max(...a.map((point,index)=>Math.hypot(point[0]-points[index][0],point[1]-points[index][1])))
+  return Math.min(error(b),error(reverse))<=.75
+}
+const polylineCoverage = (source,target) => {
+  const points=resamplePolyline(source,33)
+  return points.length===0?1:points.filter(point=>polylineDistance(point,target)<=.75).length/points.length
+}
+const occlusionWitness = (source,candidates) => {
+  const points=resamplePolyline(source,33),uncovered=new Set(points.map((_,index)=>index)),selected=[]
+  while(uncovered.size>0){
+    let best=null,bestCovered=[]
+    for(const candidate of candidates){
+      if(selected.includes(candidate))continue
+      const covered=[...uncovered].filter(index=>polylineDistance(points[index],candidate.path)<=candidate.radius)
+      if(covered.length>bestCovered.length){best=candidate;bestCovered=covered}
+    }
+    if(best===null||bestCovered.length===0)break
+    selected.push(best);for(const index of bestCovered)uncovered.delete(index)
+  }
+  return{indices:selected.map(candidate=>candidate.index),coverage:points.length===0?1:(points.length-uncovered.size)/points.length}
+}
+const curveEvidence = (screenPoints,frameScale) => {
+  const points=resamplePolyline(screenPoints,9)
+  if(points.length===0)return{normalizedPoints:[],normalizedLength:0,normalizedExtent:0,rawPointCount:0}
+  const first=points[0],last=points.at(-1),dx=last[0]-first[0],dy=last[1]-first[1]
+  let angle=Math.atan2(dy,dx)
+  if(Math.hypot(dx,dy)<1e-7){const next=points.find(point=>Math.hypot(point[0]-first[0],point[1]-first[1])>1e-7);angle=next===undefined?0:Math.atan2(next[1]-first[1],next[0]-first[0])}
+  const c=Math.cos(angle),s=Math.sin(angle),scale=Math.max(1,frameScale)
+  const normalizedPoints=points.map(point=>[((point[0]-first[0])*c+(point[1]-first[1])*s)/scale,(-(point[0]-first[0])*s+(point[1]-first[1])*c)/scale])
+  const xs=screenPoints.map(point=>point[0]),ys=screenPoints.map(point=>point[1])
+  return{normalizedPoints,normalizedLength:polylineLength(screenPoints)/scale,normalizedExtent:Math.hypot(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys))/scale,rawPointCount:screenPoints.length}
+}
+const finalizeStrokes = (canvas,drafts,tolerance) => {
   const context=document.createElement('canvas').getContext('2d')
   context.canvas.width=canvas.width;context.canvas.height=canvas.height;context.drawImage(canvas,0,0)
-  const data=context.getImageData(0,0,canvas.width,canvas.height).data,target=rgb(color)
-  let screenLength=0,bestColorDistance=Infinity,matchingPixels=0
-  const seen=new Set()
-  for(let index=1;index<screenPoints.length;index++){
-    const a=screenPoints[index-1],b=screenPoints[index]
-    screenLength+=Math.hypot(b[0]-a[0],b[1]-a[1])
-    const x0=Math.max(0,Math.floor(Math.min(a[0],b[0])-3)),x1=Math.min(canvas.width-1,Math.ceil(Math.max(a[0],b[0])+3))
-    const y0=Math.max(0,Math.floor(Math.min(a[1],b[1])-3)),y1=Math.min(canvas.height-1,Math.ceil(Math.max(a[1],b[1])+3))
-    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
-      if(segmentDistance2([x+.5,y+.5],a,b)>2.75)continue
-      const key=y*canvas.width+x;if(seen.has(key))continue;seen.add(key)
-      const offset=key*4;if(data[offset+3]<8)continue
-      const distance=Math.hypot(data[offset]-target[0],data[offset+1]-target[1],data[offset+2]-target[2])
-      bestColorDistance=Math.min(bestColorDistance,distance)
-      if(distance<=tolerance)matchingPixels++
-    }
+  const data=context.getImageData(0,0,canvas.width,canvas.height).data
+  const semanticDrafts=drafts.filter(draft=>!draft.rendererOnly)
+  const allPoints=(semanticDrafts.length===0?drafts:semanticDrafts).flatMap(draft=>draft.curvePoints??draft.screenPoints),xs=allPoints.map(point=>point[0]),ys=allPoints.map(point=>point[1])
+  const frameScale=allPoints.length===0?1:Math.max(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys),1)
+  const groups=[],assigned=new Set()
+  for(let top=drafts.length-1;top>=0;top--){
+    if(assigned.has(top))continue
+    const members=[top];assigned.add(top)
+    for(let earlier=top-1;earlier>=0;earlier--)if(!assigned.has(earlier)&&(equivalentPolylines(drafts[earlier].screenPoints,drafts[top].screenPoints)||polylineCoverage(drafts[earlier].screenPoints,drafts[top].screenPoints)>=.98)){members.unshift(earlier);assigned.add(earlier)}
+    groups.unshift(members)
   }
-  return {screenLength,matchingPixels,bestColorDistance}
+  const rasterByIndex=new Map()
+  for(const members of groups){
+    const topIndex=Math.max(...members),top=drafts[topIndex],target=rgb(top.color),seen=new Set()
+    let matchingPixels=0,bestColorDistance=Infinity,eligiblePixels=0
+    const radius=top.lineWidth/2+.75,screenLength=polylineLength(top.screenPoints)
+    for(let part=1;part<top.screenPoints.length;part++){
+      const a=top.screenPoints[part-1],b=top.screenPoints[part]
+      const x0=Math.max(0,Math.floor(Math.min(a[0],b[0])-radius)),x1=Math.min(canvas.width-1,Math.ceil(Math.max(a[0],b[0])+radius))
+      const y0=Math.max(0,Math.floor(Math.min(a[1],b[1])-radius)),y1=Math.min(canvas.height-1,Math.ceil(Math.max(a[1],b[1])+radius))
+      for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+        const point=[x+.5,y+.5],key=y*canvas.width+x
+        if(seen.has(key)||segmentDistance2(point,a,b)>radius)continue
+        seen.add(key)
+        const coveredLater=drafts.some((draft,index)=>index>topIndex&&!members.includes(index)&&polylineDistance(point,draft.screenPoints)<=draft.lineWidth/2+.75)
+        if(coveredLater)continue
+        const offset=key*4;if(data[offset+3]<8)continue
+        eligiblePixels++
+        const distance=Math.hypot(data[offset]-target[0],data[offset+1]-target[1],data[offset+2]-target[2])
+        bestColorDistance=Math.min(bestColorDistance,distance)
+        if(distance<=tolerance)matchingPixels++
+      }
+    }
+    const groupMemberIds=members.map(index=>drafts[index].id),groupId=[...groupMemberIds].sort().join('|')
+    const requiredMatchingPixels=screenLength<3?0:Math.max(3,Math.ceil(screenLength*.2))
+    const coverageByMember=Object.fromEntries(members.map(index=>[drafts[index].id,polylineCoverage(drafts[index].screenPoints,top.screenPoints)]))
+    const witness=occlusionWitness(top.screenPoints,drafts.flatMap((draft,index)=>index>topIndex&&!members.includes(index)?[{index,path:draft.screenPoints,radius:draft.lineWidth/2+.75}]:[]))
+    let occludedByPieceIds=witness.indices.map(index=>drafts[index].id),occlusionCoverage=witness.coverage
+    if(occlusionCoverage<.98){occlusionCoverage=0;occludedByPieceIds=[]}
+    for(const index of members)rasterByIndex.set(index,{screenPoints:top.screenPoints,lineWidth:top.lineWidth,screenLength,matchingPixels,bestColorDistance,eligiblePixels,requiredMatchingPixels,groupId,groupMemberIds,topPieceId:top.id,targetColor:top.color.toLowerCase(),coverageByMember,occludedByPieceIds,occlusionCoverage})
+  }
+  return drafts.map((draft,index)=>{const{screenPoints,curvePoints,lineWidth,...stroke}=draft;return{...stroke,curve:curveEvidence(curvePoints??screenPoints,frameScale),raster:rasterByIndex.get(index)}})
 }
 const shapeBounds = (shapes, view) => {
   const points = []
@@ -428,7 +537,7 @@ const localToIntrinsic = (point,progress) => {
   const rows=mix(view.sourceGrid.rows,view.targetGrid.rows)
   const offset=mix(view.sourceOffset,view.targetOffset)
   let angle=Math.atan2(point[1],point[0]);if(angle<0)angle+=Math.PI*2
-  const col=((angle-Math.PI/6)/(Math.PI*5/3))*cols-.5+offset
+  const col=((angle-Math.PI/6)/(Math.PI*5/3))*(cols+4)-2.5+offset
   return [col,rows+2-Math.hypot(point[0],point[1])]
 }
 const shapeEndpoints = shape => shape.kind==='arc'
@@ -463,30 +572,32 @@ const inverseSimilarity = (point,transform) => {
 const raw2dFrame = (frame,shapes,canvas,view,progress,baseColor,endpointStaticError) => {
   const transform=lambdaSimilarity(frame,shapes)
   const origins=new Set(frame.strokes.map(stroke=>stroke.originId))
+  const drafts=frame.strokes.map((stroke,index)=>{
+    const shape=shapes[index],worldEndpoints=shapeEndpoints(shape)
+    const localEndpoints=worldEndpoints.map(point=>inverseSimilarity(point,transform))
+    const expected=endpoint(stroke)
+    for(let point=0;point<2;point++)if(Math.hypot(localEndpoints[point][0]-expected[point][0],localEndpoints[point][1]-expected[point][1])>1e-7)throw Error('2D paint geometry diverged from its structural stroke')
+    const screenPoints=shapeSamples(shape).map(point=>[point[0]*view.scale+view.offsetX,point[1]*view.scale+view.offsetY])
+    const freeDrop=stroke.originId.endsWith(':variable')?stroke.originId.slice(0,-':variable'.length)+':free-drop':stroke.originId
+    const sourceStrokeId=origins.has(freeDrop)?freeDrop:stroke.originId,rendererOnly=sourceStrokeId.startsWith('interface:')
+    const [a,b]=stroke.points.map(point=>localToIntrinsic([point.x,point.y],progress))
+    return {
+      id:'2d:'+stroke.id,originId:sourceStrokeId,address:observationAddress(sourceStrokeId,stroke.copyIndex),
+      sourceStrokeId,renderRole:stroke.role,role:canonicalRole(sourceStrokeId,stroke.role),
+      lineage:stroke.lineage,copyIndex:stroke.copyIndex,color:stroke.color.toLowerCase(),a,b,
+      length:Math.hypot(a[0]-b[0],a[1]-b[1]),
+      junctionA:canonicalJunction(stroke.points[0].junction,stroke.copyIndex),
+      junctionB:canonicalJunction(stroke.points[1].junction,stroke.copyIndex),
+      destinationJunctionA:stroke.points[0].destinationJunction===null?null:canonicalJunction(stroke.points[0].destinationJunction,stroke.copyIndex),
+      destinationJunctionB:stroke.points[1].destinationJunction===null?null:canonicalJunction(stroke.points[1].destinationJunction,stroke.copyIndex),
+      rendererOnly,paint:null,screenPoints,
+      curvePoints:shapeSamples(shape).map(point=>inverseSimilarity(point,transform)),lineWidth:shape.width,
+    }
+  })
   return {
     source:'application-2d-paint',baseColor:baseColor.toLowerCase(),phase:frame.phase,
     copyCount:state.plan.copyCount,endpointStaticError,
-    strokes:frame.strokes.map((stroke,index)=>{
-      const shape=shapes[index],worldEndpoints=shapeEndpoints(shape)
-      const localEndpoints=worldEndpoints.map(point=>inverseSimilarity(point,transform))
-      const expected=endpoint(stroke)
-      for(let point=0;point<2;point++)if(Math.hypot(localEndpoints[point][0]-expected[point][0],localEndpoints[point][1]-expected[point][1])>1e-7)throw Error('2D paint geometry diverged from its structural stroke')
-      const screenPoints=shapeSamples(shape).map(point=>[point[0]*view.scale+view.offsetX,point[1]*view.scale+view.offsetY])
-      const freeDrop=stroke.originId.endsWith(':variable')?stroke.originId.slice(0,-':variable'.length)+':free-drop':stroke.originId
-      const sourceStrokeId=origins.has(freeDrop)?freeDrop:stroke.originId,rendererOnly=sourceStrokeId.startsWith('interface:')
-      const [a,b]=localEndpoints.map(point=>localToIntrinsic(point,progress))
-      return {
-        id:'2d:'+stroke.id,originId:sourceStrokeId,address:observationAddress(sourceStrokeId,stroke.copyIndex),
-        sourceStrokeId,renderRole:stroke.role,role:canonicalRole(sourceStrokeId,stroke.role),
-        lineage:stroke.lineage,copyIndex:stroke.copyIndex,color:stroke.color.toLowerCase(),a,b,
-        length:Math.hypot(a[0]-b[0],a[1]-b[1]),
-        junctionA:canonicalJunction(stroke.points[0].junction,stroke.copyIndex),
-        junctionB:canonicalJunction(stroke.points[1].junction,stroke.copyIndex),
-        destinationJunctionA:stroke.points[0].destinationJunction===null?null:canonicalJunction(stroke.points[0].destinationJunction,stroke.copyIndex),
-        destinationJunctionB:stroke.points[1].destinationJunction===null?null:canonicalJunction(stroke.points[1].destinationJunction,stroke.copyIndex),
-        rendererOnly,raster:authoredRaster(canvas,screenPoints,stroke.color,48),
-      }
-    }),
+    strokes:finalizeStrokes(canvas,drafts,48),
   }
 }
 const project = (point, pose, width, height) => {
@@ -527,16 +638,13 @@ const raw3dFrame = (presented,theme,pose,canvas,progress,endpointStaticError) =>
   const origins=new Set(entities.map(entity=>entity.sourceStrokeId))
   const phase=entities.find(entity=>entity.phase!==null)?.phase
   if(phase===undefined)throw Error('presented WebGL Lambda entities lost their structural phase')
-  return {
-    source:'presented-webgl-entities',baseColor:theme.baseWire.toLowerCase(),phase,
-    copyCount:state.plan.copyCount,endpointStaticError,
-    strokes:entities.map(entity=>{
-      if(entity.lineage===null||entity.junctions===null)throw Error('presented WebGL Lambda entity lost structural provenance')
+  const drafts=entities.map(entity=>{
+      if(entity.lineage===null||entity.junctions===null||entity.junctionPoints===null)throw Error('presented WebGL Lambda entity lost structural provenance')
       const local=point=>{
         const delta=sub3(point,entity.center)
         return [dot3(delta,entity.plane.right)/entity.scale,dot3(delta,entity.plane.up)/entity.scale]
       }
-      const localPoints=entity.pts.map(local),a=localToIntrinsic(localPoints[0],progress),b=localToIntrinsic(localPoints.at(-1),progress)
+      const localPoints=entity.pts.map(local),junctionPoints=entity.junctionPoints.map(local),a=localToIntrinsic(junctionPoints[0],progress),b=localToIntrinsic(junctionPoints[1],progress)
       const freeDrop=entity.sourceStrokeId.endsWith(':variable')?entity.sourceStrokeId.slice(0,-':variable'.length)+':free-drop':entity.sourceStrokeId
       const sourceStrokeId=origins.has(freeDrop)?freeDrop:entity.sourceStrokeId,rendererOnly=sourceStrokeId.startsWith('interface:')||entity.strokeId.startsWith('socket:')
       const color=entityColor(entity,theme).toLowerCase()
@@ -550,9 +658,13 @@ const raw3dFrame = (presented,theme,pose,canvas,progress,endpointStaticError) =>
         junctionB:canonicalJunction(entity.junctions[1],entity.copyIndex),rendererOnly,
         destinationJunctionA:destinations===null||destinations[0]===null?null:canonicalJunction(destinations[0],entity.copyIndex),
         destinationJunctionB:destinations===null||destinations[1]===null?null:canonicalJunction(destinations[1],entity.copyIndex),
-        raster:authoredRaster(canvas,entity.pts.map(point=>project(point,pose,900,900)),color,72),
+        paint:null,screenPoints:entity.pts.map(point=>project(point,pose,900,900)),curvePoints:localPoints,lineWidth:2.2,
       }
-    }),
+    })
+  return {
+    source:'presented-webgl-entities',baseColor:theme.baseWire.toLowerCase(),phase,
+    copyCount:state.plan.copyCount,endpointStaticError,
+    strokes:finalizeStrokes(canvas,drafts,72),
   }
 }
 
@@ -773,7 +885,6 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
         }
       }
     }
-    win.__lambdaDemo.setPosition(value)
     const canvas = document.querySelector('#canvas')
     if (!(canvas instanceof HTMLCanvasElement)) throw new Error('corrected Lambda demo canvas is unavailable')
     const plan = win.__lambdaDemo.sequence.plans[0]!
@@ -818,11 +929,126 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
       const pointCopyIndex = typeof point['copyIndex'] === 'number' ? point['copyIndex'] : copyIndex
       return pointCopyIndex === null ? identity : `copy:${pointCopyIndex}:${identity}`
     }
-    const rawLines: Array<RawStroke & { screenPoints: readonly Point[] }> = []
+    type LivePaint = ReferencePaint & { readonly devicePoints: readonly Point[] }
+    type PaintedLine = {
+      readonly line: Record<string, unknown>
+      readonly a: { col: number; row: number }
+      readonly b: { col: number; row: number }
+      readonly style: { color?: string }
+      readonly paint: LivePaint | null
+    }
+    type LivePainter = {
+      readonly canvas: HTMLCanvasElement
+      readonly ctx: CanvasRenderingContext2D
+      resize(): void
+      line(line: Record<string, unknown>, a: { col: number; row: number }, b: { col: number; row: number }, frame: unknown, style?: { color?: string }): void
+    }
+    const livePainters: LivePainter[] = []
+    const originalDraw = transition.draw
+    transition.draw = (candidate: unknown, amount: number): void => {
+      livePainters.push(candidate as LivePainter)
+      originalDraw(candidate, amount)
+    }
+    win.__lambdaDemo.setPosition(0.5)
+    transition.draw = originalDraw
+    const livePainter = livePainters[0]
+    if (livePainter === undefined) throw new Error('live corrected transition did not expose its Painter invocation')
+    const context = livePainter.ctx
+    const paintedLines: PaintedLine[] = []
+    const captureStroke = (draw: () => void): LivePaint | null => {
+      const original = {
+        beginPath: context.beginPath.bind(context), moveTo: context.moveTo.bind(context),
+        lineTo: context.lineTo.bind(context), arc: context.arc.bind(context),
+        closePath: context.closePath.bind(context), stroke: context.stroke.bind(context),
+      }
+      let commands: Array<Record<string, unknown>> = [], devicePoints: Point[] = [], subpathStart: Point | null = null
+      let captured: LivePaint | null = null
+      const matrix = (): readonly [number, number, number, number, number, number] => {
+        const transform = context.getTransform()
+        return [transform.a, transform.b, transform.c, transform.d, transform.e, transform.f]
+      }
+      const transformPoint = (x: number, y: number, transform = matrix()): Point => [
+        transform[0] * x + transform[2] * y + transform[4],
+        transform[1] * x + transform[3] * y + transform[5],
+      ]
+      context.beginPath = (): void => { commands = []; devicePoints = []; subpathStart = null; original.beginPath() }
+      context.moveTo = (x: number, y: number): void => {
+        const transform = matrix(), point = transformPoint(x, y, transform)
+        commands.push({ kind: 'moveTo', x, y, transform }); devicePoints.push(point); subpathStart = point
+        original.moveTo(x, y)
+      }
+      context.lineTo = (x: number, y: number): void => {
+        const transform = matrix(), point = transformPoint(x, y, transform)
+        commands.push({ kind: 'lineTo', x, y, transform }); devicePoints.push(point)
+        original.lineTo(x, y)
+      }
+      context.arc = (x: number, y: number, radius: number, start: number, end: number, counterclockwise = false): void => {
+        const transform = matrix(), tau = Math.PI * 2
+        let sweep = end - start
+        if (!counterclockwise) {
+          if (sweep >= tau) sweep = tau
+          else while (sweep < 0) sweep += tau
+        } else {
+          if (-sweep >= tau) sweep = -tau
+          else while (sweep > 0) sweep -= tau
+        }
+        const count = Math.max(2, Math.ceil(Math.abs(sweep) * radius / 2) + 1)
+        const arcPoints = Array.from({ length: count }, (_, index): Point => {
+          const angle = start + sweep * index / (count - 1)
+          return transformPoint(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius, transform)
+        })
+        commands.push({ kind: 'arc', x, y, radius, start, end, counterclockwise, sweep, transform })
+        if (devicePoints.length > 0 && Math.hypot(devicePoints.at(-1)![0] - arcPoints[0]![0], devicePoints.at(-1)![1] - arcPoints[0]![1]) > 1e-7) {
+          devicePoints.push(arcPoints[0]!)
+        }
+        devicePoints.push(...arcPoints.slice(devicePoints.length === 0 ? 0 : 1))
+        if (subpathStart === null) subpathStart = arcPoints[0]!
+        original.arc(x, y, radius, start, end, counterclockwise)
+      }
+      context.closePath = (): void => {
+        commands.push({ kind: 'closePath' })
+        if (subpathStart !== null) devicePoints.push(subpathStart)
+        original.closePath()
+      }
+      context.stroke = (path?: Path2D): void => {
+        if (path !== undefined) throw new Error('corrected Painter unexpectedly stroked an opaque Path2D')
+        const rect = canvas.getBoundingClientRect(), transform = matrix()
+        captured = {
+          source: 'live-canvas-context', commands: commands.map((command) => ({ ...command })),
+          devicePoints: devicePoints.map((point) => [...point] as Point),
+          cssPoints: devicePoints.map((point) => [point[0] * rect.width / canvas.width, point[1] * rect.height / canvas.height] as Point),
+          lineWidth: context.lineWidth, lineCap: context.lineCap, lineJoin: context.lineJoin, transform,
+        }
+        original.stroke()
+      }
+      try { draw() } finally {
+        context.beginPath = original.beginPath; context.moveTo = original.moveTo
+        context.lineTo = original.lineTo; context.arc = original.arc
+        context.closePath = original.closePath; context.stroke = original.stroke
+      }
+      return captured
+    }
+    const instrumented = new Proxy(livePainter, {
+      get(target, property): unknown {
+        if (property === 'line') return (
+          line: Record<string, unknown>,
+          a: { col: number; row: number },
+          b: { col: number; row: number },
+          frame: unknown,
+          style: { color?: string } = {},
+        ): void => {
+          const paint = captureStroke(() => target.line(line, a, b, frame, style))
+          paintedLines.push({ line, a, b, style, paint })
+        }
+        const member = Reflect.get(target, property, target)
+        return typeof member === 'function' ? member.bind(target) : member
+      },
+    })
+    livePainter.resize()
+    originalDraw(instrumented, value)
+    const rawLines: Array<Omit<RawStroke, 'curve' | 'raster'> & { screenPoints: readonly Point[]; lineWidth: number }> = []
     const occurrenceIds = new Set(plan.occurrences.map(({ sourceVarId }) => sourceVarId))
-    const painter = {
-      disc() {}, output() {}, socket() {}, label() {},
-      line(line: Record<string, unknown>, a: { col: number; row: number }, b: { col: number; row: number }, frame: { minCol: number; maxCol: number; minRow: number; maxRow: number }, style: { color?: string } = {}) {
+    for (const { line, a, b, style, paint } of paintedLines) {
         const copyIndex = typeof line['copyIndex'] === 'number' ? line['copyIndex'] : null
         const owner = String(line['ownerId'] ?? '')
         const lineage: RawStroke['lineage'] = copyIndex !== null ? 'copy'
@@ -835,23 +1061,6 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
         const destinationJunction = (endpoint: 'a' | 'b'): string | null => targetLine === undefined
           ? null
           : pointIdentity(String(targetLine[endpoint]), targetLine, copyIndex)
-        const mapGrid = (point: { col: number; row: number }): Point => {
-          const width = Math.max(1, frame.maxCol - frame.minCol + 1)
-          const angle = Math.PI / 6 + ((point.col - frame.minCol + 0.5) / width) * Math.PI * 5 / 3
-          const rows = Math.max(1, frame.maxRow - frame.minRow)
-          const radius = 1.02 - ((point.row - frame.minRow) / rows) * 0.8
-          const scale = Math.min(canvas.width, canvas.height) * 0.355
-          return [canvas.width * 0.53 + Math.cos(angle) * radius * scale, canvas.height * 0.49 + Math.sin(angle) * radius * scale]
-        }
-        const horizontal = line['kind'] === 'h' || line['kind'] === 'tick'
-        let screenPoints: Point[]
-        if (horizontal) {
-          let from = a.col, to = b.col
-          if (line['role'] === 'lambda') { from -= 0.25; to += 0.25 }
-          else if (line['kind'] === 'tick') { const middle = (from + to) / 2; from = middle - 0.25; to = middle + 0.25 }
-          const count = Math.max(2, Math.ceil(Math.abs(to - from) * 12) + 1)
-          screenPoints = Array.from({ length: count }, (_, index) => mapGrid({ col: from + (to - from) * index / (count - 1), row: a.row }))
-        } else screenPoints = [mapGrid(a), mapGrid(b)]
         rawLines.push({
           id: `reference:${String(line['id'])}`, originId: sourceStrokeId,
           address: copyIndex === null ? sourceStrokeId : `copy:${copyIndex}:${sourceStrokeId}`,
@@ -863,13 +1072,11 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
           destinationJunctionA: destinationJunction('a'),
           destinationJunctionB: destinationJunction('b'),
           rendererOnly: false,
-          raster: { screenLength: 0, matchingPixels: 0, bestColorDistance: Infinity },
-          screenPoints,
+          paint,
+          screenPoints: paint?.devicePoints ?? [],
+          lineWidth: paint?.lineWidth ?? 0,
         })
-      },
     }
-    transition.draw(painter, value)
-    const context = canvas.getContext('2d')!
     const data = context.getImageData(0, 0, canvas.width, canvas.height).data
     const rgb = (hex: string): readonly number[] => { const number = Number.parseInt(hex.slice(1), 16); return [number >> 16, (number >> 8) & 255, number & 255] }
     const colors = Object.fromEntries(palette.map((color) => [color, { rgb: rgb(color), count: 0 }]))
@@ -890,28 +1097,151 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
       const amount = norm === 0 ? 0 : Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / norm))
       return Math.hypot(point[0] - (a[0] + dx * amount), point[1] - (a[1] + dy * amount))
     }
-    const observedLines: RawStroke[] = rawLines.map(({ screenPoints, ...line }) => {
-      const target = rgb(line.color), seen = new Set<number>()
-      let screenLength = 0, matchingPixels = 0, bestColorDistance = Infinity
-      for (let part = 1; part < screenPoints.length; part += 1) {
-        const a = screenPoints[part - 1]!, b = screenPoints[part]!
-        screenLength += Math.hypot(b[0] - a[0], b[1] - a[1])
-        const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0]) - 3)), x1 = Math.min(canvas.width - 1, Math.ceil(Math.max(a[0], b[0]) + 3))
-        const y0 = Math.max(0, Math.floor(Math.min(a[1], b[1]) - 3)), y1 = Math.min(canvas.height - 1, Math.ceil(Math.max(a[1], b[1]) + 3))
+    const pathLength = (points: readonly Point[]): number => points.slice(1).reduce((sum, point, index) => (
+      sum + Math.hypot(point[0] - points[index]![0], point[1] - points[index]![1])
+    ), 0)
+    const pathDistance = (point: Point, points: readonly Point[]): number => points.length < 2
+      ? points.length === 0 ? Infinity : Math.hypot(point[0] - points[0]![0], point[1] - points[0]![1])
+      : Math.min(...points.slice(1).map((to, index) => distanceToSegment(point, points[index]!, to)))
+    const resample = (points: readonly Point[], count: number): Point[] => {
+      if (points.length === 0) return []
+      if (points.length === 1) return Array.from({ length: count }, () => points[0]!)
+      const cumulative = [0]
+      for (let index = 1; index < points.length; index += 1) cumulative.push(cumulative[index - 1]! + Math.hypot(
+        points[index]![0] - points[index - 1]![0], points[index]![1] - points[index - 1]![1],
+      ))
+      const total = cumulative.at(-1)!
+      if (total < 1e-9) return Array.from({ length: count }, () => points[0]!)
+      let segment = 1
+      return Array.from({ length: count }, (_, sample): Point => {
+        const target = total * sample / (count - 1)
+        while (segment < points.length - 1 && cumulative[segment]! < target) segment += 1
+        const span = cumulative[segment]! - cumulative[segment - 1]!
+        const amount = span === 0 ? 0 : (target - cumulative[segment - 1]!) / span
+        return [
+          points[segment - 1]![0] + (points[segment]![0] - points[segment - 1]![0]) * amount,
+          points[segment - 1]![1] + (points[segment]![1] - points[segment - 1]![1]) * amount,
+        ]
+      })
+    }
+    const equivalent = (left: readonly Point[], right: readonly Point[]): boolean => {
+      const leftLength = pathLength(left), rightLength = pathLength(right)
+      if (Math.abs(leftLength - rightLength) > Math.max(1, Math.max(leftLength, rightLength) * 0.02)) return false
+      const a = resample(left, 25), b = resample(right, 25), reverse = [...b].reverse()
+      const error = (points: readonly Point[]): number => Math.max(...a.map((point, index) => Math.hypot(
+        point[0] - points[index]![0], point[1] - points[index]![1],
+      )))
+      return Math.min(error(b), error(reverse)) <= 0.75
+    }
+    const coverage = (source: readonly Point[], target: readonly Point[]): number => {
+      const points = resample(source, 33)
+      return points.length === 0 ? 1 : points.filter((point) => pathDistance(point, target) <= 0.75).length / points.length
+    }
+    const occlusionWitness = (source: readonly Point[], candidates: readonly { index: number; path: readonly Point[]; radius: number }[]): {
+      indices: readonly number[]; coverage: number
+    } => {
+      const points = resample(source, 33), uncovered = new Set(points.map((_, index) => index))
+      const selected: Array<{ index: number; path: readonly Point[]; radius: number }> = []
+      while (uncovered.size > 0) {
+        let best: { index: number; path: readonly Point[]; radius: number } | null = null, bestCovered: number[] = []
+        for (const candidate of candidates) {
+          if (selected.includes(candidate)) continue
+          const covered = [...uncovered].filter((index) => pathDistance(points[index]!, candidate.path) <= candidate.radius)
+          if (covered.length > bestCovered.length) { best = candidate; bestCovered = covered }
+        }
+        if (best === null || bestCovered.length === 0) break
+        selected.push(best)
+        bestCovered.forEach((index) => uncovered.delete(index))
+      }
+      return { indices: selected.map(({ index }) => index), coverage: points.length === 0 ? 1 : (points.length - uncovered.size) / points.length }
+    }
+    const semanticLines = rawLines.filter(({ rendererOnly }) => !rendererOnly)
+    const allPoints = (semanticLines.length === 0 ? rawLines : semanticLines).flatMap(({ screenPoints }) => screenPoints)
+    const allX = allPoints.map((point) => point[0]), allY = allPoints.map((point) => point[1])
+    const frameScale = allPoints.length === 0 ? 1 : Math.max(
+      Math.max(...allX) - Math.min(...allX), Math.max(...allY) - Math.min(...allY), 1,
+    )
+    const curve = (screenPoints: readonly Point[]): StrokeCurve => {
+      const points = resample(screenPoints, 9)
+      if (points.length === 0) return { normalizedPoints: [], normalizedLength: 0, normalizedExtent: 0, rawPointCount: 0 }
+      const first = points[0]!, last = points.at(-1)!, dx = last[0] - first[0], dy = last[1] - first[1]
+      let angle = Math.atan2(dy, dx)
+      if (Math.hypot(dx, dy) < 1e-7) {
+        const next = points.find((point) => Math.hypot(point[0] - first[0], point[1] - first[1]) > 1e-7)
+        angle = next === undefined ? 0 : Math.atan2(next[1] - first[1], next[0] - first[0])
+      }
+      const cosine = Math.cos(angle), sine = Math.sin(angle)
+      const normalizedPoints = points.map((point): Point => [
+        ((point[0] - first[0]) * cosine + (point[1] - first[1]) * sine) / frameScale,
+        (-(point[0] - first[0]) * sine + (point[1] - first[1]) * cosine) / frameScale,
+      ])
+      const xs = screenPoints.map((point) => point[0]), ys = screenPoints.map((point) => point[1])
+      return {
+        normalizedPoints, normalizedLength: pathLength(screenPoints) / frameScale,
+        normalizedExtent: Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / frameScale,
+        rawPointCount: screenPoints.length,
+      }
+    }
+    const groups: number[][] = [], assigned = new Set<number>()
+    for (let top = rawLines.length - 1; top >= 0; top -= 1) {
+      if (assigned.has(top)) continue
+      const members = [top]; assigned.add(top)
+      for (let earlier = top - 1; earlier >= 0; earlier -= 1) {
+        if (assigned.has(earlier)) continue
+        if (equivalent(rawLines[earlier]!.screenPoints, rawLines[top]!.screenPoints)
+          || coverage(rawLines[earlier]!.screenPoints, rawLines[top]!.screenPoints) >= 0.98) {
+          members.unshift(earlier); assigned.add(earlier)
+        }
+      }
+      groups.unshift(members)
+    }
+    const rasterByIndex = new Map<number, StrokeRaster>()
+    for (const members of groups) {
+      const topIndex = Math.max(...members), top = rawLines[topIndex]!, target = rgb(top.color), seen = new Set<number>()
+      const radius = top.lineWidth / 2 + 0.75, screenLength = pathLength(top.screenPoints)
+      let matchingPixels = 0, bestColorDistance = Infinity, eligiblePixels = 0
+      for (let part = 1; part < top.screenPoints.length; part += 1) {
+        const a = top.screenPoints[part - 1]!, b = top.screenPoints[part]!
+        const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0]) - radius)), x1 = Math.min(canvas.width - 1, Math.ceil(Math.max(a[0], b[0]) + radius))
+        const y0 = Math.max(0, Math.floor(Math.min(a[1], b[1]) - radius)), y1 = Math.min(canvas.height - 1, Math.ceil(Math.max(a[1], b[1]) + radius))
         for (let y = y0; y <= y1; y += 1) for (let x = x0; x <= x1; x += 1) {
-          if (distanceToSegment([x + 0.5, y + 0.5], a, b) > 2.75) continue
-          const pixel = y * canvas.width + x
-          if (seen.has(pixel)) continue
+          const point: Point = [x + 0.5, y + 0.5], pixel = y * canvas.width + x
+          if (seen.has(pixel) || distanceToSegment(point, a, b) > radius) continue
           seen.add(pixel)
+          const coveredLater = rawLines.some((line, index) => index > topIndex && !members.includes(index)
+            && pathDistance(point, line.screenPoints) <= line.lineWidth / 2 + 0.75)
+          if (coveredLater) continue
           const offset = pixel * 4
           if (data[offset + 3]! < 8) continue
+          eligiblePixels += 1
           const distance = Math.hypot(data[offset]! - target[0]!, data[offset + 1]! - target[1]!, data[offset + 2]! - target[2]!)
           bestColorDistance = Math.min(bestColorDistance, distance)
           if (distance <= 48) matchingPixels += 1
         }
       }
-      return { ...line, raster: { screenLength, matchingPixels, bestColorDistance } }
-    })
+      const groupMemberIds = members.map((index) => rawLines[index]!.id), groupId = [...groupMemberIds].sort().join('|')
+      const witness = occlusionWitness(top.screenPoints, rawLines.flatMap((line, index) => (
+        index > topIndex && !members.includes(index)
+          ? [{ index, path: line.screenPoints, radius: line.lineWidth / 2 + 0.75 }]
+          : []
+      )))
+      let occludedByPieceIds = witness.indices.map((index) => rawLines[index]!.id)
+      let occlusionCoverage = witness.coverage
+      if (occlusionCoverage < 0.98) { occlusionCoverage = 0; occludedByPieceIds = [] }
+      const evidence: StrokeRaster = {
+        screenPoints: top.screenPoints, lineWidth: top.lineWidth, screenLength, matchingPixels, bestColorDistance, eligiblePixels,
+        requiredMatchingPixels: screenLength < 3 ? 0 : Math.max(3, Math.ceil(screenLength * 0.2)),
+        groupId, groupMemberIds, topPieceId: top.id, targetColor: top.color.toLowerCase(),
+        coverageByMember: Object.fromEntries(members.map((index) => [
+          rawLines[index]!.id, coverage(rawLines[index]!.screenPoints, top.screenPoints),
+        ])),
+        occludedByPieceIds, occlusionCoverage,
+      }
+      members.forEach((index) => rasterByIndex.set(index, evidence))
+    }
+    const observedLines: RawStroke[] = rawLines.map(({ screenPoints, lineWidth: _lineWidth, ...line }, index) => ({
+      ...line, curve: curve(screenPoints), raster: rasterByIndex.get(index)!,
+    }))
     const rect = canvas.getBoundingClientRect()
     return {
       raw: {
@@ -1072,6 +1402,8 @@ async function captureMode(
         destinations: readonly [string | null, string | null]
         points: readonly [Point, Point]
         color: string
+        curve: StrokeCurve
+        paint: ReferencePaint | null
         raster: StrokeRaster
       }>
     }
@@ -1126,12 +1458,37 @@ async function captureMode(
             [round(stroke.b[0]), round(stroke.b[1])] as const,
           ] as const,
           color: stroke.color,
+          curve: {
+            normalizedPoints: stroke.curve.normalizedPoints.map((point) => [round(point[0]), round(point[1])] as const),
+            normalizedLength: round(stroke.curve.normalizedLength),
+            normalizedExtent: round(stroke.curve.normalizedExtent),
+            rawPointCount: stroke.curve.rawPointCount,
+          },
+          paint: stroke.paint === null ? null : {
+            ...stroke.paint,
+            devicePoints: stroke.paint.devicePoints.map((point) => [round(point[0]), round(point[1])] as const),
+            cssPoints: stroke.paint.cssPoints.map((point) => [round(point[0]), round(point[1])] as const),
+            lineWidth: round(stroke.paint.lineWidth),
+            transform: stroke.paint.transform.map((value) => round(value)) as unknown as ReferencePaint['transform'],
+          },
           raster: {
+            screenPoints: stroke.raster.screenPoints.map((point) => [round(point[0]), round(point[1])] as const),
+            lineWidth: round(stroke.raster.lineWidth),
             screenLength: round(stroke.raster.screenLength),
             matchingPixels: stroke.raster.matchingPixels,
             bestColorDistance: round(Number.isFinite(stroke.raster.bestColorDistance)
               ? stroke.raster.bestColorDistance
               : 999),
+            eligiblePixels: stroke.raster.eligiblePixels,
+            requiredMatchingPixels: stroke.raster.requiredMatchingPixels,
+            groupId: stroke.raster.groupId,
+            groupMemberIds: stroke.raster.groupMemberIds,
+            topPieceId: stroke.raster.topPieceId,
+            targetColor: stroke.raster.targetColor,
+            coverageByMember: Object.fromEntries(Object.entries(stroke.raster.coverageByMember)
+              .map(([pieceId, coverage]) => [pieceId, round(coverage)])),
+            occludedByPieceIds: stroke.raster.occludedByPieceIds,
+            occlusionCoverage: round(stroke.raster.occlusionCoverage),
           },
         })),
       },

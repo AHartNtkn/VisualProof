@@ -207,6 +207,30 @@ describe('corrected structural beta motion', () => {
     expect(binderRetracting.strokes.some(({ role, lineage }) => role === 'lambda' && lineage === 'redex')).toBe(true)
   })
 
+  it('keeps coincident application-copy lambda bars as complete visible arcs in 2D at parking and settle', () => {
+    const plan = planBetaMotion(term(cases[1].source), ROOT_BETA)
+    const expectedSweep = 5 * Math.PI / 42
+
+    for (const progress of [plan.times.spaceEnd, 1]) {
+      const frame = sampleBetaMotion(plan, progress, BASE)
+      const copyBars = frame.strokes.filter(({ lineage, role }) => lineage === 'copy' && role === 'lambda')
+      expect(copyBars).toHaveLength(2)
+      for (const bar of copyBars) {
+        expect(bar.geometry.kind).toBe('arc')
+        if (bar.geometry.kind !== 'arc') throw new Error('copy lambda bar is not circular')
+        expect(bar.geometry.a1 - bar.geometry.a0).toBeCloseTo(expectedSweep, 12)
+        expect(bar.geometry.r * (bar.geometry.a1 - bar.geometry.a0)).toBeGreaterThan(2)
+      }
+
+      const painted = paintLambdaFrame(frame, { x: 0, y: 0 }, 0, 1, 3, false)
+      const paintedBars = painted.filter((shape, index) => (
+        copyBars.some(({ id }) => id === frame.strokes[index]?.id) && shape.kind === 'arc'
+      ))
+      expect(paintedBars).toHaveLength(2)
+      expect(paintedBars.every((shape) => shape.kind === 'arc' && shape.a1 > shape.a0)).toBe(true)
+    }
+  })
+
   for (const fixture of cases) {
     it(`${fixture.name}: moves each persistent junction to its one offered destination before docking`, () => {
       const plan = planBetaMotion(term(fixture.source), ROOT_BETA)

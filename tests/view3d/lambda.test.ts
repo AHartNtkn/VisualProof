@@ -144,6 +144,41 @@ describe('lambdaDiagram', () => {
       junctions: stroke.points.map(({ junction }) => junction),
       destinationJunctions: stroke.points.map(({ destinationJunction }) => destinationJunction),
     })))
+    anatomy.forEach((stroke, index) => {
+      expect(stroke.junctionPoints).not.toBeNull()
+      stroke.junctionPoints!.forEach((point, endpoint) => {
+        const local = frame.strokes[index]!.points[endpoint]!
+        const expected = {
+          x: stroke.center.x + stroke.scale * (local.x * stroke.plane.right.x + local.y * stroke.plane.up.x),
+          y: stroke.center.y + stroke.scale * (local.x * stroke.plane.right.y + local.y * stroke.plane.up.y),
+          z: stroke.center.z + stroke.scale * (local.x * stroke.plane.right.z + local.y * stroke.plane.up.z),
+        }
+        expect(dist3(point, expected)).toBeLessThan(1e-12)
+      })
+    })
+  })
+
+  it('embeds every coincident application-copy lambda bar as a nonzero circular polyline', () => {
+    const source = application(
+      lambda(lambda(application(bound(1), application(bound(1), bound(0))))),
+      lambda(bound(0)),
+    )
+    const plan = planBetaMotion(source, { kind: 'beta', path: [] })
+
+    for (const progress of [plan.times.spaceEnd, 1]) {
+      const frame = sampleBetaMotion(plan, progress, '#26343a')
+      const bars = lambdaDiagram({
+        node: 'term', region: 'region', term: source, interfaceArity: 0,
+        center: v3(0, 0, 0), tangent: v3(0, 1, 0), frame,
+      }).strokes.filter(({ lineage, role }) => lineage === 'copy' && role === 'lambda')
+      expect(bars).toHaveLength(2)
+      for (const bar of bars) {
+        expect(bar.pts.length).toBeGreaterThan(2)
+        expect(bar.pts.slice(1).reduce((sum, point, index) => (
+          sum + dist3(bar.pts[index]!, point)
+        ), 0)).toBeGreaterThan(0.2)
+      }
+    }
   })
 })
 

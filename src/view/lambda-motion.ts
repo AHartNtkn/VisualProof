@@ -1,6 +1,6 @@
 import { applyStepAt, type PathSeg, type ReductionStep } from '../kernel/term/reduce'
 import { application, bound, free, freeArity, lambda, termEq, type Term } from '../kernel/term/term'
-import { bendMaps, GAP_ANGLE } from './bend'
+import { bendMaps, GAP_ANGLE, lambdaBarPadding } from './bend'
 import { trompGrid, type TrompGrid } from './tromp'
 import type { Vec2 } from './vec'
 import { polar } from './vec'
@@ -608,15 +608,18 @@ function interpolateCoord(from: MotionCoord, to: MotionCoord, progress: number):
 function viewAt(view: ViewFrame, reflow: number): {
   readonly maps: ReturnType<typeof bendMaps>
   readonly offset: number
+  readonly lambdaPad: number
 } {
   const amount = clamp(reflow)
+  const cols = mix(view.sourceGrid.cols, view.targetGrid.cols, amount)
   return {
     maps: bendMaps(
-      mix(view.sourceGrid.cols, view.targetGrid.cols, amount),
+      cols,
       mix(view.sourceGrid.rows, view.targetGrid.rows, amount),
       mix(view.sourceGrid.railRows, view.targetGrid.railRows, amount),
     ),
     offset: mix(view.sourceOffset, view.targetOffset, amount),
+    lambdaPad: lambdaBarPadding(cols),
   }
 }
 
@@ -636,8 +639,9 @@ function strokeFrame(
   color: string,
   lineage: LambdaStrokeLineage,
   destinationJunctions: readonly [string, string] | null = null,
+  lambdaPadScale = 1,
 ): LambdaStroke {
-  const { maps, offset } = viewAt(view, reflow)
+  const { maps, offset, lambdaPad } = viewAt(view, reflow)
   const from = mapCoord(a, view, reflow), to = mapCoord(b, view, reflow)
   let geometry: LambdaStrokeGeometry
   if (stroke.drawKind === 'horizontal' || stroke.drawKind === 'output-arc') {
@@ -652,10 +656,11 @@ function strokeFrame(
       throw new Error(`arc '${stroke.id}' reaches the output port directly`)
     }
     const first = angle(a), second = angle(b)
+    const pad = stroke.role === 'lambda' ? lambdaPad * lambdaPadScale : 0
     geometry = {
       kind: 'arc',
       r: maps.radius(rowA),
-      a0: Math.min(first, second), a1: Math.max(first, second),
+      a0: Math.min(first, second) - pad, a1: Math.max(first, second) + pad,
     }
   } else {
     if (stroke.drawKind === 'vertical' && a.kind === 'grid' && b.kind === 'grid' && Math.abs(a.col - b.col) > 1e-7) {
@@ -989,11 +994,14 @@ export function sampleBetaMotion(
     b: MotionCoord,
     color: string,
     lineage: LambdaStrokeLineage,
+    lambdaPadScale = 1,
   ): void => {
     const destinationJunctions = lineage === 'persistent'
       ? model.targetJunctionsBySourceStroke.get(source.id) ?? null
       : lineage === 'copy' ? [source.a.id, source.b.id] as const : null
-    strokes.push(strokeFrame(source, a, b, model.view, space, color, lineage, destinationJunctions))
+    strokes.push(strokeFrame(
+      source, a, b, model.view, space, color, lineage, destinationJunctions, lambdaPadScale,
+    ))
   }
 
   for (const pair of model.pairs) {
@@ -1011,6 +1019,7 @@ export function sampleBetaMotion(
       gridCoord(mix(binderRight, binderCenter, bar), binderRow),
       REDEX_COLOR,
       'redex',
+      1 - bar,
     )
   }
 

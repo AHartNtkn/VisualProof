@@ -22,6 +22,13 @@ describe('bent Tromp geometry', () => {
       .toBeGreaterThan(binderArcs.find((arc) => arc.hueRow === 1)!.r)
   })
 
+  it('pads a one-column lambda bar into a visible circular arc', () => {
+    const binder = termGeometry(p('\\x. x')).arcs.find((arc) => arc.kind === 'lam')!
+
+    expect(binder.a1 - binder.a0).toBeCloseTo(Math.PI / 6, 12)
+    expect(binder.r * (binder.a1 - binder.a0)).toBeGreaterThan(1)
+  })
+
   it('keeps all internal strokes outside the output gap', () => {
     const geometry = termGeometry(p('\\f. \\x. f (f x)'))
     const low = GAP_ANGLE / 2

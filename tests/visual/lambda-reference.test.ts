@@ -57,9 +57,38 @@ type TwoDFrame = {
 }
 
 type StrokeRaster = {
+  readonly screenPoints: readonly Point[]
+  readonly lineWidth: number
   readonly screenLength: number
   readonly matchingPixels: number
   readonly bestColorDistance: number
+  readonly eligiblePixels: number
+  readonly requiredMatchingPixels: number
+  readonly groupId: string
+  readonly groupMemberIds: readonly string[]
+  readonly topPieceId: string
+  readonly targetColor: string
+  readonly coverageByMember: Readonly<Record<string, number>>
+  readonly occludedByPieceIds: readonly string[]
+  readonly occlusionCoverage: number
+}
+
+type StrokeCurve = {
+  readonly normalizedPoints: readonly Point[]
+  readonly normalizedLength: number
+  readonly normalizedExtent: number
+  readonly rawPointCount: number
+}
+
+type ReferencePaint = {
+  readonly source: 'live-canvas-context'
+  readonly commands: readonly { readonly kind?: string }[]
+  readonly devicePoints: readonly Point[]
+  readonly cssPoints: readonly Point[]
+  readonly lineWidth: number
+  readonly lineCap: string
+  readonly lineJoin: string
+  readonly transform: readonly [number, number, number, number, number, number]
 }
 
 type StrokeObservation = {
@@ -75,6 +104,8 @@ type StrokeObservation = {
   readonly destinations: readonly [string | null, string | null]
   readonly points: readonly [Point, Point]
   readonly color: string
+  readonly curve: StrokeCurve
+  readonly paint: ReferencePaint | null
   readonly raster: StrokeRaster
 }
 
@@ -99,6 +130,7 @@ type FrameEvidence = {
 
 type ModeEvidence = {
   readonly sourceDimensions: { readonly width: number; readonly height: number }
+  readonly backingDimensions: { readonly width: number; readonly height: number }
   readonly crop: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
   readonly contactSheet: string
   readonly contactSheetSha256: string
@@ -252,6 +284,53 @@ function junctionDestinations(strokes: readonly StrokeObservation[]): Map<string
 
 function pointDistance(left: Point, right: Point): number {
   return Math.hypot(left[0] - right[0], left[1] - right[1])
+}
+
+function normalizedCurveShape(curve: StrokeCurve): readonly Point[] {
+  if (curve.normalizedLength < 1e-10) return curve.normalizedPoints
+  return curve.normalizedPoints.map(([x, y]) => [x / curve.normalizedLength, Math.abs(y) / curve.normalizedLength])
+}
+
+function curveShapeError(reference: StrokeCurve, actual: StrokeCurve): number {
+  const left = normalizedCurveShape(reference), right = normalizedCurveShape(actual)
+  if (left.length !== right.length || left.length === 0) return Infinity
+  return Math.max(...left.map((point, index) => pointDistance(point, right[index]!)))
+}
+
+function pointSegmentDistance(point: Point, from: Point, to: Point): number {
+  const dx = to[0] - from[0], dy = to[1] - from[1], squared = dx * dx + dy * dy
+  const amount = squared === 0 ? 0 : Math.max(0, Math.min(1,
+    ((point[0] - from[0]) * dx + (point[1] - from[1]) * dy) / squared))
+  return pointDistance(point, [from[0] + dx * amount, from[1] + dy * amount])
+}
+
+function pathDistance(point: Point, path: readonly Point[]): number {
+  if (path.length < 2) return path.length === 0 ? Infinity : pointDistance(point, path[0]!)
+  return Math.min(...path.slice(1).map((to, index) => pointSegmentDistance(point, path[index]!, to)))
+}
+
+function unionPathCoverage(
+  source: readonly Point[],
+  targets: readonly { readonly path: readonly Point[]; readonly radius: number }[],
+): number {
+  if (source.length === 0 || targets.length === 0) return 0
+  const samples = source.slice(1).flatMap((to, index) => Array.from({ length: 9 }, (_, step): Point => {
+    const from = source[index]!, amount = step / 8
+    return [from[0] + (to[0] - from[0]) * amount, from[1] + (to[1] - from[1]) * amount]
+  }))
+  samples.push(source.at(-1)!)
+  return samples.filter((point) => targets.some((target) => pathDistance(point, target.path) <= target.radius)).length
+    / samples.length
+}
+
+function rasterGroups(frame: FrameEvidence): Map<string, StrokeObservation[]> {
+  const groups = new Map<string, StrokeObservation[]>()
+  for (const stroke of frame.observations.strokes) {
+    const group = groups.get(stroke.raster.groupId) ?? []
+    group.push(stroke)
+    groups.set(stroke.raster.groupId, group)
+  }
+  return groups
 }
 
 function topologyTerminals(strokes: readonly StrokeObservation[]): string[] {
@@ -431,6 +510,35 @@ describe('rendered Lambda comparison', () => {
         }
       })
 
+      it('derives every reference-visible tube from the live Painter canvas path', () => {
+        const mode = example.modes.reference
+        for (const frame of mode.frames) for (const stroke of semanticStrokes(frame)) {
+          if (stroke.curve.normalizedLength < 1e-8) continue
+          expect(stroke.paint, `${stroke.pieceId} has no live Canvas paint record`).not.toBeNull()
+          const paint = stroke.paint!
+          expect(paint.source).toBe('live-canvas-context')
+          expect(paint.commands.length).toBeGreaterThan(0)
+          expect(paint.devicePoints.length).toBe(stroke.curve.rawPointCount)
+          expect(paint.cssPoints).toHaveLength(paint.devicePoints.length)
+          expect(paint.lineWidth).toBeGreaterThan(0)
+          expect(paint.lineCap).toBe('round')
+          expect(paint.lineJoin).toBe('round')
+          paint.devicePoints.forEach((point, index) => {
+            expect(paint.cssPoints[index]![0]).toBeCloseTo(
+              point[0] * mode.sourceDimensions.width / mode.backingDimensions.width,
+              7,
+            )
+            expect(paint.cssPoints[index]![1]).toBeCloseTo(
+              point[1] * mode.sourceDimensions.height / mode.backingDimensions.height,
+              7,
+            )
+          })
+          if (stroke.role === 'lambda') {
+            expect(paint.commands.some(({ kind }) => kind === 'arc')).toBe(true)
+          }
+        }
+      })
+
       it('matches phase identity and structural event order across the reference, 2D, and 3D', () => {
         for (const sample of requiredSamples) {
           const frames = MODES.map((mode) => at(example.modes[mode].frames, sample.progress))
@@ -536,6 +644,37 @@ describe('rendered Lambda comparison', () => {
         }
       })
 
+      it('matches every reference-visible correspondence curve by extent, arc length, and sampled interior shape', () => {
+        for (const sample of requiredSamples) {
+          const reference = at(example.modes.reference.frames, sample.progress)
+          const referenceGroups = groupsOf(reference)
+          for (const modeName of ['2d-light', '3d-light', '3d-dark'] as const) {
+            const actualGroups = groupsOf(at(example.modes[modeName].frames, sample.progress))
+            expect([...actualGroups.keys()].sort()).toEqual([...referenceGroups.keys()].sort())
+            for (const [address, referenceGroup] of referenceGroups) {
+              const actualGroup = actualGroups.get(address)!
+              const referenceLength = referenceGroup.reduce((sum, stroke) => sum + stroke.curve.normalizedLength, 0)
+              const actualLength = actualGroup.reduce((sum, stroke) => sum + stroke.curve.normalizedLength, 0)
+              const referenceExtent = referenceGroup.reduce((sum, stroke) => sum + stroke.curve.normalizedExtent, 0)
+              const actualExtent = actualGroup.reduce((sum, stroke) => sum + stroke.curve.normalizedExtent, 0)
+              if (referenceLength < 1e-6) {
+                expect(actualLength, `${modeName} painted absent reference curve ${address}`).toBeLessThan(1e-6)
+                continue
+              }
+              expect(actualLength, `${modeName} dropped visible curve ${address}`).toBeGreaterThan(referenceLength * 0.25)
+              expect(actualLength, `${modeName} exaggerated curve ${address}`).toBeLessThan(referenceLength * 4)
+              expect(actualExtent, `${modeName} collapsed visible extent ${address}`).toBeGreaterThan(referenceExtent * 0.25)
+              expect(actualExtent, `${modeName} exaggerated visible extent ${address}`).toBeLessThan(referenceExtent * 4)
+              expect(actualGroup.every(({ curve }) => curve.rawPointCount >= 2), `${modeName} ${address} has no complete polyline`).toBe(true)
+              if (referenceGroup.length === 1 && actualGroup.length === 1) {
+                expect(curveShapeError(referenceGroup[0]!.curve, actualGroup[0]!.curve),
+                  `${modeName} changed the sampled interior shape of ${address}`).toBeLessThan(0.18)
+              }
+            }
+          }
+        }
+      })
+
       it('matches complete copy shapes and reference-derived lift/dock trajectories without snaps', () => {
         if (expected.copies === 0) return
         const [, split, liftEnd, spaceEnd, dockEnd] = expected.boundaries
@@ -607,13 +746,78 @@ describe('rendered Lambda comparison', () => {
                 expectedStrokeColor(frame, actualGroup[0]!, expected.boundaries, manifest.palette),
               )
             }
-            const rasterStrokes = semanticStrokes(frame).filter(({ raster }) => raster.screenLength >= 3)
-            expect(rasterStrokes.length, `${modeName} has no raster-addressable Lambda stroke`).toBeGreaterThan(0)
-            expect(rasterStrokes.reduce((sum, stroke) => sum + stroke.raster.matchingPixels, 0),
-              `${modeName} has no exact structural-color pixels inside Lambda-authored stroke tubes`).toBeGreaterThan(0)
-            expect(Math.min(...rasterStrokes.map(({ raster }) => raster.bestColorDistance)),
-              `${modeName} misses all exact structural colors inside Lambda-authored stroke tubes`)
-              .toBeLessThanOrEqual(modeName.startsWith('3d') ? 72 : 48)
+            const observations = new Map(frame.observations.strokes.map((stroke) => [stroke.pieceId, stroke]))
+            const eligibleGroupIds = new Set(semanticStrokes(frame)
+              .filter(({ raster }) => raster.requiredMatchingPixels > 0)
+              .map(({ raster }) => raster.groupId))
+            const allRasterGroups = rasterGroups(frame)
+            for (const groupId of eligibleGroupIds) {
+              const group = allRasterGroups.get(groupId)
+              expect(group, `${modeName} omitted raster group ${groupId}`).toBeDefined()
+              if (group === undefined) throw new Error(`${modeName} omitted raster group ${groupId}`)
+              const evidence = group[0]!.raster
+              expect([...evidence.groupMemberIds].sort()).toEqual(group.map(({ pieceId }) => pieceId).sort())
+              expect(group.every(({ raster }) => JSON.stringify(raster) === JSON.stringify(evidence)),
+                `${modeName} ${groupId} has inconsistent shared raster evidence`).toBe(true)
+              const top = observations.get(evidence.topPieceId)
+              expect(top, `${modeName} ${groupId} has no top painted member`).toBeDefined()
+              expect(top?.color).toBe(evidence.targetColor)
+              expect(top?.rendererOnly, `${modeName} ${groupId} lets renderer-only incidence satisfy semantic color`).toBe(false)
+              for (const member of group.filter(({ rendererOnly }) => rendererOnly)) {
+                expect(member.sourceStrokeId.startsWith('interface:'),
+                  `${modeName} ${groupId} contains unrelated renderer-only geometry`).toBe(true)
+                expect(evidence.coverageByMember[member.pieceId],
+                  `${modeName} ${groupId} does not fully overdraw its renderer-local subdivision`).toBeGreaterThanOrEqual(0.98)
+              }
+              if (group.length > 1) {
+                for (const member of group) {
+                  expect(evidence.coverageByMember[member.pieceId],
+                    `${modeName} ${groupId} is not a complete coincident-subpath group for ${member.pieceId}`).toBeGreaterThanOrEqual(0.98)
+                }
+              }
+              if (evidence.occludedByPieceIds.length > 0) {
+                expect(evidence.occlusionCoverage, `${modeName} ${groupId} has an incomplete occlusion witness`)
+                  .toBeGreaterThanOrEqual(0.98)
+                const occluders = evidence.occludedByPieceIds.map((pieceId) => observations.get(pieceId))
+                expect(occluders.every((stroke) => stroke !== undefined),
+                  `${modeName} ${groupId} attributes occlusion to missing geometry`).toBe(true)
+                const topIndex = frame.observations.strokes.findIndex(({ pieceId }) => pieceId === evidence.topPieceId)
+                expect(occluders.every((stroke) => frame.observations.strokes.indexOf(stroke!) > topIndex),
+                  `${modeName} ${groupId} attributes occlusion to geometry below it in Painter order`).toBe(true)
+                expect(occluders.filter((stroke) => stroke?.rendererOnly).every((stroke) => (
+                  stroke!.sourceStrokeId.startsWith('interface:') || stroke!.renderRole === 'argument-connector'
+                )), `${modeName} ${groupId} attributes occlusion to unrelated renderer-only geometry`).toBe(true)
+                expect(occluders.every((stroke) => stroke !== undefined && stroke.raster.requiredMatchingPixels > 0),
+                  `${modeName} ${groupId} is covered only by degenerate authored geometry`).toBe(true)
+                for (const stroke of occluders) {
+                  expect(stroke!.raster.eligiblePixels,
+                    `${modeName} ${groupId} relies on an occluder with no independent raster tube`).toBeGreaterThanOrEqual(stroke!.raster.requiredMatchingPixels)
+                  expect(stroke!.raster.matchingPixels,
+                    `${modeName} ${groupId} relies on an occluder with no authored-color pixels`).toBeGreaterThanOrEqual(stroke!.raster.requiredMatchingPixels)
+                  expect(stroke!.raster.bestColorDistance,
+                    `${modeName} ${groupId} relies on an occluder missing its authored color`).toBeLessThanOrEqual(modeName.startsWith('3d') ? 72 : 48)
+                }
+                const paths = occluders.map((stroke) => ({
+                  path: stroke!.raster.screenPoints,
+                  radius: stroke!.raster.lineWidth / 2 + 0.75,
+                }))
+                const coverage = unionPathCoverage(evidence.screenPoints, paths)
+                expect(coverage, `${modeName} ${groupId} cannot reproduce its serialized semantic occlusion`)
+                  .toBeGreaterThanOrEqual(0.98)
+                for (let index = 0; index < paths.length; index += 1) {
+                  expect(coverage - unionPathCoverage(evidence.screenPoints, paths.filter((_, pathIndex) => pathIndex !== index)),
+                    `${modeName} ${groupId} includes a non-contributing occlusion path`).toBeGreaterThan(0.01)
+                }
+                continue
+              }
+              expect(evidence.occlusionCoverage).toBe(0)
+              expect(evidence.eligiblePixels, `${modeName} ${groupId} has no exclusive/group raster tube`)
+                .toBeGreaterThanOrEqual(evidence.requiredMatchingPixels)
+              expect(evidence.matchingPixels, `${modeName} ${groupId} lacks its own expected-color pixels`)
+                .toBeGreaterThanOrEqual(evidence.requiredMatchingPixels)
+              expect(evidence.bestColorDistance, `${modeName} ${groupId} misses its authored group color`)
+                .toBeLessThanOrEqual(modeName.startsWith('3d') ? 72 : 48)
+            }
           }
         }
         if (expected.copies > 0) {

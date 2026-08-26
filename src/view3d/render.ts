@@ -62,8 +62,13 @@ const LINE_W: Record<LineKind, number> = { branch: 3.5, ring: 2.2, strand: 2.2, 
     receives the blurred copy of its own full-intensity interior — clipping
     the core toward white while only the halo keeps the wire hue. Thin lines
     are unaffected (their blurred energy at their own center is far lower),
-    so pips are the one entity that needs the authored color restored. */
+    so pips need a separate authored-color restoration pass. */
 const PIP_LAYER = 1
+/** Lambda anatomy is redrawn above the composite so coincident lineage
+    strokes have deterministic Painter order and retain their authored core. */
+const LAMBDA_LAYER = 2
+const LAMBDA_RENDER_ORDER_MIN = 5
+const LAMBDA_RENDER_ORDER_SPAN = 4
 const HOVER_EXTRA_W = 1.2
 const PIP_SCALE = 0.14
 const BLOOM = { strength: 0.9, radius: 0.6, threshold: 0.15 }
@@ -164,14 +169,27 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
     ;(r.obj.material as THREE.SpriteMaterial).dispose()
   }
 
-  const makeLine = (e: FadedEntity & { kind: LineKind }): LineRec => {
+  const lambdaRenderOrder = (index: number, entityCount: number): number => (
+    LAMBDA_RENDER_ORDER_MIN + LAMBDA_RENDER_ORDER_SPAN * index / Math.max(1, entityCount)
+  )
+
+  const makeLine = (e: FadedEntity & { kind: LineKind }, index: number, entityCount: number): LineRec => {
     const color = colorOf(e)
     const width = LINE_W[e.kind]
     const geo = new LineGeometry()
     geo.setPositions(e.pts.flatMap((p) => [p.x, p.y, p.z]))
     const mat = new LineMaterial({ color, linewidth: width, transparent: true, opacity: e.alpha ?? 1 })
+    if (e.kind === 'lambda') mat.depthTest = false
     mat.resolution.set(size.w, size.h)
     const obj = new Line2(geo, mat)
+    if (e.kind === 'lambda') {
+      // Transparent objects otherwise use camera-depth sorting, which can
+      // reverse the authored structural-stroke order as their arcs move.
+      // Keep every Lambda below identity pips while reproducing Canvas
+      // Painter order exactly within the anatomy layer.
+      obj.renderOrder = lambdaRenderOrder(index, entityCount)
+      obj.layers.enable(LAMBDA_LAYER)
+    }
     obj.computeLineDistances()
     obj.userData['key'] = e.key
     group.add(obj)
@@ -232,10 +250,10 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
     for (const r of spriteRecs.values()) disposeSprite(r)
     lineRecs.clear()
     spriteRecs.clear()
-    for (const e of list) {
+    list.forEach((e, index) => {
       if (e.kind === 'label' || e.kind === 'pip') spriteRecs.set(e.key, makeSprite(e))
-      else lineRecs.set(e.key, makeLine(e))
-    }
+      else lineRecs.set(e.key, makeLine(e, index, list.length))
+    })
     applyHover()
   }
 
@@ -260,7 +278,10 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
         }
       }
       if (!compatible) { rebuildAll(next); return }
+      let index = 0
       for (const [k, e] of nextByKey) {
+        const entityIndex = index
+        index += 1
         const lr = lineRecs.get(k)
         if (lr !== undefined && isLineEntity(e)) {
           lr.geo.setPositions(e.pts.flatMap((p) => [p.x, p.y, p.z]))
@@ -269,6 +290,7 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
           lr.mat.opacity = e.alpha ?? 1
           lr.baseColor = colorOf(e)
           lr.mat.color.set(hoverKeys.has(k) ? th.hover : lr.baseColor)
+          if (e.kind === 'lambda') lr.obj.renderOrder = lambdaRenderOrder(entityIndex, next.length)
           continue
         }
         const sr = spriteRecs.get(k)!
@@ -300,19 +322,23 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
     },
     render() {
       composer.render()
+      const restoreLayer = (layer: number): void => {
+        const bg = scene.background
+        scene.background = null
+        renderer.autoClear = false
+        camera.layers.set(layer)
+        renderer.render(scene, camera)
+        camera.layers.set(0)
+        renderer.autoClear = true
+        scene.background = bg
+      }
+      restoreLayer(LAMBDA_LAYER)
       // With the bloom pass in the chain, redraw the pips over the composite:
       // the composite's disc cores are clipped toward white (see PIP_LAYER),
       // and this pass restores the authored color there while the bloom halo
       // around each disc remains from the composite underneath.
       if (composer.passes.includes(bloom)) {
-        const bg = scene.background
-        scene.background = null // a background draw ignores layers and would wipe the composite
-        renderer.autoClear = false
-        camera.layers.set(PIP_LAYER)
-        renderer.render(scene, camera)
-        camera.layers.set(0)
-        renderer.autoClear = true
-        scene.background = bg
+        restoreLayer(PIP_LAYER)
       }
     },
     resize(w, h) {
