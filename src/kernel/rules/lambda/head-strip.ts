@@ -11,6 +11,7 @@ import { completeWireEnds, type PartsInProgress } from '../wire-ends'
 import {
   mapTermToCommonCarrier,
   validateSlotCorrespondence,
+  validateSlotCorrespondenceWires,
   type SlotCorrespondence,
 } from './correspondence'
 
@@ -147,20 +148,7 @@ export function applyLambdaHeadStrip(
     )
   }
 
-  const rightByColumn = new Map<number, number>()
-  correspondence.right.forEach((column, slot) => rightByColumn.set(column, slot))
-  correspondence.left.forEach((column, leftSlot) => {
-    const rightSlot = rightByColumn.get(column)
-    if (rightSlot === undefined) return
-    const leftWire = wireAt(diagram, a, { kind: 'free', index: leftSlot })
-    const rightWire = wireAt(diagram, b, { kind: 'free', index: rightSlot })
-    if (leftWire !== rightWire) {
-      throw new RuleError(
-        `head strip shared correspondence column ${column} maps free slots `
-        + `onto different host wires ('${leftWire}' and '${rightWire}')`,
-      )
-    }
-  })
+  validateSlotCorrespondenceWires(diagram, a, b, correspondence)
 
   const close = (term: Term): Term => {
     let result = term

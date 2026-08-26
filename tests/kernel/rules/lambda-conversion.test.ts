@@ -79,4 +79,45 @@ describe('applyLambdaConversion', () => {
       { leftSteps: [], rightSteps: [] },
     )).toThrowError(/conversion certificate rejected/i)
   })
+
+  it('rejects a quotient column whose source slots ride different wires', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.term(
+      builder.root,
+      application(free(0), free(1)),
+      2,
+    )
+    const source = builder.build()
+
+    expect(() => applyLambdaConversion(
+      source,
+      node,
+      application(free(0), free(0)),
+      { commonArity: 1, left: [0, 0], right: [0] },
+      { leftSteps: [], rightSteps: [] },
+    )).toThrow(/column 0.*different host wires/i)
+  })
+
+  it('rejects a new quotient column attached to different wires', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.term(builder.root, free(0), 1)
+    const first = builder.wire([
+      { node: builder.identity(builder.root, { kind: 'iota' }, 1), port: { kind: 'identity', index: 0 } },
+      { node: builder.identity(builder.root, { kind: 'iota' }, 1), port: { kind: 'identity', index: 0 } },
+    ])
+    const second = builder.wire([
+      { node: builder.identity(builder.root, { kind: 'iota' }, 1), port: { kind: 'identity', index: 0 } },
+      { node: builder.identity(builder.root, { kind: 'iota' }, 1), port: { kind: 'identity', index: 0 } },
+    ])
+    const source = builder.build()
+
+    expect(() => applyLambdaConversion(
+      source,
+      node,
+      free(0),
+      { commonArity: 2, left: [0], right: [0, 1, 1] },
+      { leftSteps: [], rightSteps: [] },
+      { 1: first, 2: second },
+    )).toThrow(/column 1.*different attachment wires/i)
+  })
 })

@@ -147,6 +147,36 @@ describe('term interaction surface', () => {
     )).toMatchObject({ rule: 'lambdaCongruenceJoin', a: left, b: right })
   })
 
+  it('resolves host-equivalent aliased interfaces through one carrier column', () => {
+    const builder = new DiagramBuilder()
+    const left = builder.term(builder.root, application(free(0), free(1)), 2)
+    const right = builder.term(builder.root, application(free(0), free(0)), 1)
+    builder.wire([
+      { node: left, port: { kind: 'free', index: 0 } },
+      { node: left, port: { kind: 'free', index: 1 } },
+      { node: right, port: { kind: 'free', index: 0 } },
+    ])
+    const diagram = builder.build()
+    const step = proofConnectionStep(
+      diagram,
+      {
+        wire: wireAt(diagram, left, { kind: 'output' }),
+        endpoint: { node: left, port: { kind: 'output' } },
+      },
+      {
+        wire: wireAt(diagram, right, { kind: 'output' }),
+        endpoint: { node: right, port: { kind: 'output' } },
+      },
+      'forward',
+      64,
+    )
+
+    expect(step).toMatchObject({
+      rule: 'lambdaCongruenceJoin',
+      correspondence: { commonArity: 1, left: [0, 0], right: [0] },
+    })
+  })
+
   it('connects two term free-slot wires through the proof wire join', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)

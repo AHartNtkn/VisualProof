@@ -1,7 +1,9 @@
 import { application, free, lambda, type Term } from '../../term/term'
+import type { Diagram, NodeId, WireId } from '../../diagram/diagram'
+import { wireAt } from '../access'
 import { RuleError } from '../error'
 
-/** Injective embeddings of two numeric free-slot interfaces into one carrier. */
+/** Quotient maps from two numeric free-slot interfaces onto physical carriers. */
 export type SlotCorrespondence = {
   readonly commonArity: number
   readonly left: readonly number[]
@@ -21,7 +23,6 @@ export function validateSlotCorrespondenceCarrier(
   }
   const covered = new Set<number>()
   for (const side of ['left', 'right'] as const) {
-    const seen = new Set<number>()
     for (const [slot, column] of correspondence[side].entries()) {
       if (
         !Number.isSafeInteger(column)
@@ -33,13 +34,6 @@ export function validateSlotCorrespondenceCarrier(
           + `in range 0..<${correspondence.commonArity}`,
         )
       }
-      if (seen.has(column)) {
-        throw new RuleError(
-          `slot correspondence must be injective on the ${side}; `
-          + `column ${column} is repeated`,
-        )
-      }
-      seen.add(column)
       covered.add(column)
     }
   }
@@ -50,6 +44,56 @@ export function validateSlotCorrespondenceCarrier(
       `slot correspondence common column ${first} is uncovered`,
     )
   }
+}
+
+function accumulateSlotWires(
+  diagram: Diagram,
+  node: NodeId,
+  columns: readonly number[],
+  carrierByColumn: Map<number, WireId>,
+): void {
+  columns.forEach((column, slot) => {
+    const wire = wireAt(diagram, node, { kind: 'free', index: slot })
+    const carrier = carrierByColumn.get(column)
+    if (carrier !== undefined && carrier !== wire) {
+      throw new RuleError(
+        `slot correspondence common column ${column} is carried by `
+        + `different host wires '${carrier}' and '${wire}'`,
+      )
+    }
+    carrierByColumn.set(column, wire)
+  })
+}
+
+/** Repeated columns on one existing interface must share their host wire. */
+export function validateSlotMappingWires(
+  diagram: Diagram,
+  node: NodeId,
+  columns: readonly number[],
+): void {
+  accumulateSlotWires(diagram, node, columns, new Map())
+}
+
+/** Every occurrence of one quotient column must ride the same host wire. */
+export function validateSlotCorrespondenceWires(
+  diagram: Diagram,
+  leftNode: NodeId,
+  rightNode: NodeId,
+  correspondence: SlotCorrespondence,
+): void {
+  const carrierByColumn = new Map<number, WireId>()
+  accumulateSlotWires(
+    diagram,
+    leftNode,
+    correspondence.left,
+    carrierByColumn,
+  )
+  accumulateSlotWires(
+    diagram,
+    rightNode,
+    correspondence.right,
+    carrierByColumn,
+  )
 }
 
 export function validateSlotCorrespondence(

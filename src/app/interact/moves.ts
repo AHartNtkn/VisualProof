@@ -48,29 +48,24 @@ export function proposeAttachedSlotCorrespondence(
 ) {
   const left = termNodeAt(diagram, a)
   const right = termNodeAt(diagram, b)
-  const leftColumns: number[] = Array.from({ length: left.freeArity })
-  const rightColumns: number[] = Array.from({ length: right.freeArity })
-  const usedRight = new Set<number>()
-  let commonArity = 0
-  for (let leftSlot = 0; leftSlot < left.freeArity; leftSlot++) {
-    const leftWire = wireAt(diagram, a, { kind: 'free', index: leftSlot })
-    const rightSlot = Array.from({ length: right.freeArity }, (_, index) => index)
-      .find((candidate) =>
-        !usedRight.has(candidate)
-        && wireAt(diagram, b, { kind: 'free', index: candidate }) === leftWire)
-    if (rightSlot === undefined) continue
-    leftColumns[leftSlot] = commonArity
-    rightColumns[rightSlot] = commonArity
-    usedRight.add(rightSlot)
-    commonArity++
+  const columnByWire = new Map<WireId, number>()
+  const columns = (node: NodeId, arity: number): number[] =>
+    Array.from({ length: arity }, (_, slot) => {
+      const wire = wireAt(diagram, node, { kind: 'free', index: slot })
+      let column = columnByWire.get(wire)
+      if (column === undefined) {
+        column = columnByWire.size
+        columnByWire.set(wire, column)
+      }
+      return column
+    })
+  const leftColumns = columns(a, left.freeArity)
+  const rightColumns = columns(b, right.freeArity)
+  return {
+    commonArity: columnByWire.size,
+    left: leftColumns,
+    right: rightColumns,
   }
-  for (let slot = 0; slot < left.freeArity; slot++) {
-    if (leftColumns[slot] === undefined) leftColumns[slot] = commonArity++
-  }
-  for (let slot = 0; slot < right.freeArity; slot++) {
-    if (rightColumns[slot] === undefined) rightColumns[slot] = commonArity++
-  }
-  return { commonArity, left: leftColumns, right: rightColumns }
 }
 
 function outputNodes(diagram: Diagram, wire: WireId): NodeId[] {

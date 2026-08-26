@@ -17,71 +17,23 @@ import { termNodeAt, wireAt } from '../access'
 import { RuleError } from '../error'
 import { completeWireEnds, type PartsInProgress } from '../wire-ends'
 
-function mapFreeSlots(term: Term, mapping: readonly number[]): Term {
+function renameSlots(term: Term, mapping: readonly number[]): Term {
   switch (term.kind) {
     case 'bound': return term
     case 'free': {
       const slot = mapping[term.slot]
-      if (slot === undefined) {
+      if (slot === undefined || slot < 0) {
         throw new DiagramError(`term free slot ${term.slot} is outside its node interface`)
       }
       return free(slot)
     }
-    case 'lambda': return lambda(mapFreeSlots(term.body, mapping))
+    case 'lambda': return lambda(renameSlots(term.body, mapping))
     case 'application':
       return application(
-        mapFreeSlots(term.fn, mapping),
-        mapFreeSlots(term.argument, mapping),
+        renameSlots(term.fn, mapping),
+        renameSlots(term.argument, mapping),
       )
   }
-}
-
-function usedSlots(term: Term): number[] {
-  const result: number[] = []
-  const seen = new Set<number>()
-  const visit = (current: Term): void => {
-    switch (current.kind) {
-      case 'bound': return
-      case 'free':
-        if (!seen.has(current.slot)) {
-          seen.add(current.slot)
-          result.push(current.slot)
-        }
-        return
-      case 'lambda':
-        visit(current.body)
-        return
-      case 'application':
-        visit(current.fn)
-        visit(current.argument)
-    }
-  }
-  visit(term)
-  return result
-}
-
-function compactTerm(
-  term: Term,
-  carrierWires: readonly WireId[],
-): { readonly term: Term; readonly wires: readonly WireId[] } {
-  const slots = usedSlots(term)
-  const mapping: number[] = []
-  const wires: WireId[] = []
-  const byWire = new Map<WireId, number>()
-  for (const slot of slots) {
-    const wire = carrierWires[slot]
-    if (wire === undefined) {
-      throw new DiagramError(`term carrier slot ${slot} has no host wire`)
-    }
-    let compact = byWire.get(wire)
-    if (compact === undefined) {
-      compact = wires.length
-      byWire.set(wire, compact)
-      wires.push(wire)
-    }
-    mapping[slot] = compact
-  }
-  return { term: mapFreeSlots(term, mapping), wires }
 }
 
 /** Extract one bound-closed occurrence onto a fresh producer and bridge wire. */
@@ -94,20 +46,9 @@ export function applyLambdaFission(
   const node = termNodeAt(diagram, nodeId)
   const nativeWires = Array.from({ length: node.freeArity }, (_, index) =>
     wireAt(diagram, nodeId, { kind: 'free', index }))
-  const carrierWires: WireId[] = []
-  const carrierByWire = new Map<WireId, number>()
-  const nativeToCarrier = nativeWires.map((wire) => {
-    const existing = carrierByWire.get(wire)
-    if (existing !== undefined) return existing
-    const carrier = carrierWires.length
-    carrierByWire.set(wire, carrier)
-    carrierWires.push(wire)
-    return carrier
-  })
-  const globalTerm = mapFreeSlots(node.term, nativeToCarrier)
   let selected: Term
   try {
-    selected = subtermAt(globalTerm, path)
+    selected = subtermAt(node.term, path)
   } catch (error) {
     throw new DiagramError(
       `invalid path into node '${nodeId}': `
@@ -121,9 +62,8 @@ export function applyLambdaFission(
     )
   }
 
-  const bridgeSlot = carrierWires.length
-  const residualTerm = replaceSubtermAt(globalTerm, path, free(bridgeSlot))
-  const producer = compactTerm(selected, carrierWires)
+  const bridgeSlot = node.freeArity
+  const residualTerm = replaceSubtermAt(node.term, path, free(bridgeSlot))
   const producerId = freshId(
     new Set(Object.keys(diagram.nodes)),
     `${nodeId}_fis`,
@@ -134,7 +74,7 @@ export function applyLambdaFission(
     `${nodeId}_fis`,
     reservation?.wires,
   )
-  const oldScopes = new Map(carrierWires.map((wire) => [wire, derivedScope(diagram, wire)]))
+  const oldScopes = new Map(nativeWires.map((wire) => [wire, derivedScope(diagram, wire)]))
   const nodes: Record<NodeId, DiagramNode> = {
     ...diagram.nodes,
     [nodeId]: {
@@ -146,31 +86,20 @@ export function applyLambdaFission(
     [producerId]: {
       kind: 'term',
       region: node.region,
-      term: producer.term,
-      freeArity: producer.wires.length,
+      term: selected,
+      freeArity: node.freeArity,
     },
   }
-  const producerSlotByWire = new Map(
-    producer.wires.map((wire, index) => [wire, index]),
-  )
   const wires: Record<WireId, Wire> = {}
   for (const [wireId, wire] of Object.entries(diagram.wires)) {
-    const carrier = carrierByWire.get(wireId)
     const endpoints: Endpoint[] = []
-    let replaced = false
     for (const endpoint of wire.endpoints) {
       if (endpoint.node === nodeId && endpoint.port.kind === 'free') {
-        if (!replaced && carrier !== undefined) {
-          endpoints.push({ node: nodeId, port: { kind: 'free', index: carrier } })
-          const producerSlot = producerSlotByWire.get(wireId)
-          if (producerSlot !== undefined) {
-            endpoints.push({
-              node: producerId,
-              port: { kind: 'free', index: producerSlot },
-            })
-          }
-          replaced = true
-        }
+        endpoints.push(endpoint)
+        endpoints.push({
+          node: producerId,
+          port: { kind: 'free', index: endpoint.port.index },
+        })
         continue
       }
       endpoints.push(endpoint)
@@ -216,6 +145,9 @@ export function applyLambdaFusion(
       `fusion requires one term output and one term free-slot endpoint on wire '${wireId}'`,
     )
   }
+  if (input.port.kind !== 'free') {
+    throw new RuleError(`fusion input on wire '${wireId}' is not a term free slot`)
+  }
   if (output.node === input.node) {
     throw new RuleError(
       `fusion cannot inline a node into itself ('${output.node}'); the equation is recursive`,
@@ -231,30 +163,36 @@ export function applyLambdaFusion(
     )
   }
 
-  const carrierWires: WireId[] = []
-  const byWire = new Map<WireId, number>()
-  const carrierFor = (wire: WireId): number => {
-    const existing = byWire.get(wire)
-    if (existing !== undefined) return existing
-    const carrier = carrierWires.length
-    byWire.set(wire, carrier)
-    carrierWires.push(wire)
-    return carrier
-  }
   const consumerWires = Array.from({ length: consumer.freeArity }, (_, index) =>
     wireAt(diagram, input.node, { kind: 'free', index }))
-  for (const wire of consumerWires) if (wire !== wireId) carrierFor(wire)
   const producerWires = Array.from({ length: producer.freeArity }, (_, index) =>
     wireAt(diagram, output.node, { kind: 'free', index }))
-  for (const wire of producerWires) if (wire !== wireId) carrierFor(wire)
+  const carrierWires: WireId[] = []
+  const consumerMapping = consumerWires.map((wire) => {
+    if (wire === wireId) return -1
+    const carrier = carrierWires.length
+    carrierWires.push(wire)
+    return carrier
+  })
   const consumedCarrier = carrierWires.length
-  const consumerMapping = consumerWires.map((wire) =>
-    wire === wireId ? consumedCarrier : carrierFor(wire))
-  const producerMapping = producerWires.map((wire) => carrierFor(wire))
+  consumerMapping[input.port.index] = consumedCarrier
+  const producerMapping = producerWires.map((wire, slot) => {
+    const sameNative = consumerMapping[slot]
+    if (
+      sameNative !== undefined
+      && sameNative !== consumedCarrier
+      && carrierWires[sameNative] === wire
+    ) return sameNative
+    const shared = carrierWires.indexOf(wire)
+    if (shared >= 0) return shared
+    const carrier = carrierWires.length
+    carrierWires.push(wire)
+    return carrier
+  })
   const mergedTerm = substFree(
-    mapFreeSlots(consumer.term, consumerMapping),
+    renameSlots(consumer.term, consumerMapping),
     consumedCarrier,
-    mapFreeSlots(producer.term, producerMapping),
+    renameSlots(producer.term, producerMapping),
   )
 
   const oldScopes = new Map(carrierWires.map((wire) => [wire, derivedScope(diagram, wire)]))
@@ -271,24 +209,50 @@ export function applyLambdaFusion(
       : node
   }
   const wires: Record<WireId, Wire> = {}
+  const slotsByWire = new Map<WireId, number[]>()
+  carrierWires.forEach((wire, slot) => {
+    const slots = slotsByWire.get(wire) ?? []
+    slots.push(slot)
+    slotsByWire.set(wire, slots)
+  })
   for (const [candidateId, wire] of Object.entries(diagram.wires)) {
     if (candidateId === wireId) continue
-    const carrier = byWire.get(candidateId)
     const endpoints: Endpoint[] = []
-    let replaced = false
+    const inserted = new Set<number>()
+    const insertSlot = (slot: number | undefined): void => {
+      if (
+        slot === undefined
+        || slot < 0
+        || slot >= carrierWires.length
+        || inserted.has(slot)
+      ) return
+      inserted.add(slot)
+      endpoints.push({
+        node: input.node,
+        port: { kind: 'free', index: slot },
+      })
+    }
     for (const endpoint of wire.endpoints) {
-      const removed = endpoint.node === output.node
-        || (endpoint.node === input.node && endpoint.port.kind === 'free')
-      if (!removed) {
-        endpoints.push(endpoint)
+      if (endpoint.node === output.node) {
+        insertSlot(
+          endpoint.port.kind === 'free'
+            ? producerMapping[endpoint.port.index]
+            : undefined,
+        )
         continue
       }
-      if (!replaced && carrier !== undefined) {
+      if (endpoint.node === input.node && endpoint.port.kind === 'free') {
+        insertSlot(consumerMapping[endpoint.port.index])
+        continue
+      }
+      endpoints.push(endpoint)
+    }
+    for (const slot of slotsByWire.get(candidateId) ?? []) {
+      if (!inserted.has(slot)) {
         endpoints.push({
           node: input.node,
-          port: { kind: 'free', index: carrier },
+          port: { kind: 'free', index: slot },
         })
-        replaced = true
       }
     }
     wires[candidateId] = {

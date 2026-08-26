@@ -3,6 +3,8 @@ export {
   mapTermToCommonCarrier,
   validateSlotCorrespondence,
   validateSlotCorrespondenceCarrier,
+  validateSlotCorrespondenceWires,
+  validateSlotMappingWires,
 } from './correspondence'
 export { applyLambdaConversion } from './conversion'
 export type { FreeVariableIdentityAction } from './free-variable-identity'

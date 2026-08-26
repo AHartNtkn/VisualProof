@@ -8,6 +8,7 @@ import { RuleError } from '../error'
 import {
   mapTermToCommonCarrier,
   validateSlotCorrespondence,
+  validateSlotCorrespondenceWires,
   type SlotCorrespondence,
 } from './correspondence'
 
@@ -44,20 +45,7 @@ export function applyLambdaCongruenceJoin(
     throw new RuleError(`congruence certificate rejected: ${checked.reason}`)
   }
 
-  const rightByColumn = new Map<number, number>()
-  correspondence.right.forEach((column, slot) => rightByColumn.set(column, slot))
-  correspondence.left.forEach((column, leftSlot) => {
-    const rightSlot = rightByColumn.get(column)
-    if (rightSlot === undefined) return
-    const leftWire = wireAt(diagram, a, { kind: 'free', index: leftSlot })
-    const rightWire = wireAt(diagram, b, { kind: 'free', index: rightSlot })
-    if (leftWire !== rightWire) {
-      throw new RuleError(
-        `congruence join requires common column ${column} free slots `
-        + `${leftSlot} and ${rightSlot} on one wire; found '${leftWire}' and '${rightWire}'`,
-      )
-    }
-  })
+  validateSlotCorrespondenceWires(diagram, a, b, correspondence)
 
   const outputA = wireAt(diagram, a, { kind: 'output' })
   const outputB = wireAt(diagram, b, { kind: 'output' })

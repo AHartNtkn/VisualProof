@@ -14,6 +14,7 @@ import { RuleError } from '../error'
 import {
   mapTermToCommonCarrier,
   validateSlotCorrespondence,
+  validateSlotMappingWires,
   type SlotCorrespondence,
 } from './correspondence'
 
@@ -23,6 +24,7 @@ function replacementAttachments(
   attachments: Readonly<Record<number, WireId>>,
 ): ReadonlyMap<number, WireId> {
   const result = new Map<number, WireId>()
+  const newCarrierByColumn = new Map<number, WireId>()
   for (const [rawSlot, wire] of Object.entries(attachments)) {
     const slot = Number(rawSlot)
     if (
@@ -44,6 +46,14 @@ function replacementAttachments(
     if (diagram.wires[wire] === undefined) {
       throw new DiagramError(`unknown wire '${wire}'`)
     }
+    const carrier = newCarrierByColumn.get(column)
+    if (carrier !== undefined && carrier !== wire) {
+      throw new RuleError(
+        `slot correspondence new column ${column} is carried by different `
+        + `attachment wires '${carrier}' and '${wire}'`,
+      )
+    }
+    newCarrierByColumn.set(column, wire)
     result.set(slot, wire)
   }
   for (const [slot, column] of correspondence.right.entries()) {
@@ -121,6 +131,7 @@ export function applyLambdaConversion(
     source.freeArity,
     correspondence.right.length,
   )
+  validateSlotMappingWires(diagram, node, correspondence.left)
   try {
     assertWellFormedTerm(term, correspondence.right.length)
   } catch (error) {
