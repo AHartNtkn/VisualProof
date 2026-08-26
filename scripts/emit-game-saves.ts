@@ -1,10 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
-  renameSync,
   rmSync,
 } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -14,6 +11,7 @@ import { diagramToJson } from '../src/kernel/diagram/json'
 import { verifyTheory } from '../src/kernel/proof/context'
 import { buildFregeTheory } from '../src/theories/frege'
 import { orchardPlacements } from '../orchard/placement'
+import { publishGeneratedSaves } from './game-save-publication'
 
 const counts = [1, 10, 50, 100, 250, 500, 1000, 2000] as const
 const largeDiagram = mkReplay('zeroIsNat', verifyTheory(buildFregeTheory())).diagramAt(20)
@@ -50,18 +48,11 @@ try {
     throw new Error(`save emitter failed with status ${String(emitted.status)}:\n${emitted.stderr}`)
   }
 
-  let replaced = 0
-  for (const save of saves) {
-    const generated = join(temporaryDirectory, save.filename)
-    const destination = join(outputDirectory, save.filename)
-    if (!existsSync(generated)) throw new Error(`save emitter did not produce ${save.filename}`)
-    const unchanged = existsSync(destination)
-      && readFileSync(destination).equals(readFileSync(generated))
-    if (!unchanged) {
-      renameSync(generated, destination)
-      replaced++
-    }
-  }
+  const replaced = publishGeneratedSaves(
+    outputDirectory,
+    temporaryDirectory,
+    saves.map(({ filename }) => filename),
+  )
   console.log(`emitted ${saves.length} ordinary saves (${replaced} replaced)`)
 } finally {
   rmSync(temporaryDirectory, { recursive: true, force: true })
