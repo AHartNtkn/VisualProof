@@ -172,6 +172,82 @@ contexts, proving split/contract as inverse equality factorizations, applying
 beta-eta soundness for convertible closed witnesses, composing every exact pin
 insertion equivalence, and transporting through the source/target isomorphisms.
 
+## Review fix round 1
+
+### Fusion ancestor/descendant ownership
+
+Fusion now keeps the producer at the bridge-derived ancestor scope while its
+consumer may be the hole of an arbitrarily nested descendant context. The
+`DiagramContext.WireExtension` witness recursively adds the bridge to the
+context interface, retains it through every cut, and rebuilds the exact source
+context. `DiagramContext.extendWire_denote_fill_iff` transports denotation in
+both directions through that recursive construction, including cut polarity
+and reachability.
+
+The public Fusion description records the ancestor locals separately from the
+consumer locals and derives the consumer's producer port through
+`descendant.outerWire`. Its source places the producer at the ancestor and the
+consumer in the extended descendant; its target removes the producer while
+retaining the consumer at the same descendant region. Same-region Fusion is
+the `.hole` case of the same construction. Physical carriers retain the exact
+consumer-first/producer-first order and TypeScript alias behavior.
+
+Carrier evidence now pairs each source address with its exact target address,
+because removing the private bridge and producer changes root-local indices
+and nested item prefixes. Completion destinations use target addresses while
+old scopes are derived from source addresses and rebased across the preserved
+descendant branch. Completion depth includes both occurrence and descendant
+cut depth, and the public target remains the description-owned canonical
+two-ended target.
+
+The following owning production theorems each reached RED with its dependency
+closure complete and only that theorem admitted, then GREEN with the same
+statement and a kernel-checked proof:
+
+- `DiagramContext.extendWire_source_holePath`
+- `DiagramContext.extendWire_denote_fill_iff`
+- `Fusion.rebaseScope_source`
+- `Fusion.Description.consumerRegion_preserved`
+- `Fusion.Description.descendantScope_preserved`
+- `Fusion.Local.sound_iff`
+- `Fusion.sound`
+
+RED/GREEN was checked with:
+
+```text
+lake env lean VisualProof/Diagram/NestedScopedRewrite.lean
+lake env lean VisualProof/Diagram/Semantics/NestedScopedRewrite.lean
+lake env lean VisualProof/Rule/Lambda/Fission.lean
+lake env lean VisualProof/Rule/Soundness/Lambda/Fission.lean
+```
+
+The local soundness proof evaluates the producer at the ancestor bridge
+owner, transports the private bridge environment recursively to the consumer,
+and merges or reconstructs that consumer in its preserved descendant region.
+The global proof then composes occurrence context, exact completion, and open
+isomorphism equivalences.
+
+### Nested AnchoredWire address embedding
+
+Root-local addresses below the selected descendant now include both
+`anchorLocals.length` and `selected.locals.length`. Addresses owned by an
+actual descendant cut keep their existing local index and only embed their
+region path. Both `descendantWireAddress` and local `nestedItemAddress` use the
+same owner-sensitive embedding rule, so split and contract share the corrected
+address authority.
+
+The following production contract theorems were independently RED/GREEN:
+
+- `NestedOccurrence.descendantWireAddress_internal_root`
+- `NestedOccurrence.descendantWireAddress_internal_cut`
+- `NestedOccurrence.nestedItemAddress_local_root`
+- `NestedOccurrence.nestedItemAddress_local_cut`
+
+They cover same-region root offsets and descendant-cut indices directly. The
+aggregate AnchoredWire soundness and exact forward/backward runners then
+recompiled against the corrected addresses, including carrier aliases, exact
+old scopes, completion destinations, and the canonical two-ended target.
+
 ## Files
 
 Model and Lambda reduction support:
@@ -184,6 +260,7 @@ Occurrence/rewrite API:
 - `VisualProof/Diagram/ScopedRewrite.lean`
 - `VisualProof/Diagram/NestedScopedRewrite.lean`
 - `VisualProof/Diagram/Semantics/ScopedRewrite.lean`
+- `VisualProof/Diagram/Semantics/NestedScopedRewrite.lean`
 
 Lambda relations, soundness, and exact execution:
 
@@ -213,7 +290,7 @@ Public registration:
 
 ```text
 lake build
-Build completed successfully (151 jobs).
+Build completed successfully (152 jobs).
 
 rg -n '\bsorry\b' VisualProof --glob '*.lean'
 no matches

@@ -25,9 +25,87 @@ private def Var.appendView (left right : List Sig) :
           | .fromLeft inherited => .fromLeft (.there inherited)
           | .fromRight localWire => .fromRight localWire
 
+private theorem Var.appendView_appendRight
+    (left right : List Sig) (wire : Var right signature) :
+    Var.appendView left right (Var.appendRight left wire) = .fromRight wire := by
+  induction left with
+  | nil => rfl
+  | cons head tail induction =>
+      simp only [Var.appendRight, Var.appendView, induction]
+
 def RegionPath.shiftRoot (offset : Nat) : RegionPath → RegionPath
   | [] => []
   | item :: rest => (offset + item) :: rest
+
+namespace DiagramContext
+
+private def ItemSeq.renameWires_length
+    (items : ItemSeq sourceWires)
+    (rename : WireRenaming sourceWires targetWires) :
+    (items.renameWires rename).length = items.length :=
+  match items with
+  | .nil => rfl
+  | .cons _ tail => congrArg Nat.succ (ItemSeq.renameWires_length tail rename)
+
+/-- The exact recursive extension of a descendant context by one wire owned
+at an ancestor. Every existing frame item is retained through the inherited
+wire embedding, while the distinguished wire stays inherited through every
+cut down to the selected descendant. -/
+structure WireExtension
+    (context : DiagramContext targetOuter targetWires)
+    (sourceOuter : List Sig)
+    (outerRetain : WireRenaming targetOuter sourceOuter)
+    (outerWire : Var sourceOuter signature) where
+  sourceWires : List Sig
+  source : DiagramContext sourceOuter sourceWires
+  retain : WireRenaming targetWires sourceWires
+  wire : Var sourceWires signature
+
+def extendWire
+    (context : DiagramContext targetOuter targetWires)
+    (sourceOuter : List Sig)
+    (outerRetain : WireRenaming targetOuter sourceOuter)
+    (outerWire : Var sourceOuter signature) :
+    WireExtension context sourceOuter outerRetain outerWire :=
+  match context with
+  | .hole => {
+      sourceWires := sourceOuter
+      source := .hole
+      retain := outerRetain
+      wire := outerWire
+    }
+  | .cut locals before after child =>
+      let childExtension := child.extendWire (sourceOuter ++ locals)
+        (outerRetain.appendRight locals) (outerWire.appendLeft locals)
+      {
+        sourceWires := childExtension.sourceWires
+        source := .cut locals
+          (before.renameWires (outerRetain.appendRight locals))
+          (after.renameWires (outerRetain.appendRight locals))
+          childExtension.source
+        retain := childExtension.retain
+        wire := childExtension.wire
+      }
+
+/-- Extending a recursive context by an inherited ancestor wire preserves the
+exact selected descendant region address. -/
+theorem extendWire_source_holePath
+    (context : DiagramContext targetOuter targetWires)
+    (sourceOuter : List Sig)
+    (outerRetain : WireRenaming targetOuter sourceOuter)
+    (outerWire : Var sourceOuter signature) :
+    (context.extendWire sourceOuter outerRetain outerWire).source.holePath =
+      context.holePath := by
+  induction context generalizing sourceOuter with
+  | hole => rfl
+  | cut locals before after child induction =>
+      simp only [extendWire, holePath]
+      rw [ItemSeq.renameWires_length]
+      exact congrArg (List.cons before.length)
+        (induction (sourceOuter := sourceOuter ++ locals)
+          (outerRetain.appendRight locals) (outerWire.appendLeft locals))
+
+end DiagramContext
 
 namespace NestedOccurrence
 
@@ -74,13 +152,76 @@ private def embeddedFilledOwner (occurrence : NestedOccurrence source)
   occurrence.outer.holePath ++
     owner.shiftRoot occurrence.selected.items.length
 
-private def descendantWireAddress (occurrence : NestedOccurrence source)
+private def descendantRootLocalIndex (occurrence : NestedOccurrence source)
+    (index : Nat) : Nat :=
+  occurrence.anchorLocals.length + occurrence.selected.locals.length + index
+
+private def embeddedFilledAddress (occurrence : NestedOccurrence source)
+    (owner : RegionPath) (index : Nat) : WireAddress :=
+  match owner with
+  | [] => .internal occurrence.outer.holePath
+      (occurrence.descendantRootLocalIndex index)
+  | _ :: _ => .internal (occurrence.embeddedFilledOwner owner) index
+
+private def embeddedDescendantAddress (occurrence : NestedOccurrence source)
+    (owner : RegionPath) (index : Nat) : WireAddress :=
+  match occurrence.descendant.holePath ++ owner with
+  | [] => .internal occurrence.outer.holePath
+      (occurrence.descendantRootLocalIndex index)
+  | relativeOwner@(_ :: _) =>
+      .internal
+        (occurrence.outer.holePath ++
+          relativeOwner.shiftRoot occurrence.selected.items.length)
+        index
+
+def descendantWireAddress (occurrence : NestedOccurrence source)
     (wire : Var occurrence.descendantWires signature) : WireAddress :=
   match occurrence.descendant.classifyHoleWire occurrence.before wire with
   | .inl anchorWire => occurrence.anchorAddress occurrence.before anchorWire
   | .inr internal =>
-      .internal (occurrence.embeddedFilledOwner internal.ownerAddress.1)
+      occurrence.embeddedFilledAddress internal.ownerAddress.1
         internal.ownerAddress.2
+
+/-- A descendant-context wire owned at the combined anchor root is indexed
+after the anchor and selected-region local prefixes. -/
+theorem descendantWireAddress_internal_root
+    (occurrence : NestedOccurrence source)
+    (wire : Var occurrence.descendantWires signature)
+    (internal : Region.InternalWire
+      (occurrence.descendant.fill occurrence.before) signature)
+    (classified : occurrence.descendant.classifyHoleWire occurrence.before
+      wire = .inr internal)
+    (ownerRoot : internal.ownerAddress.1 = []) :
+    occurrence.descendantWireAddress wire =
+      .internal occurrence.outer.holePath
+        (occurrence.anchorLocals.length +
+          occurrence.selected.locals.length + internal.ownerAddress.2) := by
+  unfold descendantWireAddress
+  rw [classified]
+  unfold embeddedFilledAddress descendantRootLocalIndex
+  simp [ownerRoot]
+
+/-- A descendant-context wire owned by an actual cut retains its cut-local
+index; embedding changes only its global owner path. -/
+theorem descendantWireAddress_internal_cut
+    (occurrence : NestedOccurrence source)
+    (wire : Var occurrence.descendantWires signature)
+    (internal : Region.InternalWire
+      (occurrence.descendant.fill occurrence.before) signature)
+    (classified : occurrence.descendant.classifyHoleWire occurrence.before
+      wire = .inr internal)
+    (head : Nat) (tail : RegionPath)
+    (ownerCut : internal.ownerAddress.1 = head :: tail) :
+    occurrence.descendantWireAddress wire =
+      .internal
+        (occurrence.outer.holePath ++
+          RegionPath.shiftRoot occurrence.selected.items.length
+            (head :: tail))
+        internal.ownerAddress.2 := by
+  unfold descendantWireAddress
+  rw [classified]
+  unfold embeddedFilledAddress embeddedFilledOwner
+  simp [ownerCut]
 
 /-- Compose an exact item-wire address from a site inside `before` through
 the descendant frame, same-region selected prefix, and outer frame. -/
@@ -92,11 +233,49 @@ def nestedItemAddress (occurrence : NestedOccurrence source)
       match site.visibleWire visible with
       | .inl descendantWire => occurrence.descendantWireAddress descendantWire
       | .inr internal =>
-          .internal (occurrence.embeddedDescendantOwner
-            internal.ownerAddress.1) internal.ownerAddress.2
+          occurrence.embeddedDescendantAddress internal.ownerAddress.1
+            internal.ownerAddress.2
   | .fromRight localWire =>
-      .internal (occurrence.embeddedDescendantOwner site.path)
-        localWire.index.val
+      occurrence.embeddedDescendantAddress site.path localWire.index.val
+
+/-- A local owned at the combined descendant root follows the anchor locals
+and the selected ancestor's locals in the authoritative root context. -/
+theorem nestedItemAddress_local_root
+    (occurrence : NestedOccurrence source)
+    (site : ScopedRegion occurrence.before)
+    (localWire : Var site.body.locals signature)
+    (descendantRoot : occurrence.descendant.holePath = [])
+    (siteRoot : site.path = []) :
+    occurrence.nestedItemAddress site
+        (Var.appendRight site.wires localWire) =
+      .internal occurrence.outer.holePath
+        (occurrence.anchorLocals.length +
+          occurrence.selected.locals.length + localWire.index.val) := by
+  unfold nestedItemAddress
+  rw [Var.appendView_appendRight]
+  unfold embeddedDescendantAddress descendantRootLocalIndex
+  rw [siteRoot, descendantRoot]
+  simp
+
+/-- A local owned by an actual descendant cut retains its cut-local index;
+only its owner path crosses the same-region selected-item prefix. -/
+theorem nestedItemAddress_local_cut
+    (occurrence : NestedOccurrence source)
+    (site : ScopedRegion occurrence.before)
+    (localWire : Var site.body.locals signature)
+    (head : Nat) (tail : RegionPath)
+    (owner : occurrence.descendant.holePath ++ site.path = head :: tail) :
+    occurrence.nestedItemAddress site
+        (Var.appendRight site.wires localWire) =
+      .internal
+        (occurrence.outer.holePath ++
+          RegionPath.shiftRoot occurrence.selected.items.length
+            (head :: tail))
+        localWire.index.val := by
+  unfold nestedItemAddress
+  rw [Var.appendView_appendRight]
+  unfold embeddedDescendantAddress
+  rw [owner]
 
 def beforePath (occurrence : NestedOccurrence source) : RegionPath :=
   occurrence.embeddedDescendantOwner []

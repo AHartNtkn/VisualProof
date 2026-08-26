@@ -1,5 +1,5 @@
 import VisualProof.Diagram.Algebra
-import VisualProof.Diagram.ScopedRewrite
+import VisualProof.Diagram.NestedScopedRewrite
 import VisualProof.Lambda.Certificate
 import VisualProof.Rule.Relation
 
@@ -166,12 +166,32 @@ private def producerCarrierIndex [DecidableEq α]
     else firstPhysicalIndex (producerNative slot) carriers
   else firstPhysicalIndex (producerNative slot) carriers
 
-/-- Exact source-indexed fusion data. The producer output and one consumer
-slot are the two incidences of the final local bridge. `consumerMap` and
-`producerMap` are the positional carrier maps computed by the TypeScript
-operation; their port equalities retain aliased physical carriers. -/
+/-- Rebase one exact region path through a recursive rewrite. Paths inside the
+rewritten descendant keep their suffix under the target descendant address;
+paths at or above the selected ancestor remain unchanged. -/
+def rebaseScope (sourcePrefix targetPrefix path : RegionPath) : RegionPath :=
+  if sourcePrefix.IsPrefix path
+  then targetPrefix ++ path.drop sourcePrefix.length
+  else path
+
+theorem rebaseScope_source
+    (sourcePrefix targetPrefix suffix : RegionPath) :
+    rebaseScope sourcePrefix targetPrefix (sourcePrefix ++ suffix) =
+      targetPrefix ++ suffix := by
+  simp [rebaseScope]
+
+/-- Exact source-indexed fusion data. The producer lives at the ancestor that
+owns the private bridge, while `descendant` selects the consumer's own region.
+Extending that recursive context carries the bridge down as an inherited wire;
+the target rebuilds the same context without the bridge and therefore leaves a
+descendant consumer in its original region. `consumerMap` and `producerMap`
+are the positional carrier maps computed by the TypeScript operation, and
+their port equalities retain aliased physical carriers. -/
 structure Description (outer : List Sig) where
-  locals : List Sig
+  anchorLocals : List Sig
+  descendantWires : List Sig
+  descendant : DiagramContext (outer ++ anchorLocals) descendantWires
+  consumerLocals : List Sig
   producerArity : Nat
   consumerArity : Nat
   producerTerm : VisualProof.Lambda.Term 0 (Fin producerArity)
@@ -183,44 +203,82 @@ structure Description (outer : List Sig) where
   consumed_eq : consumerMap consumed = Fin.last carrierArity
   carrierSlot : ∀ slot : Fin consumerArity,
     slot ≠ consumed → Fin carrierArity
-  consumerNative : Fin consumerArity → Var (outer ++ locals) .iota
-  producerNative : Fin producerArity → Var (outer ++ locals) .iota
-  carrier : Fin carrierArity → Var (outer ++ locals) .iota
+  consumerNative : Fin consumerArity →
+    Var (descendantWires ++ consumerLocals) .iota
+  producerNative : Fin producerArity → Var (outer ++ anchorLocals) .iota
+  carrier : Fin carrierArity →
+    Var (descendantWires ++ consumerLocals) .iota
   consumer_port : ∀ slot (different : slot ≠ consumed),
     consumerMap slot = (carrierSlot slot different).castSucc
   producer_port : ∀ slot,
-    carrier (producerMap slot) = producerNative slot
+    carrier (producerMap slot) =
+      (descendant.outerWire (producerNative slot)).appendLeft consumerLocals
   consumer_carrier : ∀ slot (different : slot ≠ consumed),
     carrier (carrierSlot slot different) = consumerNative slot
   carrier_exact : List.ofFn carrier =
-    carrierWires consumerNative producerNative consumed
+    carrierWires consumerNative
+      (fun slot =>
+        (descendant.outerWire (producerNative slot)).appendLeft consumerLocals)
+      consumed
   consumer_index : ∀ slot (different : slot ≠ consumed),
     (carrierSlot slot different).val = consumerCarrierIndex consumed slot
   producer_index : ∀ slot, (producerMap slot).val =
-    producerCarrierIndex consumerNative producerNative consumed
+    producerCarrierIndex consumerNative
+      (fun producerSlot =>
+        (descendant.outerWire
+          (producerNative producerSlot)).appendLeft consumerLocals)
+      consumed
       (List.ofFn carrier) slot
-  consumerOutput : Var (outer ++ locals) .iota
-  rest : ItemSeq (outer ++ locals)
+  consumerOutput : Var (descendantWires ++ consumerLocals) .iota
+  anchorRest : ItemSeq (outer ++ anchorLocals)
+  consumerRest : ItemSeq (descendantWires ++ consumerLocals)
+
+def Description.anchorRetain (description : Description outer) :
+    WireRenaming (outer ++ description.anchorLocals)
+      (outer ++ (description.anchorLocals ++ [.iota])) :=
+  Region.adjoinHostWire outer description.anchorLocals [.iota]
 
 def Description.bridge (description : Description outer) :
-    Var (outer ++ (description.locals ++ [.iota])) .iota :=
-  Var.appendRight outer (Var.appendRight description.locals .here)
+    Var (outer ++ (description.anchorLocals ++ [.iota])) .iota :=
+  Var.appendRight outer (Var.appendRight description.anchorLocals .here)
 
-def Description.retain (description : Description outer) :
-    WireRenaming (outer ++ description.locals)
-      (outer ++ (description.locals ++ [.iota])) :=
-  Region.adjoinHostWire outer description.locals [.iota]
+def Description.extension (description : Description outer) :
+    description.descendant.WireExtension
+      (outer ++ (description.anchorLocals ++ [.iota]))
+      description.anchorRetain description.bridge :=
+  description.descendant.extendWire
+    (outer ++ (description.anchorLocals ++ [.iota]))
+    description.anchorRetain description.bridge
+
+/-- Removing the ancestor bridge changes the inherited context but never the
+selected consumer's region address; this covers both the hole (same-region)
+and recursive-cut (descendant) cases. -/
+theorem Description.consumerRegion_preserved
+    (description : Description outer) :
+    description.extension.source.holePath =
+      description.descendant.holePath := by
+  exact DiagramContext.extendWire_source_holePath description.descendant
+    (outer ++ (description.anchorLocals ++ [.iota]))
+    description.anchorRetain description.bridge
+
+def Description.consumerRetain (description : Description outer) :
+    WireRenaming
+      (description.descendantWires ++ description.consumerLocals)
+      (description.extension.sourceWires ++ description.consumerLocals) :=
+  description.extension.retain.appendRight description.consumerLocals
 
 def Description.consumerPorts (description : Description outer) :
     Fin description.consumerArity →
-      Var (outer ++ (description.locals ++ [.iota])) .iota :=
-  fun slot => if slot = description.consumed then description.bridge
-    else description.retain (description.consumerNative slot)
+      Var (description.extension.sourceWires ++
+        description.consumerLocals) .iota :=
+  fun slot => if slot = description.consumed then
+      description.extension.wire.appendLeft description.consumerLocals
+    else description.consumerRetain (description.consumerNative slot)
 
 def Description.producerPorts (description : Description outer) :
     Fin description.producerArity →
-      Var (outer ++ (description.locals ++ [.iota])) .iota :=
-  fun slot => description.retain (description.producerNative slot)
+      Var (outer ++ (description.anchorLocals ++ [.iota])) .iota :=
+  fun slot => description.anchorRetain (description.producerNative slot)
 
 def Description.mergedTerm (description : Description outer) :
     VisualProof.Lambda.Term 0 (Fin description.carrierArity) :=
@@ -228,53 +286,252 @@ def Description.mergedTerm (description : Description outer) :
     (Fin.lastCases (description.producerTerm.mapFree description.producerMap)
       (fun slot => .port slot))
 
-def Description.source (description : Description outer) : Region outer :=
-  .mk (description.locals ++ [.iota])
-    (.cons
-      (.term description.bridge description.producerArity
-        description.producerPorts description.producerTerm)
-      (.cons
-        (.term (description.retain description.consumerOutput)
-          description.consumerArity description.consumerPorts
-          description.consumerTerm)
-        (description.rest.renameWires description.retain)))
+def Description.sourceSelected (description : Description outer) :
+    Region (outer ++ (description.anchorLocals ++ [.iota])) :=
+  Region.ofItems (.cons
+    (.term description.bridge description.producerArity
+      description.producerPorts description.producerTerm)
+    (description.anchorRest.renameWires description.anchorRetain))
 
-def Description.target (description : Description outer) : Region outer :=
-  .mk description.locals
+def Description.sourceConsumer (description : Description outer) :
+    Region description.extension.sourceWires :=
+  .mk description.consumerLocals
+    (.cons
+      (.term (description.consumerRetain description.consumerOutput)
+        description.consumerArity description.consumerPorts
+        description.consumerTerm)
+      (description.consumerRest.renameWires description.consumerRetain))
+
+def Description.source (description : Description outer) : Region outer :=
+  Region.adjoinAt (description.anchorLocals ++ [.iota]) .nil
+    (description.sourceSelected.conjoin
+      (description.extension.source.fill description.sourceConsumer))
+
+def Description.targetConsumer (description : Description outer) :
+    Region description.descendantWires :=
+  .mk description.consumerLocals
     (.cons
       (.term description.consumerOutput description.carrierArity
         description.carrier description.mergedTerm)
-      description.rest)
+      description.consumerRest)
+
+def Description.target (description : Description outer) : Region outer :=
+  Region.adjoinAt description.anchorLocals .nil
+    ((Region.ofItems description.anchorRest).conjoin
+      (description.descendant.fill description.targetConsumer))
 
 inductive Local : LocalRule
   | fuse (description : Description outer) :
       Local description.source description.target
 
-def Description.touchedAddresses (description : Description outer)
-    (context : DiagramContext interfaceWires outer) : List WireAddress :=
-  let site : ScopedRegion (context.fill description.source) := {
-    wires := outer
-    body := description.source
-    context := context
-    root_eq := rfl
-  }
-  (List.ofFn fun slot => site.itemAddress
-    (description.retain (description.carrier slot))).eraseDups
+private inductive Var.AppendView (left right : List Sig) :
+    {signature : Sig} → Var (left ++ right) signature → Type
+  | fromLeft (wire : Var left signature) :
+      AppendView left right (wire.appendLeft right)
+  | fromRight (wire : Var right signature) :
+      AppendView left right (Var.appendRight left wire)
+
+private def Var.appendView (left right : List Sig) :
+    {signature : Sig} → (wire : Var (left ++ right) signature) →
+      Var.AppendView left right wire :=
+  match left with
+  | [] => fun wire => .fromRight wire
+  | _ :: tail => fun wire =>
+      match wire with
+      | .here => .fromLeft .here
+      | .there rest =>
+          match Var.appendView tail right rest with
+          | .fromLeft inherited => .fromLeft (.there inherited)
+          | .fromRight localWire => .fromRight localWire
+
+private def Description.sourceEmbeddedOwner (description : Description outer)
+    (context : DiagramContext interfaceWires outer)
+    (owner : RegionPath) (index : Nat) : WireAddress :=
+  match owner with
+  | [] => .internal context.holePath
+      ((description.anchorLocals ++ [Sig.iota]).length + index)
+  | relative@(_ :: _) =>
+      .internal
+        (context.holePath ++
+          relative.shiftRoot description.sourceSelected.items.length)
+        index
+
+private def Description.targetEmbeddedOwner (description : Description outer)
+    (context : DiagramContext interfaceWires outer)
+    (owner : RegionPath) (index : Nat) : WireAddress :=
+  match owner with
+  | [] => .internal context.holePath
+      (description.anchorLocals.length + index)
+  | relative@(_ :: _) =>
+      .internal
+        (context.holePath ++
+          relative.shiftRoot description.anchorRest.length)
+        index
+
+private def Description.anchorAddress (description : Description outer)
+    (context : DiagramContext interfaceWires outer)
+    (wire : Var (outer ++ (description.anchorLocals ++ [.iota]))
+      signature) : WireAddress :=
+  match Var.appendView outer (description.anchorLocals ++ [Sig.iota]) wire with
+  | .fromLeft inherited =>
+      let site : ScopedRegion (context.fill description.source) := {
+        wires := outer
+        body := description.source
+        context := context
+        root_eq := rfl
+      }
+      site.visibleAddress inherited
+  | .fromRight localWire =>
+      .internal context.holePath localWire.index.val
+
+private def Description.targetAnchorAddress (description : Description outer)
+    (context : DiagramContext interfaceWires outer)
+    (wire : Var (outer ++ description.anchorLocals) signature) : WireAddress :=
+  match Var.appendView outer description.anchorLocals wire with
+  | .fromLeft inherited =>
+      let site : ScopedRegion (context.fill description.target) := {
+        wires := outer
+        body := description.target
+        context := context
+        root_eq := rfl
+      }
+      site.visibleAddress inherited
+  | .fromRight localWire =>
+      .internal context.holePath localWire.index.val
+
+def Description.consumerAddress (description : Description outer)
+    (context : DiagramContext interfaceWires outer)
+    (wire : Var (description.extension.sourceWires ++
+      description.consumerLocals) signature) : WireAddress :=
+  match Var.appendView description.extension.sourceWires
+      description.consumerLocals wire with
+  | .fromLeft visible =>
+      match description.extension.source.classifyHoleWire
+          description.sourceConsumer visible with
+      | .inl anchorWire => description.anchorAddress context anchorWire
+      | .inr internal => description.sourceEmbeddedOwner context
+          internal.ownerAddress.1 internal.ownerAddress.2
+  | .fromRight localWire =>
+      description.sourceEmbeddedOwner context
+        description.extension.source.holePath localWire.index.val
+
+def Description.targetConsumerAddress (description : Description outer)
+    (context : DiagramContext interfaceWires outer)
+    (wire : Var (description.descendantWires ++
+      description.consumerLocals) signature) : WireAddress :=
+  match Var.appendView description.descendantWires
+      description.consumerLocals wire with
+  | .fromLeft visible =>
+      match description.descendant.classifyHoleWire
+          description.targetConsumer visible with
+      | .inl anchorWire => description.targetAnchorAddress context anchorWire
+      | .inr internal => description.targetEmbeddedOwner context
+          internal.ownerAddress.1 internal.ownerAddress.2
+  | .fromRight localWire =>
+      description.targetEmbeddedOwner context description.descendant.holePath
+        localWire.index.val
+
+/-- The stable physical carrier correspondence across deletion of the
+ancestor bridge. Source and target addresses may differ at the combined root;
+aliases retain one identical correspondence after deduplication. -/
+structure CarrierAddress where
+  source : WireAddress
+  target : WireAddress
+  deriving DecidableEq, BEq
+
+def Description.touchedCarriers (description : Description outer)
+    (context : DiagramContext interfaceWires outer) : List CarrierAddress :=
+  (List.ofFn fun slot => {
+    source := description.consumerAddress context
+      (description.consumerRetain (description.carrier slot))
+    target := description.targetConsumerAddress context
+      (description.carrier slot)
+  }).eraseDups
+
+def Description.sourceDescendantPath (description : Description outer)
+    (context : DiagramContext interfaceWires outer) : RegionPath :=
+  context.holePath ++
+    description.extension.source.holePath.shiftRoot
+      description.sourceSelected.items.length
+
+def Description.targetDescendantPath (description : Description outer)
+    (context : DiagramContext interfaceWires outer) : RegionPath :=
+  context.holePath ++
+    description.descendant.holePath.shiftRoot description.anchorRest.length
+
+def Description.sourceRewritePrefix (description : Description outer)
+    (context : DiagramContext interfaceWires outer) : RegionPath :=
+  match description.descendant.holePath with
+  | [] => context.holePath
+  | head :: _ => context.holePath ++
+      [description.sourceSelected.items.length + head]
+
+def Description.targetRewritePrefix (description : Description outer)
+    (context : DiagramContext interfaceWires outer) : RegionPath :=
+  match description.descendant.holePath with
+  | [] => context.holePath
+  | head :: _ => context.holePath ++ [description.anchorRest.length + head]
+
+/-- The old consumer region is transported to the exact target consumer
+region, including the producer-item index shift in the descendant case. -/
+theorem Description.descendantScope_preserved
+    (description : Description outer)
+    (context : DiagramContext interfaceWires outer) :
+    rebaseScope (description.sourceRewritePrefix context)
+        (description.targetRewritePrefix context)
+        (description.sourceDescendantPath context) =
+      description.targetDescendantPath context := by
+  have pathEq := description.consumerRegion_preserved
+  cases descendantPath : description.descendant.holePath with
+  | nil =>
+      have sourceEq : description.sourceDescendantPath context =
+          description.sourceRewritePrefix context ++ [] := by
+        simp [Description.sourceDescendantPath,
+          Description.sourceRewritePrefix, pathEq, descendantPath,
+          RegionPath.shiftRoot]
+      have targetEq : description.targetDescendantPath context =
+          description.targetRewritePrefix context ++ [] := by
+        simp [Description.targetDescendantPath,
+          Description.targetRewritePrefix, descendantPath,
+          RegionPath.shiftRoot]
+      rw [sourceEq, targetEq]
+      exact rebaseScope_source _ _ []
+  | cons head tail =>
+      have sourceEq : description.sourceDescendantPath context =
+          description.sourceRewritePrefix context ++ tail := by
+        simp [Description.sourceDescendantPath,
+          Description.sourceRewritePrefix, pathEq, descendantPath,
+          RegionPath.shiftRoot, List.append_assoc]
+      have targetEq : description.targetDescendantPath context =
+          description.targetRewritePrefix context ++ tail := by
+        simp [Description.targetDescendantPath,
+          Description.targetRewritePrefix, descendantPath,
+          RegionPath.shiftRoot, List.append_assoc]
+      rw [sourceEq, targetEq]
+      exact rebaseScope_source _ _ tail
+
+def Description.oldTargetScope (description : Description outer)
+    (context : DiagramContext interfaceWires outer)
+    (carrier : CarrierAddress) : RegionPath :=
+  rebaseScope (description.sourceRewritePrefix context)
+    (description.targetRewritePrefix context)
+    (RegionPath.deepestCommonAncestor
+      ((context.fill description.source).incidencePathsAtAddress
+        carrier.source))
 
 structure OpenDescription (source : OpenDiagram boundary) where
   outer : List Sig
   primary : Description outer
   occurrence : Occurrence primary.source source
   targetBody : Region occurrence.interface.external
-  completion : CompletionPlan occurrence.context.cutDepth
+  completion : CompletionPlan
+    (occurrence.context.cutDepth + primary.descendant.cutDepth)
     (occurrence.context.fill primary.target) targetBody
   completion_exact : completion.requirements =
     requiredCompletions (occurrence.context.fill primary.target)
-      ((primary.touchedAddresses occurrence.context).map fun address => {
-        address := address
-        scope := RegionPath.deepestCommonAncestor
-          ((occurrence.context.fill primary.source).incidencePathsAtAddress
-            address)
+      ((primary.touchedCarriers occurrence.context).map fun carrier => {
+        address := carrier.target
+        scope := primary.oldTargetScope occurrence.context carrier
       })
   targetCanonical : targetBody.Canonical
   targetExternalTwoEnded : OpenDiagram.ExternalTwoEnded
