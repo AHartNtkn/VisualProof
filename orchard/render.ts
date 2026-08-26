@@ -42,6 +42,7 @@ export type OrchardFrameStats = {
   readonly glowTiles: number
   readonly pointLights: number
   readonly representedEntities: number
+  readonly representationOperations: number
   readonly buildMs: number
   readonly lodMs: number
   readonly error: string | null
@@ -845,7 +846,7 @@ export function mountOrchardWorld(
     resize,
     render() {
       const lod = runtime.updateGame(camera, world.terrain.fogFar, size.height)
-      runtime.processOperations()
+      const representationWork = runtime.processOperations()
       syncGlow()
       renderer.info.reset()
       composer.render()
@@ -867,6 +868,7 @@ export function mountOrchardWorld(
         glowTiles: activeGlowTiles.size,
         pointLights: current.pointLights,
         representedEntities: current.representedEntities,
+        representationOperations: representationWork.completed,
         buildMs: current.buildMs,
         lodMs: lod.lodMs,
         error: current.error,

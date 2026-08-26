@@ -97,7 +97,7 @@ async function boot(): Promise<void> {
     root.dataset['building'] = 'true'
     status.textContent = `Synchronizing ${count.toLocaleString()} logical trees…`
     try {
-      frameTelemetry.beginTransition()
+      root.dataset['transitionGeneration'] = String(frameTelemetry.beginTransition())
       const build = await world.setCount(count)
       treeCount = count
       root.dataset['treeCount'] = String(build.trees)
@@ -143,6 +143,7 @@ async function boot(): Promise<void> {
     root.dataset['glowTileCount'] = String(rendered.glowTiles)
     root.dataset['pointLightCount'] = String(rendered.pointLights)
     root.dataset['representedProofEntities'] = String(rendered.representedEntities)
+    root.dataset['representationOperations'] = String(rendered.representationOperations)
     root.dataset['rendererObjects'] = String(rendered.objects)
     root.dataset['instancedCount'] = String(rendered.instanced)
     root.dataset['drawCalls'] = String(rendered.drawCalls)
@@ -151,6 +152,8 @@ async function boot(): Promise<void> {
     root.dataset['buildMs'] = rendered.buildMs.toFixed(3)
     root.dataset['transitionBuildMs'] = settled.transitionBuildMs.toFixed(3)
     root.dataset['frameSampleCount'] = String(settled.sampleCount)
+    root.dataset['transitionGeneration'] = String(settled.transitionGeneration)
+    root.dataset['settledGeneration'] = String(settled.settledGeneration)
     root.dataset['fps'] = fps.toFixed(3)
     root.dataset['averageFrameMs'] = average.toFixed(3)
     root.dataset['p95FrameMs'] = p95.toFixed(3)
@@ -213,6 +216,7 @@ async function boot(): Promise<void> {
       frameMs: timing.sampleMs,
       pending: rendered.pending,
       buildMs: rendered.buildMs,
+      operations: rendered.representationOperations,
     })
     const average = settled.samples.reduce((sum, value) => sum + value, 0) / Math.max(1, settled.sampleCount)
     const p95 = percentile(settled.samples, 0.95)
@@ -279,7 +283,7 @@ async function boot(): Promise<void> {
     listen(input, 'change', () => {
       if (!input.checked) return
       activeMode = input.value as RenderMode
-      frameTelemetry.beginTransition()
+      root.dataset['transitionGeneration'] = String(frameTelemetry.beginTransition())
       world.setMode(activeMode)
       root.dataset['renderMode'] = activeMode
       status.textContent = activeMode === 'game'

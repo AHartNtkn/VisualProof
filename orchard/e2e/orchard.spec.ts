@@ -110,14 +110,79 @@ test('reports a complete post-drain frame window and transition build CPU', asyn
   await expect(orchard).toHaveAttribute('data-ready', 'true')
   await expect(orchard).toHaveAttribute('data-pending-representations', '0')
   expect(Number(await orchard.getAttribute('data-transition-build-ms'))).toBeGreaterThan(0)
-  await expect(orchard).toHaveAttribute('data-frame-sample-count', '60', { timeout: 30_000 })
+  await expect.poll(async () => orchard.evaluate((element) => ({
+    samples: (element as HTMLElement).dataset['frameSampleCount'],
+    transition: (element as HTMLElement).dataset['transitionGeneration'],
+    settled: (element as HTMLElement).dataset['settledGeneration'],
+  })), { timeout: 30_000 }).toEqual({ samples: '60', transition: '1', settled: '1' })
 
+  const previousGeneration = Number(await orchard.getAttribute('data-transition-generation'))
   await page.getByRole('spinbutton', { name: 'Tree count', exact: true }).fill('3')
   await page.getByRole('button', { name: 'Apply tree count' }).click()
+  await expect(orchard).toHaveAttribute('data-transition-generation', String(previousGeneration + 1))
   await expect(orchard).toHaveAttribute('data-tree-count', '3')
   await expect(orchard).toHaveAttribute('data-pending-representations', '0')
   expect(Number(await orchard.getAttribute('data-frame-sample-count'))).toBeLessThan(60)
+  await expect(orchard).toHaveAttribute('data-settled-generation', String(previousGeneration))
   expect(Number(await orchard.getAttribute('data-transition-build-ms'))).toBeGreaterThan(0)
+  await expect.poll(async () => orchard.evaluate((element) => ({
+    samples: (element as HTMLElement).dataset['frameSampleCount'],
+    transition: (element as HTMLElement).dataset['transitionGeneration'],
+    settled: (element as HTMLElement).dataset['settledGeneration'],
+  })), { timeout: 30_000 }).toEqual({
+    samples: '60',
+    transition: String(previousGeneration + 1),
+    settled: String(previousGeneration + 1),
+  })
+})
+
+test('invalidates settled timing when camera work drains within one render frame', async ({ page }) => {
+  test.setTimeout(60_000)
+  const viewportHeight = 360
+  await page.setViewportSize({ width: 800, height: viewportHeight })
+  const savedWorld = JSON.parse(readFileSync(new URL('../world.json', import.meta.url), 'utf8'))
+  const tree = savedWorld.trees[0] as SavedTree
+  const layout = savedWorld.layouts[tree.layout]
+  const projectionScale = layout.bounds.radius * viewportHeight / Math.tan(THREE_FOV_RADIANS / 2)
+  const fullPromotionDepth = projectionScale / (140 * 1.15)
+  const fullDemotionDepth = projectionScale / (140 * 0.85)
+  const transitionDepth = (fullPromotionDepth + fullDemotionDepth - 6 * 3) / 2
+  savedWorld.trees = [{
+    ...tree,
+    x: savedWorld.player.x,
+    z: savedWorld.player.z - transitionDepth,
+  }]
+  await page.route('**/world.json*', (route) => route.fulfill({ json: savedWorld }))
+  await page.goto('/?trees=1')
+  const orchard = page.locator('[data-orchard]')
+  await expect(orchard).toHaveAttribute('data-ready', 'true')
+  await expect(orchard).toHaveAttribute('data-full-count', '1')
+  await expect(orchard).toHaveAttribute('data-frame-sample-count', '60', { timeout: 30_000 })
+  const generation = await orchard.getAttribute('data-transition-generation')
+  await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('[data-orchard]')!
+    const operationFrames: Array<{ operations: number, pending: number }> = []
+    const observer = new MutationObserver(() => {
+      const operations = Number(root.dataset['representationOperations'])
+      if (operations > 0) operationFrames.push({
+        operations,
+        pending: Number(root.dataset['pendingRepresentations']),
+      })
+    })
+    observer.observe(root, { attributes: true, attributeFilter: ['data-representation-operations'] })
+    ;(window as Window & { orchardOperationFrames?: typeof operationFrames }).orchardOperationFrames = operationFrames
+  })
+
+  await page.keyboard.down('s')
+  await page.waitForTimeout(3_000)
+  await page.keyboard.up('s')
+  await expect(orchard).toHaveAttribute('data-reduced-count', '1')
+  await expect(orchard).toHaveAttribute('data-pending-representations', '0')
+  expect(await page.evaluate(() => (
+    window as Window & { orchardOperationFrames?: Array<{ operations: number, pending: number }> }
+  ).orchardOperationFrames)).toContainEqual(expect.objectContaining({ operations: 1, pending: 0 }))
+  expect(Number(await orchard.getAttribute('data-frame-sample-count'))).toBeLessThan(60)
+  await expect(orchard).toHaveAttribute('data-transition-generation', generation!)
   await expect(orchard).toHaveAttribute('data-frame-sample-count', '60', { timeout: 30_000 })
 })
 

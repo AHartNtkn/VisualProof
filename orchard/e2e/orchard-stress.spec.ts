@@ -18,6 +18,7 @@ type StressRow = {
   buildMs: number
   settleMs: number
   frameSamples: number
+  generation: number
   fps: number
   frameMs: number
   p95FrameMs: number
@@ -27,7 +28,7 @@ type StressRow = {
 
 type StressTimeout = Pick<StressRow,
   'mode' | 'trees' | 'visible' | 'resident' | 'full' | 'reduced' | 'marker' | 'culled'
-  | 'pendingRepresentations' | 'pointLights'>
+  | 'pendingRepresentations' | 'pointLights' | 'frameSamples' | 'generation'>
 
 const enabled = process.env['ORCHARD_STRESS'] === '1'
 const modeValue = process.env['ORCHARD_STRESS_MODE'] ?? 'game'
@@ -41,26 +42,39 @@ const requestedCounts = (process.env['ORCHARD_STRESS_COUNTS'] ?? '10,50,100,250,
   .filter((count) => Number.isInteger(count) && count > 0)
 if (requestedCounts.length === 0) throw new Error('ORCHARD_STRESS_COUNTS must contain at least one positive integer')
 const REPRESENTATION_TIMEOUT_MS = 10 * 60_000
+const READINESS_TIMEOUT_MS = 12 * 60_000
 const STEADY_FRAME_COUNT = 60
-const PER_ROW_MARGIN_MS = 5 * 60_000
+const STEADY_FRAME_TIMEOUT_MS = 5 * 60_000
+const PER_ROW_OVERHEAD_MS = 60_000
+const PER_ROW_TIMEOUT_MS = READINESS_TIMEOUT_MS + REPRESENTATION_TIMEOUT_MS
+  + STEADY_FRAME_TIMEOUT_MS + PER_ROW_OVERHEAD_MS
 
 test.skip(!enabled, 'machine-specific stress sweep; run npm run stress:orchard')
 
 test(`measures ${requestedMode} rendering across increasing counts`, async ({ page }) => {
-  test.setTimeout(requestedCounts.length * (REPRESENTATION_TIMEOUT_MS + PER_ROW_MARGIN_MS) + PER_ROW_MARGIN_MS)
+  test.setTimeout(requestedCounts.length * PER_ROW_TIMEOUT_MS + PER_ROW_OVERHEAD_MS)
   const pageErrors: Error[] = []
   page.on('pageerror', (error) => pageErrors.push(error))
   const orchard = page.locator('[data-orchard]')
+  const generation = async (name: 'transition-generation' | 'settled-generation'): Promise<number> => {
+    const value = Number(await orchard.getAttribute(`data-${name}`))
+    if (!Number.isInteger(value) || value < 0) throw new Error(`data-${name} is not a generation: ${value}`)
+    return value
+  }
   let gpu: { vendor: string, renderer: string } | undefined
   const rows: StressRow[] = []
   for (const count of requestedCounts) {
     const settleStarted = performance.now()
+    let targetGeneration: number
     if (requestedMode === 'raw' || rows.length === 0) {
       await page.goto(`/?trees=${count}`)
-      await expect(orchard).toHaveAttribute('data-ready', 'true', { timeout: 12 * 60_000 })
+      await expect(orchard).toHaveAttribute('data-ready', 'true', { timeout: READINESS_TIMEOUT_MS })
+      const initialGeneration = await generation('transition-generation')
       await page.getByRole('radio', {
         name: requestedMode === 'game' ? 'Game LOD' : 'Raw full detail',
       }).check()
+      targetGeneration = requestedMode === 'raw' ? initialGeneration + 1 : initialGeneration
+      await expect(orchard).toHaveAttribute('data-transition-generation', String(targetGeneration))
       await expect(orchard).toHaveAttribute('data-render-mode', requestedMode)
       gpu ??= await page.evaluate(() => {
         const canvas = document.querySelector('canvas')
@@ -72,8 +86,11 @@ test(`measures ${requestedMode} rendering across increasing counts`, async ({ pa
         }
       })
     } else {
+      const previousGeneration = await generation('transition-generation')
       await page.getByRole('spinbutton', { name: 'Tree count', exact: true }).fill(String(count))
       await page.getByRole('button', { name: 'Apply tree count' }).click()
+      targetGeneration = previousGeneration + 1
+      await expect(orchard).toHaveAttribute('data-transition-generation', String(targetGeneration))
       await expect(orchard).toHaveAttribute('data-tree-count', String(count), { timeout: 12 * 60_000 })
     }
     try {
@@ -93,14 +110,25 @@ test(`measures ${requestedMode} rendering across increasing counts`, async ({ pa
           culled: number('culledCount'),
           pendingRepresentations: number('pendingRepresentations'),
           pointLights: number('pointLightCount'),
+          frameSamples: number('frameSampleCount'),
+          generation: number('transitionGeneration'),
         }
       }, requestedMode)
       console.log(`ORCHARD_STRESS_TIMEOUT ${JSON.stringify(timeout)}`)
       throw error
     }
     const settleMs = performance.now() - settleStarted
-    await expect(orchard).toHaveAttribute('data-frame-sample-count', String(STEADY_FRAME_COUNT), {
-      timeout: PER_ROW_MARGIN_MS,
+    await expect.poll(async () => orchard.evaluate((element) => {
+      const dataset = (element as HTMLElement).dataset
+      return {
+        frameSamples: Number(dataset['frameSampleCount']),
+        transitionGeneration: Number(dataset['transitionGeneration']),
+        settledGeneration: Number(dataset['settledGeneration']),
+      }
+    }), { timeout: STEADY_FRAME_TIMEOUT_MS }).toEqual({
+      frameSamples: STEADY_FRAME_COUNT,
+      transitionGeneration: targetGeneration,
+      settledGeneration: targetGeneration,
     })
     const row = await orchard.evaluate((element, { mode, settleMs }): StressRow => {
       const dataset = (element as HTMLElement).dataset
@@ -124,6 +152,7 @@ test(`measures ${requestedMode} rendering across increasing counts`, async ({ pa
         buildMs: number('transitionBuildMs'),
         settleMs,
         frameSamples: number('frameSampleCount'),
+        generation: number('settledGeneration'),
         fps: number('fps'),
         frameMs: number('averageFrameMs'),
         p95FrameMs: number('p95FrameMs'),
@@ -137,6 +166,7 @@ test(`measures ${requestedMode} rendering across increasing counts`, async ({ pa
       pendingRepresentations: 0,
       pointLights: 0,
       frameSamples: STEADY_FRAME_COUNT,
+      generation: targetGeneration,
     })
     expect(row.buildMs).toBeGreaterThan(0)
     expect(row.full + row.reduced + row.marker + row.culled).toBe(row.trees)

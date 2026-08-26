@@ -7,6 +7,7 @@ export type SettledFrameRecord = {
   readonly frameMs: number
   readonly pending: number
   readonly buildMs: number
+  readonly operations: number
 }
 
 export type SettledFrameSnapshot = {
@@ -14,36 +15,49 @@ export type SettledFrameSnapshot = {
   readonly sampleCount: number
   readonly transitionBuildMs: number
   readonly transitionComplete: boolean
+  readonly transitionGeneration: number
+  readonly settledGeneration: number
 }
 
 export class SettledFrameTelemetry {
   private readonly samples: number[] = []
-  private previousPending = 0
   private transitionBuildMs = 0
   private transitionActive = false
+  private residencyActive = false
+  private transitionGeneration = 0
+  private settledGeneration = 0
 
   public constructor(private readonly windowSize: number) {
     if (!Number.isInteger(windowSize) || windowSize < 1) throw new Error('frame telemetry window must be a positive integer')
   }
 
-  public beginTransition(): void {
+  public beginTransition(): number {
     this.transitionBuildMs = 0
     this.transitionActive = true
+    this.transitionGeneration++
+    return this.transitionGeneration
   }
 
   public record(record: SettledFrameRecord): SettledFrameSnapshot {
     if (this.transitionActive) this.transitionBuildMs += record.buildMs
+    const startsResidency = !this.residencyActive && (record.pending > 0 || record.operations > 0)
+    const completesResidency = this.residencyActive && record.pending === 0
     const completedTransition = this.transitionActive && record.pending === 0
-    const completedUnsolicitedDrain = !this.transitionActive && this.previousPending > 0 && record.pending === 0
-    if (completedTransition) this.transitionActive = false
+    const zeroWorkTransition = completedTransition && !this.residencyActive && record.operations === 0
 
-    if (completedTransition || completedUnsolicitedDrain) {
-      this.samples.length = 0
-    } else if (record.pending === 0) {
+    if (startsResidency || zeroWorkTransition) this.samples.length = 0
+    if (startsResidency) this.residencyActive = true
+    if (completedTransition) this.transitionActive = false
+    if (this.residencyActive && record.pending === 0) this.residencyActive = false
+
+    const drainBoundary = startsResidency || completesResidency || zeroWorkTransition
+    if (!drainBoundary && record.pending === 0 && record.operations === 0) {
       this.samples.push(record.frameMs)
       if (this.samples.length > this.windowSize) this.samples.shift()
     }
-    this.previousPending = record.pending
+    if (this.samples.length === this.windowSize && !this.transitionActive && !this.residencyActive) {
+      this.settledGeneration = this.transitionGeneration
+    }
     return this.snapshot()
   }
 
@@ -53,6 +67,8 @@ export class SettledFrameTelemetry {
       sampleCount: this.samples.length,
       transitionBuildMs: this.transitionBuildMs,
       transitionComplete: !this.transitionActive,
+      transitionGeneration: this.transitionGeneration,
+      settledGeneration: this.settledGeneration,
     }
   }
 }
