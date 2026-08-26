@@ -57,6 +57,21 @@ theorem Step.Evidence.sound
         (Lambda.Spawn.sound step model args).mp sourceDenotes
   | lambdaTermLeaf step =>
       exact Lambda.TermLeaf.sound step
+  | lambdaFission step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.Fission.sound step model args).mp sourceDenotes
+  | lambdaFusion step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.Fusion.sound step model args).mp sourceDenotes
+  | lambdaCongruence step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.Congruence.sound step model args).mp sourceDenotes
+  | lambdaHeadStrip step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.HeadStrip.sound step model args).mp sourceDenotes
+  | lambdaAnchoredWire step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.AnchoredWire.sound step model args).mp sourceDenotes
   | lambdaConversion step =>
       exact fun model args sourceDenotes =>
         (Lambda.Conversion.sound step model args).mp sourceDenotes

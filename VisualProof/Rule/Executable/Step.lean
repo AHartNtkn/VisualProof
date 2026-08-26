@@ -95,6 +95,31 @@ def Step.Evidence.ForwardExecutable {boundary : List Sig} :
           (output : OpenDiagram boundary),
         Lambda.TermLeaf.runForward source index = some output ∧
           OpenDiagram.Isomorphic output target
+  | source, target, .lambdaFission _ =>
+      ∃ (index : Lambda.Fission.ForwardIndex source)
+          (output : OpenDiagram boundary),
+        Lambda.Fission.runForward source index = some output ∧
+          OpenDiagram.Isomorphic output target
+  | source, target, .lambdaFusion _ =>
+      ∃ (index : Lambda.Fusion.ForwardIndex source)
+          (output : OpenDiagram boundary),
+        Lambda.Fusion.runForward source index = some output ∧
+          OpenDiagram.Isomorphic output target
+  | source, target, .lambdaCongruence _ =>
+      ∃ (index : Lambda.Congruence.ForwardIndex source)
+          (output : OpenDiagram boundary),
+        Lambda.Congruence.runForward source index = some output ∧
+          OpenDiagram.Isomorphic output target
+  | source, target, .lambdaHeadStrip _ =>
+      ∃ (index : Lambda.HeadStrip.ForwardIndex source)
+          (output : OpenDiagram boundary),
+        Lambda.HeadStrip.runForward source index = some output ∧
+          OpenDiagram.Isomorphic output target
+  | source, target, .lambdaAnchoredWire _ =>
+      ∃ (index : Lambda.AnchoredWire.ForwardIndex source)
+          (output : OpenDiagram boundary),
+        Lambda.AnchoredWire.runForward source index = some output ∧
+          OpenDiagram.Isomorphic output target
   | source, target, .lambdaConversion _ =>
       ∃ (index : Lambda.Conversion.ForwardIndex source)
           (output : OpenDiagram boundary),
@@ -188,6 +213,31 @@ def Step.Evidence.BackwardExecutable {boundary : List Sig} :
           (output : OpenDiagram boundary),
         Lambda.TermLeaf.runBackward target index = some output ∧
           OpenDiagram.Isomorphic output source
+  | source, target, .lambdaFission _ =>
+      ∃ (index : Lambda.Fission.BackwardIndex target)
+          (output : OpenDiagram boundary),
+        Lambda.Fission.runBackward target index = some output ∧
+          OpenDiagram.Isomorphic output source
+  | source, target, .lambdaFusion _ =>
+      ∃ (index : Lambda.Fusion.BackwardIndex target)
+          (output : OpenDiagram boundary),
+        Lambda.Fusion.runBackward target index = some output ∧
+          OpenDiagram.Isomorphic output source
+  | source, target, .lambdaCongruence _ =>
+      ∃ (index : Lambda.Congruence.BackwardIndex target)
+          (output : OpenDiagram boundary),
+        Lambda.Congruence.runBackward target index = some output ∧
+          OpenDiagram.Isomorphic output source
+  | source, target, .lambdaHeadStrip _ =>
+      ∃ (index : Lambda.HeadStrip.BackwardIndex target)
+          (output : OpenDiagram boundary),
+        Lambda.HeadStrip.runBackward target index = some output ∧
+          OpenDiagram.Isomorphic output source
+  | source, target, .lambdaAnchoredWire _ =>
+      ∃ (index : Lambda.AnchoredWire.BackwardIndex target)
+          (output : OpenDiagram boundary),
+        Lambda.AnchoredWire.runBackward target index = some output ∧
+          OpenDiagram.Isomorphic output source
   | source, target, .lambdaConversion _ =>
       ∃ (index : Lambda.Conversion.BackwardIndex target)
           (output : OpenDiagram boundary),
@@ -249,6 +299,21 @@ theorem Step.forward_execution_complete
   | lambdaTermLeaf evidence =>
       exact ⟨.lambdaTermLeaf evidence,
         (Lambda.TermLeaf.forward_exact _ _).mpr evidence⟩
+  | lambdaFission evidence =>
+      exact ⟨.lambdaFission evidence,
+        (Lambda.Fission.forward_exact _ _).mpr evidence⟩
+  | lambdaFusion evidence =>
+      exact ⟨.lambdaFusion evidence,
+        (Lambda.Fusion.forward_exact _ _).mpr evidence⟩
+  | lambdaCongruence evidence =>
+      exact ⟨.lambdaCongruence evidence,
+        (Lambda.Congruence.forward_exact _ _).mpr evidence⟩
+  | lambdaHeadStrip evidence =>
+      exact ⟨.lambdaHeadStrip evidence,
+        (Lambda.HeadStrip.forward_exact _ _).mpr evidence⟩
+  | lambdaAnchoredWire evidence =>
+      exact ⟨.lambdaAnchoredWire evidence,
+        (Lambda.AnchoredWire.forward_exact _ _).mpr evidence⟩
   | lambdaConversion evidence =>
       exact ⟨.lambdaConversion evidence,
         (Lambda.Conversion.forward_exact _ _).mpr evidence⟩
@@ -306,6 +371,21 @@ theorem Step.backward_execution_complete
   | lambdaTermLeaf evidence =>
       exact ⟨.lambdaTermLeaf evidence,
         (Lambda.TermLeaf.backward_exact _ _).mpr evidence⟩
+  | lambdaFission evidence =>
+      exact ⟨.lambdaFission evidence,
+        (Lambda.Fission.backward_exact _ _).mpr evidence⟩
+  | lambdaFusion evidence =>
+      exact ⟨.lambdaFusion evidence,
+        (Lambda.Fusion.backward_exact _ _).mpr evidence⟩
+  | lambdaCongruence evidence =>
+      exact ⟨.lambdaCongruence evidence,
+        (Lambda.Congruence.backward_exact _ _).mpr evidence⟩
+  | lambdaHeadStrip evidence =>
+      exact ⟨.lambdaHeadStrip evidence,
+        (Lambda.HeadStrip.backward_exact _ _).mpr evidence⟩
+  | lambdaAnchoredWire evidence =>
+      exact ⟨.lambdaAnchoredWire evidence,
+        (Lambda.AnchoredWire.backward_exact _ _).mpr evidence⟩
   | lambdaConversion evidence =>
       exact ⟨.lambdaConversion evidence,
         (Lambda.Conversion.backward_exact _ _).mpr evidence⟩

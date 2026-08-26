@@ -2118,6 +2118,19 @@ private theorem List.Forall₂.of_get
             have tail := hget index.succ
             simpa using tail
 
+private theorem List.Forall₂.ofFn_left
+    {r : α → β → Prop} (right : List β)
+    (left : Fin right.length → α)
+    (related : ∀ index, r (left index) (right.get index)) :
+    List.Forall₂ r (List.ofFn left) right := by
+  induction right with
+  | nil => exact .nil
+  | cons head tail induction =>
+      rw [List.ofFn_succ]
+      apply List.Forall₂.cons (related 0)
+      exact induction (fun index => left index.succ)
+        (fun index => related index.succ)
+
 private theorem BetaEta.applyArgs₂ {fn fn' : Term n α}
     {left right : List (Term n α)}
     (head : BetaEta fn fn') (arguments : List.Forall₂ BetaEta left right) :
@@ -2322,5 +2335,137 @@ theorem rigidHead_of_args_bindFree_bound
           apply BetaEta.applyArgs₂
           · exact .refl
           · exact harguments
+
+/-- The body of the long eta expansion that applies a term to each newly
+enclosing binder from outermost to innermost. -/
+private def etaLongBody : (binders : Nat) → Term n α →
+    Term (extendScope n binders) α
+  | 0, term => term
+  | binders + 1, term =>
+      etaLongBody binders (.app term.lift (.bvar 0))
+
+/-- A free value applied to every enclosing binder. Prefix-closing this body
+is its long eta expansion. -/
+def applyEnclosingBinders (binders : Nat) (term : Term 0 α) :
+    Term (extendScope 0 binders) α :=
+  etaLongBody binders term
+
+private theorem prefixClose_etaLongBody
+    (binders : Nat) (term : Term n α) :
+    BetaEta (prefixClose binders (etaLongBody binders term)) term := by
+  induction binders generalizing n with
+  | zero => exact .refl
+  | succ binders induction =>
+      change BetaEta
+        (Term.lam (prefixClose binders
+          (etaLongBody binders (.app term.lift (.bvar 0))))) term
+      have expanded := (induction (.app term.lift (.bvar 0))).lam
+      exact expanded.trans (.step (.eta (etaContract_complete term)))
+
+private theorem prefixClose_applyEnclosingBinders
+    (binders : Nat) (term : Term 0 α) :
+    BetaEta (prefixClose binders (applyEnclosingBinders binders term))
+      term :=
+  prefixClose_etaLongBody binders term
+
+private theorem etaLongBody_bindFree
+    (binders : Nat) (term : Term n α) (substitution : α → Term n β) :
+    (etaLongBody binders term).bindFree (fun value =>
+        (substitution value).renameBound
+          (scopeEmbed (n := n) (k := 0) (K := binders)
+            (Nat.zero_le binders))) =
+      etaLongBody binders (term.bindFree substitution) := by
+  induction binders generalizing n with
+  | zero =>
+      simp only [etaLongBody]
+      apply congrArg (fun replacement => term.bindFree replacement)
+      funext value
+      rw [scopeEmbed_refl]
+      exact Term.renameBound_id (substitution value)
+  | succ binders induction =>
+      simp only [etaLongBody]
+      have substitutionEq :
+          (fun value =>
+            (substitution value).renameBound
+              (scopeEmbed (n := n) (k := 0) (K := binders + 1)
+                (Nat.zero_le (binders + 1)))) =
+          (fun value =>
+            ((substitution value).lift).renameBound
+              (scopeEmbed (n := n + 1) (k := 0) (K := binders)
+                (Nat.zero_le binders))) := by
+        funext value
+        symm
+        calc
+          ((substitution value).lift).renameBound
+                (scopeEmbed (n := n + 1) (k := 0) (K := binders)
+                  (Nat.zero_le binders)) =
+              (substitution value).renameBound
+                (scopeEmbed (n := n + 1) (k := 0) (K := binders)
+                  (Nat.zero_le binders) ∘ Fin.succ) :=
+            Term.renameBound_comp (substitution value) Fin.succ _
+          _ = _ := by
+            apply congrArg (fun rename =>
+              (substitution value).renameBound rename)
+            funext index
+            apply Fin.ext
+            simp only [Function.comp_apply, scopeEmbed, Fin.val_mk, Fin.succ]
+            omega
+      rw [substitutionEq]
+      calc
+        _ = etaLongBody binders
+              ((Term.app term.lift (.bvar 0)).bindFree
+                (fun value => (substitution value).lift)) :=
+          induction (Term.app term.lift (.bvar 0))
+            (fun value => (substitution value).lift)
+        _ = _ := by
+          apply congrArg (etaLongBody binders)
+          simp only [Term.bindFree]
+          congr 1
+          exact (Term.renameBound_bindFree term substitution Fin.succ).symm
+
+/-- The common open term whose free positions stand for the prefix-closed
+arguments of one aligned bound-rigid head. -/
+def rigidBoundSkeleton (binders : Nat) (headIndex : Fin binders)
+    (argumentCount : Nat) : Term 0 (Fin argumentCount) :=
+  prefixClose binders <| applyArgs
+    ((Head.bound headIndex : Head 0 binders (Fin argumentCount)).toTerm)
+    (List.ofFn fun position =>
+      applyEnclosingBinders binders (.port position))
+
+/-- Substituting a rigid spine's prefix-closed arguments into its common
+skeleton reconstructs the original term up to beta-eta equivalence. -/
+theorem rigidBoundSkeleton_bind_arguments
+    {term : Term 0 α} {spine : HeadSpine 0 α}
+    (shape : headSpine term = some spine)
+    (headIndex : Fin spine.binders)
+    (head : spine.head = .bound headIndex) :
+    BetaEta
+      ((rigidBoundSkeleton spine.binders headIndex spine.args.length).bindFree
+        (fun position => prefixClose spine.binders
+          (spine.args.get position)))
+      term := by
+  rw [headSpine_sound shape]
+  unfold rigidBoundSkeleton HeadSpine.toTerm
+  rw [prefixClose_bindFree, applyArgs_bindFree]
+  rw [head]
+  apply BetaEta.prefixClose
+  apply BetaEta.applyArgs₂
+  · exact .refl
+  · rw [List.map_ofFn]
+    apply List.Forall₂.ofFn_left spine.args
+    intro position
+    have argumentProof : BetaEta
+        ((etaLongBody spine.binders (.port position)).bindFree
+          (fun value => (prefixClose spine.binders
+            (spine.args.get value)).renameBound
+              (scopeEmbed (n := 0) (k := 0) (K := spine.binders)
+                (Nat.zero_le spine.binders))))
+        (spine.args.get position) := by
+      rw [etaLongBody_bindFree]
+      simp only [Term.bindFree]
+      exact (prefixClose_applyEnclosingBinders spine.binders
+          (prefixClose spine.binders
+            (spine.args.get position))).prefixClose_cancel
+    simpa [applyEnclosingBinders, Function.comp_def] using argumentProof
 
 end VisualProof.Lambda

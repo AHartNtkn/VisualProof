@@ -1,5 +1,9 @@
 import VisualProof.Rule.Executable.Lambda.Spawn
 import VisualProof.Rule.Executable.Lambda.TermLeaf
+import VisualProof.Rule.Executable.Lambda.Fission
+import VisualProof.Rule.Executable.Lambda.Congruence
+import VisualProof.Rule.Executable.Lambda.HeadStrip
+import VisualProof.Rule.Executable.Lambda.AnchoredWire
 import VisualProof.Rule.Executable.WirePrimitive.Uniform
 import VisualProof.Rule.Lambda
 

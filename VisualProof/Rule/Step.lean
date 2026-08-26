@@ -38,6 +38,12 @@ inductive Step.Evidence {boundary : List Sig} :
       Evidence source target
   | lambdaSpawn : Lambda.Spawn source target → Evidence source target
   | lambdaTermLeaf : Lambda.TermLeaf source target → Evidence source target
+  | lambdaFission : Lambda.Fission source target → Evidence source target
+  | lambdaFusion : Lambda.Fusion source target → Evidence source target
+  | lambdaCongruence : Lambda.Congruence source target → Evidence source target
+  | lambdaHeadStrip : Lambda.HeadStrip source target → Evidence source target
+  | lambdaAnchoredWire : Lambda.AnchoredWire source target →
+      Evidence source target
   | lambdaConversion : Lambda.Conversion source target → Evidence source target
   | lambdaFreeVariableIdentity : Lambda.FreeVariableIdentity source target →
       Evidence source target
@@ -106,6 +112,25 @@ def lambdaSpawn (step : Lambda.Spawn source target) : Step source target :=
 def lambdaTermLeaf (step : Lambda.TermLeaf source target) : Step source target :=
   ⟨.lambdaTermLeaf step⟩
 
+def lambdaFission (step : Lambda.Fission source target) : Step source target :=
+  ⟨.lambdaFission step⟩
+
+def lambdaFusion (step : Lambda.Fusion source target) : Step source target :=
+  ⟨.lambdaFusion step⟩
+
+def lambdaCongruence (step : Lambda.Congruence source target) :
+    Step source target :=
+  ⟨.lambdaCongruence step⟩
+
+def lambdaHeadStrip (step : Lambda.HeadStrip source target) :
+    Step source target :=
+  ⟨.lambdaHeadStrip step⟩
+
+def lambdaAnchoredWire
+    (step : Lambda.AnchoredWire source target) :
+    Step source target :=
+  ⟨.lambdaAnchoredWire step⟩
+
 def lambdaConversion (step : Lambda.Conversion source target) :
     Step source target :=
   ⟨.lambdaConversion step⟩
@@ -162,6 +187,17 @@ def Evidence.iso
       exact .lambdaSpawn (Lambda.Spawn.iso sourceIso step targetIso)
   | lambdaTermLeaf step =>
       exact .lambdaTermLeaf (Lambda.TermLeaf.iso sourceIso step targetIso)
+  | lambdaFission step =>
+      exact .lambdaFission (Lambda.Fission.iso sourceIso step targetIso)
+  | lambdaFusion step =>
+      exact .lambdaFusion (Lambda.Fusion.iso sourceIso step targetIso)
+  | lambdaCongruence step =>
+      exact .lambdaCongruence (Lambda.Congruence.iso sourceIso step targetIso)
+  | lambdaHeadStrip step =>
+      exact .lambdaHeadStrip (Lambda.HeadStrip.iso sourceIso step targetIso)
+  | lambdaAnchoredWire step =>
+      exact .lambdaAnchoredWire
+        (Lambda.AnchoredWire.iso sourceIso step targetIso)
   | lambdaConversion step =>
       exact .lambdaConversion (Lambda.Conversion.iso sourceIso step targetIso)
   | lambdaFreeVariableIdentity step =>
