@@ -1,5 +1,13 @@
 import type { Engine } from '../../view/engine'
+import {
+  planBetaMotion,
+  sampleBetaMotion,
+  type LambdaMotionPlan,
+  type LambdaStrokeFrame,
+} from '../../view/lambda-motion'
 import type { Shape, Theme } from '../../view/paint'
+import type { ReductionStep } from '../../kernel/term/reduce'
+import type { Term } from '../../kernel/term/term'
 import type { Vec2 } from '../../view/vec'
 
 export type MotionPreferences = {
@@ -40,6 +48,7 @@ export type MotionDebugState = {
 
 type Ghost = { readonly pos: Vec2; readonly discR: number; readonly start: number }
 type Pulse = { readonly id: string; readonly start: number }
+type ActiveBeta = { readonly plan: LambdaMotionPlan; readonly baseColor: string }
 
 const GHOST_MS = 320
 const PULSE_MS = 450
@@ -60,6 +69,7 @@ export class MotionCoordinator {
   #pulses: Pulse[] = []
   #hoverKey: string | null = null
   #hoverSince = 0
+  #beta: ActiveBeta | null = null
   #disposed = false
 
   constructor(options: MotionCoordinatorOptions) {
@@ -130,6 +140,38 @@ export class MotionCoordinator {
     return duration === 0 ? 1 : Math.max(0, Math.min(1, (now - this.#hoverSince) / duration))
   }
 
+  beginBeta(source: Term, step: ReductionStep, baseColor: string): LambdaMotionPlan {
+    const plan = planBetaMotion(source, step)
+    this.#beta = { plan, baseColor }
+    return plan
+  }
+
+  #sampleBeta(progress: number): LambdaStrokeFrame | null {
+    return this.#beta === null
+      ? null
+      : sampleBetaMotion(this.#beta.plan, progress, this.#beta.baseColor)
+  }
+
+  /** Pointer-driven timeline sampling uses the active structural plan verbatim. */
+  scrubBeta(progress: number): LambdaStrokeFrame | null {
+    return this.#sampleBeta(progress)
+  }
+
+  /** Clock-driven playback uses the same normalized structural plan. */
+  playBeta(progress: number): LambdaStrokeFrame | null {
+    return this.#sampleBeta(progress)
+  }
+
+  /** A discrete step is the settled endpoint of the active structural plan. */
+  stepBeta(): LambdaStrokeFrame | null {
+    return this.#sampleBeta(1)
+  }
+
+  /** Undo, redo, and replay history sample the same plan as direct scrubbing. */
+  historyBeta(progress: number): LambdaStrokeFrame | null {
+    return this.#sampleBeta(progress)
+  }
+
   debugState(now: number): MotionDebugState {
     return {
       ghosts: this.#ghosts.length,
@@ -142,6 +184,7 @@ export class MotionCoordinator {
     this.#ghosts = []
     this.#pulses = []
     this.#hoverKey = null
+    this.#beta = null
   }
 
   dispose(): void {

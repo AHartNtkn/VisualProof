@@ -2,6 +2,7 @@ import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagra
 import { sigOrder } from '../kernel/diagram/sig'
 import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
+import { ARGUMENT_COLOR, type LambdaStrokeFrame } from './lambda-motion'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, localToWorld, resolvedFrameSlot } from './engine'
 import { computeLegs, legPaths } from './wires'
@@ -192,6 +193,62 @@ function anatomyOutline(e: Engine, b: Body, g: NodeGeometry, stroke: string, wid
     })
   }
   return out
+}
+
+const transformLambdaPoint = (point: Vec2, center: Vec2, theta: number, scale: number): Vec2 => {
+  const cosine = Math.cos(theta), sine = Math.sin(theta)
+  return {
+    x: center.x + (point.x * cosine - point.y * sine) * scale,
+    y: center.y + (point.x * sine + point.y * cosine) * scale,
+  }
+}
+
+const motionAlpha = (color: string, alpha: number): string => {
+  const byte = Math.max(0, Math.min(255, Math.round(alpha * 255))).toString(16).padStart(2, '0')
+  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${byte}` : color
+}
+
+/** Paint one shared Lambda motion frame in the same local plane as a term body. */
+export function paintLambdaFrame(
+  frame: LambdaStrokeFrame,
+  center: Vec2,
+  theta: number,
+  scale: number,
+  width: number,
+  wireGlow: boolean,
+): Shape[] {
+  const shapes: Shape[] = frame.strokes.map((stroke): Shape => {
+    const glow = wireGlow ? stroke.color : null
+    if (stroke.geometry.kind === 'arc') {
+      return {
+        kind: 'arc', center,
+        r: stroke.geometry.r * scale,
+        a0: stroke.geometry.a0 + theta,
+        a1: stroke.geometry.a1 + theta,
+        stroke: stroke.color, width, glow,
+      }
+    }
+    return {
+      kind: 'segment',
+      from: transformLambdaPoint(stroke.geometry.from, center, theta, scale),
+      to: transformLambdaPoint(stroke.geometry.to, center, theta, scale),
+      stroke: stroke.color, width, glow,
+    }
+  })
+  for (const socket of frame.sockets) {
+    if (socket.amount <= 0.002) continue
+    shapes.push({
+      kind: 'circle',
+      center: transformLambdaPoint(socket.point, center, theta, scale),
+      r: (0.16 + socket.copyIndex * 0.025) * scale,
+      fill: null,
+      stroke: motionAlpha(ARGUMENT_COLOR, socket.amount),
+      width: Math.max(1, width * 0.64),
+      insetColor: null,
+      glow: null,
+    })
+  }
+  return shapes
 }
 
 /** Cut-nesting depth of a region (drives shade parity: odd depth shades). */
