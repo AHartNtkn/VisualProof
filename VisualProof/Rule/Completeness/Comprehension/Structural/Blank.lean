@@ -465,6 +465,21 @@ mutual
             List.append_nil, Var.index_appendLeft]
           rw [← portsEq]
           exact SupportParallelIncidenceScope.refl _
+    | term output freeArity ports term =>
+        constructor
+        · intro _
+          exact ⟨fun index => Fin.elim0 index, ⟨True.intro, True.intro⟩⟩
+        · intro wireSignature wire
+          have outputEq := invariant.reflects output wire
+          have portsEq := Transform.countPorts_map_eq_of_reflection
+            freeArity ports frame.sourceKeep frame.targetKeep
+              invariant.reflects wire
+          simp only [Transform.ItemEdit.run, Region.singleton,
+            Region.ofItems, Region.incidencePaths, ItemSeq.renameWires,
+            Item.renameWires, ItemSeq.incidencePaths, Item.incidencePaths,
+            List.append_nil, Var.index_appendLeft]
+          simp only [outputEq, portsEq]
+          exact SupportParallelIncidenceScope.refl _
     | cut childEdit =>
         exact EndsSpawnScope.cut
           (endsRegionEditSpawnScope invariant childEdit)
@@ -1232,6 +1247,9 @@ mutual
         exact ⟨.selectedAtom (pattern := blankPattern) application PUnit.unit⟩
     | identity signature arity ports =>
         exact ⟨.identity (pattern := blankPattern) signature arity ports⟩
+    | term output freeArity ports term =>
+        exact ⟨.term (pattern := blankPattern)
+          output freeArity ports term⟩
     | cut childEvidence =>
         obtain ⟨childSites⟩ := endsRegionSites_nonempty childEvidence
         exact ⟨.cut childSites⟩
@@ -1332,6 +1350,18 @@ mutual
         exact ⟨RegionIso.ofEq (by
           simp only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
             portsEq])⟩
+    | .term output freeArity ports term => by
+        have outputEq : frame.targetKeep output = output := by
+          rw [targetKeepEq]
+          rfl
+        have portsEq :
+            (fun position => frame.targetKeep (ports position)) = ports := by
+          funext position
+          rw [targetKeepEq]
+          rfl
+        exact ⟨RegionIso.ofEq (by
+          simp only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
+            outputEq, portsEq])⟩
     | .cut childSites => by
         obtain ⟨childIso⟩ :=
           endsRegionEndpointIso_nonempty childSites targetKeepEq

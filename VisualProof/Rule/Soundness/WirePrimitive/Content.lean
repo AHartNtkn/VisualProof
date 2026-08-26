@@ -554,6 +554,18 @@ mutual
             intro targetDenotes left right
             rw [agree (ports left), agree (ports right)]
             exact targetDenotes left right
+    | term output freeArity ports term =>
+        simp only [Transform.ItemEdit.run]
+        rw [Transform.denote_singleton_iff]
+        simp only [denoteItem_term]
+        rw [agree output]
+        have argumentsAgree :
+            (fun slot => sourceEnv.lookup (frame.sourceKeep (ports slot))) =
+              (fun slot => targetEnv.lookup (frame.targetKeep (ports slot))) := by
+          funext slot
+          exact agree (ports slot)
+        rw [argumentsAgree]
+        cases polarity <;> exact id
     | cut bodyEdit bodyGuard =>
         simp only [Transform.ItemEdit.run]
         rw [Transform.denote_singleton_iff]

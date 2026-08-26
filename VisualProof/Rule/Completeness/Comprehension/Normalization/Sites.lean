@@ -80,6 +80,9 @@ mutual
     | identity signature arity ports =>
         exact ⟨ItemSites.identity (pattern := pattern) (frame := frame)
           signature arity ports⟩
+    | term output freeArity ports term =>
+        exact ⟨ItemSites.term (pattern := pattern) (frame := frame)
+          output freeArity ports term⟩
     | cut childEvidence =>
         obtain ⟨sites⟩ := normalizationRegionSites_nonempty childEvidence
         exact ⟨.cut sites⟩

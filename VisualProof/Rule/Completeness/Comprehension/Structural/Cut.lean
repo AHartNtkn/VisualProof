@@ -77,6 +77,8 @@ mutual
     | _, .atom head ports => .atom head ports
     | _, .identity signature arity ports =>
         .identity signature arity ports
+    | _, .term output freeArity ports term =>
+        .term output freeArity ports term
     | _, .cut body => .cut (cutSupportedRegion body)
 
   def cutSupportedItems : {wires : List Sig} →
@@ -196,6 +198,15 @@ theorem cutSupportedIdentityHosted
         (.identity signature arity ports))) := by
   exact HostedStrict.refl _
 
+theorem cutSupportedTermHosted
+    (output : Var wires .iota) (freeArity : Nat)
+    (ports : Fin freeArity → Var wires .iota)
+    (term : Lambda.Term 0 (Fin freeArity)) :
+    HostedStrict (Region.singleton (.term output freeArity ports term))
+      (Region.singleton (cutSupportedItem
+        (.term output freeArity ports term))) := by
+  exact HostedStrict.refl _
+
 theorem cutSupportedCutHosted (body : Region wires)
     (bodyBridge : HostedStrict body (cutSupportedRegion body)) :
     HostedStrict (Region.singleton (.cut body))
@@ -232,7 +243,7 @@ theorem cutSupportedItemsHosted (items : ItemSeq wires) :
     (motive_3 := fun _ items => HostedStrict (Region.ofItems items)
       (Region.ofItems (cutSupportedItems items)))
     cutSupportedRegionHostedCase cutSupportedAtomHosted
-    cutSupportedIdentityHosted cutSupportedCutHosted
+    cutSupportedIdentityHosted cutSupportedTermHosted cutSupportedCutHosted
     (@cutSupportedNilHosted) cutSupportedConsHosted items
 
 theorem cutSupportedRootItemsHosted
@@ -287,6 +298,15 @@ theorem cutSupportedIdentityScope
         (.identity signature arity ports))) := by
   exact ScopePreservation.refl _
 
+theorem cutSupportedTermScope
+    (output : Var wires .iota) (freeArity : Nat)
+    (ports : Fin freeArity → Var wires .iota)
+    (term : Lambda.Term 0 (Fin freeArity)) :
+    ScopePreservation (Region.singleton (.term output freeArity ports term))
+      (Region.singleton (cutSupportedItem
+        (.term output freeArity ports term))) := by
+  exact ScopePreservation.refl _
+
 theorem cutSupportedCutScope (body : Region wires)
     (bodyScope : ScopePreservation body (cutSupportedRegion body)) :
     ScopePreservation (Region.singleton (.cut body))
@@ -324,7 +344,7 @@ theorem cutSupportedItemsScope (items : ItemSeq wires) :
     (motive_3 := fun _ items => ScopePreservation (Region.ofItems items)
       (Region.ofItems (cutSupportedItems items)))
     cutSupportedRegionScopeCase cutSupportedAtomScope
-    cutSupportedIdentityScope cutSupportedCutScope
+    cutSupportedIdentityScope cutSupportedTermScope cutSupportedCutScope
     (@cutSupportedNilScope) cutSupportedConsScope items
 
 /-- Prepend one deterministic retained-pin batch to an existing Cut edit and
@@ -1148,6 +1168,47 @@ mutual
                   (.atom (frame.targetKeep head)
                     (ports.map fun wire => frame.targetKeep wire))).incidencePaths
                       data.index.val)))⟩
+    | term output freeArity ports term =>
+        have outputEq :
+            frame.sourceKeep output = frame.targetKeep output := by
+          apply Var.eq_of_index_eq
+          apply Fin.ext
+          exact invariant.2.1 output
+        have portsEq :
+            (fun slot => frame.sourceKeep (ports slot)) =
+              (fun slot => frame.targetKeep (ports slot)) := by
+          funext slot
+          apply Var.eq_of_index_eq
+          apply Fin.ext
+          exact invariant.2.1 (ports slot)
+        have itemEq :
+            cutSupportedItem (.term (frame.sourceKeep output) freeArity
+              (fun slot => frame.sourceKeep (ports slot)) term) =
+              .term (frame.targetKeep output) freeArity
+                (fun slot => frame.targetKeep (ports slot)) term := by
+          simp only [cutSupportedItem]
+          rw [outputEq, portsEq]
+        exact ⟨.term output freeArity ports term,
+          .term (frame.targetKeep output) freeArity
+            (fun slot => frame.targetKeep (ports slot)) term,
+          Region.singleton (.term output freeArity ports term),
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.term
+            output freeArity ports term,
+          ⟨RegionIso.refl _⟩, HostedStrict.refl _,
+          (fun canonical => canonical), (fun _ => Iff.rfl),
+          (by
+            rw [itemEq]
+            exact fun canonical => canonical),
+          (by
+            intro signature wire
+            simp [itemEq, invariant.2.1 wire]),
+          (by
+            simpa [itemEq, invariant.2.2] using
+              (SupportParallelIncidenceScope.refl
+                ((Region.singleton
+                  (.term (frame.targetKeep output) freeArity
+                    (fun slot => frame.targetKeep (ports slot)) term)
+                    ).incidencePaths data.index.val)))⟩
     | selectedAtom ports =>
         let childPattern := Erasure.Exposure.supportPattern body bodyCanonical
         let emptyRename : WireRenaming common (common ++ []) :=

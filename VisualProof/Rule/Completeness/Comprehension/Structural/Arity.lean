@@ -208,6 +208,8 @@ mutual
         exact ⟨.selectedAtom (pattern := pattern) application PUnit.unit⟩
     | identity signature arity ports =>
         exact ⟨.identity (pattern := pattern) signature arity ports⟩
+    | term output freeArity ports term =>
+        exact ⟨.term (pattern := pattern) output freeArity ports term⟩
     | cut childEvidence =>
         obtain ⟨childSites⟩ := arityRegionSites_nonempty childEvidence
         exact ⟨.cut childSites⟩
@@ -659,6 +661,58 @@ mutual
             List.append_nil, Var.index_appendLeft]
           rw [sourcePortsZero, targetPortsZero]
           exact SupportParallelIncidenceScope.refl _
+    | term output freeArity ports term =>
+        constructor
+        · intro _
+          exact ⟨fun index => Fin.elim0 index, ⟨True.intro, True.intro⟩⟩
+        · intro wireSignature wire
+          have outputEq :
+              (frame.sourceKeep output).index.val =
+                  (frame.sourceKeep wire).index.val ↔
+                (frame.targetKeep output).index.val =
+                  (frame.targetKeep wire).index.val := by
+            rw [headInvariant.2.1 output, headInvariant.2.1 wire]
+          have portsEq := Transform.countPorts_map_eq_of_reflection
+            freeArity ports frame.sourceKeep frame.targetKeep
+              (fun left right => by
+                rw [headInvariant.2.1 left, headInvariant.2.1 right]) wire
+          simp only [Transform.ItemEdit.run, Region.singleton,
+            Region.ofItems, Region.incidencePaths, ItemSeq.renameWires,
+            Item.renameWires, ItemSeq.incidencePaths, Item.incidencePaths,
+            List.append_nil, Var.index_appendLeft]
+          simp only [outputEq, portsEq]
+          exact SupportParallelIncidenceScope.refl _
+        · have sourceOutputFresh := retainedInvariant.selectedFresh output
+          have targetOutputFresh : data.index.val ≠
+              (frame.targetKeep output).index.val := by
+            rw [← headInvariant.2.2, ← headInvariant.2.1 output]
+            exact sourceOutputFresh
+          have sourcePortsZero :=
+            countPorts_map_eq_zero_of_no_preimage freeArity ports
+              frame.sourceKeep frame.selected.index.val
+              (fun wire => Ne.symm (retainedInvariant.selectedFresh wire))
+          have targetPortsZero :=
+            countPorts_map_eq_zero_of_no_preimage freeArity ports
+              frame.targetKeep data.index.val (fun wire => by
+                rw [← headInvariant.2.2, ← headInvariant.2.1 wire]
+                exact Ne.symm (retainedInvariant.selectedFresh wire))
+          have sourceEmpty :
+              (Region.singleton (.term (frame.sourceKeep output) freeArity
+                (fun port => frame.sourceKeep (ports port)) term)).incidencePaths
+                  frame.selected.index.val = [] := by
+            simp [Region.singleton, Region.incidencePaths_ofItems,
+              ItemSeq.incidencePaths, Item.incidencePaths,
+              Ne.symm sourceOutputFresh, sourcePortsZero]
+          have targetEmpty :
+              (Region.singleton (.term (frame.targetKeep output) freeArity
+                (fun port => frame.targetKeep (ports port)) term)).incidencePaths
+                  data.index.val = [] := by
+            simp [Region.singleton, Region.incidencePaths_ofItems,
+              ItemSeq.incidencePaths, Item.incidencePaths,
+              Ne.symm targetOutputFresh, targetPortsZero]
+          simp only [Transform.ItemEdit.run]
+          rw [sourceEmpty, targetEmpty]
+          exact SupportParallelIncidenceScope.refl []
     | cut childEdit =>
         exact SupportArityShiftScope.cut
           (arityRegionEditScope retainedInvariant headInvariant childEdit)

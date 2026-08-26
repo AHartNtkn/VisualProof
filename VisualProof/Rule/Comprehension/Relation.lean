@@ -445,6 +445,16 @@ mutual
         ItemResult pattern retain selected
           (.identity signature arity (fun index => retain (ports index)))
           (Region.singleton (.identity signature arity ports))
+    | term
+        {retain : WireRenaming targetWires sourceWires}
+        {selected : Var sourceWires (.rel arguments)}
+        (output : Var targetWires .iota) (freeArity : Nat)
+        (ports : Fin freeArity → Var targetWires .iota)
+        (term : Lambda.Term 0 (Fin freeArity)) :
+        ItemResult pattern retain selected
+          (.term (retain output) freeArity
+            (fun index => retain (ports index)) term)
+          (Region.singleton (.term output freeArity ports term))
     | cut
         {retain : WireRenaming targetWires sourceWires}
         {selected : Var sourceWires (.rel arguments)}

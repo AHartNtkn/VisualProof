@@ -466,6 +466,36 @@ theorem accumulateTarget
             sourceWires targetWires localPattern localFrame localData signature
             arity ports)
           targetValues formalFrame formalData closeCommon closeTarget))
+    (termCase : ∀
+      {common sourceWires targetWires : List Sig}
+      {evidencePattern localPattern : OpenDiagram patternWires}
+      {localFrame : Transform.Frame patternWires common sourceWires targetWires}
+      {localData : operation.Data localFrame}
+      (output : Var common .iota) (freeArity : Nat)
+      (ports : Fin freeArity → Var common .iota)
+      (term : Lambda.Term 0 (Fin freeArity))
+      {formalSourceWires formalTargetWires : List Sig}
+      (formalFrame : Transform.Frame targetArguments common
+        formalSourceWires formalTargetWires)
+      (formalData : targetBaseOperation.Data formalFrame),
+      (closeCommon : Region common → Region outer) →
+      (closeTarget : Region formalTargetWires → Region outer) →
+      TargetItem
+        (VisualProof.Rule.Comprehension.Instantiation.ItemResult.term
+          (pattern := evidencePattern) (retain := localFrame.sourceKeep)
+          (selected := localFrame.selected) output freeArity ports term)
+        (@ItemSites.term patternWires operation evidencePattern common
+          sourceWires targetWires localPattern localFrame localData output
+          freeArity ports term)
+        targetValues formalFrame formalData
+        (KItem
+          (VisualProof.Rule.Comprehension.Instantiation.ItemResult.term
+            (pattern := evidencePattern) (retain := localFrame.sourceKeep)
+            (selected := localFrame.selected) output freeArity ports term)
+          (@ItemSites.term patternWires operation evidencePattern common
+            sourceWires targetWires localPattern localFrame localData output
+            freeArity ports term)
+          targetValues formalFrame formalData closeCommon closeTarget))
     (cutCase : ∀
       {common sourceWires targetWires : List Sig}
       {localPattern : OpenDiagram patternWires}
@@ -563,6 +593,9 @@ theorem accumulateTarget
   case identity =>
     intros
     apply identityCase
+  case term =>
+    intros
+    apply termCase
   case cut =>
     intros
     rename_i _ _ _ _ _ _ _ _ _ childSites childIH _ _ formalFrame
@@ -948,7 +981,7 @@ theorem accumulateHostedTargetWith
                           sourceWires).append retained)
                       PUnit.unit (fun _ _ _ => PUnit.unit)).1)) ∧
               Retained retained)
-      ?_ ?_ ?_ ?_ ?_ ?_ ?_
+      ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
     case refine_1 =>
         intros
         rename_i nilCommon nilSourceWires nilTargetWires nilPattern nilFrame
@@ -2295,6 +2328,203 @@ theorem accumulateHostedTargetWith
         exact sourceSideIso (RegionIso.refl _) sourcePresentation
           (sourceSideRefl sourceMaterial)
     case refine_7 =>
+      intros
+      rename_i itemCommon itemSourceWires itemTargetWires evidencePattern
+        itemPattern itemFrame itemData termOutput termFreeArity termPorts
+        lambdaTerm formalSourceWires formalTargetWires formalFrame formalData
+        _closeCommon _closeTarget
+      let values := targetValues
+      unfold TargetItem
+      let commonEquiv := WireEquiv.appendNil itemCommon
+      let commonAppend := commonEquiv.symm.toRenaming
+      let mappedOutput := commonAppend termOutput
+      let mappedPorts := fun position => commonAppend (termPorts position)
+      let childFrame := formalFrame.append []
+      let childData := targetOperation.appendData formalFrame formalData []
+      let formalItemResult : Region (itemCommon ++ []) :=
+        Region.singleton
+          (.term mappedOutput termFreeArity mappedPorts lambdaTerm)
+      let formalItemSource : Item (formalSourceWires ++ []) :=
+        .term (childFrame.sourceKeep mappedOutput) termFreeArity
+          (fun position => childFrame.sourceKeep (mappedPorts position))
+          lambdaTerm
+      let formalItemEvidence :
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult
+            targetPattern childFrame.sourceKeep
+            childFrame.selected formalItemSource formalItemResult :=
+        .term mappedOutput termFreeArity mappedPorts lambdaTerm
+      let tailEvidence :
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+            targetPattern childFrame.sourceKeep
+            childFrame.selected (.nil : ItemSeq (formalSourceWires ++ []))
+            (Region.blank (itemCommon ++ [])) := .nil
+      let formalSource : ItemSeq (formalSourceWires ++ []) :=
+        .cons formalItemSource .nil
+      let formalResult : Region (itemCommon ++ []) :=
+        formalItemResult.conjoin (Region.blank (itemCommon ++ []))
+      let formalEvidence :
+          VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+            targetPattern childFrame.sourceKeep
+            childFrame.selected formalSource formalResult :=
+        .cons formalItemEvidence tailEvidence
+      let formalItemSites : ItemSites
+          targetOperation childData formalItemEvidence :=
+        ItemSites.term (pattern := targetPattern) (frame := childFrame)
+          mappedOutput termFreeArity mappedPorts lambdaTerm
+      let formalSites : ItemsSites
+          targetOperation childData formalEvidence :=
+        .cons formalItemSites (.nil tailEvidence)
+      let staged := Region.singleton
+        (.term termOutput termFreeArity termPorts lambdaTerm)
+      have hosted : HostedStrict staged staged := by
+        intro outer hostLocals rename hostItems boundary source occurrence
+          targetCanonical targetExternalTwoEnded
+        simpa only [EqualityNormalization.StrictEquates] using
+          EqualityNormalization.StrictEquates.refl occurrence
+      let appendRename : WireRenaming itemCommon (itemCommon ++ []) :=
+        commonEquiv.symm.toRenaming
+      let stagedMapped := staged.renameWires appendRename
+      have stagedMappedEq : stagedMapped = formalItemResult := by
+        simp only [stagedMapped, staged, appendRename, formalItemResult,
+          Region.singleton_renameWires, Item.renameWires, mappedOutput,
+          mappedPorts, commonAppend]
+      let intoMapped : RegionIso commonEquiv.symm staged formalItemResult :=
+        (by
+          let renamed := RegionIso.renameWires staged WireRenaming.id
+            appendRename commonEquiv.symm (by
+              intro signature wire
+              rfl)
+          rw [Region.renameWires_id] at renamed
+          have targetEq : staged.renameWires appendRename =
+              formalItemResult := stagedMappedEq
+          rw [targetEq] at renamed
+          exact renamed)
+      let intoFormal : RegionIso commonEquiv.symm staged formalResult :=
+        intoMapped.trans ((RegionIso.conjoinBlank formalItemResult).symm)
+      let mappedBack : RegionIso commonEquiv formalResult
+          (formalResult.renameWires commonEquiv.toRenaming) := by
+        simpa only [Region.renameWires_id] using
+          RegionIso.renameWires formalResult WireRenaming.id
+            commonEquiv.toRenaming commonEquiv (by
+              intro signature wire
+              rfl)
+      let closed := (intoFormal.trans mappedBack).trans
+        (RegionIso.adjoinAtNil formalResult)
+      have ambientEq :
+          ((commonEquiv.symm.trans commonEquiv).trans
+            (WireEquiv.refl itemCommon)) = WireEquiv.refl itemCommon := by
+        apply WireEquiv.ext
+        intro signature wire
+        exact commonEquiv.right_inv wire
+      let formalPresentation := closed.castAmbient ambientEq
+      refine ⟨[], formalSource, formalResult, formalEvidence, formalSites,
+        by rfl, ?_⟩
+      intro patternEq
+      cases patternEq
+      refine ⟨staged, hosted, sideRefl staged, ⟨formalPresentation⟩,
+        ?_, ?_, retainedNil⟩
+      · intro bridge alignment
+        let material : Region (formalTargetWires ++ []) :=
+          Region.ofItems (formalSource.renameWires
+            (bridge.sourceToTarget.appendRight []))
+        have outputEq :
+            alignment.ambient.toRenaming
+                (itemFrame.targetKeep termOutput) =
+              (WireEquiv.appendNil formalTargetWires).toRenaming
+                ((bridge.sourceToTarget.appendRight [])
+                  (childFrame.sourceKeep mappedOutput)) := by
+          rw [alignment.keep_commutes]
+          rw [← bridge.keep_commutes termOutput]
+          rw [show mappedOutput = termOutput.appendLeft [] by
+            exact WireEquiv.appendNil_symm_apply itemCommon termOutput]
+          simp [childFrame, Transform.Frame.append,
+            WireRenaming.appendRight]
+        have portsEq :
+            (fun position => alignment.ambient.toRenaming
+              (itemFrame.targetKeep (termPorts position))) =
+            (fun position =>
+              (WireEquiv.appendNil formalTargetWires).toRenaming
+                ((bridge.sourceToTarget.appendRight [])
+                  (childFrame.sourceKeep (mappedPorts position)))) := by
+          funext position
+          rw [alignment.keep_commutes]
+          rw [← bridge.keep_commutes (termPorts position)]
+          rw [show mappedPorts position =
+              (termPorts position).appendLeft [] by
+            exact WireEquiv.appendNil_symm_apply itemCommon
+              (termPorts position)]
+          simp [childFrame, Transform.Frame.append,
+            WireRenaming.appendRight]
+        have sourceEq :
+            (Region.singleton (.term
+              (itemFrame.targetKeep termOutput) termFreeArity
+              (fun position => itemFrame.targetKeep (termPorts position))
+              lambdaTerm)).renameWires alignment.ambient.toRenaming =
+              material.renameWires
+                (WireEquiv.appendNil formalTargetWires).toRenaming := by
+          simp only [material, formalSource, formalItemSource, Region.ofItems,
+            Region.singleton_renameWires, Region.renameWires,
+            ItemSeq.renameWires, Item.renameWires, ItemSeq.append_nil,
+            ItemSeq.renameWires_comp, WireRenaming.appendRight,
+            Var.appendMap_left, WireEquiv.appendNil_apply]
+          rw [outputEq, portsEq]
+          simp [Region.singleton, Region.ofItems,
+            WireRenaming.appendRight, ItemSeq.renameWires,
+            Item.renameWires]
+        refine ⟨?_⟩
+        simpa only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
+          WireEquiv.trans_refl] using
+          (RegionIso.ofEq sourceEq).trans
+            ((RegionIso.adjoinAtNil material).trans
+              (RegionIso.adjoinAtOfItems []
+                (formalSource.renameWires
+                  (bridge.sourceToTarget.appendRight []))))
+      · let sourceMaterial : Region itemSourceWires :=
+          Region.singleton (.term (itemFrame.sourceKeep termOutput)
+            termFreeArity
+            (fun position => itemFrame.sourceKeep (termPorts position))
+            lambdaTerm)
+        let authoritativeFrame : Transform.Frame patternWires itemCommon
+            itemSourceWires itemSourceWires := {
+          sourceKeep := itemFrame.sourceKeep
+          targetKeep := itemFrame.sourceKeep
+          selected := itemFrame.selected
+        }
+        let targetMaterial := Region.ofItems
+          (argumentItemsEdit formalSites sourceValues
+            (normalizationOperation patternWires)
+            (authoritativeFrame.append [])
+            PUnit.unit (fun _ _ _ => PUnit.unit)).1
+        have targetEq : sourceMaterial.renameWires
+              (WireEquiv.appendNil itemSourceWires).symm.toRenaming =
+            targetMaterial := by
+          change sourceMaterial.renameWires
+              (WireEquiv.appendNil itemSourceWires).symm.toRenaming =
+            Region.ofItems (.cons
+              (.term
+                ((authoritativeFrame.append []).sourceKeep mappedOutput)
+                termFreeArity
+                (fun position =>
+                  (authoritativeFrame.append []).sourceKeep
+                    (mappedPorts position)) lambdaTerm) .nil)
+          rw [Region.singleton_renameWires]
+          change Region.singleton _ = Region.singleton _
+          apply congrArg Region.singleton
+          simp only [Item.renameWires]
+          congr 1
+          · simp [authoritativeFrame, mappedOutput, commonAppend,
+              commonEquiv, Transform.Frame.append,
+              WireRenaming.appendRight, WireEquiv.appendNil_symm_apply]
+          · funext position
+            simp [authoritativeFrame, mappedPorts, commonAppend,
+              commonEquiv, Transform.Frame.append,
+              WireRenaming.appendRight, WireEquiv.appendNil_symm_apply]
+        let sourcePresentation :=
+          (RegionIso.adjoinAtNilRenamed sourceMaterial).trans
+            (RegionIso.adjoinAt [] .nil (RegionIso.ofEq targetEq))
+        exact sourceSideIso (RegionIso.refl _) sourcePresentation
+          (sourceSideRefl sourceMaterial)
+    case refine_8 =>
       intros
       rename_i itemCommon itemSourceWires itemTargetWires itemPattern
         itemFrame itemData body childResult childEvidence childSites

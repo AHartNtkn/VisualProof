@@ -4,6 +4,7 @@ import VisualProof.Rule.DoubleCut
 import VisualProof.Rule.Vacuity
 import VisualProof.Rule.Presentation
 import VisualProof.Rule.Identification
+import VisualProof.Rule.Lambda
 import VisualProof.Rule.WirePrimitive
 
 namespace VisualProof.Rule
@@ -35,6 +36,8 @@ inductive Step.Evidence {boundary : List Sig} :
       Evidence source target
   | identityLeaf : WirePrimitive.IdentityLeaf source target →
       Evidence source target
+  | lambdaSpawn : Lambda.Spawn source target → Evidence source target
+  | lambdaTermLeaf : Lambda.TermLeaf source target → Evidence source target
 
 /-- The relational view of the proof-relevant one-step evidence. -/
 def Step {boundary : List Sig}
@@ -94,6 +97,12 @@ def identityLeaf
     (step : WirePrimitive.IdentityLeaf source target) : Step source target :=
   ⟨.identityLeaf step⟩
 
+def lambdaSpawn (step : Lambda.Spawn source target) : Step source target :=
+  ⟨.lambdaSpawn step⟩
+
+def lambdaTermLeaf (step : Lambda.TermLeaf source target) : Step source target :=
+  ⟨.lambdaTermLeaf step⟩
+
 def Evidence.iso
     {boundary : List Sig}
     {source source' target target' : OpenDiagram boundary}
@@ -138,6 +147,10 @@ def Evidence.iso
   | identityLeaf step =>
       exact .identityLeaf
         (WirePrimitive.IdentityLeaf.iso sourceIso step targetIso)
+  | lambdaSpawn step =>
+      exact .lambdaSpawn (Lambda.Spawn.iso sourceIso step targetIso)
+  | lambdaTermLeaf step =>
+      exact .lambdaTermLeaf (Lambda.TermLeaf.iso sourceIso step targetIso)
 
 theorem iso
     {boundary : List Sig}

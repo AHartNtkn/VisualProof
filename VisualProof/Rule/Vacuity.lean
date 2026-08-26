@@ -511,6 +511,7 @@ private theorem length_renameWires (items : ItemSeq source)
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (by intro source target rename; rfl)
     (by
@@ -1222,6 +1223,10 @@ private def Stub.embedExtendedItems
       match wire with
       | .tail nested => .tail (Stub.embedExtendedItems tail after
           signature arity ports position nested)
+  | .cons (.term _ _ _ _) tail => fun wire =>
+      match wire with
+      | .tail nested => .tail (Stub.embedExtendedItems tail after
+          signature arity ports position nested)
   | .cons (.cut _) tail => fun wire =>
       match wire with
       | .headCut nested => .headCut (renameRegionInternal
@@ -1255,6 +1260,13 @@ private theorem Stub.ownerPathFrom_embedExtendedItems
           exact Stub.ownerPathFrom_embedExtendedItems tail after
             signature arity ports position nested (itemIndex + 1)
   | .cons (.identity _ _ _) tail =>
+      match wire with
+      | .tail nested => by
+          simp only [Stub.embedExtendedItems,
+            ItemSeq.InternalWire.ownerPathFrom]
+          exact Stub.ownerPathFrom_embedExtendedItems tail after
+            signature arity ports position nested (itemIndex + 1)
+  | .cons (.term _ _ _ _) tail =>
       match wire with
       | .tail nested => by
           simp only [Stub.embedExtendedItems,
@@ -1297,6 +1309,10 @@ private def mapExactFrameInternal
       match wire with
       | .tail nested => .tail
           (mapExactFrameInternal tail trailing bodyMap nested)
+  | .cons (.term _ _ _ _) tail => fun wire =>
+      match wire with
+      | .tail nested => .tail
+          (mapExactFrameInternal tail trailing bodyMap nested)
   | .cons (.cut _) tail => fun wire =>
       match wire with
       | .headCut nested => .headCut nested
@@ -1328,6 +1344,11 @@ private theorem ownerPathFrom_mapExactFrameInternal
               exact ownerPathFrom_mapExactFrameInternal tail trailing bodyMap
                 bodyOwner nested (itemIndex + 1)
       | identity _ _ _ =>
+          cases wire with
+          | tail nested =>
+              exact ownerPathFrom_mapExactFrameInternal tail trailing bodyMap
+                bodyOwner nested (itemIndex + 1)
+      | term _ _ _ _ =>
           cases wire with
           | tail nested =>
               exact ownerPathFrom_mapExactFrameInternal tail trailing bodyMap

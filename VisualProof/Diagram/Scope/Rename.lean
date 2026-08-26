@@ -147,6 +147,17 @@ private theorem ItemSeq.incidencePaths_rename_reflect
       simp only [Item.renameWires, Item.incidencePaths]
       rw [countPorts_of_reflect arity ports rename sourceIndex targetIndex reflect])
     (by
+      intro source output freeArity ports term target rename sourceIndex
+        targetIndex itemIndex reflect
+      simp only [Item.renameWires, Item.incidencePaths]
+      rw [countPorts_of_reflect freeArity ports rename sourceIndex targetIndex
+        reflect]
+      by_cases sourceEq : output.index.val = sourceIndex
+      · have targetEq := (reflect.apply output).mpr sourceEq
+        simp [sourceEq, targetEq]
+      · have targetNe := not_congr (reflect.apply output) |>.mpr sourceEq
+        simp [sourceEq, targetNe])
+    (by
       intro source body bodyIH target rename sourceIndex targetIndex itemIndex reflect
       simp only [Item.renameWires, Item.incidencePaths]
       rw [bodyIH rename sourceIndex targetIndex reflect])
@@ -231,6 +242,13 @@ theorem ItemSeq.incidencePaths_renameWires_eq_nil_of_no_preimage
         targetIndex none]
       rfl)
     (by
+      intro source output freeArity ports term target rename targetIndex
+        itemIndex bound none
+      simp only [Item.renameWires, Item.incidencePaths]
+      rw [countPorts_map_eq_zero_of_no_preimage freeArity ports rename
+        targetIndex none]
+      simp [none output])
+    (by
       intro source body bodyIH target rename targetIndex itemIndex bound none
       simp only [Item.renameWires, Item.incidencePaths]
       rw [bodyIH rename targetIndex bound none]
@@ -306,6 +324,7 @@ private theorem ItemSeq.childrenCanonical_rename
           (nestedIH (rename.appendRight locals)).mpr children⟩)
     (by intro source arguments head ports target rename; exact Iff.rfl)
     (by intro source signature arity ports target rename; exact Iff.rfl)
+    (by intro source output freeArity ports term target rename; exact Iff.rfl)
     (by intro source body bodyIH target rename; exact bodyIH rename)
     (by intro source target rename; exact Iff.rfl)
     (by
@@ -441,6 +460,9 @@ private theorem ItemSeq.childrenCanonical_rename_embedding
       exact Iff.rfl)
     (by
       intro source signature arity ports target rename embedding
+      exact Iff.rfl)
+    (by
+      intro source output freeArity ports term target rename embedding
       exact Iff.rfl)
     (by
       intro source body bodyIH target rename embedding
@@ -803,6 +825,7 @@ private theorem ItemSeq.length_renameWires
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (by intro _ _ _; rfl)
     (by
@@ -829,6 +852,7 @@ private theorem ItemSeq.startsWith_of_mem_incidencePaths_lt
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (by
       intro _ wireIndex itemIndex path index member starts
@@ -844,6 +868,10 @@ private theorem ItemSeq.startsWith_of_mem_incidencePaths_lt
             subst path
             simp [RegionPath.StartsWith] at starts
         | identity signature arity ports =>
+            have pathEq := List.eq_of_mem_replicate headMember
+            subst path
+            simp [RegionPath.StartsWith] at starts
+        | term output freeArity ports term =>
             have pathEq := List.eq_of_mem_replicate headMember
             subst path
             simp [RegionPath.StartsWith] at starts

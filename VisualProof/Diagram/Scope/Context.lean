@@ -30,6 +30,10 @@ private def ItemSeq.mapFrameInternalWire
       match wire with
       | .tail nested => .tail
           (ItemSeq.mapFrameInternalWire tail trailing bodyMap nested)
+  | .cons (.term _ _ _ _) tail => fun wire =>
+      match wire with
+      | .tail nested => .tail
+          (ItemSeq.mapFrameInternalWire tail trailing bodyMap nested)
   | .cons (.cut _) tail => fun wire =>
       match wire with
       | .headCut nested => .headCut nested
@@ -63,6 +67,11 @@ private theorem ItemSeq.ownerPathFrom_mapFrameInternalWire
               exact ItemSeq.ownerPathFrom_mapFrameInternalWire tail trailing
                 bodyMap bodyOwner nested (itemIndex + 1)
       | identity signature arity ports =>
+          cases wire with
+          | tail nested =>
+              exact ItemSeq.ownerPathFrom_mapFrameInternalWire tail trailing
+                bodyMap bodyOwner nested (itemIndex + 1)
+      | term output freeArity ports term =>
           cases wire with
           | tail nested =>
               exact ItemSeq.ownerPathFrom_mapFrameInternalWire tail trailing

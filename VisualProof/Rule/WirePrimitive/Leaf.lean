@@ -66,6 +66,7 @@ inductive Applies : Region outer → Region outer → Prop
   | .selectedAtom _ _ => rfl
   | .selectedPin _ _ => False.elim noPin
   | .identity _ _ _ => rfl
+  | .term _ _ _ _ => rfl
   | .cut _ => rfl
 
 theorem formalSelectedAtom_retainedTargetToSource
@@ -367,6 +368,7 @@ def rootFrame (outer localBefore localAfter : List Sig)
   | .selectedAtom _ _ => rfl
   | .selectedPin _ _ => False.elim noPin
   | .identity _ _ _ => rfl
+  | .term _ _ _ _ => rfl
   | .cut _ => rfl
 
 theorem Vars.countIndex_fromFn

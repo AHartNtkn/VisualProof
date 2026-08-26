@@ -645,6 +645,15 @@ mutual
         ItemEdit operation frame data
           (.identity signature arity
             (fun index => frame.sourceKeep (ports index)))
+    | term
+        {frame : Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        (output : Var common .iota) (freeArity : Nat)
+        (ports : Fin freeArity → Var common .iota)
+        (term : Lambda.Term 0 (Fin freeArity)) :
+        ItemEdit operation frame data
+          (.term (frame.sourceKeep output) freeArity
+            (fun slot => frame.sourceKeep (ports slot)) term)
     | cut
         {frame : Frame arguments common sourceWires targetWires}
         {data : operation.Data frame}
@@ -795,6 +804,9 @@ mutual
     | .identity signature arity ports =>
         Region.singleton (.identity signature arity
           (fun index => frame.targetKeep (ports index)))
+    | .term output freeArity ports term =>
+        Region.singleton (.term (frame.targetKeep output) freeArity
+          (fun slot => frame.targetKeep (ports slot)) term)
     | .cut bodyEdit => Region.singleton (.cut bodyEdit.run)
 end
 
@@ -1283,6 +1295,38 @@ mutual
               simp [List.get_eq_getElem, keepIndex]
           rw [indicesEq]
           exact Nat.le_refl _
+    | .term output freeArity ports term => by
+        cases direction <;> intro _ <;>
+          refine ⟨⟨fun index => Fin.elim0 index,
+            ⟨True.intro, True.intro⟩⟩, ?_⟩ <;>
+          intro wireIndex wireBound <;>
+          simp only [ItemEdit.run, Region.singleton, Region.ofItems,
+            Region.incidencePaths, ItemSeq.renameWires, Item.renameWires,
+            ItemSeq.incidencePaths, Item.incidencePaths, List.append_nil,
+            Var.index_appendLeft] <;>
+          apply (List.replicate_sublist_replicate []).mpr
+        · have indicesEq :
+              List.ofFn (fun slot =>
+                (frame.sourceKeep (ports slot)).index.val) =
+              List.ofFn (fun slot =>
+                (frame.targetKeep (ports slot)).index.val) := by
+            apply List.ext_get
+            · simp
+            · intro n hn hn'
+              simp [List.get_eq_getElem, keepIndex]
+          rw [indicesEq, ← keepIndex output]
+          exact Nat.le_refl _
+        · have indicesEq :
+              List.ofFn (fun slot =>
+                (frame.targetKeep (ports slot)).index.val) =
+              List.ofFn (fun slot =>
+                (frame.sourceKeep (ports slot)).index.val) := by
+            apply List.ext_get
+            · simp
+            · intro n hn hn'
+              simp [List.get_eq_getElem, keepIndex]
+          rw [indicesEq, keepIndex output]
+          exact Nat.le_refl _
     | @ItemEdit.cut _ _ _ _ _ _ _ body bodyEdit => by
         have child := RegionEdit.scopeTransfer direction invariant
           appendInvariant contextLength keepIndex selectedAtomTransfer
@@ -1668,6 +1712,24 @@ mutual
           ItemSeq.incidencePaths, Item.incidencePaths, List.append_nil,
           Var.index_appendLeft]
         rw [portsEq]
+    | .term output freeArity ports term => by
+        intro _
+        refine ⟨⟨fun index => Fin.elim0 index,
+          ⟨True.intro, True.intro⟩⟩, ?_⟩
+        intro signature wire
+        have index := indexInvariant dataInvariant
+        have portsEq := countPorts_map_eq_of_reflection freeArity ports
+          frame.sourceKeep frame.targetKeep index.reflects wire
+        simp only [ItemEdit.run, Region.singleton, Region.ofItems,
+          Region.incidencePaths, ItemSeq.renameWires, Item.renameWires,
+          ItemSeq.incidencePaths, Item.incidencePaths, List.append_nil,
+          Var.index_appendLeft]
+        by_cases sourceEq : (frame.sourceKeep output).index.val =
+            (frame.sourceKeep wire).index.val
+        · have targetEq := (index.reflects output wire).mp sourceEq
+          simp [sourceEq, targetEq, portsEq]
+        · have targetNe := not_congr (index.reflects output wire) |>.mp sourceEq
+          simp [sourceEq, targetNe, portsEq]
     | @ItemEdit.cut _ _ _ _ _ _ _ body bodyEdit => by
         intro targetCanonical
         have child := RegionEdit.retainedTargetToSource invariant
@@ -1875,6 +1937,19 @@ mutual
       · intro targetDenotes left right
         rw [agree (ports left), agree (ports right)]
         exact targetDenotes left right
+    | term output freeArity ports term =>
+      simp only [ItemEdit.run]
+      rw [denote_singleton_iff]
+      simp only [denoteItem_term]
+      have evalEq :
+          model.eval term (fun slot =>
+            sourceEnv.lookup (frame.sourceKeep (ports slot))) =
+          model.eval term (fun slot =>
+            targetEnv.lookup (frame.targetKeep (ports slot))) := by
+        apply congrArg (model.eval term)
+        funext slot
+        exact agree (ports slot)
+      rw [agree output, evalEq]
     | cut bodyEdit =>
       simp only [ItemEdit.run]
       rw [denote_singleton_iff]

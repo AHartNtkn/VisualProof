@@ -1547,6 +1547,19 @@ mutual
           commutes (sourcePorts sourceIndex)
         _ = targetRename (targetPorts (positions sourceIndex)) := by
           rw [portsEq sourceIndex]
+    | @ItemIso.term _ _ freeArity _ sourceOutput targetOutput sourcePorts
+        targetPorts lambdaTerm outputEq portsEq => by
+      refine .term ?_ ?_
+      · calc
+          ambient (sourceRename sourceOutput) =
+              targetRename (oldAmbient sourceOutput) := commutes sourceOutput
+          _ = targetRename targetOutput := by rw [outputEq]
+      · intro slot
+        calc
+          ambient (sourceRename (sourcePorts slot)) =
+              targetRename (oldAmbient (sourcePorts slot)) :=
+            commutes (sourcePorts slot)
+          _ = targetRename (targetPorts slot) := by rw [portsEq slot]
     | @ItemIso.cut _ _ _ sourceBody targetBody bodyIso =>
       .cut (RegionIso.renameExisting bodyIso sourceRename targetRename
         ambient commutes)

@@ -24,6 +24,7 @@ theorem denoteItemSeq_append
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (by intro env second; simp)
     (by

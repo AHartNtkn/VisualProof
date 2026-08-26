@@ -5,6 +5,7 @@ import VisualProof.Rule.Executable.DoubleCut
 import VisualProof.Rule.Executable.Vacuity
 import VisualProof.Rule.Executable.Presentation
 import VisualProof.Rule.Executable.Identification
+import VisualProof.Rule.Executable.Lambda
 import VisualProof.Rule.Executable.WirePrimitive
 
 namespace VisualProof.Rule
@@ -84,6 +85,16 @@ def Step.Evidence.ForwardExecutable {boundary : List Sig} :
           (output : OpenDiagram boundary),
         WirePrimitive.IdentityLeaf.runForward source index = some output ∧
           OpenDiagram.Isomorphic output target
+  | source, target, .lambdaSpawn _ =>
+      ∃ (index : Lambda.Spawn.ForwardIndex source)
+          (output : OpenDiagram boundary),
+        Lambda.Spawn.runForward source index = some output ∧
+          OpenDiagram.Isomorphic output target
+  | source, target, .lambdaTermLeaf _ =>
+      ∃ (index : Lambda.TermLeaf.ForwardIndex source)
+          (output : OpenDiagram boundary),
+        Lambda.TermLeaf.runForward source index = some output ∧
+          OpenDiagram.Isomorphic output target
 
 /-- Backward execution coverage selected by the authoritative Step evidence. -/
 def Step.Evidence.BackwardExecutable {boundary : List Sig} :
@@ -157,6 +168,16 @@ def Step.Evidence.BackwardExecutable {boundary : List Sig} :
           (output : OpenDiagram boundary),
         WirePrimitive.IdentityLeaf.runBackward target index = some output ∧
           OpenDiagram.Isomorphic output source
+  | source, target, .lambdaSpawn _ =>
+      ∃ (index : Lambda.Spawn.BackwardIndex target)
+          (output : OpenDiagram boundary),
+        Lambda.Spawn.runBackward target index = some output ∧
+          OpenDiagram.Isomorphic output source
+  | source, target, .lambdaTermLeaf _ =>
+      ∃ (index : Lambda.TermLeaf.BackwardIndex target)
+          (output : OpenDiagram boundary),
+        Lambda.TermLeaf.runBackward target index = some output ∧
+          OpenDiagram.Isomorphic output source
 
 theorem Step.forward_execution_complete
     (step : Step source target) :
@@ -202,6 +223,12 @@ theorem Step.forward_execution_complete
   | identityLeaf evidence =>
       exact ⟨.identityLeaf evidence,
         (WirePrimitive.IdentityLeaf.forward_exact _ _).mpr evidence⟩
+  | lambdaSpawn evidence =>
+      exact ⟨.lambdaSpawn evidence,
+        (Lambda.Spawn.forward_exact _ _).mpr evidence⟩
+  | lambdaTermLeaf evidence =>
+      exact ⟨.lambdaTermLeaf evidence,
+        (Lambda.TermLeaf.forward_exact _ _).mpr evidence⟩
 
 theorem Step.backward_execution_complete
     (step : Step source target) :
@@ -247,5 +274,11 @@ theorem Step.backward_execution_complete
   | identityLeaf evidence =>
       exact ⟨.identityLeaf evidence,
         (WirePrimitive.IdentityLeaf.backward_exact _ _).mpr evidence⟩
+  | lambdaSpawn evidence =>
+      exact ⟨.lambdaSpawn evidence,
+        (Lambda.Spawn.backward_exact _ _).mpr evidence⟩
+  | lambdaTermLeaf evidence =>
+      exact ⟨.lambdaTermLeaf evidence,
+        (Lambda.TermLeaf.backward_exact _ _).mpr evidence⟩
 
 end VisualProof.Rule

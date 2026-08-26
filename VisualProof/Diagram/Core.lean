@@ -1,3 +1,4 @@
+import VisualProof.Lambda.Syntax
 import VisualProof.Theory.Signature
 
 namespace VisualProof.Diagram
@@ -19,6 +20,9 @@ mutual
         (ports : Vars wires arguments) : Item wires
     | identity {wires : List Sig} (signature : Sig) (arity : Nat)
         (ports : Fin arity → Var wires signature) : Item wires
+    | term {wires : List Sig} (output : Var wires .iota)
+        (freeArity : Nat) (ports : Fin freeArity → Var wires .iota)
+        (term : Lambda.Term 0 (Fin freeArity)) : Item wires
     | cut {wires : List Sig} (body : Region wires) : Item wires
 
   inductive ItemSeq : List Sig → Type
@@ -77,6 +81,7 @@ def append : ItemSeq wires → ItemSeq wires → ItemSeq wires
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun second => by simp [ItemSeq.append, ItemSeq.length])
     (fun _ _ _ induction second => by

@@ -537,6 +537,12 @@ mutual
             Comprehension.retainedItemSites] using
             Content.Ends.Absorb.ItemGuard.identity (polarity := polarity)
               (frame := frame) signature arity ports
+      | term output freeArity ports term =>
+          simpa only [Comprehension.itemEdit,
+            Comprehension.retainedItemResult,
+            Comprehension.retainedItemSites] using
+            Content.Ends.Absorb.ItemGuard.term (polarity := polarity)
+              (frame := frame) output freeArity ports term
       | cut body =>
           simpa only [Comprehension.itemEdit,
             Comprehension.retainedItemResult,

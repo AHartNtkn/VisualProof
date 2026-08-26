@@ -143,6 +143,17 @@ atoms and identities need no operation site data. -/
         ItemSites operation data
           (VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
             signature arity ports)
+    | term
+        {common sourceWires targetWires : List Sig}
+        {pattern : OpenDiagram arguments}
+        {frame : Transform.Frame arguments common sourceWires targetWires}
+        {data : operation.Data frame}
+        (output : Var common .iota) (freeArity : Nat)
+        (ports : Fin freeArity → Var common .iota)
+        (term : Lambda.Term 0 (Fin freeArity)) :
+        ItemSites operation data
+          (VisualProof.Rule.Comprehension.Instantiation.ItemResult.term
+            output freeArity ports term)
     | cut
         {common sourceWires targetWires : List Sig}
         {pattern : OpenDiagram arguments}
@@ -245,6 +256,8 @@ operation-specific site data. -/
         ExactEdit.refl (.selectedAtom ports siteData)
     | .identity signature arity ports =>
         ExactEdit.refl (.identity signature arity ports)
+    | .term output freeArity ports term =>
+        ExactEdit.refl (.term output freeArity ports term)
     | .cut childSites =>
         let childOutput := regionEdit data _ childSites
         {
@@ -326,6 +339,8 @@ mutual
         .selectedAtom (pattern := pattern) ports siteData.1
     | .identity signature arity ports =>
         .identity (pattern := pattern) signature arity ports
+    | .term output freeArity ports term =>
+        .term (pattern := pattern) output freeArity ports term
     | .cut childSites => .cut (recordingRegionSitesTarget childSites)
   termination_by structural sites
 
@@ -378,6 +393,7 @@ mutual
     | .atom _ _ => True.intro
     | .selectedAtom _ _ => True.intro
     | .identity _ _ _ => True.intro
+    | .term _ _ _ _ => True.intro
     | .cut childSites => regionEdit_noSelectedPin childSites
   termination_by structural sites
 end
@@ -427,6 +443,7 @@ mutual
     | .atom _ _ => []
     | .selectedAtom _ _ => [[]]
     | .identity _ _ _ => []
+    | .term _ _ _ _ => []
     | .cut childSites =>
         childSites.selectedPaths.map (fun path => itemIndex :: path)
   termination_by structural sites
@@ -500,6 +517,12 @@ mutual
           frame.sourceKeep frame.selected.index.val
           (fun wire => Ne.symm (invariant.selectedFresh wire))
         simp [ItemSites.selectedPaths, Item.incidencePaths, portsZero]
+    | .term output freeArity ports term => by
+        have outputNe := Ne.symm (invariant.selectedFresh output)
+        have portsZero := countPorts_map_eq_zero_of_no_preimage freeArity ports
+          frame.sourceKeep frame.selected.index.val
+          (fun wire => Ne.symm (invariant.selectedFresh wire))
+        simp [ItemSites.selectedPaths, Item.incidencePaths, outputNe, portsZero]
     | .cut childSites => by
         simp only [Item.incidencePaths, ItemSites.selectedPaths]
         rw [childSites.source_selectedPaths invariant]
@@ -531,6 +554,8 @@ mutual
     | .atom head ports => Region.singleton (.atom head ports)
     | .identity signature arity ports =>
         Region.singleton (.identity signature arity ports)
+    | .term output freeArity ports term =>
+        Region.singleton (.term output freeArity ports term)
     | .cut body =>
         Region.singleton (.cut (retainedRegionPresentation body))
 end
@@ -570,6 +595,7 @@ mutual
     match item with
     | .atom _ _ => RegionIso.refl _
     | .identity _ _ _ => RegionIso.refl _
+    | .term _ _ _ _ => RegionIso.refl _
     | .cut body =>
         RegionIso.singletonCutCongr (retainedRegionPresentationIso body)
   termination_by sizeOf item
@@ -644,6 +670,7 @@ mutual
     | .atom head ports => rfl
     | .selectedAtom ports siteData => rfl
     | .identity signature arity ports => rfl
+    | .term output freeArity ports term => rfl
     | .cut childSites =>
         congrArg (fun child => Region.singleton (.cut child))
           (recordingRegionEditEndpoint_eq childSites)

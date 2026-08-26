@@ -196,6 +196,7 @@ private theorem ItemSeq.incidencePaths_length_eq_sum
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (by intro _ _ _; rfl)
     (by
@@ -330,6 +331,37 @@ private theorem identityIncidenceLengthCase
   rw [← valuesPerm.count (ambient wire).index.val,
     countPorts_map_equiv arity sourcePorts ambient wire]
 
+private theorem termIncidenceLengthCase
+    {sourceWires targetWires : List Sig} {freeArity : Nat}
+    {ambient : WireEquiv sourceWires targetWires}
+    {sourceOutput : Var sourceWires .iota}
+    {targetOutput : Var targetWires .iota}
+    {sourcePorts : Fin freeArity → Var sourceWires .iota}
+    {targetPorts : Fin freeArity → Var targetWires .iota}
+    {lambdaTerm : Lambda.Term 0 (Fin freeArity)}
+    (outputEq : ambient sourceOutput = targetOutput)
+    (portsEq : ∀ slot,
+      ambient (sourcePorts slot) = targetPorts slot) :
+    ItemIncidenceLengthMotive ambient
+      (.term sourceOutput freeArity sourcePorts lambdaTerm)
+      (.term targetOutput freeArity targetPorts lambdaTerm)
+      (.term outputEq portsEq) := by
+  intro signature wire sourceIndex targetIndex
+  subst targetOutput
+  have targetPortsEq : (fun slot => ambient (sourcePorts slot)) = targetPorts :=
+    funext portsEq
+  subst targetPorts
+  simp only [Item.incidencePaths, List.length_replicate]
+  rw [countPorts_map_equiv freeArity sourcePorts ambient wire]
+  by_cases sourceEq : sourceOutput.index.val = wire.index.val
+  · have targetEq :=
+      (WireEquiv.index_val_eq_iff ambient sourceOutput wire).mpr sourceEq
+    simp only [sourceEq, targetEq, if_true]
+  · have targetNe :=
+      not_congr (WireEquiv.index_val_eq_iff ambient sourceOutput wire) |>.mpr
+        sourceEq
+    simp only [sourceEq, targetNe, if_false]
+
 private theorem cutIncidenceLengthCase
     {sourceWires targetWires : List Sig}
     {ambient : WireEquiv sourceWires targetWires}
@@ -392,7 +424,7 @@ private theorem RegionIso.incidencePaths_length_eq_core
     (motive_2 := ItemIncidenceLengthMotive)
     (motive_3 := ItemsIncidenceLengthMotive)
     regionIncidenceLengthCase atomIncidenceLengthCase
-    identityIncidenceLengthCase cutIncidenceLengthCase
+    identityIncidenceLengthCase termIncidenceLengthCase cutIncidenceLengthCase
     permuteIncidenceLengthCase iso) wire
 
 private theorem ItemIso.incidencePaths_length_eq_core
@@ -407,7 +439,7 @@ private theorem ItemIso.incidencePaths_length_eq_core
     (motive_2 := ItemIncidenceLengthMotive)
     (motive_3 := ItemsIncidenceLengthMotive)
     regionIncidenceLengthCase atomIncidenceLengthCase
-    identityIncidenceLengthCase cutIncidenceLengthCase
+    identityIncidenceLengthCase termIncidenceLengthCase cutIncidenceLengthCase
     permuteIncidenceLengthCase iso) wire sourceIndex targetIndex
 
 private theorem ItemSeqIso.incidencePaths_length_eq_core
@@ -422,7 +454,7 @@ private theorem ItemSeqIso.incidencePaths_length_eq_core
     (motive_2 := ItemIncidenceLengthMotive)
     (motive_3 := ItemsIncidenceLengthMotive)
     regionIncidenceLengthCase atomIncidenceLengthCase
-    identityIncidenceLengthCase cutIncidenceLengthCase
+    identityIncidenceLengthCase termIncidenceLengthCase cutIncidenceLengthCase
     permuteIncidenceLengthCase iso) wire sourceIndex targetIndex
 
 private theorem ItemSeq.mem_incidencePaths_iff_get
@@ -445,6 +477,7 @@ private theorem ItemSeq.mem_incidencePaths_iff_get
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (by intro context wireIndex itemIndex path; constructor
         <;> intro impossible
@@ -492,6 +525,8 @@ private theorem Item.nil_or_starts_of_mem_incidencePaths
   | atom head ports =>
       exact Or.inl (List.eq_of_mem_replicate member)
   | identity signature arity ports =>
+      exact Or.inl (List.eq_of_mem_replicate member)
+  | term output freeArity ports term =>
       exact Or.inl (List.eq_of_mem_replicate member)
   | cut body =>
       simp only [Item.incidencePaths, List.mem_map] at member
@@ -649,6 +684,15 @@ private theorem ItemIso.nil_mem_incidencePaths_iff_core
         (fun path member => List.eq_of_mem_replicate member)).trans
         ((ItemIso.incidencePaths_nonempty_iff_core
           (.identity positions portsEq) wire sourceIndex targetIndex).trans
+          (List.nil_mem_iff_nonempty_of_all_nil _
+            (fun path member => List.eq_of_mem_replicate member)).symm)
+  | @term _ _ freeArity _ sourceOutput targetOutput sourcePorts targetPorts
+      lambdaTerm outputEq portsEq =>
+      exact (List.nil_mem_iff_nonempty_of_all_nil _
+        (fun path member => List.eq_of_mem_replicate member)).trans
+        ((ItemIso.incidencePaths_nonempty_iff_core
+          (.term (lambdaTerm := lambdaTerm) outputEq portsEq)
+            wire sourceIndex targetIndex).trans
           (List.nil_mem_iff_nonempty_of_all_nil _
             (fun path member => List.eq_of_mem_replicate member)).symm)
   | cut body =>
@@ -823,6 +867,7 @@ private theorem ItemSeq.childrenCanonical_iff_get
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (by intro context; constructor
         · intro _ position
@@ -922,6 +967,23 @@ private theorem identityChildrenCanonicalCase
       (.identity positions portsEq) :=
   fun _ => True.intro
 
+private theorem termChildrenCanonicalCase
+    {sourceWires targetWires : List Sig} {freeArity : Nat}
+    {ambient : WireEquiv sourceWires targetWires}
+    {sourceOutput : Var sourceWires .iota}
+    {targetOutput : Var targetWires .iota}
+    {sourcePorts : Fin freeArity → Var sourceWires .iota}
+    {targetPorts : Fin freeArity → Var targetWires .iota}
+    {lambdaTerm : Lambda.Term 0 (Fin freeArity)}
+    (outputEq : ambient sourceOutput = targetOutput)
+    (portsEq : ∀ slot,
+      ambient (sourcePorts slot) = targetPorts slot) :
+    ItemChildrenCanonicalMotive ambient
+      (.term sourceOutput freeArity sourcePorts lambdaTerm)
+      (.term targetOutput freeArity targetPorts lambdaTerm)
+      (.term outputEq portsEq) :=
+  fun _ => True.intro
+
 private theorem cutChildrenCanonicalCase
     {sourceWires targetWires : List Sig}
     {ambient : WireEquiv sourceWires targetWires}
@@ -967,7 +1029,7 @@ private theorem RegionIso.canonical_forward
     (motive_2 := ItemChildrenCanonicalMotive)
     (motive_3 := ItemsChildrenCanonicalMotive)
     regionCanonicalCase atomChildrenCanonicalCase
-    identityChildrenCanonicalCase cutChildrenCanonicalCase
+    identityChildrenCanonicalCase termChildrenCanonicalCase cutChildrenCanonicalCase
     permuteChildrenCanonicalCase iso
 
 /-- Region isomorphism preserves canonicality in both directions. -/

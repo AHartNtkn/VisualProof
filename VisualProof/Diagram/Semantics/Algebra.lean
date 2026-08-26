@@ -62,6 +62,9 @@ mutual
     | identity signature arity ports =>
         simp only [Item.renameWires, denoteItem_identity,
           Values.lookup_rename]
+    | term output freeArity ports term =>
+        simp only [Item.renameWires, denoteItem_term,
+          Values.lookup_rename]
     | cut body =>
         simp only [Item.renameWires, denoteItem_cut]
         exact not_congr (denoteRegion_renameWires model

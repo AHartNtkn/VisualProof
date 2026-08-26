@@ -1149,6 +1149,10 @@ mutual
         unfold retainedItemPresentation
         rw [Region.singleton_renameWires]
         rfl
+    | term output freeArity ports term =>
+        unfold retainedItemPresentation
+        rw [Region.singleton_renameWires]
+        rfl
     | cut body =>
         unfold retainedItemPresentation
         rw [Region.singleton_renameWires]
@@ -1212,6 +1216,9 @@ mutual
     | identity signature arity ports =>
         exact VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
           signature arity ports
+    | term output freeArity ports term =>
+        exact VisualProof.Rule.Comprehension.Instantiation.ItemResult.term
+          output freeArity ports term
     | cut body =>
         exact VisualProof.Rule.Comprehension.Instantiation.ItemResult.cut
           (retainedRegionResult pattern frame body)
@@ -1261,6 +1268,9 @@ mutual
     | .identity signature arity ports =>
         ItemSites.identity (pattern := pattern) (frame := frame)
           signature arity ports
+    | .term output freeArity ports term =>
+        ItemSites.term (pattern := pattern) (frame := frame)
+          output freeArity ports term
     | .cut body =>
         ItemSites.cut (pattern := pattern) (frame := frame)
           (retainedRegionSites pattern operation frame data body)
@@ -1345,6 +1355,9 @@ mutual
         unfold retainedItemSites argumentItemEdit Item.renameWires
         rfl
     | identity signature arity ports =>
+        unfold retainedItemSites argumentItemEdit Item.renameWires
+        rfl
+    | term output freeArity ports term =>
         unfold retainedItemSites argumentItemEdit Item.renameWires
         rfl
     | cut body =>
@@ -2251,6 +2264,12 @@ mutual
         rw [Region.singleton_renameWires]
         rfl
     | identity signature arity ports =>
+        unfold retainedItemSites itemEdit retainedItemPresentation
+        rw [← ExactEdit.run_eq]
+        unfold ExactEdit.refl
+        rw [Region.singleton_renameWires]
+        rfl
+    | term output freeArity ports term =>
         unfold retainedItemSites itemEdit retainedItemPresentation
         rw [← ExactEdit.run_eq]
         unfold ExactEdit.refl

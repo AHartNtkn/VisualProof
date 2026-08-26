@@ -341,6 +341,19 @@ mutual
             targetPorts (positions sourceIndex)) :
         ItemIso ambient (.identity signature arity sourcePorts)
           (.identity signature arity targetPorts)
+    | term {sourceWires targetWires : List Sig} {freeArity : Nat}
+        {ambient : WireEquiv sourceWires targetWires}
+        {sourceOutput : Var sourceWires .iota}
+        {targetOutput : Var targetWires .iota}
+        {sourcePorts : Fin freeArity → Var sourceWires .iota}
+        {targetPorts : Fin freeArity → Var targetWires .iota}
+        {lambdaTerm : Lambda.Term 0 (Fin freeArity)}
+        (output_eq : ambient sourceOutput = targetOutput)
+        (ports_eq : ∀ slot,
+          ambient (sourcePorts slot) = targetPorts slot) :
+        ItemIso ambient
+          (.term sourceOutput freeArity sourcePorts lambdaTerm)
+          (.term targetOutput freeArity targetPorts lambdaTerm)
     | cut {sourceWires targetWires : List Sig}
         {ambient : WireEquiv sourceWires targetWires}
         {sourceBody : Region sourceWires}
@@ -414,6 +427,13 @@ private noncomputable def itemIsoReflIdentity
     ItemIsoReflMotive wires (.identity signature arity ports) :=
   .identity (FiniteEquiv.refl _) fun _ => rfl
 
+private noncomputable def itemIsoReflTerm
+    (output : Var wires .iota) (freeArity : Nat)
+    (ports : Fin freeArity → Var wires .iota)
+    (term : Lambda.Term 0 (Fin freeArity)) :
+    ItemIsoReflMotive wires (.term output freeArity ports term) :=
+  .term rfl fun _ => rfl
+
 private noncomputable def itemIsoReflCut
     (body : Region wires) (bodyIH : RegionIsoReflMotive wires body) :
     ItemIsoReflMotive wires (.cut body) :=
@@ -431,7 +451,7 @@ private noncomputable def itemsIsoReflCons
 
 noncomputable def RegionIso.refl (region : Region wires) :
     RegionIso (WireEquiv.refl wires) region region :=
-  Region.rec regionIsoReflMk itemIsoReflAtom itemIsoReflIdentity
+  Region.rec regionIsoReflMk itemIsoReflAtom itemIsoReflIdentity itemIsoReflTerm
     itemIsoReflCut itemsIsoReflNil itemsIsoReflCons region
 
 noncomputable def RegionIso.ofEq
@@ -461,14 +481,14 @@ noncomputable def RegionIso.itemSeqIso
 
 noncomputable def ItemIso.refl (item : Item wires) :
     ItemIso (WireEquiv.refl wires) item item :=
-  Item.rec regionIsoReflMk itemIsoReflAtom itemIsoReflIdentity
+  Item.rec regionIsoReflMk itemIsoReflAtom itemIsoReflIdentity itemIsoReflTerm
     itemIsoReflCut itemsIsoReflNil itemsIsoReflCons item
 
 noncomputable def ItemSeqIso.refl (items : ItemSeq wires) :
     ItemSeqIso (WireEquiv.refl wires) items items :=
   .permute (FiniteEquiv.refl _) fun sourceIndex targetIndex equality => by
     subst targetIndex
-    exact ItemSeq.rec regionIsoReflMk itemIsoReflAtom itemIsoReflIdentity
+    exact ItemSeq.rec regionIsoReflMk itemIsoReflAtom itemIsoReflIdentity itemIsoReflTerm
       itemIsoReflCut itemsIsoReflNil itemsIsoReflCons items sourceIndex
 
 /-- Extend an item-sequence isomorphism by one corresponding leading item. -/
@@ -622,6 +642,8 @@ mutual
                   commutes)
     | .identity signature arity ports =>
         .identity (FiniteEquiv.refl _) (fun index => commutes (ports index))
+    | .term output freeArity ports term =>
+        .term (commutes output) (fun slot => commutes (ports slot))
     | .cut body =>
         .cut (RegionIso.renameWires body sourceRename targetRename
           ambient commutes)
@@ -708,6 +730,7 @@ private theorem ItemSeq.get_append_left
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ position => Fin.elim0 position)
     (fun _ _ _ induction suffix position =>
@@ -732,6 +755,7 @@ private theorem ItemSeq.get_append_right
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun items position => by
       have indexEq :
@@ -943,6 +967,7 @@ private theorem ItemSeq.get_append_singleton_last
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ => rfl)
     (fun _ _ _ induction item => induction item)
@@ -1040,6 +1065,15 @@ mutual
           rw [← positions.apply_symm_apply targetIndex,
             ← ports_eq sourceIndex]
           exact ambient.left_inv _)
+    | @ItemIso.term _ _ _ _ sourceOutput targetOutput sourcePorts targetPorts
+          lambdaTerm output_eq ports_eq =>
+        .term (by
+          rw [← output_eq]
+          exact ambient.left_inv _)
+          (by
+            intro slot
+            rw [← ports_eq slot]
+            exact ambient.left_inv _)
     | .cut body => .cut body.symm
 
   noncomputable def ItemSeqIso.symm
@@ -1108,6 +1142,18 @@ mutual
           targetPorts (secondPositions (firstPositions sourceIndex))
         rw [firstPorts sourceIndex,
           secondPorts (firstPositions sourceIndex)])
+    | @ItemIso.term _ _ _ _ sourceOutput middleOutput sourcePorts middlePorts
+          lambdaTerm firstOutput firstPorts,
+        @ItemIso.term _ _ _ _ _ targetOutput _ targetPorts _
+          secondOutput secondPorts =>
+      .term (by
+        change secondAmbient (firstAmbient sourceOutput) = targetOutput
+        rw [firstOutput, secondOutput])
+        (by
+          intro slot
+          change secondAmbient (firstAmbient (sourcePorts slot)) =
+            targetPorts slot
+          rw [firstPorts slot, secondPorts slot])
     | .cut firstBody, .cut secondBody => .cut (firstBody.trans secondBody)
 
   noncomputable def ItemSeqIso.trans

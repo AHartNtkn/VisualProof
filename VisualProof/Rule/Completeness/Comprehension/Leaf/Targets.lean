@@ -2105,6 +2105,21 @@ mutual
               (Region.singleton (.identity signature arity ports)))
             (ScopePreservation.refl
               (Region.singleton (.identity signature arity ports)))
+    | term output freeArity ports term =>
+        have outputEq : frame.targetKeep output = output := by
+          rw [targetKeepEq]
+          rfl
+        have portsEq : (fun index => frame.targetKeep (ports index)) = ports := by
+          funext index
+          rw [targetKeepEq]
+          rfl
+        simpa only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
+          outputEq, portsEq] using
+          And.intro
+            (HostedStrict.refl
+              (Region.singleton (.term output freeArity ports term)))
+            (ScopePreservation.refl
+              (Region.singleton (.term output freeArity ports term)))
     | cut childSites =>
         obtain ⟨childHosted, childScope⟩ :=
           leafRegionEndpoint _ childSites targetKeepEq selected
@@ -2251,6 +2266,19 @@ mutual
           portsEq] using
           ScopePreservation.refl
             ((Region.singleton (.identity signature arity ports)
+              ).renameWires rename)
+    | term output freeArity ports term =>
+        have outputEq : frame.targetKeep output = output := by
+          rw [targetKeepEq]
+          rfl
+        have portsEq : (fun index => frame.targetKeep (ports index)) = ports := by
+          funext index
+          rw [targetKeepEq]
+          rfl
+        simpa only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
+          outputEq, portsEq] using
+          ScopePreservation.refl
+            ((Region.singleton (.term output freeArity ports term)
               ).renameWires rename)
     | cut childSites =>
         have childScope :=

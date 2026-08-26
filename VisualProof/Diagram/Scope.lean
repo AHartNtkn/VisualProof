@@ -24,6 +24,11 @@ mutual
         List.replicate
           ((List.ofFn fun index : Fin arity => (ports index).index.val).count
             wireIndex) []
+    | .term output freeArity ports _ =>
+        List.replicate
+          ((if output.index.val = wireIndex then 1 else 0) +
+            (List.ofFn fun slot : Fin freeArity => (ports slot).index.val).count
+              wireIndex) []
     | .cut body =>
         (body.incidencePaths wireIndex).map (fun path => itemIndex :: path)
 
@@ -524,6 +529,7 @@ theorem ItemSeq.incidencePaths_append
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (by intro second wireIndex itemIndex; simp [ItemSeq.append,
       ItemSeq.incidencePaths, ItemSeq.length])
@@ -580,6 +586,9 @@ theorem ItemSeq.incidencePaths_add_itemIndex
       intro _ _ _ _ wireIndex itemIndex offset
       simp [Item.incidencePaths, RegionPath.shiftHead])
     (by
+      intro _ _ _ _ _ wireIndex itemIndex offset
+      simp [Item.incidencePaths, RegionPath.shiftHead])
+    (by
       intro _ body _ wireIndex itemIndex offset
       simp [Item.incidencePaths, RegionPath.shiftHead, List.map_map,
         Function.comp_def, Nat.add_comm])
@@ -633,6 +642,7 @@ theorem ItemSeq.incidencePaths_eq_nil_iff_itemIndex
     (fun _ _ _ => True.intro)
     (by intro _ _ _ _ _ _ _; rfl)
     (by intro _ _ _ _ _ _ _; rfl)
+    (by intro _ _ _ _ _ _ _ _; rfl)
     (by
       intro _ body _ wireIndex firstIndex secondIndex
       simp [Item.incidencePaths, List.map_eq_nil_iff])
@@ -657,6 +667,7 @@ mutual
   def Item.ChildrenCanonical : Item wires → Prop
     | .atom _ _ => True
     | .identity _ _ _ => True
+    | .term _ _ _ _ => True
     | .cut body => body.Canonical
 
   def ItemSeq.ChildrenCanonical : ItemSeq wires → Prop
@@ -681,6 +692,7 @@ mutual
       Decidable item.ChildrenCanonical
     | .atom _ _ => isTrue trivial
     | .identity _ _ _ => isTrue trivial
+    | .term _ _ _ _ => isTrue trivial
     | .cut body => Region.decidableCanonical body
 
   def ItemSeq.decidableChildrenCanonical : (items : ItemSeq wires) →
@@ -719,6 +731,7 @@ theorem ItemSeq.childrenCanonical_append
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (by
       intro _ second
