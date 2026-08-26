@@ -103,6 +103,24 @@ test('keeps dense overlapping ground illumination translucent', async ({ page })
   expect(Math.max(...samples.glow)).toBeLessThan(220)
 })
 
+test('reports a complete post-drain frame window and transition build CPU', async ({ page }) => {
+  test.setTimeout(60_000)
+  await page.goto('/?trees=1')
+  const orchard = page.locator('[data-orchard]')
+  await expect(orchard).toHaveAttribute('data-ready', 'true')
+  await expect(orchard).toHaveAttribute('data-pending-representations', '0')
+  expect(Number(await orchard.getAttribute('data-transition-build-ms'))).toBeGreaterThan(0)
+  await expect(orchard).toHaveAttribute('data-frame-sample-count', '60', { timeout: 30_000 })
+
+  await page.getByRole('spinbutton', { name: 'Tree count', exact: true }).fill('3')
+  await page.getByRole('button', { name: 'Apply tree count' }).click()
+  await expect(orchard).toHaveAttribute('data-tree-count', '3')
+  await expect(orchard).toHaveAttribute('data-pending-representations', '0')
+  expect(Number(await orchard.getAttribute('data-frame-sample-count'))).toBeLessThan(60)
+  expect(Number(await orchard.getAttribute('data-transition-build-ms'))).toBeGreaterThan(0)
+  await expect(orchard).toHaveAttribute('data-frame-sample-count', '60', { timeout: 30_000 })
+})
+
 test('renders exact separate tree counts and lets the player walk', async ({ page }) => {
   test.setTimeout(45_000)
   const started = performance.now()

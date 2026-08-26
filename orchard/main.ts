@@ -1,5 +1,5 @@
 import './style.css'
-import { formatFps, frameTiming, percentile } from './frame'
+import { SettledFrameTelemetry, formatFps, frameTiming, percentile, type SettledFrameSnapshot } from './frame'
 import { mountOrchardWorld, type OrchardFrameStats, type RenderMode } from './render'
 import { clampGroundPosition, stepWalker, type WalkInput } from './walk'
 import { loadWorldSave } from './world'
@@ -15,6 +15,7 @@ const output = (selector: string): HTMLElement => document.querySelector<HTMLEle
 const fpsOut = output('[data-fps]')
 const frameMsOut = output('[data-frame-ms]')
 const p95FrameMsOut = output('[data-p95-frame-ms]')
+const frameSamplesOut = output('[data-frame-samples]')
 const modeOut = output('[data-render-mode-output]')
 const logicalOut = output('[data-logical]')
 const visibleOut = output('[data-visible]')
@@ -32,6 +33,7 @@ const drawCallsOut = output('[data-draw-calls]')
 const geometriesOut = output('[data-geometries]')
 const trianglesOut = output('[data-triangles]')
 const buildMsOut = output('[data-build-ms]')
+const transitionBuildMsOut = output('[data-transition-build-ms]')
 const lodMsOut = output('[data-lod-ms]')
 const applyButton = form.querySelector<HTMLButtonElement>('button')!
 const presetButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-preset]')]
@@ -64,7 +66,7 @@ async function boot(): Promise<void> {
   let pitch = savedWorld.player.pitch
   let player = { x: savedWorld.player.x, z: savedWorld.player.z }
   let previousFrame = performance.now()
-  let recentFrameMs: number[] = []
+  const frameTelemetry = new SettledFrameTelemetry(60)
   let lastMetricsUpdate = 0
   let buildInFlight = false
   let activeMode: RenderMode = 'game'
@@ -95,12 +97,11 @@ async function boot(): Promise<void> {
     root.dataset['building'] = 'true'
     status.textContent = `Synchronizing ${count.toLocaleString()} logical trees…`
     try {
+      frameTelemetry.beginTransition()
       const build = await world.setCount(count)
       treeCount = count
       root.dataset['treeCount'] = String(build.trees)
       root.dataset['entityCount'] = String(build.entities)
-      buildMsOut.textContent = `${build.buildMs.toFixed(2)} ms`
-      recentFrameMs = []
       previousFrame = performance.now()
       status.textContent = `${build.trees.toLocaleString()} logical trees · representation residency updates during rendered frames`
       history.replaceState(null, '', `?trees=${count}`)
@@ -123,7 +124,13 @@ async function boot(): Promise<void> {
     })
   }
 
-  const mirrorFrameDatasets = (rendered: OrchardFrameStats): void => {
+  const mirrorFrameDatasets = (
+    rendered: OrchardFrameStats,
+    settled: SettledFrameSnapshot,
+    average: number,
+    p95: number,
+  ): void => {
+    const fps = average > 0 ? 1000 / average : 0
     root.dataset['renderMode'] = activeMode
     root.dataset['logicalCount'] = String(rendered.logical)
     root.dataset['visibleCount'] = String(rendered.visible)
@@ -142,14 +149,25 @@ async function boot(): Promise<void> {
     root.dataset['geometries'] = String(rendered.geometries)
     root.dataset['triangles'] = String(rendered.triangles)
     root.dataset['buildMs'] = rendered.buildMs.toFixed(3)
+    root.dataset['transitionBuildMs'] = settled.transitionBuildMs.toFixed(3)
+    root.dataset['frameSampleCount'] = String(settled.sampleCount)
+    root.dataset['fps'] = fps.toFixed(3)
+    root.dataset['averageFrameMs'] = average.toFixed(3)
+    root.dataset['p95FrameMs'] = p95.toFixed(3)
     root.dataset['lodCpuMs'] = rendered.lodMs.toFixed(3)
   }
 
-  const updateMetricText = (rendered: OrchardFrameStats, average: number, p95: number): void => {
+  const updateMetricText = (
+    rendered: OrchardFrameStats,
+    settled: SettledFrameSnapshot,
+    average: number,
+    p95: number,
+  ): void => {
     const fps = average > 0 ? 1000 / average : 0
     fpsOut.textContent = fps > 0 ? formatFps(fps) : '—'
     frameMsOut.textContent = `${average.toFixed(1)} ms`
     p95FrameMsOut.textContent = `${p95.toFixed(1)} ms`
+    frameSamplesOut.textContent = `${settled.sampleCount} / 60`
     modeOut.textContent = activeMode === 'game' ? 'Game LOD' : 'Raw full detail'
     logicalOut.textContent = rendered.logical.toLocaleString()
     visibleOut.textContent = rendered.visible.toLocaleString()
@@ -167,10 +185,8 @@ async function boot(): Promise<void> {
     geometriesOut.textContent = rendered.geometries.toLocaleString()
     trianglesOut.textContent = rendered.triangles.toLocaleString()
     buildMsOut.textContent = `${rendered.buildMs.toFixed(2)} ms`
+    transitionBuildMsOut.textContent = `${settled.transitionBuildMs.toFixed(2)} ms`
     lodMsOut.textContent = `${rendered.lodMs.toFixed(2)} ms`
-    root.dataset['fps'] = fps.toFixed(3)
-    root.dataset['averageFrameMs'] = average.toFixed(3)
-    root.dataset['p95FrameMs'] = p95.toFixed(3)
     status.textContent = rendered.error === null
       ? `${rendered.logical.toLocaleString()} logical · ${rendered.visible.toLocaleString()} visible · ${rendered.resident.toLocaleString()} resident · ${rendered.pending.toLocaleString()} pending`
       : `Representation error: ${rendered.error}`
@@ -193,16 +209,19 @@ async function boot(): Promise<void> {
     )
     world.setPlayer(player.x, player.z, yaw, pitch)
     const rendered = world.render()
+    const settled = frameTelemetry.record({
+      frameMs: timing.sampleMs,
+      pending: rendered.pending,
+      buildMs: rendered.buildMs,
+    })
+    const average = settled.samples.reduce((sum, value) => sum + value, 0) / Math.max(1, settled.sampleCount)
+    const p95 = percentile(settled.samples, 0.95)
     root.dataset['playerX'] = player.x.toFixed(3)
     root.dataset['playerZ'] = player.z.toFixed(3)
-    mirrorFrameDatasets(rendered)
-    recentFrameMs.push(timing.sampleMs)
-    if (recentFrameMs.length > 90) recentFrameMs.shift()
+    mirrorFrameDatasets(rendered, settled, average, p95)
     if (now - lastMetricsUpdate >= 250) {
-      const average = recentFrameMs.reduce((sum, value) => sum + value, 0) / Math.max(1, recentFrameMs.length)
-      updateMetricText(rendered, average, percentile(recentFrameMs, 0.95))
+      updateMetricText(rendered, settled, average, p95)
       lastMetricsUpdate = now
-      recentFrameMs = recentFrameMs.slice(-60)
     }
     animationFrame = requestAnimationFrame(frame)
   }
@@ -260,9 +279,9 @@ async function boot(): Promise<void> {
     listen(input, 'change', () => {
       if (!input.checked) return
       activeMode = input.value as RenderMode
+      frameTelemetry.beginTransition()
       world.setMode(activeMode)
       root.dataset['renderMode'] = activeMode
-      recentFrameMs = []
       status.textContent = activeMode === 'game'
         ? 'Switching to camera-driven Game LOD…'
         : 'Switching every logical tree to Raw full detail…'

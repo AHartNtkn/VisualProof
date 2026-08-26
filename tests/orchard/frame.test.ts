@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatFps, frameTiming, percentile } from '../../orchard/frame'
+import { SettledFrameTelemetry, formatFps, frameTiming, percentile } from '../../orchard/frame'
 
 describe('frameTiming', () => {
   it('reports the full frame duration while bounding only movement catch-up', () => {
@@ -28,5 +28,51 @@ describe('percentile', () => {
 
   it('returns zero for an empty rolling window', () => {
     expect(percentile([], 0.95)).toBe(0)
+  })
+})
+
+describe('settled frame telemetry', () => {
+  it('excludes drain frames, resets on completion, and retains summed transition build CPU', () => {
+    const telemetry = new SettledFrameTelemetry(60)
+    telemetry.record({ frameMs: 16, pending: 0, buildMs: 0 })
+    telemetry.beginTransition()
+
+    telemetry.record({ frameMs: 120, pending: 2, buildMs: 1.25 })
+    expect(telemetry.snapshot()).toMatchObject({ sampleCount: 1, transitionBuildMs: 1.25, transitionComplete: false })
+    telemetry.record({ frameMs: 80, pending: 0, buildMs: 2.75 })
+
+    expect(telemetry.snapshot()).toMatchObject({
+      samples: [],
+      sampleCount: 0,
+      transitionBuildMs: 4,
+      transitionComplete: true,
+    })
+    telemetry.record({ frameMs: 20, pending: 0, buildMs: 0 })
+    expect(telemetry.snapshot().samples).toEqual([20])
+  })
+
+  it('resets a zero-work transition and caps the complete post-drain window at 60 samples', () => {
+    const telemetry = new SettledFrameTelemetry(60)
+    for (let frame = 1; frame <= 60; frame++) telemetry.record({ frameMs: frame, pending: 0, buildMs: 0 })
+    expect(telemetry.snapshot().sampleCount).toBe(60)
+
+    telemetry.beginTransition()
+    telemetry.record({ frameMs: 999, pending: 0, buildMs: 0 })
+    expect(telemetry.snapshot()).toMatchObject({ sampleCount: 0, transitionBuildMs: 0, transitionComplete: true })
+
+    for (let frame = 1; frame <= 61; frame++) telemetry.record({ frameMs: frame, pending: 0, buildMs: 0 })
+    expect(telemetry.snapshot().samples).toEqual(Array.from({ length: 60 }, (_, index) => index + 2))
+  })
+
+  it('resets settled samples after camera-driven residency work drains', () => {
+    const telemetry = new SettledFrameTelemetry(60)
+    telemetry.record({ frameMs: 16, pending: 0, buildMs: 0 })
+    telemetry.record({ frameMs: 90, pending: 1, buildMs: 3 })
+    expect(telemetry.snapshot().samples).toEqual([16])
+
+    telemetry.record({ frameMs: 70, pending: 0, buildMs: 2 })
+
+    expect(telemetry.snapshot().samples).toEqual([])
+    expect(telemetry.snapshot().transitionBuildMs).toBe(0)
   })
 })

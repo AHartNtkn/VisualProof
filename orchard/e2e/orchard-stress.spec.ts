@@ -17,6 +17,7 @@ type StressRow = {
   entities: number
   buildMs: number
   settleMs: number
+  frameSamples: number
   fps: number
   frameMs: number
   p95FrameMs: number
@@ -40,11 +41,13 @@ const requestedCounts = (process.env['ORCHARD_STRESS_COUNTS'] ?? '10,50,100,250,
   .filter((count) => Number.isInteger(count) && count > 0)
 if (requestedCounts.length === 0) throw new Error('ORCHARD_STRESS_COUNTS must contain at least one positive integer')
 const REPRESENTATION_TIMEOUT_MS = 10 * 60_000
+const STEADY_FRAME_COUNT = 60
+const PER_ROW_MARGIN_MS = 5 * 60_000
 
 test.skip(!enabled, 'machine-specific stress sweep; run npm run stress:orchard')
 
 test(`measures ${requestedMode} rendering across increasing counts`, async ({ page }) => {
-  test.setTimeout(20 * 60_000)
+  test.setTimeout(requestedCounts.length * (REPRESENTATION_TIMEOUT_MS + PER_ROW_MARGIN_MS) + PER_ROW_MARGIN_MS)
   const pageErrors: Error[] = []
   page.on('pageerror', (error) => pageErrors.push(error))
   const orchard = page.locator('[data-orchard]')
@@ -96,7 +99,9 @@ test(`measures ${requestedMode} rendering across increasing counts`, async ({ pa
       throw error
     }
     const settleMs = performance.now() - settleStarted
-    await page.waitForTimeout(2500)
+    await expect(orchard).toHaveAttribute('data-frame-sample-count', String(STEADY_FRAME_COUNT), {
+      timeout: PER_ROW_MARGIN_MS,
+    })
     const row = await orchard.evaluate((element, { mode, settleMs }): StressRow => {
       const dataset = (element as HTMLElement).dataset
       const number = (name: string): number => {
@@ -116,8 +121,9 @@ test(`measures ${requestedMode} rendering across increasing counts`, async ({ pa
         pendingRepresentations: number('pendingRepresentations'),
         pointLights: number('pointLightCount'),
         entities: number('representedProofEntities'),
-        buildMs: number('buildMs'),
+        buildMs: number('transitionBuildMs'),
         settleMs,
+        frameSamples: number('frameSampleCount'),
         fps: number('fps'),
         frameMs: number('averageFrameMs'),
         p95FrameMs: number('p95FrameMs'),
@@ -130,7 +136,9 @@ test(`measures ${requestedMode} rendering across increasing counts`, async ({ pa
       trees: count,
       pendingRepresentations: 0,
       pointLights: 0,
+      frameSamples: STEADY_FRAME_COUNT,
     })
+    expect(row.buildMs).toBeGreaterThan(0)
     expect(row.full + row.reduced + row.marker + row.culled).toBe(row.trees)
     expect(await orchard.getAttribute('data-instanced-count')).toBe('0')
     rows.push(row)
