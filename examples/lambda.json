@@ -1,0 +1,141 @@
+{
+  "format": "visual-proof-theory",
+  "version": 2,
+  "relations": [],
+  "theorems": [
+    {
+      "name": "LambdaWorkflow",
+      "lhs": {
+        "diagram": {
+          "root": "r0",
+          "regions": {
+            "r0": {
+              "kind": "sheet"
+            }
+          },
+          "nodes": {
+            "n": {
+              "kind": "term",
+              "region": "r0",
+              "term": "F(0)",
+              "freeArity": 1
+            },
+            "pin": {
+              "kind": "identity",
+              "region": "r0",
+              "sig": {
+                "kind": "iota"
+              },
+              "arity": 1
+            },
+            "pin_0": {
+              "kind": "identity",
+              "region": "r0",
+              "sig": {
+                "kind": "iota"
+              },
+              "arity": 1
+            }
+          },
+          "wires": {
+            "w": {
+              "sig": {
+                "kind": "iota"
+              },
+              "endpoints": [
+                {
+                  "node": "n",
+                  "port": "out"
+                },
+                {
+                  "node": "pin",
+                  "port": "i:0"
+                }
+              ]
+            },
+            "w_0": {
+              "sig": {
+                "kind": "iota"
+              },
+              "endpoints": [
+                {
+                  "node": "pin_0",
+                  "port": "i:0"
+                },
+                {
+                  "node": "n",
+                  "port": "f:0"
+                }
+              ]
+            }
+          }
+        },
+        "boundary": []
+      },
+      "rhs": {
+        "diagram": {
+          "root": "r0",
+          "regions": {
+            "r0": {
+              "kind": "sheet"
+            }
+          },
+          "nodes": {},
+          "wires": {}
+        },
+        "boundary": []
+      },
+      "actions": [],
+      "backActions": [
+        {
+          "label": "Lambda expression",
+          "steps": [
+            {
+              "rule": "lambdaTermSpawn",
+              "region": "r0",
+              "term": "A(L(B(0)),F(0))",
+              "freeArity": 1
+            }
+          ],
+          "placements": [
+            {
+              "introducedNode": 0,
+              "x": 80,
+              "y": 120
+            }
+          ]
+        },
+        {
+          "label": "Normalize Lambda term",
+          "steps": [
+            {
+              "rule": "lambdaConversion",
+              "node": "n",
+              "term": "F(0)",
+              "correspondence": {
+                "commonArity": 1,
+                "left": [
+                  0
+                ],
+                "right": [
+                  0
+                ]
+              },
+              "certificate": {
+                "leftSteps": [
+                  {
+                    "kind": "beta",
+                    "path": []
+                  }
+                ],
+                "rightSteps": []
+              },
+              "attachments": {}
+            }
+          ],
+          "placements": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,10 +1,84 @@
 import { expect, type Page } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { test } from './zero-signature-fixture'
 import { DARK, LIGHT } from '../src/view/paint'
 import { formulaToDiagram } from '../src/formula'
+import { loadTheory } from '../src/kernel/proof/store'
+import { mkReplay } from '../src/app/replay'
 import { scene3 } from '../src/view3d/scene'
 import { FOV_DEG, eyeOf, fitPose } from '../src/view3d/camera'
 import { cross3, dot3, norm3, sub3 } from '../src/view3d/vec3'
+
+test('a normally loaded Lambda proof remains rendered and pickable in 3D', async ({ page }) => {
+  const lambdaFile = resolve('examples/lambda.json')
+  const loaded = loadTheory(JSON.parse(await readFile(lambdaFile, 'utf8')))
+  const expectedDiagram = mkReplay('LambdaWorkflow', loaded.ctx).diagramAt(1)
+  const expectedScene = scene3(expectedDiagram)
+  const lambdaStrokes = expectedScene.entities.filter((entity) => entity.kind === 'lambda')
+  expect(lambdaStrokes.length).toBeGreaterThan(0)
+
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await page.locator('#open-file-input').setInputFiles(lambdaFile)
+  await page.locator('#library')
+    .getByRole('button', { name: '▸ lambda.json', exact: true }).click()
+  await page.locator('#library').locator('.vpa-lib-detail')
+    .filter({ hasText: 'LambdaWorkflow' })
+    .getByRole('button', { name: '▶ Replay', exact: true })
+    .click()
+  await page.keyboard.press('ArrowRight')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.replay().k)).toBe(1)
+
+  await page.getByRole('button', { name: 'Utilities', exact: true }).click()
+  await page.getByRole('button', { name: '3D view', exact: true }).click()
+  const canvas3 = page.locator('canvas[data-view3]')
+  await expect(canvas3).toBeVisible()
+  await page.waitForTimeout(900)
+
+  const box = await canvas3.boundingBox()
+  if (box === null) throw new Error('the 3D Lambda canvas has no bounding box')
+  const aspect = box.width / box.height
+  const pose = fitPose(expectedScene.center, expectedScene.radius, aspect)
+  const eye = eyeOf(pose)
+  const fwd = norm3(sub3(pose.target, eye))
+  const right = norm3(cross3(fwd, { x: 0, y: 1, z: 0 }))
+  const up = cross3(right, fwd)
+  const tanHalf = Math.tan((FOV_DEG * Math.PI) / 360)
+  const project = (point: { x: number; y: number; z: number }) => {
+    const d = sub3(point, eye)
+    const z = dot3(d, fwd)
+    return {
+      x: box.x + ((dot3(d, right) / z / (tanHalf * aspect)) + 1) / 2 * box.width,
+      y: box.y + (1 - dot3(d, up) / z / tanHalf) / 2 * box.height,
+    }
+  }
+  const candidates = lambdaStrokes.flatMap((stroke) => stroke.pts.slice(1).map((point, index) => {
+    const before = stroke.pts[index]!
+    return project({
+      x: (before.x + point.x) / 2,
+      y: (before.y + point.y) / 2,
+      z: (before.z + point.z) / 2,
+    })
+  }))
+  const wrap = page.locator('div[data-view3-hover]')
+  let picked = ''
+  let pickedPoint = candidates[0]!
+  for (const candidate of candidates) {
+    await page.mouse.move(candidate.x, candidate.y)
+    await page.waitForTimeout(35)
+    const hover = (await wrap.getAttribute('data-view3-hover')) ?? ''
+    if (hover.startsWith('t:')) {
+      picked = hover
+      pickedPoint = candidate
+      break
+    }
+  }
+  expect(picked).toMatch(/^t:/u)
+  await page.mouse.click(pickedPoint.x, pickedPoint.y)
+  await expect.poll(async () => (await wrap.getAttribute('data-view3-focus')) ?? '')
+    .toBe(picked)
+})
 
 test('3D view mounts, renders the trunk, reports hover, and unmounts', async ({ page }) => {
   await page.goto('/')

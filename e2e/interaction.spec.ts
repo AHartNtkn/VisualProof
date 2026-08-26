@@ -1,4 +1,7 @@
 import type { Page } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import { termGeometry } from '../src/view/bend'
+import { parseTerm } from '../src/kernel/term/parse'
 import {
   expect,
   loadTinyTheory,
@@ -15,6 +18,7 @@ type Body = {
   readonly y: number
   readonly r: number
   readonly region: string
+  readonly theta: number
 }
 
 type InteractionDebug = {
@@ -30,6 +34,27 @@ type DebugHook = {
   wires(): readonly { id: string; x: number; y: number }[]
   wireBinds(): readonly { id: string; node: string; x: number; y: number }[]
   editJson(): string
+  theoryJson(): string
+  frameScale(): { readonly scale: number }
+  proofSnapshot(): null | {
+    readonly diagram: {
+      readonly nodes: Record<string, {
+        readonly kind: string
+        readonly arity?: number
+        readonly freeArity?: number
+        readonly term?: string
+      }>
+      readonly wires: Record<string, {
+        readonly endpoints: readonly { readonly node: string; readonly port: string }[]
+      }>
+    }
+    readonly actions: readonly {
+      readonly label: string
+      readonly steps: readonly { readonly rule: string }[]
+    }[]
+    readonly cursor: number
+    readonly orientation: 'forward' | 'backward'
+  }
   interaction(): InteractionDebug
 }
 
@@ -139,6 +164,53 @@ async function pagePointForBody(page: Page, id: string): Promise<Point> {
   return { x: box.x + local.x, y: box.y + local.y }
 }
 
+async function pagePointsForTermStrokes(
+  page: Page,
+  id: string,
+  source: string,
+  freeArity: number,
+): Promise<readonly Point[]> {
+  const geometry = termGeometry(parseTerm(source).term, freeArity)
+  const locals: Point[] = []
+  for (const arc of [...geometry.arcs, ...(geometry.exitArc === null ? [] : [geometry.exitArc])]) {
+    for (const fraction of [0.2, 0.4, 0.6, 0.8]) {
+      const angle = arc.a0 + (arc.a1 - arc.a0) * fraction
+      locals.push({ x: arc.r * Math.cos(angle), y: arc.r * Math.sin(angle) })
+    }
+  }
+  for (const radial of geometry.radials) {
+    for (const fraction of [0.25, 0.5, 0.75]) {
+      const radius = radial.r0 + (radial.r1 - radial.r0) * fraction
+      locals.push({ x: Math.cos(radial.angle) * radius, y: Math.sin(radial.angle) * radius })
+    }
+  }
+  if (geometry.exitLine !== null) {
+    locals.push(...[0.25, 0.5, 0.75].map((fraction) => ({
+      x: geometry.exitLine![0].x + (geometry.exitLine![1].x - geometry.exitLine![0].x) * fraction,
+      y: geometry.exitLine![0].y + (geometry.exitLine![1].y - geometry.exitLine![0].y) * fraction,
+    })))
+  }
+  const worlds = await page.evaluate(({ bodyId, localPoints }) => {
+    const debug = (window as DebugWindow).__vpaDebug!
+    const body = debug.bodies().find((candidate) => candidate.id === bodyId)
+    if (body === undefined) throw new Error(`term body '${bodyId}' is not rendered`)
+    const scale = 1.4 * debug.frameScale().scale
+    const cosine = Math.cos(body.theta)
+    const sine = Math.sin(body.theta)
+    return localPoints.map((localPoint) => ({
+      x: body.x + scale * (localPoint.x * cosine - localPoint.y * sine),
+      y: body.y + scale * (localPoint.x * sine + localPoint.y * cosine),
+    }))
+  }, { bodyId: id, localPoints: locals })
+  const box = await page.locator('#c').boundingBox()
+  if (box === null) throw new Error('the main canvas has no bounding box')
+  const view = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.view())
+  return worlds.map((world) => ({
+    x: box.x + world.x * view.scale + view.offsetX,
+    y: box.y + world.y * view.scale + view.offsetY,
+  }))
+}
+
 async function voidPoint(page: Page): Promise<Point> {
   const box = await page.locator('#c').boundingBox()
   if (box === null) throw new Error('the main canvas has no bounding box')
@@ -166,6 +238,125 @@ async function stroke(
   await page.mouse.up()
   for (const modifier of [...modifiers].reverse()) await page.keyboard.up(modifier)
 }
+
+test('Lambda proof actions survive double-click history and normal save/reload', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => (window as DebugWindow).__vpaDebug !== undefined)
+  await openMode(page)
+  await page.getByRole('button', { name: 'Prove backward', exact: true }).click()
+
+  const spawnAt = await voidPoint(page)
+  await page.mouse.click(spawnAt.x, spawnAt.y, { button: 'right' })
+  const lambdaRow = page.locator('.vpa-spawn-cascade')
+    .getByRole('button', { name: 'Lambda expression', exact: true })
+  await expect(lambdaRow).toBeVisible()
+  await lambdaRow.click()
+  const input = page.getByLabel('Lambda term to spawn')
+  await input.fill('(\\x. x) a')
+  await input.press('Enter')
+
+  await expect.poll(() => page.evaluate(() => {
+    const snapshot = (window as DebugWindow).__vpaDebug!.proofSnapshot()
+    return snapshot === null ? null : {
+      cursor: snapshot.cursor,
+      rules: snapshot.actions.flatMap((action) => action.steps.map((step) => step.rule)),
+      terms: Object.values(snapshot.diagram.nodes).filter((node) => node.kind === 'term').length,
+      unaryCaps: Object.values(snapshot.diagram.nodes)
+        .filter((node) => node.kind === 'identity' && node.arity === 1).length,
+    }
+  })).toEqual({ cursor: 1, rules: ['lambdaTermSpawn'], terms: 1, unaryCaps: 2 })
+
+  const termId = await page.evaluate(() => {
+    const snapshot = (window as DebugWindow).__vpaDebug!.proofSnapshot()!
+    return Object.entries(snapshot.diagram.nodes).find(([, node]) => node.kind === 'term')![0]
+  })
+  const candidates = await pagePointsForTermStrokes(page, termId, '(\\x. x) a', 1)
+  let termPoint: Point | null = null
+  for (const candidate of candidates) {
+    await page.mouse.click(candidate.x, candidate.y)
+    if ((await selected(page)).some((hit) => hit.kind === 'node' && hit.id === termId)) {
+      termPoint = candidate
+      break
+    }
+  }
+  expect(termPoint, 'no painted Lambda stroke resolved through the real 2D hit-test path').not.toBeNull()
+  if (termPoint === null) throw new Error('no painted Lambda stroke was pickable')
+  await page.mouse.dblclick(termPoint.x, termPoint.y)
+  await expect.poll(() => page.evaluate(() => {
+    const snapshot = (window as DebugWindow).__vpaDebug!.proofSnapshot()!
+    return {
+      cursor: snapshot.cursor,
+      rules: snapshot.actions.flatMap((action) => action.steps.map((step) => step.rule)),
+    }
+  })).toEqual({ cursor: 2, rules: ['lambdaTermSpawn', 'lambdaConversion'] })
+
+  await page.locator('.vpa-temporal-undo').click()
+  await expect.poll(() => page.evaluate(() =>
+    (window as DebugWindow).__vpaDebug!.proofSnapshot()!.cursor)).toBe(1)
+  await page.locator('.vpa-temporal-redo').click()
+  await expect.poll(() => page.evaluate(() =>
+    (window as DebugWindow).__vpaDebug!.proofSnapshot()!.cursor)).toBe(2)
+
+  await page.locator('#theorem-name').fill('LambdaWorkflow')
+  await page.getByRole('button', { name: 'Declare / assemble + check', exact: true }).click()
+  await page.getByRole('button', { name: 'Utilities', exact: true }).click()
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Save theory', exact: true }).click()
+  const download = await downloadPromise
+  const savedPath = await download.path()
+  if (savedPath === null) throw new Error('saved Lambda theory has no download path')
+
+  await page.goto('/?debug')
+  await page.waitForFunction(() => (window as DebugWindow).__vpaDebug !== undefined)
+  await page.locator('#open-file-input').setInputFiles({
+    name: 'lambda-round-trip.json',
+    mimeType: 'application/json',
+    buffer: await readFile(savedPath),
+  })
+  await expect(page.locator('#library').getByRole('button', {
+    name: 'Unload lambda-round-trip.json',
+    exact: true,
+  })).toBeVisible()
+  const loaded = await page.evaluate(() => JSON.parse(
+    (window as DebugWindow).__vpaDebug!.theoryJson(),
+  ) as {
+    theorems: readonly {
+      name: string
+      actions: readonly { steps: readonly { rule: string }[] }[]
+      backActions?: readonly { steps: readonly { rule: string }[] }[]
+    }[]
+  })
+  const theorem = loaded.theorems.find((candidate) => candidate.name === 'LambdaWorkflow')
+  expect(theorem).toBeDefined()
+  expect(theorem!.actions).toEqual([])
+  expect(theorem!.backActions?.flatMap((action) => action.steps.map((step) => step.rule)))
+    .toEqual(['lambdaTermSpawn', 'lambdaConversion'])
+
+  await page.locator('#library')
+    .getByRole('button', { name: '▸ lambda-round-trip.json', exact: true }).click()
+  await page.locator('#library').locator('.vpa-lib-detail')
+    .filter({ hasText: 'LambdaWorkflow' })
+    .getByRole('button', { name: '▶ Replay', exact: true })
+    .click()
+  await expect.poll(() => page.evaluate(() => {
+    const debug = (window as DebugWindow).__vpaDebug as DebugHook & {
+      replay(): { n: number; k: number }
+      diagram(): {
+        nodes: readonly { kind: string }[]
+        wires: readonly { endpoints: number }[]
+      }
+    }
+    const replay = debug.replay()
+    const diagram = debug.diagram()
+    return {
+      actions: replay.n,
+      cursor: replay.k,
+      terms: diagram.nodes.filter((node) => node.kind === 'term').length,
+      caps: diagram.nodes.filter((node) => node.kind === 'identity').length,
+      wireEnds: diagram.wires.map((wire) => wire.endpoints).sort(),
+    }
+  })).toEqual({ actions: 2, cursor: 0, terms: 1, caps: 2, wireEnds: [2, 2] })
+})
 
 async function physicsDrag(
   page: Page,
