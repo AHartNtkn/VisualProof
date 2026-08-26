@@ -1,6 +1,7 @@
 import type { Diagram, DiagramNode, NodeId, Port, RegionId, WireId } from '../diagram'
 import { DiagramError } from '../diagram'
 import { sigKey } from '../sig'
+import { serializeTerm } from '../../term/serialize'
 
 /**
  * SHARED JOINT COLOR-REFINEMENT ENGINE.
@@ -60,6 +61,10 @@ export type RefineIndex = {
 function endpointKey(d: Diagram, node: NodeId, port: Port): string {
   const n = d.nodes[node]!
   switch (n.kind) {
+    case 'term':
+      if (port.kind === 'output') return 'out'
+      if (port.kind === 'free') return `f${port.index}`
+      throw new DiagramError(`term '${node}' cannot carry port '${port.kind}'`)
     case 'atom':
       if (port.kind === 'head') return 'hd'
       if (port.kind === 'arg') return `a${port.index}`
@@ -117,6 +122,11 @@ export function buildRefineIndex(d: Diagram, pins: readonly WireId[]): RefineInd
   const identityIncidentWires = new Map<NodeId, WireId[]>()
   const nodeCanon = (n: DiagramNode): { contentKey: string; portOrder: string[] } => {
     switch (n.kind) {
+      case 'term':
+        return {
+          contentKey: `term:${serializeTerm(n.term)}:${n.freeArity}`,
+          portOrder: ['out', ...Array.from({ length: n.freeArity }, (_, i) => `f${i}`)],
+        }
       case 'atom':
         return {
           contentKey: `atom|${sigKey(n.sig)}`,

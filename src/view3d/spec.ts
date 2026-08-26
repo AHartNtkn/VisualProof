@@ -6,7 +6,7 @@ export type RegionSpec = { id: RegionId; parent: RegionId | null; items: SceneIt
 export type NodeSpec = {
   id: NodeId
   region: RegionId
-  kind: 'identity' | 'atom' | 'ref'
+  kind: 'identity' | 'term' | 'atom' | 'ref'
   label: string | null
   portKeys: string[]
 }
@@ -32,6 +32,7 @@ export function diagramSpec(d: Diagram): DiagramSpec {
     const portKeys =
       n.kind === 'atom' ? ['hd', ...n.sig.args.map((_, i) => `a:${i}`)]
       : n.kind === 'ref' ? n.sig.args.map((_, i) => `a:${i}`)
+      : n.kind === 'term' ? ['out', ...Array.from({ length: n.freeArity }, (_, i) => `f:${i}`)]
       : []
     nodes.set(nid, {
       id: nid, region: n.region, kind: n.kind,

@@ -17,7 +17,7 @@ import {
 } from './spawn'
 
 export type StructuralSpawnRequest = {
-  readonly node: Exclude<DiagramNode, { readonly kind: 'identity' }>
+  readonly node: Exclude<DiagramNode, { readonly kind: 'identity' | 'term' }>
   readonly region: RegionId
   readonly wires: readonly WireId[]
 }

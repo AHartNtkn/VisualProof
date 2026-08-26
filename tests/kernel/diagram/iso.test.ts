@@ -9,6 +9,8 @@ import {
   sameDiagram,
 } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { spawnTermNode } from '../../../src/kernel/diagram/spawn'
+import { parseTerm } from '../../../src/kernel/term/parse'
 
 /**
  * Disjoint rings of arity-2 identity nodes joined pairwise by wires.
@@ -70,6 +72,20 @@ function hubbedRings(sizes: readonly number[]): ReturnType<typeof mkDiagram> {
 const rel1 = relSig([IOTA])
 
 describe('pairwise diagram isomorphism', () => {
+  it('treats serialized nameless term structure and free arity as canonical content', () => {
+    const make = (source: string, interfaceArity: number, root: string) => {
+      const empty = mkDiagram({ root, regions: { [root]: { kind: 'sheet' } } })
+      return spawnTermNode(empty, root, parseTerm(source).term, interfaceArity).diagram
+    }
+
+    expect(sameDiagram(make('\\x. x y', 1, 'left'), make('\\z. z y', 1, 'right')))
+      .toBe(true)
+    expect(sameDiagram(make('\\x. x y', 1, 'left'), make('\\x. y x', 1, 'right')))
+      .toBe(false)
+    expect(sameDiagram(make('\\x. x y', 1, 'left'), make('\\x. x y', 2, 'right')))
+      .toBe(false)
+  })
+
   it('SOUNDNESS: one six-ring is not two three-rings (refinement-blind pair)', () => {
     expect(sameDiagram(rings([6]), rings([3, 3]))).toBe(false)
     expect(sameDiagram(rings([3, 3]), rings([6]))).toBe(false)

@@ -4,6 +4,7 @@ import type { RelSig, Sig } from './sig'
 import { assertWellFormedSig, IOTA, relSig } from './sig'
 import type { DiagramWithBoundary } from './boundary'
 import { mkDiagramWithBoundary } from './boundary'
+import { deserializeTerm, serializeTerm } from '../term/serialize'
 
 /** Serialize semantic diagram content with IDs preserved verbatim. */
 export function diagramToJson(diagram: Diagram): unknown {
@@ -14,6 +15,13 @@ export function diagramToJson(diagram: Diagram): unknown {
 
   const nodeToJson = (node: DiagramNode): Record<string, unknown> => {
     switch (node.kind) {
+      case 'term':
+        return {
+          kind: 'term',
+          region: node.region,
+          term: serializeTerm(node.term),
+          freeArity: node.freeArity,
+        }
       case 'atom':
         return { kind: 'atom', region: node.region, sig: sigToJson(node.sig) }
       case 'ref':
@@ -133,8 +141,10 @@ export function dwbFromJson(value: unknown, what = 'pattern'): DiagramWithBounda
 }
 
 export function parsePortKey(key: string): Port {
+  if (key === 'out') return { kind: 'output' }
   if (key === 'hd') return { kind: 'head' }
   for (const [prefix, kind] of [
+    ['f:', 'free'],
     ['a:', 'arg'],
     ['i:', 'identity'],
   ] as const) {
@@ -181,6 +191,24 @@ function rawDiagramFromJson(json: unknown): Diagram {
   for (const [id, value] of Object.entries(jsonNodes)) {
     if (!isRecord(value) || typeof value.region !== 'string') {
       fail(`node '${id}' has unrecognized shape`)
+    }
+    if (
+      value.kind === 'term'
+      && typeof value.term === 'string'
+      && typeof value.freeArity === 'number'
+    ) {
+      assertOnlyKeys(value, ['kind', 'region', 'term', 'freeArity'], `node '${id}'`)
+      try {
+        nodes[id] = {
+          kind: 'term',
+          region: value.region,
+          term: deserializeTerm(value.term),
+          freeArity: value.freeArity,
+        }
+      } catch (error) {
+        fail(`node '${id}' term: ${error instanceof Error ? error.message : String(error)}`)
+      }
+      continue
     }
     if (value.kind === 'atom') {
       assertOnlyKeys(value, ['kind', 'region', 'sig'], `node '${id}'`)

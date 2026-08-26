@@ -64,6 +64,14 @@ export function refGeometry(arity: number): NodeGeometry {
   return circularGeometry(Array.from({ length: arity }, (_, index) => `a:${index}`))
 }
 
+/** Signature-indexed term shell; structural Lambda strokes replace its rail later. */
+export function termGeometry(freeArity: number): NodeGeometry {
+  return circularGeometry([
+    'out',
+    ...Array.from({ length: freeArity }, (_, index) => `f:${index}`),
+  ])
+}
+
 /**
  * Equality is a point node: every storage port is co-located at the body
  * centre. Port indices remain incidence locators, never visible geometry or
@@ -76,4 +84,3 @@ export function identityGeometry(arity: number): NodeGeometry {
   }
   return { outerRadius: 0, arcs: [], headAnchor: null, portAnchors }
 }
-

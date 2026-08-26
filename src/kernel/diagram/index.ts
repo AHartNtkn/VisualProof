@@ -1,5 +1,5 @@
 export type {
-  RegionId, NodeId, WireId, Region, IdentityDiagramNode, DiagramNode, Port,
+  RegionId, NodeId, WireId, Region, IdentityDiagramNode, TermDiagramNode, DiagramNode, Port,
   Endpoint, Wire, Diagram, DiagramParts,
 } from './diagram'
 export {

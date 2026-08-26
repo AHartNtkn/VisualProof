@@ -19,14 +19,13 @@ const nodeKinds = {
   atom: true,
   identity: true,
   ref: true,
+  term: true,
 } satisfies Record<DiagramNode['kind'], true>
 
 const sortedNodeKinds = Object.keys(nodeKinds).sort()
 
 const prohibitedSemanticSymbols = [
-  "kind: 'term'",
   "kind: 'body'",
-  'TermDiagramNode',
   'applyFusion',
   'applyFission',
   'applyCongruenceJoin',
@@ -37,9 +36,9 @@ const prohibitedSemanticSymbols = [
   'relCongruenceJoin',
 ] as const
 
-const removedRuleSymbols = prohibitedSemanticSymbols.slice(3)
+const removedRuleSymbols = prohibitedSemanticSymbols.slice(1)
 const prohibitedIdentifiers = new Set([
-  ...prohibitedSemanticSymbols.slice(2),
+  ...removedRuleSymbols,
   'TERM',
   'isExactReificationDefinition',
 ])
@@ -177,7 +176,7 @@ function isKindAccess(node: ts.Node): boolean {
 }
 
 function semanticKindLiteral(node: ts.StringLiteralLike): string | null {
-  if (node.text !== 'term' && node.text !== 'body') return null
+  if (node.text !== 'body') return null
   const owner = ts.isLiteralTypeNode(node.parent) ? node.parent.parent : node.parent
   if (
     (ts.isPropertyAssignment(owner) || ts.isPropertySignature(owner))
@@ -471,7 +470,7 @@ function decoderRejectionEvidence(): {
 
 describe('Phase-1 kernel vocabulary conformance', () => {
   it('has exactly atom, ref, and identity diagram nodes', () => {
-    expect(sortedNodeKinds).toEqual(['atom', 'identity', 'ref'])
+    expect(sortedNodeKinds).toEqual(['atom', 'identity', 'ref', 'term'])
   })
 
   it('physically removes every displaced Phase-1 authority', () => {

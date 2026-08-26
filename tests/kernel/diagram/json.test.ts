@@ -9,7 +9,9 @@ import {
 } from '../../../src/kernel/diagram/json'
 import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { spawnTermNode } from '../../../src/kernel/diagram/spawn'
 import { applyIdentification } from '../../../src/kernel/rules/identity-rules'
+import { parseTerm } from '../../../src/kernel/term/parse'
 
 function sample() {
   const relation = relSig([IOTA])
@@ -75,7 +77,26 @@ describe('diagram JSON', () => {
     })
     expect(sigFromJson(JSON.parse(JSON.stringify(sigToJson(sig))), 'wire')).toEqual(sig)
     expect(parsePortKey('i:12')).toEqual({ kind: 'identity', index: 12 })
+    expect(parsePortKey('out')).toEqual({ kind: 'output' })
+    expect(parsePortKey('f:12')).toEqual({ kind: 'free', index: 12 })
     expect(() => parsePortKey('i:1e2')).toThrowError(/unrecognized port key/)
+  })
+
+  it('round-trips injective nameless term content and its numeric interface', () => {
+    const empty = mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } } })
+    const term = parseTerm('\\x. x y').term
+    const spawned = spawnTermNode(empty, empty.root, term, 2)
+    const encoded = diagramToJson(spawned.diagram) as {
+      nodes: Record<string, unknown>
+    }
+
+    expect(encoded.nodes[spawned.node]).toEqual({
+      kind: 'term',
+      region: 'r0',
+      term: 'L(A(B(0),F(0)))',
+      freeArity: 2,
+    })
+    expect(diagramFromJson(JSON.parse(JSON.stringify(encoded)))).toEqual(spawned.diagram)
   })
 
   it('rejects unknown fields and legacy node/port vocabulary', () => {
@@ -89,14 +110,14 @@ describe('diagram JSON', () => {
     const legacyNode = JSON.parse(JSON.stringify(diagramToJson(sample()))) as {
       nodes: Record<string, unknown>
     }
-    legacyNode.nodes.ref = { kind: 'term', region: 'r1', term: '#0' }
+    legacyNode.nodes.ref = { kind: 'body', region: 'r1', content: {} }
     expect(() => diagramFromJson(legacyNode)).toThrowError(/unrecognized shape/)
 
     const legacyPort = JSON.parse(JSON.stringify(diagramToJson(sample()))) as {
       wires: Record<string, { endpoints: { port: string }[] }>
     }
-    legacyPort.wires.value!.endpoints[0]!.port = 'out'
-    expect(() => diagramFromJson(legacyPort)).toThrowError(/unrecognized port key 'out'/)
+    legacyPort.wires.value!.endpoints[0]!.port = 'v:x'
+    expect(() => diagramFromJson(legacyPort)).toThrowError(/unrecognized port key 'v:x'/)
   })
 
   it('revalidates decoded diagrams', () => {

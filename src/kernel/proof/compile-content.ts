@@ -12,7 +12,7 @@ import type {
 } from '../diagram/diagram'
 import { sameDiagram, diagramIso } from '../diagram/canonical/iso'
 import { diagramToJson } from '../diagram/json'
-import { mkDiagram } from '../diagram/diagram'
+import { mkDiagram, portKey } from '../diagram/diagram'
 import { derivedScope, derivedScopes, isAncestorOrEqual } from '../diagram/regions'
 import { bareWireDeletionSteps } from './bare-wire'
 import type { RelSig, Sig } from '../diagram/sig'
@@ -294,19 +294,22 @@ function nodeAttachments(
 ): { readonly head: WireId | undefined; readonly args: readonly WireId[] } {
   const diagram = content.diagram
   const node = diagram.nodes[nodeId]!
+  if (node.kind === 'term') {
+    throw new RuleError(`content compilation does not support term node '${nodeId}'`)
+  }
   const byPort = new Map<string, WireId>()
   for (const [wireId, wire] of Object.entries(diagram.wires)) {
     for (const endpoint of wire.endpoints) {
       if (endpoint.node !== nodeId) continue
-      const port = endpoint.port
-      const key = port.kind === 'head' ? 'hd' : `${port.kind}:${port.index}`
-      byPort.set(key, wireId)
+      byPort.set(portKey(endpoint.port), wireId)
     }
   }
   const arity = node.kind === 'identity' ? node.arity : node.sig.args.length
-  const portKind = node.kind === 'identity' ? 'identity' : 'arg'
   const args = Array.from({ length: arity }, (_, index) => {
-    const wire = byPort.get(`${portKind}:${index}`)
+    const port = node.kind === 'identity'
+      ? { kind: 'identity' as const, index }
+      : { kind: 'arg' as const, index }
+    const wire = byPort.get(portKey(port))
     if (wire === undefined) {
       throw new RuleError(
         `content node '${nodeId}' has no attachment at position ${index}`,
@@ -1254,8 +1257,7 @@ export function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofS
       const dyingId = aSurvived ? step.input.b : step.input.a
       const dying = preWire(dyingId)
       const key = (endpoint: Endpoint): string =>
-        `${endpoint.node}|${endpoint.port.kind}|${
-          endpoint.port.kind === 'head' ? '' : endpoint.port.index}`
+        `${endpoint.node}|${portKey(endpoint.port)}`
       const movedKeys = new Set(dying.endpoints.map(key))
       const keep = post.wires[survivorPost]!.endpoints.filter((endpoint) =>
         !movedKeys.has(key(endpoint)))

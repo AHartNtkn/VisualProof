@@ -3,6 +3,7 @@ import { endpointPositionKey } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
 import { derivedScope, derivedScopes, isAncestorOrEqual } from '../regions'
 import { sigEquals, sigKey } from '../sig'
+import { serializeTerm } from '../../term/serialize'
 
 /** A complete structural witness that an open pattern occurs in a host. */
 export type OccurrenceCertificate = {
@@ -119,6 +120,15 @@ export function checkOccurrenceCertificate(
       return fail(`node '${patternNode}' has incompatible image '${hostNode}'`)
     }
     switch (source.kind) {
+      case 'term':
+        if (
+          target.kind !== 'term'
+          || source.freeArity !== target.freeArity
+          || serializeTerm(source.term) !== serializeTerm(target.term)
+        ) {
+          return fail(`term '${patternNode}' has incompatible image '${hostNode}'`)
+        }
+        break
       case 'atom':
         if (target.kind !== 'atom' || !sigEquals(source.sig, target.sig)) {
           return fail(

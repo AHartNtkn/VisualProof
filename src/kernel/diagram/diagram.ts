@@ -1,5 +1,7 @@
+import type { Term } from '../term/term'
+import { assertWellFormedTerm } from '../term/term'
 import type { Sig, RelSig } from './sig'
-import { assertWellFormedSig, sigEquals, sigKey } from './sig'
+import { assertWellFormedSig, IOTA, sigEquals, sigKey } from './sig'
 
 export type RegionId = string
 export type NodeId = string
@@ -21,12 +23,22 @@ export type IdentityDiagramNode = {
   readonly arity: number
 }
 
+export type TermDiagramNode = {
+  readonly kind: 'term'
+  readonly region: RegionId
+  readonly term: Term
+  readonly freeArity: number
+}
+
 export type DiagramNode =
+  | TermDiagramNode
   | { readonly kind: 'atom'; readonly region: RegionId; readonly sig: RelSig }
   | { readonly kind: 'ref'; readonly region: RegionId; readonly defId: string; readonly sig: RelSig }
   | IdentityDiagramNode
 
 export type Port =
+  | { readonly kind: 'output' }
+  | { readonly kind: 'free'; readonly index: number }
   | { readonly kind: 'arg'; readonly index: number }
   | { readonly kind: 'head' }
   | { readonly kind: 'identity'; readonly index: number }
@@ -70,6 +82,8 @@ export class DiagramError extends Error {
 
 export function portKey(port: Port): string {
   switch (port.kind) {
+    case 'output': return 'out'
+    case 'free': return `f:${port.index}`
     case 'arg': return `a:${port.index}`
     case 'head': return 'hd'
     case 'identity': return `i:${port.index}`
@@ -91,6 +105,10 @@ export function portKey(port: Port): string {
 export function endpointPositionKey(diagram: Diagram, endpoint: Endpoint): string {
   const node = diagram.nodes[endpoint.node]!
   switch (node.kind) {
+    case 'term':
+      if (endpoint.port.kind === 'output') return 'out'
+      if (endpoint.port.kind === 'free') return `f:${endpoint.port.index}`
+      throw new DiagramError(`term node cannot carry port kind '${endpoint.port.kind}'`)
     case 'atom':
       if (endpoint.port.kind === 'head') return 'hd'
       if (endpoint.port.kind === 'arg') return `a:${endpoint.port.index}`
@@ -107,6 +125,14 @@ export function endpointPositionKey(diagram: Diagram, endpoint: Endpoint): strin
 /** The exact storage ports a node must have attached. */
 export function requiredPorts(node: DiagramNode): Port[] {
   switch (node.kind) {
+    case 'term':
+      return [
+        { kind: 'output' },
+        ...Array.from(
+          { length: node.freeArity },
+          (_, index): Port => ({ kind: 'free', index }),
+        ),
+      ]
     case 'atom':
       return [
         { kind: 'head' },
@@ -125,6 +151,17 @@ export function requiredPorts(node: DiagramNode): Port[] {
 /** The signature accepted by one concrete storage port. */
 export function portSig(node: DiagramNode, port: Port): Sig {
   switch (node.kind) {
+    case 'term':
+      if (port.kind === 'output') return IOTA
+      if (
+        port.kind === 'free'
+        && Number.isSafeInteger(port.index)
+        && port.index >= 0
+        && port.index < node.freeArity
+      ) {
+        return IOTA
+      }
+      break
     case 'atom':
       if (port.kind === 'head') return node.sig
       if (port.kind === 'arg') {
@@ -212,6 +249,16 @@ export function validateRawDiagram(
       fail(`node '${id}' is in missing region '${node.region}'`)
     }
     switch (node.kind) {
+      case 'term':
+        if (!Number.isSafeInteger(node.freeArity) || node.freeArity < 0) {
+          fail(`term node '${id}' freeArity must be a natural number, got '${String(node.freeArity)}'`)
+        }
+        try {
+          assertWellFormedTerm(node.term, node.freeArity)
+        } catch (error) {
+          fail(`term node '${id}' term: ${error instanceof Error ? error.message : String(error)}`)
+        }
+        break
       case 'atom':
       case 'ref':
         assertNodeSig(id, node.kind, node.sig)

@@ -2,7 +2,48 @@ import type { Diagram, DiagramNode, Endpoint, NodeId, RegionId, Wire, WireId } f
 import { DiagramError, mkDiagram, portSig, requiredPorts } from './diagram'
 import { derivedScope, wireVisibleAt } from './regions'
 import type { RelSig, Sig } from './sig'
+import type { Term } from '../term/term'
 import { freshId, type IdNamespaceReservation, type IdReservation } from './subgraph/freshId'
+
+export function spawnTermNode(
+  diagram: Diagram,
+  region: RegionId,
+  term: Term,
+  interfaceArity: number,
+  reservation?: IdReservation,
+): { readonly diagram: Diagram; readonly node: NodeId; readonly wires: readonly WireId[] } {
+  const takenNodes = new Set(Object.keys(diagram.nodes))
+  const node = freshId(takenNodes, 'n', reservation?.nodes)
+  takenNodes.add(node)
+  const termNode: DiagramNode = { kind: 'term', region, term, freeArity: interfaceArity }
+  const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes, [node]: termNode }
+  const wires: Record<WireId, Wire> = { ...diagram.wires }
+  const takenWires = new Set(Object.keys(diagram.wires))
+  const spawnedWires: WireId[] = []
+  for (const port of requiredPorts(termNode)) {
+    const wire = freshId(takenWires, 'w', reservation?.wires)
+    takenWires.add(wire)
+    spawnedWires.push(wire)
+    const wireSig = portSig(termNode, port)
+    wires[wire] = {
+      sig: wireSig,
+      endpoints: [
+        { node, port },
+        mintPin(nodes, takenNodes, region, wireSig, reservation?.nodes),
+      ],
+    }
+  }
+  return {
+    node,
+    wires: Object.freeze(spawnedWires),
+    diagram: mkDiagram({
+      root: diagram.root,
+      regions: { ...diagram.regions },
+      nodes,
+      wires,
+    }),
+  }
+}
 
 /**
  * Every spawned wire is born with its second end: a pin at the spawn
