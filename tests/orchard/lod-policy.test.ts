@@ -7,6 +7,13 @@ describe('projected tree LOD', () => {
     expect(projectedDiameterPx(10, 100, 2000, Math.PI / 2)).toBeCloseTo(200)
   })
 
+  it('treats positive bounds intersecting the camera plane as effectively infinite', () => {
+    expect(projectedDiameterPx(10, 10, 1000, Math.PI / 2)).toBe(Number.POSITIVE_INFINITY)
+    expect(projectedDiameterPx(10, -4, 1000, Math.PI / 2)).toBe(Number.POSITIVE_INFINITY)
+    expect(projectedDiameterPx(10, -11, 1000, Math.PI / 2)).toBe(0)
+    expect(projectedDiameterPx(0, -4, 1000, Math.PI / 2)).toBe(0)
+  })
+
   it('selects fixed bands with hysteresis', () => {
     expect(selectLod('culled', 3, true)).toBe('marker')
     expect(selectLod('marker', 21, true)).toBe('marker')

@@ -128,6 +128,12 @@ const nonnegative = (value: unknown, field: string): number => {
   return number
 }
 
+const unitInterval = (value: unknown, field: string): number => {
+  const number = nonnegative(value, field)
+  if (number > 1) throw new Error(`invalid orchard save: ${field}`)
+  return number
+}
+
 const scene = (value: unknown, field: string): Scene3 => {
   if (!isRecord(value) || !Array.isArray(value['entities'])) throw new Error(`invalid orchard save: ${field}`)
   return {
@@ -179,6 +185,10 @@ export function parseWorldSave(value: unknown): OrchardWorldSave {
       if (!Array.isArray(entry) || entry.length !== 2) throw new Error(`invalid orchard save: layouts.${layoutId}.hues[${index}]`)
       return [text(entry[0], `layouts.${layoutId}.hues[${index}][0]`), text(entry[1], `layouts.${layoutId}.hues[${index}][1]`)]
     })
+    const reduced = scene(raw['lods']['reduced'], `layouts.${layoutId}.lods.reduced`)
+    reduced.entities.forEach((item, index) => {
+      if (item.kind !== 'branch') throw new Error(`invalid orchard save: layouts.${layoutId}.lods.reduced.entities[${index}].kind`)
+    })
     layouts[layoutId] = {
       label: text(raw['label'], `layouts.${layoutId}.label`),
       bounds: {
@@ -187,7 +197,7 @@ export function parseWorldSave(value: unknown): OrchardWorldSave {
       },
       lods: {
         full: scene(raw['lods']['full'], `layouts.${layoutId}.lods.full`),
-        reduced: scene(raw['lods']['reduced'], `layouts.${layoutId}.lods.reduced`),
+        reduced,
         marker: {
           color: text(raw['lods']['marker']['color'], `layouts.${layoutId}.lods.marker.color`),
           size: positive(raw['lods']['marker']['size'], `layouts.${layoutId}.lods.marker.size`),
@@ -206,8 +216,8 @@ export function parseWorldSave(value: unknown): OrchardWorldSave {
       glow: {
         color: text(raw['glow']['color'], `layouts.${layoutId}.glow.color`),
         radius: nonnegative(raw['glow']['radius'], `layouts.${layoutId}.glow.radius`),
-        opacity: nonnegative(raw['glow']['opacity'], `layouts.${layoutId}.glow.opacity`),
-        bloom: nonnegative(raw['glow']['bloom'], `layouts.${layoutId}.glow.bloom`),
+        opacity: unitInterval(raw['glow']['opacity'], `layouts.${layoutId}.glow.opacity`),
+        bloom: unitInterval(raw['glow']['bloom'], `layouts.${layoutId}.glow.bloom`),
       },
     }
   }

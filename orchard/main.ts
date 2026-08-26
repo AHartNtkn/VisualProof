@@ -144,6 +144,8 @@ async function boot(): Promise<void> {
     root.dataset['pointLightCount'] = String(rendered.pointLights)
     root.dataset['representedProofEntities'] = String(rendered.representedEntities)
     root.dataset['representationOperations'] = String(rendered.representationOperations)
+    root.dataset['representationErrorCount'] = String(rendered.representationErrors)
+    root.dataset['representationError'] = rendered.error ?? ''
     root.dataset['rendererObjects'] = String(rendered.objects)
     root.dataset['instancedCount'] = String(rendered.instanced)
     root.dataset['drawCalls'] = String(rendered.drawCalls)

@@ -27,7 +27,7 @@ Each saved layout contains:
 - `lods.full`: the complete precomputed `Scene3`;
 - `lods.reduced`: precomputed structural geometry containing branches but no labels, pips, rings, or strands;
 - `lods.marker`: color and world-space size for the far emissive marker;
-- `glow`: color, world-space ground radius, opacity, and bloom contribution.
+- `glow`: color, world-space ground radius, opacity in `[0,1]`, and bloom contribution in `[0,1]`.
 
 Each saved tree continues to contain its stable ID, layout reference, position, and rotation. No LOD level or visibility state is persisted because those are camera-dependent presentation state.
 
@@ -83,7 +83,7 @@ Each batched buffer stores entity-key segment ranges in `userData`. This preserv
 
 Tree halo and ground illumination are separate effects:
 
-- Bright, unlit tree materials feed a restrained `UnrealBloomPass`. Bloom runs at reduced resolution and creates the optical halo with cost bounded primarily by viewport pixels.
+- Bright, unlit tree materials feed a restrained `UnrealBloomPass`. Each layout's saved bloom contribution deterministically scales its authored tree-material radiance by `1 + bloom`, preserving the authored color at `bloom = 0` and bounding the multiplier to `[1,2]` through strict save validation. Bloom runs at reduced resolution and creates the optical halo with cost bounded primarily by viewport pixels.
 - A dynamic tiled illumination field creates ground pools. Each nonempty tile owns a low-resolution RGBA texture and a ground overlay mesh. Active tree glow circles are rasterized into intersecting tiles from their current world positions and saved glow parameters.
 
 The glow field uses 128-by-128-world-unit tiles backed by 128-by-128-pixel textures. Insert, remove, move, layout change, and active-count change mark only intersecting tiles dirty. Rebuilding a dirty tile clears it, queries every active tree whose glow radius intersects it, and rerasterizes those contributions. Multiple trees add visually, subject to a bounded final alpha. Empty tiles release their overlay and texture. Tile generation never assumes current spacing or density.

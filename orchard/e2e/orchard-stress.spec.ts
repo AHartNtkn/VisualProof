@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { assertStressResidency } from '../stress-validation'
 import type { SavedTree } from '../world'
 
 type StressRow = {
@@ -13,6 +14,8 @@ type StressRow = {
   marker: number
   culled: number
   pendingRepresentations: number
+  representationErrors: number
+  representationError: string
   pointLights: number
   entities: number
   buildMs: number
@@ -28,7 +31,8 @@ type StressRow = {
 
 type StressTimeout = Pick<StressRow,
   'mode' | 'trees' | 'visible' | 'resident' | 'full' | 'reduced' | 'marker' | 'culled'
-  | 'pendingRepresentations' | 'pointLights' | 'frameSamples' | 'generation'>
+  | 'pendingRepresentations' | 'representationErrors' | 'representationError'
+  | 'pointLights' | 'frameSamples' | 'generation'>
   & { observedGeneration: number }
 
 type ResidencySnapshot = {
@@ -131,6 +135,8 @@ test(`measures ${requestedMode} rendering across increasing counts`, async ({ pa
           marker: number('markerCount'),
           culled: number('culledCount'),
           pendingRepresentations: number('pendingRepresentations'),
+          representationErrors: number('representationErrorCount'),
+          representationError: dataset['representationError'] ?? '',
           pointLights: number('pointLightCount'),
           frameSamples: number('frameSampleCount'),
           generation: number('transitionGeneration'),
@@ -170,6 +176,8 @@ test(`measures ${requestedMode} rendering across increasing counts`, async ({ pa
         marker: number('markerCount'),
         culled: number('culledCount'),
         pendingRepresentations: number('pendingRepresentations'),
+        representationErrors: number('representationErrorCount'),
+        representationError: dataset['representationError'] ?? '',
         pointLights: number('pointLightCount'),
         entities: number('representedProofEntities'),
         buildMs: number('transitionBuildMs'),
@@ -191,6 +199,7 @@ test(`measures ${requestedMode} rendering across increasing counts`, async ({ pa
       frameSamples: STEADY_FRAME_COUNT,
       generation: targetGeneration,
     })
+    assertStressResidency(row)
     expect(row.buildMs).toBeGreaterThan(0)
     expect(row.full + row.reduced + row.marker + row.culled).toBe(row.trees)
     expect(await orchard.getAttribute('data-instanced-count')).toBe('0')

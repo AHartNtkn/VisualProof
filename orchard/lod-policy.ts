@@ -4,7 +4,9 @@ const BANDS = { full: 140, reduced: 20, marker: 2 } as const
 const HYSTERESIS = 0.15
 
 export function projectedDiameterPx(radius: number, depth: number, viewportHeight: number, verticalFovRadians: number): number {
-  if (depth <= 0) return 0
+  if (radius <= 0) return 0
+  if (Math.abs(depth) <= radius) return Number.POSITIVE_INFINITY
+  if (depth < 0) return 0
   return 2 * radius * (viewportHeight / (2 * Math.tan(verticalFovRadians / 2))) / depth
 }
 

@@ -39,4 +39,25 @@ describe('orchard world save', () => {
     expect(layout.lods.full.entities.filter(({ kind }) => kind === 'strand')).toHaveLength(41)
     for (const tree of world.trees) expect(world.layouts[tree.layout]).toBeDefined()
   })
+
+  it.each([
+    ['version 1', (raw: any) => { raw.version = 1 }, 'invalid orchard save: version'],
+    ['missing LODs', (raw: any) => { delete raw.layouts['zero-is-nat-20'].lods }, 'invalid orchard save: layouts.zero-is-nat-20'],
+    ['missing reduced LOD', (raw: any) => { delete raw.layouts['zero-is-nat-20'].lods.reduced }, 'invalid orchard save: layouts.zero-is-nat-20.lods.reduced'],
+    ['missing marker size', (raw: any) => { delete raw.layouts['zero-is-nat-20'].lods.marker.size }, 'invalid orchard save: layouts.zero-is-nat-20.lods.marker.size'],
+    ['missing glow', (raw: any) => { delete raw.layouts['zero-is-nat-20'].glow }, 'invalid orchard save: layouts.zero-is-nat-20'],
+    ['missing bloom', (raw: any) => { delete raw.layouts['zero-is-nat-20'].glow.bloom }, 'invalid orchard save: layouts.zero-is-nat-20.glow.bloom'],
+    ['out-of-range bloom', (raw: any) => { raw.layouts['zero-is-nat-20'].glow.bloom = 1.01 }, 'invalid orchard save: layouts.zero-is-nat-20.glow.bloom'],
+    ['out-of-range opacity', (raw: any) => { raw.layouts['zero-is-nat-20'].glow.opacity = 1.01 }, 'invalid orchard save: layouts.zero-is-nat-20.glow.opacity'],
+    ['non-branch reduced entity', (raw: any) => {
+      raw.layouts['zero-is-nat-20'].lods.reduced.entities = [
+        raw.layouts['zero-is-nat-20'].lods.full.entities.find((entity: any) => entity.kind === 'ring'),
+      ]
+    }, 'invalid orchard save: layouts.zero-is-nat-20.lods.reduced.entities[0].kind'],
+  ])('rejects %s', (_name, mutate, error) => {
+    const raw = JSON.parse(readFileSync(new URL('../../orchard/world.json', import.meta.url), 'utf8'))
+    mutate(raw)
+
+    expect(() => parseWorldSave(raw)).toThrow(error)
+  })
 })

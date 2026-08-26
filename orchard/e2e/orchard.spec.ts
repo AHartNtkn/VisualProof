@@ -40,6 +40,58 @@ test('accumulates overlapping glow contributors into bounded order-independent p
   expect.soft(pixels.redGreen[3]).toBe(255)
 })
 
+test('creates one glow resource per key and releases it once when the tile empties', async ({ page }) => {
+  await page.goto('/?trees=1')
+
+  const lifecycle = await page.evaluate(async () => {
+    const modulePath = '/glow-render.ts'
+    const { mountGlowRenderer } = await import(modulePath)
+    const added: any[] = []
+    const removed: any[] = []
+    const scene = {
+      add(object: any) { added.push(object) },
+      remove(object: any) { removed.push(object) },
+    }
+    const renderer = mountGlowRenderer(scene as any, 0)
+    const populated = [{
+      key: '0:0', x: 0, z: 0,
+      contributors: [{ id: 'tree-a', x: 32, z: 32, radius: 16, color: '#ffffff', opacity: 0.5 }],
+    }]
+    renderer.sync(populated)
+    const mesh = added[0]
+    const disposal = { geometry: 0, material: 0, texture: 0 }
+    for (const [name, resource] of [
+      ['geometry', mesh.geometry],
+      ['material', mesh.material],
+      ['texture', mesh.material.map],
+    ] as const) {
+      const original = resource.dispose.bind(resource)
+      resource.dispose = () => {
+        disposal[name]++
+        original()
+      }
+    }
+
+    renderer.sync(populated)
+    renderer.sync([{ key: '0:0', x: 0, z: 0, contributors: [] }])
+    renderer.sync([{ key: '0:0', x: 0, z: 0, contributors: [] }])
+    renderer.dispose()
+    return {
+      adds: added.length,
+      removes: removed.length,
+      removedSameMesh: removed[0] === mesh,
+      disposal,
+    }
+  })
+
+  expect(lifecycle).toEqual({
+    adds: 1,
+    removes: 1,
+    removedSameMesh: true,
+    disposal: { geometry: 1, material: 1, texture: 1 },
+  })
+})
+
 test('shows tiled ground illumination around a nearby irregular placement', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 })
   const savedWorld = JSON.parse(readFileSync(new URL('../world.json', import.meta.url), 'utf8'))
@@ -221,6 +273,29 @@ test('invalidates settled timing when camera work drains within one render frame
   expect(Number(await orchard.getAttribute('data-frame-sample-count'))).toBeLessThan(60)
   await expect(orchard).toHaveAttribute('data-transition-generation', generation!)
   await expect(orchard).toHaveAttribute('data-frame-sample-count', '60', { timeout: 30_000 })
+})
+
+test('keeps a camera-containing tree full while looking away from its sphere center', async ({ page }) => {
+  const savedWorld = JSON.parse(readFileSync(new URL('../world.json', import.meta.url), 'utf8'))
+  const tree = savedWorld.trees[0] as SavedTree
+  const layout = savedWorld.layouts[tree.layout]
+  savedWorld.trees = [{
+    ...tree,
+    x: savedWorld.player.x - layout.bounds.center.x,
+    z: savedWorld.player.z + layout.bounds.radius / 2 - layout.bounds.center.z,
+    yaw: 0,
+  }]
+  await page.route('**/world.json*', (route) => route.fulfill({ json: savedWorld }))
+  await page.goto('/?trees=1')
+  const orchard = page.locator('[data-orchard]')
+
+  await expect(orchard).toHaveAttribute('data-ready', 'true')
+  await expect(orchard).toHaveAttribute('data-pending-representations', '0')
+  await expect(orchard).toHaveAttribute('data-full-count', '1')
+  await expect(orchard).toHaveAttribute('data-resident-count', '1')
+  await expect(orchard).toHaveAttribute('data-representation-error-count', '0')
+  await expect(orchard).toHaveAttribute('data-representation-error', '')
+  await expect(orchard).toHaveAttribute('data-point-light-count', '0')
 })
 
 test('renders exact separate tree counts and lets the player walk', async ({ page }) => {

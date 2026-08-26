@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  makeOrchardMaterialSource,
   OrchardWorldLifecycle,
   OrchardTreeRuntime,
   treeWorldSphere,
@@ -203,6 +204,40 @@ describe('orchard tree runtime', () => {
     expect(runtime.updateGame(camera, 100, 720).visited).toBe(1)
   })
 
+  it('selects full detail when the camera is inside a saved sphere and looks away from its center', () => {
+    const parent = new THREE.Group()
+    const factory = objectBuilder()
+    const runtime = new OrchardTreeRuntime({ a: layout({ x: 0, y: 1.7, z: -4 }) }, parent, factory.build)
+    runtime.setTrees([saved('surrounding', 0, 0)])
+    const camera = new THREE.PerspectiveCamera(67, 16 / 9, 0.08, 1800)
+    camera.position.set(0, 1.7, 0)
+    camera.lookAt(0, 1.7, 1)
+
+    runtime.updateGame(camera, 100, 720)
+    runtime.processOperations(12)
+
+    expect(runtime.snapshot()).toMatchObject({ visible: 1, full: 1, resident: 1 })
+    expect(factory.groups[0]!.userData['representation']).toBe('full')
+  })
+
+  it('derives bounded material radiance from each saved layout bloom value', () => {
+    const branch = layout().lods.full.entities[0]!
+    if (branch.kind !== 'branch') throw new Error('fixture branch missing')
+    const material = (bloom: number) => makeOrchardMaterialSource(
+      { ...layout(), palette: { ...layout().palette, branch: '#808080' }, glow: { ...layout().glow, bloom } },
+      new Set(),
+      new Set(),
+      new Set(),
+      () => ({ width: 800, height: 600 }),
+    ).line(branch, 0.1)
+
+    const base = material(0).color.r
+    const authored = material(0.8).color.r
+    const maximum = material(1).color.r
+    expect(authored).toBeCloseTo(base * 1.8)
+    expect(maximum).toBeCloseTo(base * 2)
+  })
+
   it('reindexes a stable-ID Game move/yaw and moves its saved-ground glow contribution', () => {
     const movedLayout = layout({ x: 20, y: 1.7, z: 0 })
     const parent = new THREE.Group()
@@ -240,7 +275,12 @@ describe('orchard tree runtime', () => {
 
     runtime.processOperations(12)
 
-    expect(runtime.snapshot()).toMatchObject({ resident: 0, pending: 0, error: 'tree-a build failed' })
+    expect(runtime.snapshot()).toMatchObject({
+      resident: 0,
+      pending: 0,
+      failureCount: 1,
+      error: "tree 'tree-a' full representation failed: tree-a build failed",
+    })
     runtime.processOperations(12)
     expect(attempts).toBe(1)
   })
@@ -255,7 +295,7 @@ describe('orchard tree runtime', () => {
     runtime.setMode('raw')
     runtime.setTrees([saved('moving', 0, -20)])
     runtime.processOperations(12)
-    expect(runtime.snapshot().error).toBe('moving tree failed')
+    expect(runtime.snapshot().error).toBe("tree 'moving' full representation failed: moving tree failed")
 
     fail = false
     runtime.setTrees([saved('moving', 1, -20)])
@@ -276,7 +316,7 @@ describe('orchard tree runtime', () => {
     camera.lookAt(0, 1.7, -1)
     runtime.updateGame(camera, 100, 720)
     runtime.processOperations(12)
-    expect(runtime.snapshot().error).toBe('full failed')
+    expect(runtime.snapshot().error).toBe("tree 'lod-retry' full representation failed: full failed")
 
     runtime.setTrees([saved('lod-retry', 0, -80)])
     runtime.updateGame(camera, 100, 720)
@@ -295,12 +335,12 @@ describe('orchard tree runtime', () => {
     runtime.setMode('raw')
     runtime.setTrees([saved('a', 0, -20), saved('b', 1, -20)])
     runtime.processOperations(12)
-    expect(runtime.snapshot().error).toBe('a failed')
+    expect(runtime.snapshot().error).toBe("tree 'a' full representation failed: a failed")
 
     failing.delete('a')
     runtime.setTrees([saved('a', 0, -21), saved('b', 1, -20)])
     runtime.processOperations(12)
-    expect(runtime.snapshot().error).toBe('b failed')
+    expect(runtime.snapshot().error).toBe("tree 'b' full representation failed: b failed")
 
     runtime.setTrees([saved('a', 0, -21)])
     expect(runtime.snapshot().error).toBeNull()

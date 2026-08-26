@@ -46,6 +46,7 @@ export type OrchardFrameStats = {
   readonly buildMs: number
   readonly lodMs: number
   readonly error: string | null
+  readonly representationErrors: number
 }
 
 export type OrchardBuildStats = {
@@ -147,6 +148,7 @@ export type TreeRuntimeSnapshot = {
   readonly representedEntities: number
   readonly buildMs: number
   readonly error: string | null
+  readonly failureCount: number
 }
 
 export function treeWorldSphere(saved: SavedTree, layout: SavedTreeLayout): THREE.Sphere {
@@ -334,6 +336,7 @@ export class OrchardTreeRuntime {
   }
 
   public snapshot(): TreeRuntimeSnapshot {
+    const firstFailure = this.failures.entries().next().value as readonly [string, RepresentationFailure] | undefined
     return {
       logical: this.states.size,
       logicalEntities: this.logicalEntities,
@@ -349,7 +352,10 @@ export class OrchardTreeRuntime {
       pointLights: this.pointLights,
       representedEntities: this.representedEntities,
       buildMs: this.buildMs,
-      error: this.failures.values().next().value?.message ?? null,
+      error: firstFailure === undefined
+        ? null
+        : `tree '${firstFailure[0]}' ${firstFailure[1].desired} representation failed: ${firstFailure[1].message}`,
+      failureCount: this.failures.size,
     }
   }
 
@@ -651,7 +657,12 @@ function textTexture(text: string, color: string): { texture: THREE.CanvasTextur
   return { texture, aspect: canvas.width / canvas.height }
 }
 
-function materialsFor(
+/** Saved bloom is a bounded radiance contribution: multiplier = 1 + bloom, for [1, 2]× authored color. */
+function bloomRadiance(color: string, bloom: number): THREE.Color {
+  return new THREE.Color(color).multiplyScalar(1 + bloom)
+}
+
+export function makeOrchardMaterialSource(
   layout: SavedTreeLayout,
   lineMaterials: Set<LineMaterial>,
   textures: Set<THREE.Texture>,
@@ -676,7 +687,7 @@ function materialsFor(
     const key = `${entity.kind}:${color}:${width}`
     let material = lines.get(key)
     if (material === undefined) {
-      material = new LineMaterial({ color, linewidth: width, worldUnits: true })
+      material = new LineMaterial({ color: bloomRadiance(color, layout.glow.bloom), linewidth: width, worldUnits: true })
       const size = resolution()
       material.resolution.set(size.width, size.height)
       lines.set(key, material)
@@ -692,7 +703,7 @@ function materialsFor(
       textures.add(texture)
       material = new THREE.SpriteMaterial({
         map: texture,
-        color: saved.color,
+        color: bloomRadiance(saved.color, layout.glow.bloom),
         transparent: true,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
@@ -710,7 +721,12 @@ function materialsFor(
       const authored = entity.kind === 'label' ? textTexture(entity.text, color) : null
       const texture = authored?.texture ?? discTexture(color)
       textures.add(texture)
-      material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: entity.kind !== 'pip' })
+      material = new THREE.SpriteMaterial({
+        map: texture,
+        color: bloomRadiance('#ffffff', layout.glow.bloom),
+        transparent: true,
+        depthTest: entity.kind !== 'pip',
+      })
       if (authored !== null) material.userData['aspect'] = authored.aspect
       sprites.set(key, material)
       spriteMaterials.add(material)
@@ -762,7 +778,7 @@ export function mountOrchardWorld(
   let size = { width: 1, height: 1 }
   const materialsByLayout = new Map<string, OrchardMaterialSource>()
   for (const [layoutId, layout] of Object.entries(world.layouts)) {
-    materialsByLayout.set(layoutId, materialsFor(
+    materialsByLayout.set(layoutId, makeOrchardMaterialSource(
       layout,
       lineMaterials,
       textures,
@@ -872,6 +888,7 @@ export function mountOrchardWorld(
         buildMs: current.buildMs,
         lodMs: lod.lodMs,
         error: current.error,
+        representationErrors: current.failureCount,
       }
     },
     dispose() {
