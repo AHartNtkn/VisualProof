@@ -56,7 +56,7 @@ describe('lambdaDiagram', () => {
     const tangent = v3(1, 2, -1)
     const embedded = lambdaDiagram({ node: 'term', region: 'region', term, interfaceArity: 2, center, tangent })
     const geometry = termGeometry(term, 2)
-    expect(embedded.strokes.map((stroke) => stroke.sourceStrokeId)).toEqual([
+    expect(embedded.strokes.map((stroke) => stroke.strokeId)).toEqual([
       ...geometry.arcs.map((_, index) => `arc:${index}`),
       ...geometry.radials.map((_, index) => `radial:${index}`),
       'exit:arc',
@@ -91,7 +91,6 @@ describe('lambdaDiagram', () => {
       expect(dist3(actual, want)).toBeLessThan(1e-12)
     }
     expect(embedded.strokes.some((stroke) => stroke.subtermPath.length > 0)).toBe(true)
-    expect(embedded.strokes.every((stroke) => typeof stroke.sourceStrokeId === 'string')).toBe(true)
   })
 
   it('uses the exact light/dark term-wire base colors until a motion frame supplies a structural color', () => {
@@ -107,57 +106,6 @@ describe('lambdaDiagram', () => {
     expect(entityColor(moving, renderTheme(DARK.wire, 'dark'))).toBe('#f06aa7')
   })
 
-  it('carries every sampled stroke lineage, copy, and junction identity into the embedded entities', () => {
-    // Would fail if the WebGL evidence could be reconstructed only from a
-    // parallel motion sample after the embedding had dropped or reassigned a
-    // structural stroke.
-    const source = application(lambda(application(bound(0), bound(0))), lambda(bound(0)))
-    const frame = sampleBetaMotion(
-      planBetaMotion(source, { kind: 'beta', path: [] }),
-      0.44,
-      '#26343a',
-    )
-    const embedded = lambdaDiagram({
-      node: 'term',
-      region: 'region',
-      term: source,
-      interfaceArity: 0,
-      center: v3(0, 0, 0),
-      tangent: v3(0, 1, 0),
-      frame,
-    })
-    const anatomy = embedded.strokes.filter((stroke) => !stroke.strokeId.startsWith('socket:'))
-    expect(anatomy.map((stroke) => ({
-      strokeId: stroke.strokeId,
-      sourceStrokeId: stroke.sourceStrokeId,
-      phase: stroke.phase,
-      lineage: stroke.lineage,
-      copyIndex: stroke.copyIndex,
-      junctions: stroke.junctions,
-      destinationJunctions: stroke.destinationJunctions,
-    }))).toEqual(frame.strokes.map((stroke) => ({
-      strokeId: stroke.id,
-      sourceStrokeId: stroke.originId,
-      phase: frame.phase,
-      lineage: stroke.lineage,
-      copyIndex: stroke.copyIndex,
-      junctions: stroke.points.map(({ junction }) => junction),
-      destinationJunctions: stroke.points.map(({ destinationJunction }) => destinationJunction),
-    })))
-    anatomy.forEach((stroke, index) => {
-      expect(stroke.junctionPoints).not.toBeNull()
-      stroke.junctionPoints!.forEach((point, endpoint) => {
-        const local = frame.strokes[index]!.points[endpoint]!
-        const expected = {
-          x: stroke.center.x + stroke.scale * (local.x * stroke.plane.right.x + local.y * stroke.plane.up.x),
-          y: stroke.center.y + stroke.scale * (local.x * stroke.plane.right.y + local.y * stroke.plane.up.y),
-          z: stroke.center.z + stroke.scale * (local.x * stroke.plane.right.z + local.y * stroke.plane.up.z),
-        }
-        expect(dist3(point, expected)).toBeLessThan(1e-12)
-      })
-    })
-  })
-
   it('embeds every coincident application-copy lambda bar as a nonzero circular polyline', () => {
     const source = application(
       lambda(lambda(application(bound(1), application(bound(1), bound(0))))),
@@ -170,7 +118,7 @@ describe('lambdaDiagram', () => {
       const bars = lambdaDiagram({
         node: 'term', region: 'region', term: source, interfaceArity: 0,
         center: v3(0, 0, 0), tangent: v3(0, 1, 0), frame,
-      }).strokes.filter(({ lineage, role }) => lineage === 'copy' && role === 'lambda')
+      }).strokes.filter(({ strokeId, role }) => strokeId.startsWith('copy:') && role === 'lambda')
       expect(bars).toHaveLength(2)
       for (const bar of bars) {
         expect(bar.pts.length).toBeGreaterThan(2)
@@ -241,23 +189,8 @@ describe('3D scene integration', () => {
     ]
     for (const { progress, staticEntities } of endpoints) {
       const presented = lambdaEntities(sceneAt(transition, progress).entities)
-      const sampled = sampleBetaMotion(
-        planBetaMotion(source, { kind: 'beta', path: [] }),
-        progress,
-        baseColor,
-      )
-      expect(presented.map(({ strokeId }) => strokeId).sort())
-        .toEqual(sampled.strokes.map(({ id }) => id).sort())
-      expect(presented.map(({ lineage, copyIndex, junctions, destinationJunctions }) => ({
-        lineage, copyIndex, junctions, destinationJunctions,
-      }))).toEqual(sampled.strokes.map((stroke) => ({
-        lineage: stroke.lineage,
-        copyIndex: stroke.copyIndex,
-        junctions: stroke.points.map(({ junction }) => junction),
-        destinationJunctions: stroke.points.map(({ destinationJunction }) => destinationJunction),
-      })))
-      expect(presented.flatMap(({ pts }) => pts).length)
-        .toBe(staticEntities.flatMap(({ pts }) => pts).length)
+      expect(presented.map(({ strokeId, pts }) => ({ strokeId, pts })))
+        .toEqual(staticEntities.map(({ strokeId, pts }) => ({ strokeId, pts })))
     }
   })
 

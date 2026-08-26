@@ -2,12 +2,7 @@ import type { NodeId, RegionId } from '../kernel/diagram/diagram'
 import type { PathSeg } from '../kernel/term/reduce'
 import type { Term } from '../kernel/term/term'
 import { termGeometry, type NodeGeometry } from '../view/bend'
-import type {
-  LambdaPhase,
-  LambdaStrokeFrame,
-  LambdaStrokeLineage,
-  LambdaStrokeRole,
-} from '../view/lambda-motion'
+import type { LambdaStrokeFrame, LambdaStrokeRole } from '../view/lambda-motion'
 import { lambdaFrameGeometry } from '../view/morph'
 import type { Vec2 } from '../view/vec'
 import {
@@ -38,16 +33,7 @@ export type LambdaEntity = {
   readonly scale: number
   readonly subtermPath: readonly PathSeg[]
   readonly strokeId: string
-  readonly sourceStrokeId: string
   readonly role: LambdaStrokeRole
-  readonly phase: LambdaPhase | null
-  /** Structural provenance is populated for beta-motion frames. */
-  readonly lineage: LambdaStrokeLineage | null
-  readonly copyIndex: number | null
-  readonly junctions: readonly [string, string] | null
-  readonly destinationJunctions: readonly [string | null, string | null] | null
-  /** Embedded semantic junctions remain distinct from padded paint endpoints. */
-  readonly junctionPoints: readonly [Vec3, Vec3] | null
   /** Null means the renderer's authoritative term-wire base color. */
   readonly color: string | null
   readonly alpha?: number
@@ -94,15 +80,8 @@ function arcPoints(r: number, a0: number, a1: number): Vec2[] {
 
 type StaticStroke = {
   readonly strokeId: string
-  readonly sourceStrokeId: string
   readonly role: LambdaStrokeRole
-  readonly phase: LambdaPhase | null
   readonly subtermPath: readonly PathSeg[]
-  readonly lineage: LambdaStrokeLineage | null
-  readonly copyIndex: number | null
-  readonly junctions: readonly [string, string] | null
-  readonly destinationJunctions: readonly [string | null, string | null] | null
-  readonly junctionPoints: readonly [Vec2, Vec2] | null
   readonly color: string | null
   readonly alpha?: number
   readonly points: readonly Vec2[]
@@ -128,15 +107,8 @@ function staticStrokes(geometry: NodeGeometry): StaticStroke[] {
   const out: StaticStroke[] = []
   geometry.arcs.forEach((arc, index) => out.push({
     strokeId: `arc:${index}`,
-    sourceStrokeId: `arc:${index}`,
     role: arc.kind === 'lam' ? 'lambda' : arc.kind === 'app' ? 'application' : 'free-rail',
-    phase: null,
     subtermPath: deepestOwner(geometry, 'arc', index),
-    lineage: null,
-    copyIndex: null,
-    junctions: null,
-    destinationJunctions: null,
-    junctionPoints: null,
     color: null,
     points: arcPoints(arc.r, arc.a0, arc.a1),
   }))
@@ -145,33 +117,20 @@ function staticStrokes(geometry: NodeGeometry): StaticStroke[] {
     const to = { x: Math.cos(radial.angle) * radial.r1, y: Math.sin(radial.angle) * radial.r1 }
     out.push({
       strokeId: `radial:${index}`,
-      sourceStrokeId: `radial:${index}`,
       role: radial.kind === 'var' ? 'variable' : radial.kind === 'port' ? 'free-port' : 'fn-connector',
-      phase: null,
       subtermPath: deepestOwner(geometry, 'radial', index),
-      lineage: null,
-      copyIndex: null,
-      junctions: null,
-      destinationJunctions: null,
-      junctionPoints: null,
       color: null,
       points: [from, to],
     })
   })
   if (geometry.exitArc !== null) out.push({
-    strokeId: 'exit:arc', sourceStrokeId: 'exit:arc', role: 'output-arc',
-    phase: null, subtermPath: deepestOwner(geometry, 'exit', 0),
-    lineage: null, copyIndex: null, junctions: null, color: null,
-    destinationJunctions: null,
-    junctionPoints: null,
+    strokeId: 'exit:arc', role: 'output-arc',
+    subtermPath: deepestOwner(geometry, 'exit', 0), color: null,
     points: arcPoints(geometry.exitArc.r, geometry.exitArc.a0, geometry.exitArc.a1),
   })
   if (geometry.exitLine !== null) out.push({
-    strokeId: 'exit:line', sourceStrokeId: 'exit:line', role: 'output-line',
-    phase: null, subtermPath: deepestOwner(geometry, 'exit', 0),
-    lineage: null, copyIndex: null, junctions: null, color: null,
-    destinationJunctions: null,
-    junctionPoints: null,
+    strokeId: 'exit:line', role: 'output-line',
+    subtermPath: deepestOwner(geometry, 'exit', 0), color: null,
     points: geometry.exitLine,
   })
   return out
@@ -189,15 +148,8 @@ function pathFromOwner(ownerId: string | null): readonly PathSeg[] {
 function frameStrokes(frame: LambdaStrokeFrame): StaticStroke[] {
   const strokes: StaticStroke[] = frame.strokes.map((stroke) => ({
     strokeId: stroke.id,
-    sourceStrokeId: stroke.originId,
     role: stroke.role,
-    phase: frame.phase,
     subtermPath: pathFromOwner(stroke.ownerId),
-    lineage: stroke.lineage,
-    copyIndex: stroke.copyIndex,
-    junctions: [stroke.points[0].junction, stroke.points[1].junction],
-    destinationJunctions: [stroke.points[0].destinationJunction, stroke.points[1].destinationJunction],
-    junctionPoints: [stroke.points[0], stroke.points[1]],
     color: stroke.color,
     points: stroke.geometry.kind === 'arc'
       ? arcPoints(stroke.geometry.r, stroke.geometry.a0, stroke.geometry.a1)
@@ -208,15 +160,8 @@ function frameStrokes(frame: LambdaStrokeFrame): StaticStroke[] {
     const radius = 0.16 + socket.copyIndex * 0.025
     strokes.push({
       strokeId: `socket:${socket.copyIndex}`,
-      sourceStrokeId: socket.sourceOccurrenceId,
       role: 'argument-connector',
-      phase: frame.phase,
       subtermPath: pathFromOwner(socket.sourceOccurrenceId),
-      lineage: 'argument',
-      copyIndex: socket.copyIndex,
-      junctions: [socket.sourceOccurrenceId, socket.sourceOccurrenceId],
-      destinationJunctions: null,
-      junctionPoints: [socket.point, socket.point],
       color: '#f0bd55',
       alpha: socket.amount,
       points: arcPoints(radius, 0, 2 * Math.PI).map((point) => ({
@@ -249,17 +194,7 @@ export function lambdaDiagram(input: LambdaDiagramInput): LambdaDiagram {
     scale,
     subtermPath: stroke.subtermPath,
     strokeId: stroke.strokeId,
-    sourceStrokeId: stroke.sourceStrokeId,
     role: stroke.role,
-    phase: stroke.phase,
-    lineage: stroke.lineage,
-    copyIndex: stroke.copyIndex,
-    junctions: stroke.junctions,
-    destinationJunctions: stroke.destinationJunctions,
-    junctionPoints: stroke.junctionPoints === null ? null : [
-      embedLambdaPoint(stroke.junctionPoints[0], input.center, plane, scale),
-      embedLambdaPoint(stroke.junctionPoints[1], input.center, plane, scale),
-    ],
     color: stroke.color,
     ...(stroke.alpha === undefined ? {} : { alpha: stroke.alpha }),
     pts: stroke.points.map((point) => embedLambdaPoint(point, input.center, plane, scale)),

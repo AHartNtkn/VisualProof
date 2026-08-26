@@ -72,7 +72,7 @@ async function openMode(page: Page): Promise<void> {
 async function openSpawn(page: Page): Promise<Locator> {
   const canvas = (await page.locator('#c').boundingBox())!
   await page.mouse.click(canvas.x + canvas.width * 0.5, canvas.y + canvas.height * 0.5, { button: 'right' })
-  return page.locator('.vpa-spawn-cascade button.vpa-spawn-row').first()
+  return page.getByRole('button', { name: 'UnaryWitness /1', exact: true })
 }
 
 test('Manuscript and Slate render accessible, distinct controls across app mount boundaries', async ({ page, theoryFiles }) => {

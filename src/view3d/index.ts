@@ -9,8 +9,6 @@ import { lerp3, type Vec3 } from './vec3'
 import { expandHover, focusPoint } from './pick'
 import { mountRender, type RenderTheme } from './render'
 
-export * from './lambda'
-
 export type View3State = { diagram: Diagram; theme: Theme }
 export type View3 = { update(s: View3State): void; dispose(): void }
 
@@ -24,8 +22,7 @@ export function presentedScene(target: Scene3, plan: TweenPlan | null, progress:
   return plan === null ? target : sceneAt(plan, progress)
 }
 
-/** Authoritative bridge from the shared application theme to WebGL colors. */
-export const renderThemeOf = (theme: Theme, diagram: Diagram): RenderTheme => ({
+const renderThemeOf = (theme: Theme, diagram: Diagram): RenderTheme => ({
   mode: theme.mode,
   background: theme.canvas,
   line: theme.mode === 'dark' ? '#f2f4f8' : theme.ink,

@@ -39,13 +39,6 @@ export type LambdaStrokeRole =
   | 'output-arc'
   | 'output-line'
 
-export type LambdaStrokePoint = Vec2 & {
-  /** Stable source-junction identity used by both renderers. */
-  readonly junction: string
-  /** Stable target junction for persistent/copy correspondence. */
-  readonly destinationJunction: string | null
-}
-
 export type LambdaStrokeGeometry =
   | { readonly kind: 'arc'; readonly r: number; readonly a0: number; readonly a1: number }
   | { readonly kind: 'segment'; readonly from: Vec2; readonly to: Vec2 }
@@ -59,7 +52,7 @@ export type LambdaStroke = {
   readonly lineage: LambdaStrokeLineage
   readonly copyIndex: number | null
   readonly color: string
-  readonly points: readonly [LambdaStrokePoint, LambdaStrokePoint]
+  readonly points: readonly [Vec2, Vec2]
   readonly geometry: LambdaStrokeGeometry
 }
 
@@ -85,19 +78,12 @@ export type LambdaStageTimes = {
   readonly barEnd: number
 }
 
-export type LambdaJunctionCorrespondence = {
-  readonly sourceId: string
-  readonly source: Vec2
-  readonly target: Vec2
-}
-
 export type LambdaMotionPlan = {
   readonly source: Term
   readonly target: Term
   readonly step: ReductionStep
   readonly copyCount: number
   readonly times: LambdaStageTimes
-  readonly persistentJunctions: readonly LambdaJunctionCorrespondence[]
   /** Internal structural authority retained for deterministic resampling. */
   readonly model: MotionModel
 }
@@ -188,7 +174,6 @@ type MotionModel = {
   readonly boundStrokes: readonly StrokeModel[]
   readonly targetCopies: ReadonlyMap<number, readonly StrokeModel[]>
   readonly targetOfSource: ReadonlyMap<string, MotionCoord>
-  readonly targetJunctionsBySourceStroke: ReadonlyMap<string, readonly [string, string]>
   readonly sourceArgumentPointByOrigin: ReadonlyMap<string, PointModel>
   readonly copies: readonly OccurrenceCopy[]
   readonly copyStages: ReadonlyMap<number, CopyStage>
@@ -638,7 +623,6 @@ function strokeFrame(
   reflow: number,
   color: string,
   lineage: LambdaStrokeLineage,
-  destinationJunctions: readonly [string, string] | null = null,
   lambdaPadScale = 1,
 ): LambdaStroke {
   const { maps, offset, lambdaPad } = viewAt(view, reflow)
@@ -676,10 +660,7 @@ function strokeFrame(
     lineage,
     copyIndex: stroke.copyIndex,
     color,
-    points: [
-      { ...from, junction: stroke.a.id, destinationJunction: destinationJunctions?.[0] ?? null },
-      { ...to, junction: stroke.b.id, destinationJunction: destinationJunctions?.[1] ?? null },
-    ],
+    points: [from, to],
     geometry,
   }
 }
@@ -707,7 +688,7 @@ function createMotionModel(
   targetReduct: AnnotatedNode,
   copies: readonly OccurrenceCopy[],
   interfaceArity: number,
-): { readonly motion: MotionModel; readonly persistentJunctions: readonly LambdaJunctionCorrespondence[] } {
+): MotionModel {
   const source = buildStrokeModel(sourceRoot, interfaceArity)
   const target = buildStrokeModel(targetRoot, interfaceArity)
   const view: ViewFrame = {
@@ -870,34 +851,15 @@ function createMotionModel(
   const targetBinderLeft = Math.min(targetBox.left + view.targetOffset, ...socketPoints.map(({ col }) => col))
   const targetBinderRight = Math.max(targetBox.right + view.targetOffset, ...socketPoints.map(({ col }) => col))
 
-  const persistentPointIds = new Set(pairs.flatMap((pair) => [pair.source.a.id, pair.source.b.id]))
-  const targetJunctionsBySourceStroke = new Map(pairs.map(({ source: sourceStroke, target: targetStroke }) => [
-    sourceStroke.id,
-    [targetStroke.a.id, targetStroke.b.id] as const,
-  ]))
-  const persistentJunctions = [...persistentPointIds].map((sourceId): LambdaJunctionCorrespondence => {
-    const sourcePoint = source.points.get(sourceId)!
-    const destination = targetOfSource.get(sourceId)
-    if (destination === undefined) throw new Error(`persistent junction '${sourceId}' has no destination`)
-    return {
-      sourceId,
-      source: mapCoord(sourceCoord(sourcePoint), view, 0),
-      target: mapCoord(destination, view, 1),
-    }
-  })
-
   return {
-    motion: {
-      source, target, view, pairs, sourceArgument, redexScaffolding, lambdaStroke,
-      boundStrokes, targetCopies, targetOfSource, targetJunctionsBySourceStroke,
-      sourceArgumentPointByOrigin, copies, copyStages,
-      sourceBodyOut: asGrid(sourceCoord(source.points.get(source.nodeOut(body))!), 'source body output'),
-      sourceArgumentRoot,
-      sourceLambdaA: asGrid(sourceCoord(lambdaStroke.a), 'source lambda start'),
-      sourceLambdaB: asGrid(sourceCoord(lambdaStroke.b), 'source lambda end'),
-      targetBinderRow, targetBinderLeft, targetBinderRight,
-    },
-    persistentJunctions,
+    source, target, view, pairs, sourceArgument, redexScaffolding, lambdaStroke,
+    boundStrokes, targetCopies, targetOfSource,
+    sourceArgumentPointByOrigin, copies, copyStages,
+    sourceBodyOut: asGrid(sourceCoord(source.points.get(source.nodeOut(body))!), 'source body output'),
+    sourceArgumentRoot,
+    sourceLambdaA: asGrid(sourceCoord(lambdaStroke.a), 'source lambda start'),
+    sourceLambdaB: asGrid(sourceCoord(lambdaStroke.b), 'source lambda end'),
+    targetBinderRow, targetBinderLeft, targetBinderRight,
   }
 }
 
@@ -919,7 +881,7 @@ export function planBetaMotion(
   const target = plainTerm(targetRoot)
   const kernelTarget = applyStepAt(source, step)
   if (!termEq(target, kernelTarget)) throw new Error('motion correspondence disagrees with kernel beta substitution')
-  const { motion, persistentJunctions } = createMotionModel(
+  const motion = createMotionModel(
     sourceRoot, targetRoot, redex, binder, body, argument, targetReduct, copies, interfaceArity,
   )
   const times: LambdaStageTimes = copies.length > 0
@@ -927,7 +889,7 @@ export function planBetaMotion(
     : { split: 0.15, liftEnd: 0.38, spaceEnd: 0.64, dockEnd: 0.64, stemEnd: 0.64, barEnd: 0.93 }
   return {
     source, target, step: { kind: step.kind, path: [...step.path] },
-    copyCount: copies.length, times, persistentJunctions, model: motion,
+    copyCount: copies.length, times, model: motion,
   }
 }
 
@@ -954,7 +916,6 @@ export function sampleBetaMotion(
         model.view, 0,
         baseColor,
         argumentIds.has(stroke.id) ? 'argument' : redexIds.has(stroke.id) ? 'redex' : 'persistent',
-        model.targetJunctionsBySourceStroke.get(stroke.id) ?? null,
       )),
       sockets: [],
     }
@@ -969,7 +930,6 @@ export function sampleBetaMotion(
         model.view, 1,
         baseColor,
         stroke.copyIndex === null ? 'persistent' : 'copy',
-        [stroke.a.id, stroke.b.id],
       )),
       sockets: [],
     }
@@ -996,11 +956,8 @@ export function sampleBetaMotion(
     lineage: LambdaStrokeLineage,
     lambdaPadScale = 1,
   ): void => {
-    const destinationJunctions = lineage === 'persistent'
-      ? model.targetJunctionsBySourceStroke.get(source.id) ?? null
-      : lineage === 'copy' ? [source.a.id, source.b.id] as const : null
     strokes.push(strokeFrame(
-      source, a, b, model.view, space, color, lineage, destinationJunctions, lambdaPadScale,
+      source, a, b, model.view, space, color, lineage, lambdaPadScale,
     ))
   }
 

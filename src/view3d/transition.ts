@@ -300,7 +300,6 @@ export function sceneAt(plan: TweenPlan, t: number): TweenScene {
     const branch = branchOf(entities, move.region)
     const branchTangent = sub3(branch.pts[branch.pts.length - 1]!, branch.pts[0]!)
     const endpoint = t === 0 ? move.from : t === 1 ? move.to : null
-    const frame = sampleBetaMotion(move.motion, move.reverse ? 1 - t : t, move.baseColor)
     const diagram = lambdaDiagram({
       node: move.node,
       region: move.region,
@@ -312,7 +311,9 @@ export function sceneAt(plan: TweenPlan, t: number): TweenScene {
       ),
       tangent: endpoint?.plane.normal ?? branchTangent,
       scale: endpoint?.scale ?? move.from.scale + (move.to.scale - move.from.scale) * e,
-      frame,
+      ...(endpoint === null ? {
+        frame: sampleBetaMotion(move.motion, move.reverse ? 1 - t : t, move.baseColor),
+      } : {}),
     })
     diagrams.set(move.node, diagram)
     entities.push(...diagram.strokes)

@@ -66,22 +66,6 @@ const copiesAt = (plan: LambdaMotionPlan, progress: number): Map<number, LambdaS
   return copies
 }
 
-const endpointPositions = (strokes: readonly LambdaStroke[]): Map<string, { x: number; y: number }> => {
-  const points = new Map<string, { x: number; y: number }>()
-  for (const stroke of strokes) {
-    for (const point of stroke.points) {
-      const existing = points.get(point.junction)
-      if (existing !== undefined) {
-        expect(point.x).toBeCloseTo(existing.x, 10)
-        expect(point.y).toBeCloseTo(existing.y, 10)
-      } else {
-        points.set(point.junction, point)
-      }
-    }
-  }
-  return points
-}
-
 const colorsOf = (frame: ReturnType<typeof sampleBetaMotion>, lineage: LambdaStroke['lineage']): Set<string> => (
   new Set(frame.strokes.filter((stroke) => stroke.lineage === lineage).map((stroke) => stroke.color))
 )
@@ -230,21 +214,6 @@ describe('corrected structural beta motion', () => {
       expect(paintedBars.every((shape) => shape.kind === 'arc' && shape.a1 > shape.a0)).toBe(true)
     }
   })
-
-  for (const fixture of cases) {
-    it(`${fixture.name}: moves each persistent junction to its one offered destination before docking`, () => {
-      const plan = planBetaMotion(term(fixture.source), ROOT_BETA)
-      expect(plan.persistentJunctions.length).toBeGreaterThan(0)
-      const destinationFrame = sampleBetaMotion(plan, plan.times.spaceEnd, BASE)
-      const points = endpointPositions(destinationFrame.strokes)
-      for (const correspondence of plan.persistentJunctions) {
-        const point = points.get(correspondence.sourceId)
-        expect(point, correspondence.sourceId).toBeDefined()
-        expect(point!.x).toBeCloseTo(correspondence.target.x, 10)
-        expect(point!.y).toBeCloseTo(correspondence.target.y, 10)
-      }
-    })
-  }
 
   it('keeps source, redex, argument, and repeating copy hues attached to lineage across every used boundary', () => {
     const plan = planBetaMotion(term(cases[1].source), ROOT_BETA)

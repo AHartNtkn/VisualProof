@@ -17,6 +17,7 @@
     "emit:theories": "tsx scripts/emit-theories.ts",
     "preapp": "npm run emit:theories",
     "app": "vite app",
+    "capture:lambda": "node --import tsx scripts/capture-lambda-comparison.ts",
     "pree2e": "npm run emit:theories",
     "e2e": "playwright test"
   },

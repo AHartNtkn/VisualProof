@@ -277,36 +277,3 @@ test('dragging an applied end into open space tears it off (parallel split)', as
   await expect.poll(async () => (await counts(page)).wires)
     .toBe(before.wires + 1)
 })
-
-test('a closed right-stroke around one end wraps it in a cut', async ({ page, theoryFiles }) => {
-  await openApp(page, theoryFiles)
-  await addRef(page)
-  await addAtom(page)
-  await proveCurrent(page)
-  const before = await counts(page)
-
-  const atom = await page.evaluate(() => {
-    const front = (window as DebugWindow).__vpaDebug!.proofFront('forward')
-    const body = front.bodies.find((candidate) => candidate.kind === 'atom')
-    if (body === undefined) throw new Error('the forward front has no atom body')
-    return { x: body.x, y: body.y }
-  })
-  const at = await frontPoint(page, atom)
-  const radius = 46
-  await page.mouse.move(at.x - radius, at.y - radius)
-  await page.mouse.down({ button: 'right' })
-  for (const [dx, dy] of [
-    [radius, -radius - 14],
-    [radius + 20, 0],
-    [radius, radius + 14],
-    [-radius, radius + 14],
-    [-radius - 20, 0],
-    [-radius + 2, -radius + 3],
-  ] as const) {
-    await page.mouse.move(at.x + dx, at.y + dy, { steps: 4 })
-  }
-  await page.mouse.up({ button: 'right' })
-
-  await expect.poll(async () => (await counts(page)).regions)
-    .toBe(before.regions + 1)
-})

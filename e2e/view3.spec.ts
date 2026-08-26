@@ -169,6 +169,17 @@ test('a normally loaded Lambda proof remains rendered and pickable in 3D', async
     .toBe(picked)
 })
 
+test('WebGL preserves Lambda painter order and restores identity pips above Lambda lines', async ({ page }) => {
+  await page.goto('/test/view3-render.html')
+  await page.waitForFunction(() => window.__view3RenderResults !== undefined)
+  const results = await page.evaluate(() => window.__view3RenderResults!)
+
+  for (const result of results) {
+    expect(result.lambda, `${result.theme} Lambda painter order`).toEqual([0, 0, 255])
+    expect(result.pip, `${result.theme} pip-over-Lambda order`).toEqual([0, 255, 0])
+  }
+})
+
 test('3D view mounts, renders the trunk, reports hover, and unmounts', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Utilities' }).click()

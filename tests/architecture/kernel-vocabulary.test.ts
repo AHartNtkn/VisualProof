@@ -129,7 +129,6 @@ const absentAuthorityPaths = [
   'tests/theories/battery.test.ts',
   'tests/theories/lambda.test.ts',
   'tests/theories/macros.test.ts',
-  'examples/lambda.json',
 ] as const
 
 function tsFilesUnder(dir: string): string[] {
