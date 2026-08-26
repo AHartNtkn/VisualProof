@@ -68,6 +68,7 @@ import {
 import {
   applyFreeVariableIdentity,
   applyLambdaConversion,
+  applyLambdaTermSpawn,
   type FreeVariableIdentityAction,
   type SlotCorrespondence,
 } from '../rules/lambda'
@@ -87,6 +88,7 @@ export type ProofStep =
   | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate }
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
+  | { readonly rule: 'lambdaTermSpawn'; readonly region: RegionId; readonly term: Term; readonly freeArity: number }
   | { readonly rule: 'lambdaConversion'; readonly node: NodeId; readonly term: Term; readonly correspondence: SlotCorrespondence; readonly certificate: ConversionCertificate; readonly attachments: Readonly<Record<number, WireId>> }
   | { readonly rule: 'lambdaFreeVariableIdentity'; readonly action: FreeVariableIdentityAction }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
@@ -153,6 +155,7 @@ export function reboundWires(step: ProofStep): readonly WireId[] {
     case 'deiteration':
     case 'doubleCutIntro':
     case 'doubleCutElim':
+    case 'lambdaTermSpawn':
     case 'lambdaConversion':
     case 'lambdaFreeVariableIdentity':
     case 'theorem':
@@ -277,6 +280,15 @@ function applyStepRaw(
       return applyDoubleCutIntro(diagram, step.sel, reservation)
     case 'doubleCutElim':
       return applyDoubleCutElim(diagram, step.region)
+    case 'lambdaTermSpawn':
+      return applyLambdaTermSpawn(
+        diagram,
+        step.region,
+        step.term,
+        step.freeArity,
+        orientation,
+        reservation,
+      )
     case 'lambdaConversion':
       return applyLambdaConversion(
         diagram,

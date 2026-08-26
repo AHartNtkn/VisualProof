@@ -17,6 +17,65 @@ import { vec, type Vec2 } from '../../src/view/vec'
 import { UNARY } from '../fixtures/zero-signature'
 import { segment, spread } from './helpers/build'
 import { place } from './helpers/gesture'
+import { parseTerm } from '../../src/kernel/term/parse'
+
+class ProofMenuElement extends EventTarget {
+  readonly children: ProofMenuElement[] = []
+  readonly style: Record<string, string> = {}
+  parentElement: ProofMenuElement | null = null
+  textContent = ''
+  className = ''
+  value = ''
+  type = ''
+  placeholder = ''
+
+  constructor(readonly ownerDocument: ProofMenuDocument, readonly tagName: string) {
+    super()
+  }
+
+  get childElementCount(): number { return this.children.length }
+  append(...children: ProofMenuElement[]): void {
+    for (const child of children) {
+      child.parentElement = this
+      this.children.push(child)
+    }
+  }
+  remove(): void {
+    if (this.parentElement === null) return
+    const index = this.parentElement.children.indexOf(this)
+    if (index >= 0) this.parentElement.children.splice(index, 1)
+    this.parentElement = null
+  }
+  setAttribute(): void {}
+  focus(): void { this.ownerDocument.activeElement = this }
+}
+
+class ProofMenuDocument {
+  activeElement: ProofMenuElement | null = null
+  createElement(tagName: string): ProofMenuElement {
+    return new ProofMenuElement(this, tagName.toLowerCase())
+  }
+}
+
+function menuDescendants(root: ProofMenuElement): ProofMenuElement[] {
+  return root.children.flatMap((child) => [child, ...menuDescendants(child)])
+}
+
+function clickMenuRow(host: ProofMenuElement, label: string): void {
+  const row = menuDescendants(host).find((element) =>
+    element.tagName === 'button' && element.textContent === label)
+  if (row === undefined) throw new Error(`no proof menu row '${label}'`)
+  row.dispatchEvent(new Event('click'))
+}
+
+function submitPrompt(host: ProofMenuElement, source: string): void {
+  const input = menuDescendants(host).find((element) => element.tagName === 'input')
+  if (input === undefined) throw new Error('proof text prompt is absent')
+  input.value = source
+  const event = new Event('keydown')
+  Object.defineProperty(event, 'key', { value: 'Enter' })
+  input.dispatchEvent(event)
+}
 
 function keySample(key: string, shiftKey = false) {
   return {
@@ -97,6 +156,45 @@ function harnessKernel(diagram: Diagram, selection: readonly Hit[] = []) {
     openSpawn: () => undefined,
   })
   return { moves, engine, applied, refusals }
+}
+
+function lambdaHarness(source: string) {
+  const builder = new DiagramBuilder()
+  const parsed = parseTerm(source)
+  const node = builder.term(builder.root, parsed.term, parsed.freeIdentifiers.length)
+  let diagram = builder.build()
+  const engine = mkEngine(diagram, [])
+  const document = new ProofMenuDocument()
+  const host = document.createElement('div')
+  const applied: ProofAction[] = []
+  const refusals: string[] = []
+  const controller = new ProofMoveController({
+    host: host as unknown as HTMLElement,
+    active: () => true,
+    diagram: () => diagram,
+    engine: () => engine,
+    viewScale: () => 1,
+    selection: () => [{ kind: 'node', id: node }],
+    setSelection: () => undefined,
+    context: () => EMPTY_PROOF_CONTEXT,
+    orientation: () => 'forward',
+    apply: (action) => {
+      diagram = applyAction(diagram, action, EMPTY_PROOF_CONTEXT)
+      applied.push(action)
+    },
+    refuse: (text) => { refusals.push(text) },
+    theme: () => LIGHT,
+    fuel: () => 64,
+    openSpawn: () => undefined,
+  })
+  return {
+    controller,
+    host,
+    node,
+    diagram: () => diagram,
+    applied,
+    refusals,
+  }
 }
 
 describe('proof move vocabulary', () => {
@@ -335,5 +433,54 @@ describe('proof move vocabulary', () => {
 
     expect(moves.keyDown(keySample('i'))).toBe(false)
     expect(applied).toEqual([])
+  })
+
+  it('double-click fully normalizes a term through a replayable Lambda conversion', () => {
+    const fixture = lambdaHarness('f ((\\x. x) y)')
+
+    expect(fixture.controller.doubleClick(pointerSample(
+      vec(10, 20),
+      { kind: 'node', id: fixture.node },
+    ))).toBe(true)
+
+    expect(fixture.applied).toHaveLength(1)
+    expect(fixture.applied[0]!.steps[0]).toMatchObject({
+      rule: 'lambdaConversion',
+      node: fixture.node,
+    })
+    const result = fixture.diagram().nodes[fixture.node]
+    expect(result?.kind).toBe('term')
+    if (result?.kind !== 'term') throw new Error('normalization lost the term node')
+    expect(result.term).toEqual(parseTerm('f y').term)
+    expect(result.freeArity).toBe(2)
+    expect(fixture.refusals).toEqual([])
+  })
+
+  it('offers normal, head-normal, weak-head-normal, and custom conversions', () => {
+    const fixture = lambdaHarness('(\\x. x) y')
+    const sample = pointerSample(
+      vec(25, 30),
+      { kind: 'node', id: fixture.node },
+    )
+
+    expect(fixture.controller.contextMenu(sample)).toBe(true)
+    const labels = menuDescendants(fixture.host)
+      .filter((element) => element.tagName === 'button')
+      .map((element) => element.textContent)
+    expect(labels).toEqual(expect.arrayContaining([
+      'Convert → normal',
+      'Convert → head normal',
+      'Convert → weak head normal',
+      'Convert → custom target…',
+    ]))
+
+    clickMenuRow(fixture.host, 'Convert → custom target…')
+    submitPrompt(fixture.host, 'f0')
+    expect(fixture.applied).toHaveLength(1)
+    expect(fixture.applied[0]!.steps[0]).toMatchObject({
+      rule: 'lambdaConversion',
+      node: fixture.node,
+      term: parseTerm('f0').term,
+    })
   })
 })

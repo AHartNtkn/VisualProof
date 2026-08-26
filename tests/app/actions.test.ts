@@ -6,6 +6,13 @@ import { verifyTheory } from '../../src/kernel/proof/context'
 import { applicableActions } from '../../src/app/actions'
 import { identityInCut, tinyTheory, UNARY } from '../fixtures/zero-signature'
 import { segment } from './helpers/build'
+import {
+  convertToHeadNormal,
+  convertToNormal,
+  convertToWeakHeadNormal,
+} from '../../src/app/tactics'
+import { applyStep } from '../../src/kernel/proof/step'
+import { parseTerm } from '../../src/kernel/term/parse'
 
 const kinds = (
   diagram: Parameters<typeof applicableActions>[0],
@@ -206,5 +213,91 @@ describe('applicableActions', () => {
     })
     expect(kinds(diagram, positiveWire)).not.toContain('relationJoin')
     expect(kinds(diagram, positiveWire, true)).not.toContain('relationJoin')
+  })
+
+  it('offers conversion only for exactly one whole term node', () => {
+    const builder = new DiagramBuilder()
+    const term = builder.term(builder.root, parseTerm('(\\x. x) y').term, 1)
+    const ref = builder.ref(builder.root, 'UnaryWitness', UNARY)
+    const diagram = builder.build()
+    const termSelection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [term],
+      wires: [],
+    })
+    const mixedSelection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [term, ref],
+      wires: [],
+    })
+
+    expect(kinds(diagram, termSelection)).toContain('convert')
+    expect(kinds(diagram, termSelection, true)).toContain('convert')
+    expect(kinds(diagram, mixedSelection)).not.toContain('convert')
+  })
+})
+
+describe('Lambda conversion tactics', () => {
+  it.each([
+    {
+      name: 'normal',
+      source: 'f ((\\x. x) y)',
+      target: 'f y',
+      convert: convertToNormal,
+    },
+    {
+      name: 'head-normal',
+      source: '\\z. (\\x. x) y',
+      target: '\\z. y',
+      convert: convertToHeadNormal,
+    },
+    {
+      name: 'weak-head-normal',
+      source: '(\\x. x) y',
+      target: 'y',
+      convert: convertToWeakHeadNormal,
+    },
+  ])('emits a checked, replayable $name conversion', ({ source, target, convert }) => {
+    const builder = new DiagramBuilder()
+    const parsed = parseTerm(source)
+    const node = builder.term(
+      builder.root,
+      parsed.term,
+      parsed.freeIdentifiers.length,
+    )
+    const diagram = builder.build()
+    const context = verifyTheory(tinyTheory())
+
+    const tactic = convert(diagram, node, 64)
+    expect(tactic.step).toMatchObject({
+      rule: 'lambdaConversion',
+      node,
+      term: parseTerm(target).term,
+      correspondence: {
+        commonArity: parsed.freeIdentifiers.length,
+        left: Array.from({ length: parsed.freeIdentifiers.length }, (_, slot) => slot),
+        right: Array.from({ length: parsed.freeIdentifiers.length }, (_, slot) => slot),
+      },
+      attachments: {},
+    })
+    expect(applyStep(diagram, tactic.step, context)).toEqual(tactic.diagram)
+  })
+
+  it('refuses exhausted and no-op normalization instead of committing unchecked output', () => {
+    const normalBuilder = new DiagramBuilder()
+    const normal = normalBuilder.term(normalBuilder.root, parseTerm('f0').term, 1)
+    const normalDiagram = normalBuilder.build()
+    expect(() => convertToNormal(normalDiagram, normal, 64)).toThrow(/already.*normal form/i)
+
+    const omegaBuilder = new DiagramBuilder()
+    const omega = omegaBuilder.term(
+      omegaBuilder.root,
+      parseTerm('(\\x. x x) (\\x. x x)').term,
+      0,
+    )
+    const omegaDiagram = omegaBuilder.build()
+    expect(() => convertToNormal(omegaDiagram, omega, 1)).toThrow(/fuel/i)
   })
 })

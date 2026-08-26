@@ -172,6 +172,12 @@ describe('step JSON', () => {
       { rule: 'doubleCutIntro', sel: selection },
       { rule: 'doubleCutElim', region: 'r1' },
       {
+        rule: 'lambdaTermSpawn',
+        region: 'r1',
+        term: application(lambda(bound(0)), free(0)),
+        freeArity: 1,
+      },
+      {
         rule: 'lambdaConversion',
         node: 'n0',
         term: application(lambda(bound(0)), free(1)),
@@ -456,6 +462,15 @@ describe('step JSON', () => {
       args: ['w0'],
       target: { defId: 'legacy' },
     })).toThrowError(/unknown field 'target'/)
+    const badLambdaInterface = stepToJson({
+      rule: 'lambdaTermSpawn',
+      region: 'r0',
+      term: free(1),
+      freeArity: 2,
+    }) as Record<string, unknown>
+    badLambdaInterface.freeArity = 1
+    expect(() => stepFromJson(badLambdaInterface))
+      .toThrowError(/lambdaTermSpawn term interface.*outside interface arity 1/)
   })
 })
 

@@ -1,5 +1,6 @@
 import type { Diagram, RegionId, WireId } from '../../kernel/diagram/diagram'
 import { derivedScopes } from '../../kernel/diagram/regions'
+import { parseTerm, type ParsedTerm } from '../../kernel/term/parse'
 import type { Vec2 } from '../../view/vec'
 
 export const UNQUALIFIED_GROUP_LABEL = 'Unqualified'
@@ -80,10 +81,17 @@ export type SpawnAtomRequest = {
   readonly invocation: SpawnInvocation
 }
 
+export type SpawnTermRequest = {
+  readonly parsed: ParsedTerm
+  readonly invocation: SpawnInvocation
+}
+
 export type SpawnCascadeOptions = {
   readonly host: HTMLElement
+  readonly spawnTerm: (request: SpawnTermRequest) => boolean | void
   readonly spawnRef: (request: SpawnRefRequest) => boolean | void
   readonly spawnAtom: (request: SpawnAtomRequest) => boolean | void
+  readonly refuse: (text: string, pointer: Vec2) => void
   readonly headWireColor: (wire: WireId) => string
   readonly hoverHeadWire?: (wire: WireId | null) => void
   readonly openChanged?: (open: boolean) => void
@@ -204,8 +212,10 @@ export function snapshotSpawnInvocation(invocation: SpawnInvocation): SpawnInvoc
 export class SpawnCascade {
   readonly #host: HTMLElement
   readonly #document: Document
+  readonly #spawnTerm: SpawnCascadeOptions['spawnTerm']
   readonly #spawnRef: SpawnCascadeOptions['spawnRef']
   readonly #spawnAtom: SpawnCascadeOptions['spawnAtom']
+  readonly #refuse: SpawnCascadeOptions['refuse']
   readonly #headWireColor: SpawnCascadeOptions['headWireColor']
   readonly #hoverHeadWire: SpawnCascadeOptions['hoverHeadWire']
   readonly #openChanged: SpawnCascadeOptions['openChanged']
@@ -218,8 +228,10 @@ export class SpawnCascade {
   constructor(options: SpawnCascadeOptions) {
     this.#host = options.host
     this.#document = options.host.ownerDocument
+    this.#spawnTerm = options.spawnTerm
     this.#spawnRef = options.spawnRef
     this.#spawnAtom = options.spawnAtom
+    this.#refuse = options.refuse
     this.#headWireColor = options.headWireColor
     this.#hoverHeadWire = options.hoverHeadWire
     this.#openChanged = options.openChanged
@@ -267,6 +279,7 @@ export class SpawnCascade {
     this.#host.append(backdrop, menu)
     this.#openChanged?.(true)
 
+    let termMode = false
     const current = (): boolean =>
       this.#menu === menu && this.#invocation === snapshot
     const row = (
@@ -315,12 +328,29 @@ export class SpawnCascade {
       item.addEventListener('pointerleave', () => this.#hoverHeadWire?.(null))
       return item
     }
+    const enterTermMode = (): void => {
+      if (!current()) return
+      termMode = true
+      search.value = ''
+      search.type = 'text'
+      search.placeholder = 'λ-term, e.g. \\x. x x'
+      search.setAttribute('aria-label', 'Lambda term to spawn')
+      listing.replaceChildren(
+        row('Lambda expression', '', null),
+        row('Press Enter to place the term', '', null),
+      )
+      search.focus()
+    }
     const render = (): void => {
+      if (termMode || !current()) return
       const query = search.value.trim()
       const refs = query === ''
         ? this.#recents.list(catalog)
         : searchSpawnCatalog(catalog, query).slice(0, SEARCH_RESULT_LIMIT)
       const content: HTMLElement[] = []
+      if (query === '') {
+        content.push(row('Lambda expression', '', enterTermMode))
+      }
       if (heads.length > 0 && query === '') {
         content.push(row('Atoms', '', null), ...heads.map(headRow))
       }
@@ -341,6 +371,22 @@ export class SpawnCascade {
         this.close()
       } else if (event.key === 'Enter') {
         event.preventDefault()
+        if (termMode) {
+          if (search.value.trim() === '') return
+          let parsed: ParsedTerm
+          try {
+            parsed = parseTerm(search.value)
+          } catch (error) {
+            this.#refuse(
+              error instanceof Error ? error.message : String(error),
+              snapshot.screen,
+            )
+            return
+          }
+          const accepted = this.#spawnTerm({ parsed, invocation: snapshot })
+          if (accepted !== false && current()) this.close()
+          return
+        }
         const first = searchSpawnCatalog(catalog, search.value)[0]
         if (first !== undefined) pickRef(first)
       }

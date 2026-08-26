@@ -145,6 +145,11 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
         ...step,
         region: mapId(iso.regions, step.region, 'region'),
       }
+    case 'lambdaTermSpawn':
+      return {
+        ...step,
+        region: mapId(iso.regions, step.region, 'region'),
+      }
     case 'lambdaConversion':
       return {
         ...step,

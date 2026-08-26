@@ -1,4 +1,4 @@
-import type { Diagram, Endpoint, RegionId, WireId } from '../../kernel/diagram/diagram'
+import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
 import { derivedScope } from '../../kernel/diagram/regions'
 import { IOTA, relSig, type Sig } from '../../kernel/diagram/sig'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
@@ -8,6 +8,10 @@ import type { ProofContext } from '../../kernel/proof/context'
 import { assertProofContext } from '../../kernel/proof/context'
 import { bareWireDeletionSteps, bareWireInsertSteps } from '../../kernel/proof/bare-wire'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
+import { termNodeAt } from '../../kernel/rules/access'
+import { mapTermToCommonCarrier } from '../../kernel/rules/lambda'
+import { convertible } from '../../kernel/term/convert'
+import { parseTerm } from '../../kernel/term/parse'
 import { pkey, type Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
@@ -16,6 +20,11 @@ import {
   type ActionDescriptor,
 } from '../actions'
 import { inferFoldArgs } from '../define'
+import {
+  convertToHeadNormal,
+  convertToNormal,
+  convertToWeakHeadNormal,
+} from '../tactics'
 import { absorbHits, orphanedWires } from '../edit'
 import { buildSelection, regionAt, wireManipulationHitTest, type Hit } from '../hittest'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
@@ -275,10 +284,26 @@ export class ProofMoveController {
 
   doubleClick(sample: PointerSample): boolean {
     this.#context()
+    this.#lastPointer = sample.client
     if (!this.#options.active() || sample.hit?.kind !== 'node') return false
     const node = this.#options.diagram().nodes[sample.hit.id]
-    if (node?.kind !== 'ref') return false
-    this.#commit({ rule: 'unfold', nodeId: sample.hit.id })
+    if (node?.kind === 'ref') {
+      this.#commit({ rule: 'unfold', nodeId: sample.hit.id })
+      return true
+    }
+    if (node?.kind !== 'term') return false
+    try {
+      this.#commit(convertToNormal(
+        this.#options.diagram(),
+        sample.hit.id,
+        this.#options.fuel(),
+      ).step)
+    } catch (error) {
+      this.#options.refuse(
+        error instanceof Error ? error.message : String(error),
+        sample.client,
+      )
+    }
     return true
   }
 
@@ -590,7 +615,8 @@ export class ProofMoveController {
       // stored name is inherently a picker — the diagram cannot determine
       // it — so these rows are the interface, not debt.
       const paletteRows = discovery.actions.filter((action) =>
-        action.kind === 'relFold'
+        action.kind === 'convert'
+        || action.kind === 'relFold'
         || action.kind === 'citeTheorem')
       if (paletteRows.length > 0) row('Actions', null)
       for (const action of paletteRows) {
@@ -657,6 +683,9 @@ export class ProofMoveController {
           selection,
         )))
         return
+      case 'convert':
+        this.#appendConversions(row, selection.nodes[0]!)
+        return
       case 'relFold':
         row('Fold into', null)
         for (const [name] of this.#context().relations) {
@@ -680,6 +709,92 @@ export class ProofMoveController {
     }
   }
 
+  #appendConversions(
+    row: (label: string, run: (() => void) | null) => void,
+    node: NodeId,
+  ): void {
+    row('Convert → normal', () => this.#commit(convertToNormal(
+      this.#options.diagram(), node, this.#options.fuel(),
+    ).step))
+    row('Convert → head normal', () => this.#commit(convertToHeadNormal(
+      this.#options.diagram(), node, this.#options.fuel(),
+    ).step))
+    row('Convert → weak head normal', () => this.#commit(convertToWeakHeadNormal(
+      this.#options.diagram(), node, this.#options.fuel(),
+    ).step))
+    row('Convert → custom target…', () => this.#openTextPrompt(
+      'Conversion target',
+      'target term',
+      (value) => {
+        const parsed = parseTerm(value)
+        const diagram = this.#options.diagram()
+        const source = termNodeAt(diagram, node)
+        if (parsed.freeIdentifiers.length > source.freeArity) {
+          throw new Error(
+            `conversion target uses ${parsed.freeIdentifiers.length} free slots, `
+            + `but the source interface has ${source.freeArity}`,
+          )
+        }
+        const assigned = parsed.freeIdentifiers.map((identifier) => {
+          const match = /^f(0|[1-9][0-9]*)$/u.exec(identifier)
+          if (match === null) return undefined
+          const slot = Number(match[1])
+          if (slot >= source.freeArity) {
+            throw new Error(
+              `conversion target free identifier '${identifier}' is outside `
+              + `the source interface 0..<${source.freeArity}`,
+            )
+          }
+          return slot
+        })
+        const used = new Set(assigned.filter(
+          (slot): slot is number => slot !== undefined,
+        ))
+        if (used.size !== assigned.filter((slot) => slot !== undefined).length) {
+          throw new Error('conversion target maps two free identifiers to one source slot')
+        }
+        let next = 0
+        const mapping = assigned.map((slot) => {
+          if (slot !== undefined) return slot
+          while (used.has(next)) next++
+          if (next >= source.freeArity) {
+            throw new Error('conversion target has no available source free slot')
+          }
+          used.add(next)
+          return next++
+        })
+        const target = mapTermToCommonCarrier(parsed.term, mapping)
+        const conversion = convertible(
+          source.term,
+          target,
+          this.#options.fuel(),
+        )
+        if (conversion.status === 'fuel-exhausted') {
+          throw new Error(conversion.detail)
+        }
+        if (conversion.status === 'not-convertible') {
+          throw new Error('conversion target is not beta-eta convertible to the source term')
+        }
+        const slots = Array.from(
+          { length: source.freeArity },
+          (_, slot) => slot,
+        )
+        this.#commit({
+          rule: 'lambdaConversion',
+          node,
+          term: target,
+          correspondence: {
+            commonArity: source.freeArity,
+            left: slots,
+            right: [...slots],
+          },
+          certificate: conversion.certificate,
+          attachments: {},
+        })
+      },
+    ))
+  }
+
   #beginCitation(candidate: CitationCandidate): void {
     if (candidate.occurrences === null) return
     this.#closeMenu()
@@ -691,6 +806,43 @@ export class ProofMoveController {
   #closeMenu(): void {
     this.#menu?.remove()
     this.#menu = null
+  }
+
+  #openTextPrompt(
+    label: string,
+    placeholder: string,
+    accept: (value: string) => void,
+  ): void {
+    this.#closePrompt()
+    const wrap = this.#document.createElement('div')
+    wrap.className = 'vpa-proof-prompt'
+    wrap.style.left = `${this.#lastPointer.x + 10}px`
+    wrap.style.top = `${this.#lastPointer.y + 10}px`
+    const input = this.#document.createElement('input')
+    input.type = 'text'
+    input.placeholder = placeholder
+    input.setAttribute('aria-label', label)
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation()
+      if (event.key === 'Escape') {
+        this.#closePrompt()
+        return
+      }
+      if (event.key !== 'Enter') return
+      try {
+        accept(input.value)
+        this.#closePrompt()
+      } catch (error) {
+        this.#options.refuse(
+          error instanceof Error ? error.message : String(error),
+          this.#lastPointer,
+        )
+      }
+    })
+    wrap.append(input)
+    this.#prompt = wrap
+    this.#options.host.append(wrap)
+    queueMicrotask(() => input.focus())
   }
 
   /** The arity prompt: blank means an individual (ι); n means rel(ιⁿ). */

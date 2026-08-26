@@ -1,6 +1,6 @@
 import type { Endpoint } from '../diagram/diagram'
 import { portKey } from '../diagram/diagram'
-import type { Term } from '../term/term'
+import { assertWellFormedTerm, type Term } from '../term/term'
 import { deserializeTerm, serializeTerm } from '../term/serialize'
 import type { PathSeg, ReductionStep } from '../term/reduce'
 import type { ConversionCertificate } from '../term/certificate'
@@ -549,6 +549,13 @@ export function stepToJson(step: ProofStep): unknown {
       return { rule: step.rule, sel: selectionToJson(step.sel) }
     case 'doubleCutElim':
       return { rule: step.rule, region: step.region }
+    case 'lambdaTermSpawn':
+      return {
+        rule: step.rule,
+        region: step.region,
+        term: serializeTerm(step.term),
+        freeArity: step.freeArity,
+      }
     case 'lambdaConversion':
       return {
         rule: step.rule,
@@ -704,6 +711,29 @@ export function stepFromJson(value: unknown): ProofStep {
     case 'doubleCutElim':
       assertOnlyKeys(value, ['rule', 'region'], 'doubleCutElim step')
       return { rule, region: str(value.region, 'region') }
+    case 'lambdaTermSpawn': {
+      assertOnlyKeys(
+        value,
+        ['rule', 'region', 'term', 'freeArity'],
+        'lambdaTermSpawn step',
+      )
+      const term = termFromJson(value.term, 'term')
+      const freeArity = nonNegativeSafeInteger(value.freeArity, 'freeArity')
+      try {
+        assertWellFormedTerm(term, freeArity)
+      } catch (error) {
+        fail(
+          `lambdaTermSpawn term interface: `
+          + `${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+      return {
+        rule,
+        region: str(value.region, 'region'),
+        term,
+        freeArity,
+      }
+    }
     case 'lambdaConversion':
       assertOnlyKeys(
         value,

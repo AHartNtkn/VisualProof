@@ -37,6 +37,31 @@ function asymmetricCopies() {
 }
 
 describe('composeActions', () => {
+  it('maps a Lambda term spawn region while preserving its nameless payload', () => {
+    const sourceBuilder = new DiagramBuilder()
+    const sourceRegion = sourceBuilder.cut(sourceBuilder.root)
+    const source = sourceBuilder.build()
+    const targetBuilder = new DiagramBuilder()
+    const targetRegion = targetBuilder.cut(targetBuilder.root)
+    const target = targetBuilder.build()
+    const iso = {
+      regions: new Map([[source.root, target.root], [sourceRegion, targetRegion]]),
+      nodes: new Map(),
+      wires: new Map(),
+    }
+    const step: ProofStep = {
+      rule: 'lambdaTermSpawn',
+      region: sourceRegion,
+      term: free(0),
+      freeArity: 1,
+    }
+
+    expect(mapStepIds(step, iso)).toEqual({
+      ...step,
+      region: targetRegion,
+    })
+  })
+
   it('rewrites a structural tail across a non-identity isomorphism', () => {
     const copies = asymmetricCopies()
     const tail = [action('wrap the atom', [{

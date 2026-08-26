@@ -29,7 +29,7 @@ import { defineRelation, inferFoldArgs } from './define'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
 import { emptyDiagram } from './edit'
-import { spawnAtomNode, spawnRefNode } from '../kernel/diagram/spawn'
+import { spawnAtomNode, spawnRefNode, spawnTermNode } from '../kernel/diagram/spawn'
 import type { ProofSession, TrackDirection, TrackSession } from './session'
 import {
   startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide,
@@ -1463,6 +1463,29 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   chrome.append(menuDiv, openFileInput)
   spawnCascade = new SpawnCascade({
     host: document.body,
+    spawnTerm: ({ parsed, invocation }) => {
+      try {
+        requireEdit()
+        const added = spawnTermNode(
+          editDiagram,
+          invocation.region,
+          parsed.term,
+          parsed.freeIdentifiers.length,
+        )
+        pushEdit(
+          added.diagram,
+          { node: added.node, at: invocation.world },
+          true,
+        )
+        return true
+      } catch (error) {
+        refuse(
+          error instanceof Error ? error.message : String(error),
+          invocation.screen,
+        )
+        return false
+      }
+    },
     spawnRef: ({ defId, arity, invocation }) => {
       try {
         requireEdit()
@@ -1495,6 +1518,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return false
       }
     },
+    refuse,
     headWireColor: (wire) => {
       const color = relationWireHues(editDiagram, theme.relationHueLightness).get(wire)
       if (color === undefined) throw new Error(`atom option references missing relation wire '${wire}'`)
@@ -1506,9 +1530,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     host: document.body,
     diagram: currentDiagram,
     context: () => ctx,
-    commit: (step) => {
+    commit: (action) => {
       if (proof?.kind !== 'track') throw new Error('proof spawning requires an active track proof')
-      applyProofStep(step)
+      applyProofAction(action)
       return currentDiagram()
     },
     place: (node, at) => seedBodyPlacement(engine, node, at),

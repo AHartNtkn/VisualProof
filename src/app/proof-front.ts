@@ -129,8 +129,8 @@ export class ProofFrontViewport {
       host: document.body,
       diagram: model.diagram,
       context: model.context,
-      commit: (step) => {
-        model.prepare(step)()
+      commit: (action) => {
+        model.prepareAction(action)()
         return model.diagram()
       },
       place: (node, at) => seedBodyPlacement(this.#engine, node, at),
