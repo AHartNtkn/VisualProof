@@ -1,9 +1,83 @@
 import { describe, expect, it } from 'vitest'
+import { parseTerm } from '../../src/kernel/term/parse'
 import {
   atomGeometry,
+  bendGrid,
+  GAP_ANGLE,
   identityGeometry,
   refGeometry,
+  termGeometry,
 } from '../../src/view/bend'
+import { trompGrid } from '../../src/view/tromp'
+import { length } from '../../src/view/vec'
+
+const p = (source: string) => parseTerm(source).term
+
+describe('bent Tromp geometry', () => {
+  it('maps outer binders to larger circular arcs', () => {
+    const geometry = bendGrid(trompGrid(p('\\x. \\y. x')))
+    const binderArcs = geometry.arcs.filter((arc) => arc.kind === 'lam')
+    expect(binderArcs).toHaveLength(2)
+    expect(binderArcs.find((arc) => arc.hueRow === 0)!.r)
+      .toBeGreaterThan(binderArcs.find((arc) => arc.hueRow === 1)!.r)
+  })
+
+  it('keeps all internal strokes outside the output gap', () => {
+    const geometry = termGeometry(p('\\f. \\x. f (f x)'))
+    const low = GAP_ANGLE / 2
+    const high = 2 * Math.PI - GAP_ANGLE / 2
+    for (const arc of geometry.arcs) {
+      expect(arc.a0).toBeGreaterThanOrEqual(low)
+      expect(arc.a1).toBeLessThanOrEqual(high)
+    }
+    for (const radial of geometry.radials) {
+      expect(radial.angle).toBeGreaterThanOrEqual(low)
+      expect(radial.angle).toBeLessThanOrEqual(high)
+    }
+  })
+
+  it('uses diagram storage keys for output and numeric free-slot anchors', () => {
+    const geometry = termGeometry(p('y (z y)'))
+    expect(Object.keys(geometry.portAnchors)).toEqual(['f:0', 'f:1', 'out'])
+    const maxArcRadius = Math.max(...geometry.arcs.map((arc) => arc.r))
+    expect(length(geometry.portAnchors['f:0']!)).toBeGreaterThan(maxArcRadius)
+    expect(length(geometry.portAnchors['f:1']!)).toBeGreaterThan(maxArcRadius)
+    expect(geometry.portAnchors.out!.y).toBeCloseTo(0, 10)
+    expect(geometry.portAnchors.out!.x).toBeGreaterThan(0)
+  })
+
+  it('includes the output arc and straight exit owned by the root occurrence', () => {
+    const geometry = termGeometry(p('\\x. x'))
+    expect(geometry.exitArc).not.toBeNull()
+    expect(geometry.exitLine).not.toBeNull()
+    expect(geometry.exitLine).toHaveLength(2)
+    expect(geometry.occurrences[0]).toMatchObject({ path: [], includeExit: true, hit: { kind: 'exit' } })
+  })
+
+  it('maps every syntax occurrence to painted anatomy primitives and a hit trace', () => {
+    const geometry = termGeometry(p('a ((\\x. x) b)'))
+    expect(geometry.occurrences.map((occurrence) => occurrence.path)).toEqual([
+      [], ['fn'], ['argument'], ['argument', 'fn'], ['argument', 'fn', 'body'], ['argument', 'argument'],
+    ])
+    for (const occurrence of geometry.occurrences) {
+      expect(
+        occurrence.arcIndices.length + occurrence.radialIndices.length + Number(occurrence.includeExit),
+        `painted carrier for [${occurrence.path.join(',')}]`,
+      ).toBeGreaterThan(0)
+    }
+  })
+
+  it('gives lambda leaf bodies a painted carrier', () => {
+    for (const source of ['\\x. a', '\\x. x']) {
+      const body = termGeometry(p(source)).occurrences.find((occurrence) => occurrence.path.join('/') === 'body')!
+      expect(body.arcIndices.length + body.radialIndices.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('produces exactly equal circular geometry for alpha-equivalent inputs', () => {
+    expect(termGeometry(p('\\x. x free'))).toEqual(termGeometry(p('\\renamed. renamed other')))
+  })
+})
 
 describe('atom/ref/identity geometry', () => {
   it('retains atom head and argument geometry', () => {
@@ -44,12 +118,11 @@ describe('atom/ref/identity geometry', () => {
     }
   })
 
-  it('contains no lambda output, body, occurrence, or fission geometry fields', () => {
+  it('does not fabricate term exits or occurrences', () => {
     for (const geometry of [atomGeometry(2), refGeometry(2), identityGeometry(4)]) {
-      expect(geometry).not.toHaveProperty('outputAnchor')
-      expect(geometry).not.toHaveProperty('exitArc')
-      expect(geometry).not.toHaveProperty('exitLine')
-      expect(geometry).not.toHaveProperty('occurrences')
+      expect(geometry.exitArc).toBeNull()
+      expect(geometry.exitLine).toBeNull()
+      expect(geometry.occurrences).toEqual([])
     }
   })
 

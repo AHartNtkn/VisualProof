@@ -3,8 +3,10 @@ import {
   atomGeometry,
   identityGeometry,
   refGeometry,
+  termGeometry,
   type NodeGeometry,
 } from '../../src/view/bend'
+import { parseTerm } from '../../src/kernel/term/parse'
 import { mkGeomMorph } from '../../src/view/morph'
 
 const finiteGeometry = (geometry: NodeGeometry): boolean =>
@@ -44,12 +46,14 @@ describe('whole-node geometry morphing', () => {
     }
   })
 
-  it('does not recreate term-grid, output, body, occurrence, or fission state', () => {
-    const geometry = mkGeomMorph(atomGeometry(2), identityGeometry(4))(0.5)
+  it('interpolates term radials and exits without exposing ambiguous occurrence targets', () => {
+    const from = termGeometry(parseTerm('\\x. x free').term)
+    const to = termGeometry(parseTerm('\\x. x').term)
+    const geometry = mkGeomMorph(from, to)(0.5)
 
-    expect(geometry).not.toHaveProperty('outputAnchor')
-    expect(geometry).not.toHaveProperty('exitArc')
-    expect(geometry).not.toHaveProperty('exitLine')
-    expect(geometry).not.toHaveProperty('occurrences')
+    expect(geometry.radials.length).toBeGreaterThan(0)
+    expect(geometry.exitArc).not.toBeNull()
+    expect(geometry.exitLine).not.toBeNull()
+    expect(geometry.occurrences).toEqual([])
   })
 })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { relSig, IOTA } from '../../src/kernel/diagram/sig'
+import { parseTerm } from '../../src/kernel/term/parse'
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
 const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 import { mkEngine, DISC_R, frameBounds, frameSlots, resolvedFrameSlot } from '../../src/view/engine'
@@ -24,6 +25,34 @@ describe('authoritative content scale', () => {
       && shape.center.y === body.pos.y
       && shape.r === 2 * DISC_R)
     expect(disc, 'rendering must read the engine-owned scale without body state').toBeDefined()
+  })
+})
+
+describe('term anatomy paint', () => {
+  it('paints every internal and exit stroke in the theme term-wire color', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.term(builder.root, parseTerm('\\x. x free').term)
+    const engine = mkEngine(builder.build(), [])
+    settle(engine, 1)
+    const body = engine.bodies.get(node)!
+    const geometry = body.geometry!
+    const shapes = paint(engine, LIGHT, () => [])
+    const anatomy = shapes.filter((shape) => (
+      (shape.kind === 'arc' && shape.center.x === body.pos.x && shape.center.y === body.pos.y)
+      || (shape.kind === 'segment'
+        && shape.stroke === LIGHT.wire
+        && Math.hypot(shape.from.x - body.pos.x, shape.from.y - body.pos.y) <= body.discR * engine.scale)
+    ))
+
+    expect(anatomy.filter((shape) => shape.kind === 'arc')).toHaveLength(
+      geometry.arcs.length + Number(geometry.exitArc !== null),
+    )
+    expect(anatomy.filter((shape) => shape.kind === 'segment')).toHaveLength(
+      geometry.radials.length + Number(geometry.exitLine !== null),
+    )
+    for (const shape of anatomy) {
+      if (shape.kind === 'arc' || shape.kind === 'segment') expect(shape.stroke).toBe(LIGHT.wire)
+    }
   })
 })
 

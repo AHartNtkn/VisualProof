@@ -144,7 +144,7 @@ export type StoredFrame = { readonly center: Vec2; readonly half: number }
 
 /** Local anatomy scale per node kind. */
 export function ascaleOf(kind: BodyKind): number {
-  return kind === 'atom' ? 2 : 1
+  return kind === 'atom' ? 2 : kind === 'term' ? 1.4 : 1
 }
 
 /** Shared layout clearance for point nodes: dangling quantifiers and equality. */
@@ -160,7 +160,7 @@ export function nodeGeometry(d: Diagram, id: NodeId): NodeGeometry {
   if (n === undefined) throw new Error(`unknown node '${id}'`)
   switch (n.kind) {
     case 'term':
-      return termGeometry(n.freeArity)
+      return termGeometry(n.term)
     case 'atom':
       return atomGeometry(n.sig.args.length)
     case 'ref':

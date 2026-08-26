@@ -2,14 +2,52 @@ import { describe, expect, it } from 'vitest'
 import { buildSelection } from '../../src/app/hit-selection'
 import {
   pendingWireHitTest,
+  termOccurrenceHitTest,
   wireManipulationHitTest,
 } from '../../src/app/hittest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { mkEngine, computeLegs } from '../../src/view'
+import { parseTerm } from '../../src/kernel/term/parse'
+import { localToWorld, mkEngine, computeLegs } from '../../src/view'
 import { vec } from '../../src/view/vec'
 import { UNARY } from '../fixtures/zero-signature'
 
 const viewport = { scale: 1 }
+
+describe('term occurrence hit geometry', () => {
+  it('returns the deepest structural path carried by the painted occurrence geometry', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.term(builder.root, parseTerm('a ((\\x. x) b)').term)
+    const engine = mkEngine(builder.build(), [])
+    const body = engine.bodies.get(node)!
+    body.pos = vec(12, -9)
+    body.theta = Math.PI / 5
+    const occurrence = body.geometry!.occurrences.find((candidate) => (
+      candidate.path.join('/') === 'argument/fn/body'
+    ))!
+    const radial = body.geometry!.radials[occurrence.radialIndices[0]!]!
+    const radius = (radial.r0 + radial.r1) / 2
+    const point = localToWorld(engine, body, vec(
+      Math.cos(radial.angle) * radius,
+      Math.sin(radial.angle) * radius,
+    ))
+
+    expect(termOccurrenceHitTest(engine, point, { scale: 100 })).toEqual({
+      node,
+      path: ['argument', 'fn', 'body'],
+    })
+  })
+
+  it('selects the root occurrence from the painted output exit', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.term(builder.root, parseTerm('\\x. x').term)
+    const engine = mkEngine(builder.build(), [])
+    const body = engine.bodies.get(node)!
+    const [from, to] = body.geometry!.exitLine!
+    const point = localToWorld(engine, body, vec((from.x + to.x) / 2, (from.y + to.y) / 2))
+
+    expect(termOccurrenceHitTest(engine, point, viewport)).toEqual({ node, path: [] })
+  })
+})
 
 describe('hit selection policy', () => {
   it('anchors structural hits in one direct region', () => {

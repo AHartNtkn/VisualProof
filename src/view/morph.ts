@@ -1,4 +1,4 @@
-import type { NodeArc, NodeGeometry } from './bend'
+import type { NodeArc, NodeGeometry, NodeRadial } from './bend'
 import type { Vec2 } from './vec'
 
 const lerp = (from: number, to: number, progress: number): number =>
@@ -11,13 +11,26 @@ const lerpPoint = (from: Vec2, to: Vec2, progress: number): Vec2 => ({
 
 const collapsedArc = (arc: NodeArc): NodeArc => {
   const middle = (arc.a0 + arc.a1) / 2
-  return { r: arc.r, a0: middle, a1: middle }
+  return { ...arc, a0: middle, a1: middle }
 }
 
 const interpolateArc = (from: NodeArc, to: NodeArc, progress: number): NodeArc => ({
+  ...(progress < 0.5 ? from : to),
   r: lerp(from.r, to.r, progress),
   a0: lerp(from.a0, to.a0, progress),
   a1: lerp(from.a1, to.a1, progress),
+})
+
+const collapsedRadial = (radial: NodeRadial): NodeRadial => {
+  const middle = (radial.r0 + radial.r1) / 2
+  return { ...radial, r0: middle, r1: middle }
+}
+
+const interpolateRadial = (from: NodeRadial, to: NodeRadial, progress: number): NodeRadial => ({
+  ...(progress < 0.5 ? from : to),
+  angle: lerp(from.angle, to.angle, progress),
+  r0: lerp(from.r0, to.r0, progress),
+  r1: lerp(from.r1, to.r1, progress),
 })
 
 /**
@@ -33,6 +46,7 @@ export function mkGeomMorph(
   to: NodeGeometry,
 ): (progress: number) => NodeGeometry {
   const arcCount = Math.max(from.arcs.length, to.arcs.length)
+  const radialCount = Math.max(from.radials.length, to.radials.length)
   const anchorKeys = [...new Set([
     ...Object.keys(from.portAnchors),
     ...Object.keys(to.portAnchors),
@@ -56,6 +70,19 @@ export function mkGeomMorph(
       }
     }
 
+    const radials: NodeRadial[] = []
+    for (let index = 0; index < radialCount; index++) {
+      const fromRadial = from.radials[index]
+      const toRadial = to.radials[index]
+      if (fromRadial !== undefined && toRadial !== undefined) {
+        radials.push(interpolateRadial(fromRadial, toRadial, progress))
+      } else if (fromRadial !== undefined) {
+        radials.push(interpolateRadial(fromRadial, collapsedRadial(fromRadial), progress))
+      } else if (toRadial !== undefined) {
+        radials.push(interpolateRadial(collapsedRadial(toRadial), toRadial, progress))
+      }
+    }
+
     const portAnchors: Record<string, Vec2> = {}
     for (const key of anchorKeys) {
       portAnchors[key] = lerpPoint(
@@ -69,11 +96,45 @@ export function mkGeomMorph(
       ? null
       : lerpPoint(from.headAnchor ?? center, to.headAnchor ?? center, progress)
 
+    const exitArc = from.exitArc === null && to.exitArc === null
+      ? null
+      : (() => {
+          const fromArc = from.exitArc ?? {
+            r: to.exitArc!.r,
+            a0: (to.exitArc!.a0 + to.exitArc!.a1) / 2,
+            a1: (to.exitArc!.a0 + to.exitArc!.a1) / 2,
+          }
+          const toArc = to.exitArc ?? {
+            r: from.exitArc!.r,
+            a0: (from.exitArc!.a0 + from.exitArc!.a1) / 2,
+            a1: (from.exitArc!.a0 + from.exitArc!.a1) / 2,
+          }
+          return {
+            r: lerp(fromArc.r, toArc.r, progress),
+            a0: lerp(fromArc.a0, toArc.a0, progress),
+            a1: lerp(fromArc.a1, toArc.a1, progress),
+          }
+        })()
+    const exitLine = from.exitLine === null && to.exitLine === null
+      ? null
+      : (() => {
+          const fromLine = from.exitLine ?? [to.exitLine![0], to.exitLine![0]] as const
+          const toLine = to.exitLine ?? [from.exitLine![0], from.exitLine![0]] as const
+          return [
+            lerpPoint(fromLine[0], toLine[0], progress),
+            lerpPoint(fromLine[1], toLine[1], progress),
+          ] as const
+        })()
+
     return {
       outerRadius: lerp(from.outerRadius, to.outerRadius, progress),
       arcs,
+      radials,
       headAnchor,
       portAnchors,
+      exitArc,
+      exitLine,
+      occurrences: [],
     }
   }
 }

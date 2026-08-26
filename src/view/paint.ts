@@ -3,7 +3,7 @@ import { sigOrder } from '../kernel/diagram/sig'
 import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
-import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, resolvedFrameSlot } from './engine'
+import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, localToWorld, resolvedFrameSlot } from './engine'
 import { computeLegs, legPaths } from './wires'
 import type { Leg } from './engine'
 
@@ -146,12 +146,50 @@ function atomHeadWires(d: Diagram): Map<NodeId, WireId> {
   return out
 }
 
-/** The semantic-node rail outline in one stroke/width/glow. */
+/** All line anatomy owned by one semantic node. */
 function anatomyOutline(e: Engine, b: Body, g: NodeGeometry, stroke: string, width: number, glow: string | null): Shape[] {
   const ascale = ascaleOf(b.kind) * e.scale
   const out: Shape[] = []
   for (const a of g.arcs) {
     out.push({ kind: 'arc', center: b.pos, r: a.r * ascale, a0: a.a0 + b.theta, a1: a.a1 + b.theta, stroke, width, glow })
+  }
+  for (const radial of g.radials) {
+    out.push({
+      kind: 'segment',
+      from: localToWorld(e, b, {
+        x: Math.cos(radial.angle) * radial.r0,
+        y: Math.sin(radial.angle) * radial.r0,
+      }),
+      to: localToWorld(e, b, {
+        x: Math.cos(radial.angle) * radial.r1,
+        y: Math.sin(radial.angle) * radial.r1,
+      }),
+      stroke,
+      width,
+      glow,
+    })
+  }
+  if (g.exitArc !== null) {
+    out.push({
+      kind: 'arc',
+      center: b.pos,
+      r: g.exitArc.r * ascale,
+      a0: g.exitArc.a0 + b.theta,
+      a1: g.exitArc.a1 + b.theta,
+      stroke,
+      width,
+      glow,
+    })
+  }
+  if (g.exitLine !== null) {
+    out.push({
+      kind: 'segment',
+      from: localToWorld(e, b, g.exitLine[0]),
+      to: localToWorld(e, b, g.exitLine[1]),
+      stroke,
+      width,
+      glow,
+    })
   }
   return out
 }
@@ -280,7 +318,7 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     const g = b.geometry
     if (g === null) continue
     const ascale = ascaleOf(b.kind) * e.scale
-    const stroke = bodyStroke(b)
+    const stroke = b.kind === 'term' ? st.wire : bodyStroke(b)
     shapes.push(...anatomyOutline(e, b, g, stroke, st.wireW, glow(stroke)))
     if (node?.kind === 'atom' && pipArity(b) >= 2) {
       shapes.push(pipAt(b, g.arcs[0]!.r * ascale, stroke))
