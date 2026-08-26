@@ -100,6 +100,7 @@ test('renders exact separate tree counts and lets the player walk', async ({ pag
   await expect(orchard).toHaveAttribute('data-render-mode', 'raw')
   await expect(orchard).toHaveAttribute('data-pending-representations', '0', { timeout: 30_000 })
   await expect(orchard).toHaveAttribute('data-full-count', '100')
+  await expect(orchard).toHaveAttribute('data-point-light-count', '0')
   await page.getByRole('radio', { name: 'Game LOD' }).check()
   await expect(orchard).toHaveAttribute('data-render-mode', 'game')
   await expect(orchard).toHaveAttribute('data-pending-representations', '0', { timeout: 30_000 })
@@ -142,17 +143,17 @@ test('updates LOD and glow for irregular saved placements without page errors', 
   await expect(orchard).toHaveAttribute('data-ready', 'true')
   await expect(orchard).toHaveAttribute('data-tree-count', '3')
   await expect(orchard).toHaveAttribute('data-point-light-count', '0')
-  expect(Number(await orchard.getAttribute('data-glow-tile-count'))).toBeGreaterThan(1)
-
-  const lodCounts = () => orchard.evaluate((element) => [
-    element.getAttribute('data-full-count'),
-    element.getAttribute('data-reduced-count'),
-    element.getAttribute('data-marker-count'),
-  ].join(':'))
-  const initialLods = await lodCounts()
+  await expect(orchard).toHaveAttribute('data-glow-tile-count', '9')
+  await expect(orchard).toHaveAttribute('data-full-count', '1')
+  await expect(orchard).toHaveAttribute('data-reduced-count', '2')
+  await expect(orchard).toHaveAttribute('data-marker-count', '0')
+  await expect(orchard).toHaveAttribute('data-culled-count', '0')
   await page.keyboard.down('s')
   await page.waitForTimeout(3_000)
   await page.keyboard.up('s')
-  await expect.poll(lodCounts).not.toBe(initialLods)
+  await expect(orchard).toHaveAttribute('data-full-count', '0')
+  await expect(orchard).toHaveAttribute('data-reduced-count', '3')
+  await expect(orchard).toHaveAttribute('data-marker-count', '0')
+  await expect(orchard).toHaveAttribute('data-culled-count', '0')
   expect(pageErrors).toEqual([])
 })

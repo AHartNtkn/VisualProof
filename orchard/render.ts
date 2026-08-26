@@ -40,7 +40,7 @@ export type OrchardFrameStats = {
   readonly culled: number
   readonly pending: number
   readonly glowTiles: number
-  readonly pointLights: 0
+  readonly pointLights: number
   readonly representedEntities: number
   readonly buildMs: number
   readonly lodMs: number
@@ -83,11 +83,12 @@ type TreeRenderState = {
   object: THREE.Group | null
   objectNodes: number
   objectInstanced: number
+  objectPointLights: number
   representedEntities: number
   queued: boolean
+  operationNode: RepresentationOperationNode | null
   active: boolean
   needsReplacement: boolean
-  failedDesired: LodLevel | null
 }
 
 type SpatialTree = {
@@ -101,6 +102,34 @@ type RepresentationOperation =
   | { readonly kind: 'state'; readonly state: TreeRenderState }
   | { readonly kind: 'retired'; readonly object: THREE.Group }
 
+type RepresentationOperationNode = {
+  readonly operation: RepresentationOperation
+  previous: RepresentationOperationNode | null
+  next: RepresentationOperationNode | null
+}
+
+type RepresentationFailure = {
+  readonly desired: LodLevel
+  readonly message: string
+}
+
+export type RepresentationWork = {
+  readonly completed: number
+  readonly examined: number
+}
+
+export class OrchardWorldLifecycle {
+  private disposed = false
+
+  public constructor(private readonly releases: readonly (() => void)[]) {}
+
+  public dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    for (const release of this.releases) release()
+  }
+}
+
 export type TreeRuntimeSnapshot = {
   readonly logical: number
   readonly logicalEntities: number
@@ -113,6 +142,7 @@ export type TreeRuntimeSnapshot = {
   readonly pending: number
   readonly objects: number
   readonly instanced: number
+  readonly pointLights: number
   readonly representedEntities: number
   readonly buildMs: number
   readonly error: string | null
@@ -130,14 +160,20 @@ export function treeWorldSphere(saved: SavedTree, layout: SavedTreeLayout): THRE
   return new THREE.Sphere(center, layout.bounds.radius)
 }
 
-function objectCardinality(object: THREE.Group): { readonly nodes: number; readonly instanced: number } {
+function objectCardinality(object: THREE.Group): {
+  readonly nodes: number
+  readonly instanced: number
+  readonly pointLights: number
+} {
   let nodes = 0
   let instanced = 0
+  let pointLights = 0
   object.traverse((child) => {
     nodes++
     if ((child as THREE.InstancedMesh).isInstancedMesh === true) instanced++
+    if ((child as THREE.PointLight).isPointLight === true) pointLights++
   })
-  return { nodes, instanced }
+  return { nodes, instanced, pointLights }
 }
 
 function sameSavedTree(left: SavedTree, right: SavedTree): boolean {
@@ -151,8 +187,10 @@ export class OrchardTreeRuntime {
   private readonly states = new Map<string, TreeRenderState>()
   private readonly spatial = new SpatialIndex<SpatialTree>(SPATIAL_CELL_SIZE)
   private readonly glowPlan = new GlowTilePlan(SPATIAL_CELL_SIZE)
-  private readonly operations: RepresentationOperation[] = []
+  private operationHead: RepresentationOperationNode | null = null
+  private operationTail: RepresentationOperationNode | null = null
   private readonly tracked = new Set<TreeRenderState>()
+  private readonly failures = new Map<string, RepresentationFailure>()
   private readonly maxRadius: number
   private readonly lodCounts: Record<LodLevel, number> = { full: 0, reduced: 0, marker: 0, culled: 0 }
   private mode: RenderMode = 'game'
@@ -161,9 +199,9 @@ export class OrchardTreeRuntime {
   private resident = 0
   private objects = 0
   private instanced = 0
+  private pointLights = 0
   private representedEntities = 0
   private buildMs = 0
-  private lastError: string | null = null
   private disposed = false
 
   public constructor(
@@ -208,9 +246,8 @@ export class OrchardTreeRuntime {
     this.assertActive()
     if (mode === this.mode) return
     this.mode = mode
-    this.lastError = null
     for (const state of this.states.values()) {
-      state.failedDesired = null
+      this.clearFailure(state)
       this.setDesired(state, mode === 'raw' ? 'full' : 'culled')
       this.enqueueState(state, true)
     }
@@ -263,30 +300,31 @@ export class OrchardTreeRuntime {
     return { visited: visitedStates.size, lodMs: performance.now() - started }
   }
 
-  public processOperations(requestedBudget = MAX_REPRESENTATION_OPERATIONS): number {
+  public processOperations(requestedBudget = MAX_REPRESENTATION_OPERATIONS): RepresentationWork {
     this.assertActive()
     const started = performance.now()
     const budget = Math.min(MAX_REPRESENTATION_OPERATIONS, Math.max(0, Math.trunc(requestedBudget)))
-    let processed = 0
-    while (processed < budget && this.operations.length > 0) {
-      const operation = this.operations.shift()!
+    let completed = 0
+    let examined = 0
+    while (completed < budget && examined < budget && this.operationHead !== null) {
+      const operation = this.shiftOperation()
+      examined++
       if (operation.kind === 'retired') {
         this.pending--
         this.releaseObject(operation.object)
-        processed++
+        completed++
         continue
       }
       const state = operation.state
-      if (!state.queued) continue
       state.queued = false
+      state.operationNode = null
       this.pending--
-      if (!state.active) continue
       this.replaceStateObject(state)
-      processed++
+      completed++
       this.pruneTracked(state)
     }
     this.buildMs = performance.now() - started
-    return processed
+    return { completed, examined }
   }
 
   public flushGlow(): DirtyGlowTile[] {
@@ -307,9 +345,10 @@ export class OrchardTreeRuntime {
       pending: this.pending,
       objects: this.objects,
       instanced: this.instanced,
+      pointLights: this.pointLights,
       representedEntities: this.representedEntities,
       buildMs: this.buildMs,
-      error: this.lastError,
+      error: this.failures.values().next().value?.message ?? null,
     }
   }
 
@@ -324,17 +363,20 @@ export class OrchardTreeRuntime {
       state.active = false
       state.queued = false
     }
-    for (const operation of this.operations) {
-      if (operation.kind === 'retired') objects.add(operation.object)
+    for (let node = this.operationHead; node !== null; node = node.next) {
+      if (node.operation.kind === 'retired') objects.add(node.operation.object)
     }
-    this.operations.length = 0
+    this.operationHead = null
+    this.operationTail = null
     this.pending = 0
     for (const object of objects) this.releaseObject(object)
     this.states.clear()
     this.tracked.clear()
+    this.failures.clear()
     this.resident = 0
     this.objects = 0
     this.instanced = 0
+    this.pointLights = 0
     this.representedEntities = 0
   }
 
@@ -350,11 +392,12 @@ export class OrchardTreeRuntime {
       object: null,
       objectNodes: 0,
       objectInstanced: 0,
+      objectPointLights: 0,
       representedEntities: 0,
       queued: false,
+      operationNode: null,
       active: true,
       needsReplacement: false,
-      failedDesired: null,
     }
     this.states.set(saved.id, state)
     this.lodCounts[desired]++
@@ -377,7 +420,7 @@ export class OrchardTreeRuntime {
 
     state.saved = saved
     state.sphere = treeWorldSphere(saved, nextLayout)
-    state.failedDesired = null
+    this.clearFailure(state)
     this.indexState(state)
     this.setGlow(state)
     if (layoutChanged) {
@@ -397,6 +440,7 @@ export class OrchardTreeRuntime {
     this.glowPlan.remove(state.saved.id)
     this.logicalEntities -= this.layouts[state.saved.layout]!.lods.full.entities.length
     this.lodCounts[state.desired]--
+    this.clearFailure(state)
     state.active = false
     this.cancelStateOperation(state)
     this.tracked.delete(state)
@@ -405,7 +449,7 @@ export class OrchardTreeRuntime {
       const object = state.object
       state.object = null
       state.resident = 'culled'
-      this.operations.push({ kind: 'retired', object })
+      this.appendOperation({ kind: 'retired', object })
       this.pending++
     }
   }
@@ -436,7 +480,7 @@ export class OrchardTreeRuntime {
     this.lodCounts[state.desired]--
     state.desired = desired
     this.lodCounts[desired]++
-    state.failedDesired = null
+    this.clearFailure(state)
     this.detachSelectedObject(state)
     this.tracked.add(state)
   }
@@ -450,9 +494,9 @@ export class OrchardTreeRuntime {
     if (state.queued) return
     if (!state.needsReplacement && state.resident === state.desired && state.object !== null) return
     if (!state.needsReplacement && state.desired === 'culled' && state.object === null) return
-    if (!force && state.failedDesired === state.desired) return
+    if (!force && this.failures.get(state.saved.id)?.desired === state.desired) return
     state.queued = true
-    this.operations.push({ kind: 'state', state })
+    state.operationNode = this.appendOperation({ kind: 'state', state })
     this.pending++
     this.tracked.add(state)
   }
@@ -460,7 +504,36 @@ export class OrchardTreeRuntime {
   private cancelStateOperation(state: TreeRenderState): void {
     if (!state.queued) return
     state.queued = false
+    this.removeOperation(state.operationNode!)
+    state.operationNode = null
     this.pending--
+  }
+
+  private appendOperation(operation: RepresentationOperation): RepresentationOperationNode {
+    const node: RepresentationOperationNode = {
+      operation,
+      previous: this.operationTail,
+      next: null,
+    }
+    if (this.operationTail === null) this.operationHead = node
+    else this.operationTail.next = node
+    this.operationTail = node
+    return node
+  }
+
+  private shiftOperation(): RepresentationOperation {
+    const node = this.operationHead!
+    this.removeOperation(node)
+    return node.operation
+  }
+
+  private removeOperation(node: RepresentationOperationNode): void {
+    if (node.previous === null) this.operationHead = node.next
+    else node.previous.next = node.next
+    if (node.next === null) this.operationTail = node.previous
+    else node.next.previous = node.previous
+    node.previous = null
+    node.next = null
   }
 
   private detachSelectedObject(state: TreeRenderState): void {
@@ -470,10 +543,12 @@ export class OrchardTreeRuntime {
     if (state.objectNodes > 0) {
       this.objects -= state.objectNodes
       this.instanced -= state.objectInstanced
+      this.pointLights -= state.objectPointLights
       this.resident--
       this.representedEntities -= state.representedEntities
       state.objectNodes = 0
       state.objectInstanced = 0
+      state.objectPointLights = 0
       state.representedEntities = 0
     }
   }
@@ -504,16 +579,24 @@ export class OrchardTreeRuntime {
       state.resident = state.desired
       state.objectNodes = cardinality.nodes
       state.objectInstanced = cardinality.instanced
+      state.objectPointLights = cardinality.pointLights
       state.representedEntities = state.desired === 'marker' ? 0 : layout.lods[state.desired].entities.length
       this.resident++
       this.objects += cardinality.nodes
       this.instanced += cardinality.instanced
+      this.pointLights += cardinality.pointLights
       this.representedEntities += state.representedEntities
-      state.failedDesired = null
+      this.clearFailure(state)
     } catch (error) {
-      state.failedDesired = state.desired
-      this.lastError = error instanceof Error ? error.message : String(error)
+      this.failures.set(state.saved.id, {
+        desired: state.desired,
+        message: error instanceof Error ? error.message : String(error),
+      })
     }
+  }
+
+  private clearFailure(state: TreeRenderState): void {
+    this.failures.delete(state.saved.id)
   }
 
   private applyPlacement(object: THREE.Group, saved: SavedTree, index: number): void {
@@ -703,7 +786,6 @@ export function mountOrchardWorld(
       return makeBatchedTreeObject(layout, lod, placement, materials)
     },
   )
-  let disposed = false
 
   const syncGlow = (): void => {
     const dirty = runtime.flushGlow()
@@ -728,6 +810,20 @@ export function mountOrchardWorld(
   }
 
   const setTrees = async (savedTrees: readonly SavedTree[]): Promise<OrchardBuildStats> => runtime.setTrees(savedTrees)
+  const lifecycle = new OrchardWorldLifecycle([
+    () => runtime.dispose(),
+    () => { for (const material of lineMaterials) material.dispose() },
+    () => { for (const material of spriteMaterials) material.dispose() },
+    () => { for (const texture of textures) texture.dispose() },
+    () => glowRenderer.dispose(),
+    () => activeGlowTiles.clear(),
+    () => ground.geometry.dispose(),
+    () => (ground.material as THREE.Material).dispose(),
+    () => bloomPass.dispose(),
+    () => composer.dispose(),
+    () => renderer.dispose(),
+    () => renderer.domElement.remove(),
+  ])
 
   return {
     canvas: renderer.domElement,
@@ -769,7 +865,7 @@ export function mountOrchardWorld(
         culled: current.culled,
         pending: current.pending,
         glowTiles: activeGlowTiles.size,
-        pointLights: 0,
+        pointLights: current.pointLights,
         representedEntities: current.representedEntities,
         buildMs: current.buildMs,
         lodMs: lod.lodMs,
@@ -777,20 +873,7 @@ export function mountOrchardWorld(
       }
     },
     dispose() {
-      if (disposed) return
-      disposed = true
-      runtime.dispose()
-      for (const material of lineMaterials) material.dispose()
-      for (const material of spriteMaterials) material.dispose()
-      for (const texture of textures) texture.dispose()
-      glowRenderer.dispose()
-      activeGlowTiles.clear()
-      ground.geometry.dispose()
-      ;(ground.material as THREE.Material).dispose()
-      bloomPass.dispose()
-      composer.dispose()
-      renderer.dispose()
-      renderer.domElement.remove()
+      lifecycle.dispose()
     },
   }
 }
