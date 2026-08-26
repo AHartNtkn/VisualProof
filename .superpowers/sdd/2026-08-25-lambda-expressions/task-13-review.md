@@ -112,3 +112,83 @@ None.
 - `git diff --check f36bce003cd9b44929ab9299b0bfd4b2a769d54f..c533dfe57c0319ded1bb064998863ec0c624d88a` — PASS.
 - Direct TypeScript probes confirmed both omitted operational cases:
   descendant-consumer Fusion and same-region AnchoredWire contraction.
+
+## Re-review: fix round 1
+
+### Assessment
+
+Approved. Both prior Important findings are resolved, and I found no regression
+in the corrected Fusion or nested AnchoredWire address paths.
+
+### Critical findings
+
+None.
+
+### Important findings
+
+None.
+
+### Minor findings
+
+None.
+
+### Fusion verification
+
+- `Fusion.Description` now separates ancestor-owned producer data from the
+  consumer's recursive descendant context. `extension` carries the fresh bridge
+  through every cut as an inherited wire; `source` places the producer at the
+  ancestor and the consumer in the extended context, while `target` rebuilds the
+  original context and merged consumer (`VisualProof/Rule/Lambda/Fission.lean:190-321`).
+  The `.hole` case is same-region Fusion, and recursive `.cut` cases preserve an
+  arbitrarily deep descendant consumer.
+- The producer/consumer carrier list still has the exact TypeScript order and
+  alias behavior: non-consumed consumer columns are retained positionally,
+  producer slots prefer the same native position and otherwise reuse the first
+  physical occurrence, and duplicate physical carriers are completed once
+  (`VisualProof/Rule/Lambda/Fission.lean:130-167,201-231,442-449`; compare
+  `src/kernel/rules/lambda/fission.ts:166-198,212-217`).
+- Source/target address pairs account for deletion of the ancestor bridge and
+  producer item. Old scopes are computed from source incidences, rebased only
+  across the preserved descendant branch, and applied to the target carrier
+  address. Completion depth is the outer occurrence depth plus descendant depth,
+  and the public target is still description-owned, canonical, and externally
+  two-ended (`VisualProof/Rule/Lambda/Fission.lean:347-544`).
+- Recursive denotational transport proves both the `.hole` and `.cut` cases,
+  including cut negation and environment reachability. Fusion soundness then
+  composes the local equivalence, exact completion plan, and open isomorphisms
+  (`VisualProof/Diagram/Semantics/NestedScopedRewrite.lean:27-176`;
+  `VisualProof/Rule/Soundness/Lambda/Fission.lean:551-730`). Forward and backward
+  exact runners quantify over the updated description, so both same-region and
+  descendant witnesses are covered (`VisualProof/Rule/Executable/Lambda/Fission.lean:76-135`).
+- Direct TypeScript probes of a root producer with (a) a root consumer and (b) a
+  consumer one cut below both removed the producer and bridge, preserved the
+  consumer's original region, retained the shared physical carrier once, and
+  produced the same one-slot merged application. This matches the formal source,
+  target, carrier, and region-preservation construction.
+
+### Nested AnchoredWire address verification
+
+- Combined-root locals are now indexed after
+  `anchorLocals.length + selected.locals.length`; actual cut-owned locals keep
+  their native index while only their owner path is embedded. Both
+  `descendantWireAddress` and `nestedItemAddress` route through this
+  owner-sensitive distinction, with explicit reduction theorems for root and
+  cut cases (`VisualProof/Diagram/NestedScopedRewrite.lean:144-278`).
+- AnchoredWire split uses the corrected anchor address for its exact completion
+  request, and contract uses it consistently for survivor/drop distinctness,
+  drop-derived scope, touched carriers, and target completion destinations.
+  Each rewrite still owns its ordered completion plan and final canonical,
+  externally two-ended target (`VisualProof/Rule/Lambda/AnchoredWire.lean:112-162,220-291`).
+  Consequently same-region contraction addresses descendant-root locals after
+  both prefixes, while descendant contraction leaves true cut-local indices
+  unshifted and embeds only their paths.
+
+### Validation
+
+- `lake build` — PASS, 152 jobs.
+- `npx vitest run tests/kernel/rules/lambda-fission.test.ts` — PASS, 3 tests.
+- Direct same-region and descendant TypeScript Fusion probes — PASS.
+- Lean admission scan — no `sorry`, `admit`, or `admitted` proof terms in
+  `VisualProof`; the sole textual `admitted` match is prose in an existing
+  documentation comment.
+- `git diff --check 1fab88a5..c52b7208` — PASS.
