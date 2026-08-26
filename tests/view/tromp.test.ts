@@ -47,6 +47,16 @@ describe('trompGrid', () => {
     expect(grid.stems.filter((stem) => stem.kind === 'port' && stem.portSlot === 0 && stem.rowTop === -1)).toHaveLength(2)
   })
 
+  it('paints deterministic rails for unused slots in an explicit larger interface', () => {
+    const grid = trompGrid(p('used'), 2)
+
+    expect(grid.rails).toEqual([
+      { slot: 0, row: -1, colStart: 0, colEnd: 0, stemCol: 0 },
+      { slot: 1, row: -2, colStart: 1, colEnd: 1, stemCol: 1 },
+    ])
+    expect(grid.cols).toBe(2)
+  })
+
   it('keeps every stem and bar inside the declared grid bounds', () => {
     const grid = trompGrid(p('\\f. \\x. f (f (f x))'))
     for (const bar of grid.bars) {

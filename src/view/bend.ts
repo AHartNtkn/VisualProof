@@ -149,8 +149,8 @@ export function bendGrid(grid: TrompGrid): NodeGeometry {
   }
 }
 
-export function termGeometry(term: Term): NodeGeometry {
-  return bendGrid(trompGrid(term))
+export function termGeometry(term: Term, interfaceArity?: number): NodeGeometry {
+  return bendGrid(trompGrid(term, interfaceArity))
 }
 
 const RAIL_R = 2

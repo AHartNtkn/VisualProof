@@ -47,6 +47,17 @@ describe('mkEngine', () => {
     expect(body.discR).toBeGreaterThan(body.geometry!.outerRadius * ascaleOf('term'))
   })
 
+  it('renders every explicit free-interface port even when the term does not use the slot', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.term(builder.root, parseTerm('used').term, 2)
+    const engine = mkEngine(builder.build(), [])
+    const body = engine.bodies.get(node)!
+
+    expect([...body.localAnchor.keys()]).toEqual(['out', 'f:0', 'f:1'])
+    expect(Object.keys(body.geometry!.portAnchors)).toEqual(['f:0', 'f:1', 'out'])
+    expect(body.geometry!.portAnchors['f:1']).not.toEqual(body.geometry!.portAnchors['f:0'])
+  })
+
   it('creates exactly one body per diagram node', () => {
     const d = threeNodeDiagram()
     const e = mkEngine(d, [])

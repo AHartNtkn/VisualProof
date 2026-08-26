@@ -1,6 +1,6 @@
 import type { PathSeg } from '../kernel/term/reduce'
 import type { Term } from '../kernel/term/term'
-import { assertWellFormedTerm } from '../kernel/term/term'
+import { assertWellFormedTerm, freeArity } from '../kernel/term/term'
 
 export type Bar = {
   readonly row: number
@@ -230,21 +230,25 @@ function layoutAt(term: Term, binderDepth: number, path: readonly PathSeg[]): Bo
   }
 }
 
-export function trompGrid(term: Term): TrompGrid {
-  assertWellFormedTerm(term)
+export function trompGrid(term: Term, interfaceArity: number = freeArity(term)): TrompGrid {
+  assertWellFormedTerm(term, interfaceArity)
   const box = layoutAt(term, 0, [])
-  const slots = [...box.free.keys()].sort((left, right) => left - right)
+  const slots = Array.from({ length: interfaceArity }, (_, slot) => slot)
+  const unusedColumns = new Map<number, number>()
+  for (const slot of slots) {
+    if (!box.free.has(slot)) unusedColumns.set(slot, box.width + unusedColumns.size)
+  }
   const rails: Rail[] = slots.map((slot, index) => {
     const cols = box.free.get(slot)
-    if (cols === undefined || cols.length === 0) {
-      throw new Error(`free slot ${slot} has no occurrence columns`)
-    }
+    const fallbackCol = unusedColumns.get(slot)
+    const railCols = cols ?? (fallbackCol === undefined ? [] : [fallbackCol])
+    if (railCols.length === 0) throw new Error(`free slot ${slot} has no layout column`)
     return {
       slot,
       row: -(index + 1),
-      colStart: Math.min(...cols),
-      colEnd: Math.max(...cols),
-      stemCol: Math.min(...cols),
+      colStart: Math.min(...railCols),
+      colEnd: Math.max(...railCols),
+      stemCol: Math.min(...railCols),
     }
   })
   const drops: Stem[] = rails.flatMap((rail) => (
@@ -263,7 +267,7 @@ export function trompGrid(term: Term): TrompGrid {
     kind: 'output',
   }
   return {
-    cols: box.width,
+    cols: box.width + unusedColumns.size,
     rows: box.bottom + 1,
     railRows: rails.length,
     bars: [

@@ -47,6 +47,25 @@ describe('term occurrence hit geometry', () => {
 
     expect(termOccurrenceHitTest(engine, point, viewport)).toEqual({ node, path: [] })
   })
+
+  it('chooses body order before comparing occurrence depth within overlapping terms', () => {
+    const builder = new DiagramBuilder()
+    const first = builder.term(builder.root, parseTerm('\\x. x').term)
+    builder.term(builder.root, parseTerm('\\x. \\y. y').term)
+    const engine = mkEngine(builder.build(), [])
+    const bodies = [...engine.bodies.values()].filter((body) => body.kind === 'term')
+    const [firstBody, secondBody] = bodies
+    firstBody!.pos = vec(0, 0)
+    secondBody!.pos = vec(0, 0)
+    firstBody!.theta = 0
+    secondBody!.theta = 0
+    const point = localToWorld(engine, firstBody!, vec(-3.5, 0))
+
+    expect(termOccurrenceHitTest(engine, point, { scale: 100 })).toEqual({
+      node: first,
+      path: ['body'],
+    })
+  })
 })
 
 describe('hit selection policy', () => {

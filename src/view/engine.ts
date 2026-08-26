@@ -160,7 +160,7 @@ export function nodeGeometry(d: Diagram, id: NodeId): NodeGeometry {
   if (n === undefined) throw new Error(`unknown node '${id}'`)
   switch (n.kind) {
     case 'term':
-      return termGeometry(n.term)
+      return termGeometry(n.term, n.freeArity)
     case 'atom':
       return atomGeometry(n.sig.args.length)
     case 'ref':

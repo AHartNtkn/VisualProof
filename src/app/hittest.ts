@@ -71,7 +71,8 @@ function arcDistance(point: Vec2, radius: number, angleStart: number, angleEnd: 
 /**
  * The exact painted Lambda carrier under a point, including its structural path.
  * Occurrences own indices into the same arcs and radials consumed by paint;
- * overlapping carriers resolve to the deepest syntax path.
+ * body order selects among overlapping term figures, then overlapping carriers
+ * within that body resolve to the deepest syntax path.
  */
 export function termOccurrenceHitTest(
   e: Engine,
@@ -79,9 +80,9 @@ export function termOccurrenceHitTest(
   viewport: HitViewport,
 ): TermOccurrenceTarget | null {
   const worldRadius = wireHitRadius(viewport)
-  let best: { readonly target: TermOccurrenceTarget; readonly depth: number; readonly distance: number } | null = null
   for (const body of e.bodies.values()) {
     if (body.kind !== 'term' || body.geometry === null) continue
+    let best: { readonly target: TermOccurrenceTarget; readonly depth: number; readonly distance: number } | null = null
     const geometry = body.geometry
     const localPoint = worldToAnatomyLocal(e, body, point)
     const anatomyScale = ascaleOf(body.kind) * e.scale
@@ -125,8 +126,9 @@ export function termOccurrenceHitTest(
         || (candidate.depth === best.depth && candidate.distance < best.distance)
       ) best = candidate
     }
+    if (best !== null) return best.target
   }
-  return best?.target ?? null
+  return null
 }
 
 /**
