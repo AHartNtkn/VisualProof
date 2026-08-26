@@ -1,6 +1,5 @@
-import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { resolve, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -150,6 +149,13 @@ type Manifest = {
     readonly lightBase: string
     readonly darkBase: string
   }
+  readonly rendererLayering: Readonly<Record<'light' | 'dark', {
+    readonly lambdaPixel: readonly number[]
+    readonly pipPixel: readonly number[]
+    readonly combinedPixel: readonly number[]
+    readonly pipDistance: number
+    readonly lambdaDistance: number
+  }>>
   readonly examples: readonly {
     readonly key: string
     readonly source: string
@@ -195,6 +201,29 @@ function sourceHash(): string {
     digest.update(relative(ROOT, file)).update('\0').update(sha256(readFileSync(file))).update('\n')
   }
   return digest.digest('hex')
+}
+
+function currentGitHead(): string {
+  const dotGit = resolve(ROOT, '.git')
+  const marker = statSync(dotGit).isDirectory() ? '' : readFileSync(dotGit, 'utf8').trim()
+  const gitDirectory = marker.startsWith('gitdir:') ? resolve(ROOT, marker.slice('gitdir:'.length).trim()) : dotGit
+  const commonMarker = resolve(gitDirectory, 'commondir')
+  const commonDirectory = existsSync(commonMarker)
+    ? resolve(gitDirectory, readFileSync(commonMarker, 'utf8').trim())
+    : gitDirectory
+  const head = readFileSync(resolve(gitDirectory, 'HEAD'), 'utf8').trim()
+  if (!head.startsWith('ref:')) return head
+  const reference = head.slice('ref:'.length).trim()
+  for (const base of [gitDirectory, commonDirectory]) {
+    const loose = resolve(base, reference)
+    if (existsSync(loose)) return readFileSync(loose, 'utf8').trim()
+  }
+  const packed = resolve(commonDirectory, 'packed-refs')
+  if (existsSync(packed)) {
+    const match = readFileSync(packed, 'utf8').split('\n').find((line) => line.endsWith(` ${reference}`))
+    if (match !== undefined) return match.slice(0, match.indexOf(' '))
+  }
+  throw new Error(`cannot resolve ${reference} from repository metadata`)
 }
 
 function samples(boundaries: readonly number[]): readonly { progress: number; sample: 'boundary' | 'midpoint' }[] {
@@ -286,15 +315,214 @@ function pointDistance(left: Point, right: Point): number {
   return Math.hypot(left[0] - right[0], left[1] - right[1])
 }
 
-function normalizedCurveShape(curve: StrokeCurve): readonly Point[] {
-  if (curve.normalizedLength < 1e-10) return curve.normalizedPoints
-  return curve.normalizedPoints.map(([x, y]) => [x / curve.normalizedLength, Math.abs(y) / curve.normalizedLength])
+function polylineLength(points: readonly Point[]): number {
+  return points.slice(1).reduce((sum, point, index) => sum + pointDistance(points[index]!, point), 0)
 }
 
-function curveShapeError(reference: StrokeCurve, actual: StrokeCurve): number {
-  const left = normalizedCurveShape(reference), right = normalizedCurveShape(actual)
-  if (left.length !== right.length || left.length === 0) return Infinity
-  return Math.max(...left.map((point, index) => pointDistance(point, right[index]!)))
+function resamplePolyline(points: readonly Point[], count: number): Point[] {
+  if (points.length === 0) return []
+  if (points.length === 1) return Array.from({ length: count }, () => points[0]!)
+  const cumulative = [0]
+  for (let index = 1; index < points.length; index += 1) {
+    cumulative.push(cumulative[index - 1]! + pointDistance(points[index - 1]!, points[index]!))
+  }
+  const total = cumulative.at(-1)!
+  if (total < 1e-9) return Array.from({ length: count }, () => points[0]!)
+  let segment = 1
+  return Array.from({ length: count }, (_, sample): Point => {
+    const target = total * sample / (count - 1)
+    while (segment < points.length - 1 && cumulative[segment]! < target) segment += 1
+    const span = cumulative[segment]! - cumulative[segment - 1]!
+    const amount = span === 0 ? 0 : (target - cumulative[segment - 1]!) / span
+    return [
+      points[segment - 1]![0] + (points[segment]![0] - points[segment - 1]![0]) * amount,
+      points[segment - 1]![1] + (points[segment]![1] - points[segment - 1]![1]) * amount,
+    ]
+  })
+}
+
+function framePixelsPerSemanticUnit(frame: FrameEvidence): number {
+  const ratios = semanticStrokes(frame).flatMap((stroke) => {
+    const semanticSpan = pointDistance(stroke.points[0], stroke.points[1])
+    const screenPoints = stroke.raster.screenPoints
+    const screenSpan = screenPoints.length < 2 ? 0 : pointDistance(screenPoints[0]!, screenPoints.at(-1)!)
+    return semanticSpan > 1e-7 && screenSpan > 1e-7 ? [screenSpan / semanticSpan] : []
+  }).sort((left, right) => left - right)
+  if (ratios.length === 0) throw new Error(`frame ${frame.progress} has no semantic scale witness`)
+  return ratios[Math.floor(ratios.length / 2)]!
+}
+
+function semanticComponentPath(
+  screenPoints: readonly Point[],
+  semanticFrom: Point,
+  semanticTo: Point,
+  pixelsPerSemanticUnit: number,
+): Point[] {
+  const source = resamplePolyline(screenPoints, 33)
+  if (source.length === 0) return []
+  const screenFrom = source[0]!, screenTo = source.at(-1)!
+  const semanticSpan = pointDistance(semanticFrom, semanticTo)
+  const screenSpan = pointDistance(screenFrom, screenTo)
+  if (semanticSpan > 1e-7 && screenSpan > 1e-7) {
+    const screenX: Point = [(screenTo[0] - screenFrom[0]) / screenSpan, (screenTo[1] - screenFrom[1]) / screenSpan]
+    const semanticX: Point = [
+      (semanticTo[0] - semanticFrom[0]) / semanticSpan,
+      (semanticTo[1] - semanticFrom[1]) / semanticSpan,
+    ]
+    return source.map((point): Point => {
+      const delta: Point = [point[0] - screenFrom[0], point[1] - screenFrom[1]]
+      const parallel = (delta[0] * screenX[0] + delta[1] * screenX[1]) * semanticSpan / screenSpan
+      const perpendicular = (-delta[0] * screenX[1] + delta[1] * screenX[0]) * semanticSpan / screenSpan
+      return [
+        semanticFrom[0] + parallel * semanticX[0] - perpendicular * semanticX[1],
+        semanticFrom[1] + parallel * semanticX[1] + perpendicular * semanticX[0],
+      ]
+    })
+  }
+  const next = source.find((point) => pointDistance(point, screenFrom) > 1e-7) ?? screenFrom
+  const angle = Math.atan2(next[1] - screenFrom[1], next[0] - screenFrom[0])
+  const cosine = Math.cos(angle), sine = Math.sin(angle)
+  return source.map((point): Point => {
+    const x = point[0] - screenFrom[0], y = point[1] - screenFrom[1]
+    return [(x * cosine + y * sine) / pixelsPerSemanticUnit, (-x * sine + y * cosine) / pixelsPerSemanticUnit]
+  })
+}
+
+function canonicalSemanticCurve(frame: FrameEvidence, strokes: readonly StrokeObservation[]): Point[] {
+  const pixelsPerSemanticUnit = framePixelsPerSemanticUnit(frame)
+  const byRasterGroup = new Map<string, StrokeObservation[]>()
+  for (const stroke of strokes) {
+    const members = byRasterGroup.get(stroke.raster.groupId) ?? []
+    members.push(stroke)
+    byRasterGroup.set(stroke.raster.groupId, members)
+  }
+  const components = [...byRasterGroup.values()].flatMap((members) => {
+    const topPieceId = members[0]!.raster.topPieceId
+    const top = frame.observations.strokes.find(({ pieceId }) => pieceId === topPieceId) ?? members[0]!
+    if (top.raster.screenLength < 1e-7) return []
+    const degree = new Map<string, number>(), positions = new Map<string, Point>()
+    for (const member of members) member.junctions.forEach((junction, endpoint) => {
+      degree.set(junction, (degree.get(junction) ?? 0) + 1)
+      positions.set(junction, member.points[endpoint]!)
+    })
+    const terminals = [...degree].filter(([, count]) => count % 2 === 1).map(([junction]) => junction).sort()
+    const from = terminals[0] ?? members[0]!.junctions[0]
+    const to = terminals[1] ?? members[0]!.junctions[1]
+    return [{
+      junctions: [from, to] as const,
+      points: semanticComponentPath(top.raster.screenPoints, positions.get(from)!, positions.get(to)!, pixelsPerSemanticUnit),
+    }]
+  })
+  if (components.length === 0) return []
+  const degree = new Map<string, number>()
+  for (const component of components) for (const junction of component.junctions) {
+    degree.set(junction, (degree.get(junction) ?? 0) + 1)
+  }
+  const terminals = [...degree].filter(([, count]) => count % 2 === 1).map(([junction]) => junction).sort()
+  let junction = terminals[0] ?? components[0]!.junctions[0]
+  const unused = new Set(components.map((_, index) => index)), composed: Point[] = []
+  while (unused.size > 0) {
+    const index = [...unused].find((candidate) => components[candidate]!.junctions.includes(junction))
+    if (index === undefined) return []
+    unused.delete(index)
+    const component = components[index]!
+    const reverse = component.junctions[1] === junction
+    const points = reverse ? [...component.points].reverse() : component.points
+    composed.push(...(composed.length === 0 ? points : points.slice(1)))
+    junction = reverse ? component.junctions[0] : component.junctions[1]
+  }
+  if (composed.length < 2) return composed
+  const first = composed[0]!, last = composed.at(-1)!, span = pointDistance(first, last)
+  const direction = span > 1e-7
+    ? [((last[0] - first[0]) / span), ((last[1] - first[1]) / span)] as const
+    : (() => {
+        const next = composed.find((point) => pointDistance(point, first) > 1e-7) ?? first
+        const distance = Math.max(pointDistance(first, next), 1e-7)
+        return [(next[0] - first[0]) / distance, (next[1] - first[1]) / distance] as const
+      })()
+  return composed.map((point): Point => {
+    const x = point[0] - first[0], y = point[1] - first[1], scale = span > 1e-7 ? span : 1
+    return [(x * direction[0] + y * direction[1]) / scale, (-x * direction[1] + y * direction[0]) / scale]
+  })
+}
+
+function curveExtent(points: readonly Point[]): number {
+  if (points.length === 0) return 0
+  const xs = points.map(([x]) => x), ys = points.map(([, y]) => y)
+  return Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys))
+}
+
+function composedCurveError(reference: readonly Point[], actual: readonly Point[]): number {
+  const left = resamplePolyline(reference, 65), right = resamplePolyline(actual, 65)
+  if (left.length === 0 || right.length === 0) return Infinity
+  const variants = [right, [...right].reverse()].flatMap((candidate) => [
+    candidate,
+    candidate.map(([x, y]): Point => [x, -y]),
+  ])
+  return Math.min(...variants.map((candidate) => Math.max(...left.map((point, index) => (
+    pointDistance(point, candidate[index]!)
+  )))))
+}
+
+type CurveAcceptance = {
+  readonly accepted: boolean
+  readonly serializedLengthRatio: number
+  readonly serializedExtentRatio: number
+  readonly semanticLengthRatio: number
+  readonly semanticExtentRatio: number
+  readonly semanticShapeError: number
+}
+
+function correspondenceCurveAcceptance(
+  referenceFrame: FrameEvidence,
+  referenceGroup: readonly StrokeObservation[],
+  actualFrame: FrameEvidence,
+  actualGroup: readonly StrokeObservation[],
+  mode: '2d-light' | '3d-light' | '3d-dark',
+): CurveAcceptance {
+  const referenceLength = referenceGroup.reduce((sum, stroke) => sum + stroke.curve.normalizedLength, 0)
+  const actualLength = actualGroup.reduce((sum, stroke) => sum + stroke.curve.normalizedLength, 0)
+  const referenceExtent = referenceGroup.reduce((sum, stroke) => sum + stroke.curve.normalizedExtent, 0)
+  const actualExtent = actualGroup.reduce((sum, stroke) => sum + stroke.curve.normalizedExtent, 0)
+  const referenceCurve = canonicalSemanticCurve(referenceFrame, referenceGroup)
+  const actualCurve = canonicalSemanticCurve(actualFrame, actualGroup)
+  const referenceSemanticLength = polylineLength(referenceCurve), actualSemanticLength = polylineLength(actualCurve)
+  const referenceSemanticExtent = curveExtent(referenceCurve), actualSemanticExtent = curveExtent(actualCurve)
+  if (referenceLength < 1e-6 || referenceSemanticLength < 1e-6) return {
+    accepted: actualLength < 1e-6 && actualSemanticLength < 1e-6,
+    serializedLengthRatio: actualLength / Math.max(referenceLength, 1e-12),
+    serializedExtentRatio: actualExtent / Math.max(referenceExtent, 1e-12),
+    semanticLengthRatio: actualSemanticLength / Math.max(referenceSemanticLength, 1e-12),
+    semanticExtentRatio: actualSemanticExtent / Math.max(referenceSemanticExtent, 1e-12),
+    semanticShapeError: actualSemanticLength < 1e-6 ? 0 : Infinity,
+  }
+  const serializedLengthRatio = actualLength / referenceLength
+  const serializedExtentRatio = actualExtent / referenceExtent
+  const semanticLengthRatio = actualSemanticLength / referenceSemanticLength
+  const semanticExtentRatio = actualSemanticExtent / referenceSemanticExtent
+  const semanticShapeError = composedCurveError(referenceCurve, actualCurve)
+  // Current correct live/application evidence occupies 0.689–2.142 in the
+  // producer's renderer-local serialized scale. This narrow corroborating
+  // envelope has 6% headroom and rejects the cited 0.259 collapsed mutation.
+  const serialized = serializedLengthRatio >= 0.65 && serializedLengthRatio <= 2.25
+    && serializedExtentRatio >= 0.65 && serializedExtentRatio <= 2.25
+  // Semantic junction-frame normalization removes layout scale/orientation.
+  // Current 2D evidence is 0.818–1.006 length, 0.950–1.001 extent, <=0.166
+  // interior error; projected 3D is 0.750–1.021, 0.928–1.006, <=0.292.
+  const limits = mode === '2d-light'
+    ? { length: [0.78, 1.05], extent: [0.92, 1.03], shape: 0.20 }
+    : { length: [0.70, 1.08], extent: [0.89, 1.04], shape: 0.34 }
+  return {
+    accepted: serialized
+      && semanticLengthRatio >= limits.length[0]! && semanticLengthRatio <= limits.length[1]!
+      && semanticExtentRatio >= limits.extent[0]! && semanticExtentRatio <= limits.extent[1]!
+      && semanticShapeError <= limits.shape,
+    serializedLengthRatio,
+    serializedExtentRatio,
+    semanticLengthRatio,
+    semanticExtentRatio,
+    semanticShapeError,
+  }
 }
 
 function pointSegmentDistance(point: Point, from: Point, to: Point): number {
@@ -312,14 +540,17 @@ function pathDistance(point: Point, path: readonly Point[]): number {
 function unionPathCoverage(
   source: readonly Point[],
   targets: readonly { readonly path: readonly Point[]; readonly radius: number }[],
+  sourceRadius = 0,
 ): number {
   if (source.length === 0 || targets.length === 0) return 0
-  const samples = source.slice(1).flatMap((to, index) => Array.from({ length: 9 }, (_, step): Point => {
-    const from = source[index]!, amount = step / 8
-    return [from[0] + (to[0] - from[0]) * amount, from[1] + (to[1] - from[1]) * amount]
-  }))
-  samples.push(source.at(-1)!)
-  return samples.filter((point) => targets.some((target) => pathDistance(point, target.path) <= target.radius)).length
+  const centerline = resamplePolyline(source, Math.max(2, Math.ceil(polylineLength(source) / 0.5) + 1))
+  const samples = centerline.flatMap((center) => [center, ...[0.5, 1].flatMap((radial) => (
+    Array.from({ length: 16 }, (_, index): Point => {
+      const angle = index * Math.PI * 2 / 16
+      return [center[0] + Math.cos(angle) * sourceRadius * radial, center[1] + Math.sin(angle) * sourceRadius * radial]
+    })
+  ))])
+  return samples.filter((point) => targets.some((target) => pathDistance(point, target.path) <= target.radius + 1e-6)).length
     / samples.length
 }
 
@@ -472,13 +703,62 @@ function assertEvidenceFile(path: string, expectedHash: string): void {
 describe('rendered Lambda comparison', () => {
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as Manifest
 
+  it('rejects the reviewer collapsed-copy-bar manifest mutation', () => {
+    const example = manifest.examples.find(({ key }) => key === 'duplication')!
+    const reference = at(example.modes.reference.frames, 0.54)
+    const actual = structuredClone(at(example.modes['2d-light'].frames, 0.54))
+    const address = 'copy:0:root/argument:lambda'
+    const referenceGroup = groupsOf(reference).get(address)!
+    const actualGroup = groupsOf(actual).get(address)!
+    for (const stroke of actualGroup) {
+      const mutable = stroke.curve as unknown as { normalizedPoints: Point[]; normalizedLength: number; normalizedExtent: number }
+      mutable.normalizedPoints = mutable.normalizedPoints.map(([x, y]) => [x * 0.17, y * 0.17])
+      mutable.normalizedLength *= 0.17
+      mutable.normalizedExtent *= 0.17
+    }
+    expect(correspondenceCurveAcceptance(reference, referenceGroup, actual, actualGroup, '2d-light').accepted).toBe(false)
+  })
+
+  it('rejects a deformed interior in a multi-piece correspondence group', () => {
+    const example = manifest.examples.find(({ key }) => key === 'capture-avoidance')!
+    const reference = at(example.modes.reference.frames, 0.15)
+    const actual = structuredClone(at(example.modes['2d-light'].frames, 0.15))
+    const address = 'copy:0:root/argument:free-drop'
+    const referenceGroup = groupsOf(reference).get(address)!
+    const actualGroup = groupsOf(actual).get(address)!
+    for (const stroke of actualGroup) {
+      const points = stroke.raster.screenPoints
+      const first = points[0]!, last = points.at(-1)!
+      ;(stroke.raster as unknown as { screenPoints: Point[] }).screenPoints = [
+        first,
+        [(first[0] + last[0]) / 2 + 40, (first[1] + last[1]) / 2 - 40],
+        last,
+      ]
+    }
+    expect(correspondenceCurveAcceptance(reference, referenceGroup, actual, actualGroup, '2d-light').accepted).toBe(false)
+  })
+
+  it('rejects narrower and offset later strokes as full-tube occluders', () => {
+    const source: readonly Point[] = [[0, 0], [20, 0]]
+    expect(unionPathCoverage(source, [{ path: source, radius: 1.75 }], 3.75)).toBeLessThan(0.98)
+    expect(unionPathCoverage(source, [{ path: [[0, 0.75], [20, 0.75]], radius: 3.75 }], 3.75)).toBeLessThan(0.98)
+  })
+
+  it('keeps coincident identity pips above Lambda strokes in both WebGL themes', () => {
+    const layering = manifest.rendererLayering
+    expect(layering, 'capture omitted the coincident Lambda/pip renderer probe').toBeDefined()
+    for (const theme of ['light', 'dark'] as const) {
+      expect(layering?.[theme].pipDistance, `${theme} combined pixel did not preserve the pip`).toBeLessThanOrEqual(3)
+      expect(layering?.[theme].lambdaDistance, `${theme} combined pixel still matches the Lambda stroke`).toBeGreaterThan(24)
+    }
+  })
+
   it('is current, complete evidence from the live authority and current application', () => {
     expect(manifest.schema).toBe(1)
     expect(resolve(manifest.outputDirectory)).toBe(OUTPUT)
     expect(manifest.reference.path).toBe('/home/ahart/Documents/gameProj/demos/lambda_tromp_reduction_demo_corrected.html')
     expect(sha256(readFileSync(manifest.reference.path))).toBe(manifest.reference.sha256)
-    expect(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim())
-      .toBe(manifest.application.commit)
+    expect(currentGitHead()).toBe(manifest.application.commit)
     expect(sourceHash()).toBe(manifest.application.sourceHash)
     expect(manifest.examples.map(({ key }) => key)).toEqual(EXPECTED.map(({ key }) => key))
   })
@@ -653,23 +933,11 @@ describe('rendered Lambda comparison', () => {
             expect([...actualGroups.keys()].sort()).toEqual([...referenceGroups.keys()].sort())
             for (const [address, referenceGroup] of referenceGroups) {
               const actualGroup = actualGroups.get(address)!
-              const referenceLength = referenceGroup.reduce((sum, stroke) => sum + stroke.curve.normalizedLength, 0)
-              const actualLength = actualGroup.reduce((sum, stroke) => sum + stroke.curve.normalizedLength, 0)
-              const referenceExtent = referenceGroup.reduce((sum, stroke) => sum + stroke.curve.normalizedExtent, 0)
-              const actualExtent = actualGroup.reduce((sum, stroke) => sum + stroke.curve.normalizedExtent, 0)
-              if (referenceLength < 1e-6) {
-                expect(actualLength, `${modeName} painted absent reference curve ${address}`).toBeLessThan(1e-6)
-                continue
-              }
-              expect(actualLength, `${modeName} dropped visible curve ${address}`).toBeGreaterThan(referenceLength * 0.25)
-              expect(actualLength, `${modeName} exaggerated curve ${address}`).toBeLessThan(referenceLength * 4)
-              expect(actualExtent, `${modeName} collapsed visible extent ${address}`).toBeGreaterThan(referenceExtent * 0.25)
-              expect(actualExtent, `${modeName} exaggerated visible extent ${address}`).toBeLessThan(referenceExtent * 4)
               expect(actualGroup.every(({ curve }) => curve.rawPointCount >= 2), `${modeName} ${address} has no complete polyline`).toBe(true)
-              if (referenceGroup.length === 1 && actualGroup.length === 1) {
-                expect(curveShapeError(referenceGroup[0]!.curve, actualGroup[0]!.curve),
-                  `${modeName} changed the sampled interior shape of ${address}`).toBeLessThan(0.18)
-              }
+              const acceptance = correspondenceCurveAcceptance(reference, referenceGroup,
+                at(example.modes[modeName].frames, sample.progress), actualGroup, modeName)
+              expect(acceptance.accepted,
+                `${modeName} ${address} violates semantic-frame full-curve bounds: ${JSON.stringify(acceptance)}`).toBe(true)
             }
           }
         }
@@ -755,29 +1023,39 @@ describe('rendered Lambda comparison', () => {
               const group = allRasterGroups.get(groupId)
               expect(group, `${modeName} omitted raster group ${groupId}`).toBeDefined()
               if (group === undefined) throw new Error(`${modeName} omitted raster group ${groupId}`)
-              const evidence = group[0]!.raster
-              expect([...evidence.groupMemberIds].sort()).toEqual(group.map(({ pieceId }) => pieceId).sort())
-              expect(group.every(({ raster }) => JSON.stringify(raster) === JSON.stringify(evidence)),
-                `${modeName} ${groupId} has inconsistent shared raster evidence`).toBe(true)
-              const top = observations.get(evidence.topPieceId)
+              const topPieceId = group[0]!.raster.topPieceId
+              const top = observations.get(topPieceId)
               expect(top, `${modeName} ${groupId} has no top painted member`).toBeDefined()
+              if (top === undefined) throw new Error(`${modeName} ${groupId} has no top painted member`)
+              const evidence = top.raster
+              expect([...evidence.groupMemberIds].sort()).toEqual(group.map(({ pieceId }) => pieceId).sort())
+              for (const member of group) {
+                const { screenPoints: _points, lineWidth: _width, screenLength: _length,
+                  requiredMatchingPixels: _required, ...shared } = member.raster
+                const { screenPoints: _topPoints, lineWidth: _topWidth, screenLength: _topLength,
+                  requiredMatchingPixels: _topRequired, ...topShared } = evidence
+                expect(shared, `${modeName} ${groupId} has inconsistent shared raster evidence`).toEqual(topShared)
+                expect(member.raster.screenLength, `${modeName} ${member.pieceId} lost its authored centerline`)
+                  .toBeCloseTo(polylineLength(member.raster.screenPoints), 6)
+                expect(member.raster.lineWidth, `${modeName} ${member.pieceId} lost its authored width`).toBeGreaterThan(0)
+              }
               expect(top?.color).toBe(evidence.targetColor)
               expect(top?.rendererOnly, `${modeName} ${groupId} lets renderer-only incidence satisfy semantic color`).toBe(false)
               for (const member of group.filter(({ rendererOnly }) => rendererOnly)) {
                 expect(member.sourceStrokeId.startsWith('interface:'),
                   `${modeName} ${groupId} contains unrelated renderer-only geometry`).toBe(true)
                 expect(evidence.coverageByMember[member.pieceId],
-                  `${modeName} ${groupId} does not fully overdraw its renderer-local subdivision`).toBeGreaterThanOrEqual(0.98)
+                  `${modeName} ${groupId} does not fully overdraw its renderer-local subdivision tube`).toBeGreaterThanOrEqual(0.995)
               }
               if (group.length > 1) {
                 for (const member of group) {
                   expect(evidence.coverageByMember[member.pieceId],
-                    `${modeName} ${groupId} is not a complete coincident-subpath group for ${member.pieceId}`).toBeGreaterThanOrEqual(0.98)
+                    `${modeName} ${groupId} does not contain the full painted tube for ${member.pieceId}`).toBeGreaterThanOrEqual(0.995)
                 }
               }
               if (evidence.occludedByPieceIds.length > 0) {
                 expect(evidence.occlusionCoverage, `${modeName} ${groupId} has an incomplete occlusion witness`)
-                  .toBeGreaterThanOrEqual(0.98)
+                  .toBeGreaterThanOrEqual(0.995)
                 const occluders = evidence.occludedByPieceIds.map((pieceId) => observations.get(pieceId))
                 expect(occluders.every((stroke) => stroke !== undefined),
                   `${modeName} ${groupId} attributes occlusion to missing geometry`).toBe(true)
@@ -801,12 +1079,13 @@ describe('rendered Lambda comparison', () => {
                   path: stroke!.raster.screenPoints,
                   radius: stroke!.raster.lineWidth / 2 + 0.75,
                 }))
-                const coverage = unionPathCoverage(evidence.screenPoints, paths)
+                const coverage = unionPathCoverage(evidence.screenPoints, paths, evidence.lineWidth / 2 + 0.75)
                 expect(coverage, `${modeName} ${groupId} cannot reproduce its serialized semantic occlusion`)
-                  .toBeGreaterThanOrEqual(0.98)
+                  .toBeGreaterThanOrEqual(0.995)
                 for (let index = 0; index < paths.length; index += 1) {
-                  expect(coverage - unionPathCoverage(evidence.screenPoints, paths.filter((_, pathIndex) => pathIndex !== index)),
-                    `${modeName} ${groupId} includes a non-contributing occlusion path`).toBeGreaterThan(0.01)
+                  expect(unionPathCoverage(evidence.screenPoints,
+                    paths.filter((_, pathIndex) => pathIndex !== index), evidence.lineWidth / 2 + 0.75),
+                  `${modeName} ${groupId} includes a non-minimal full-tube occluder`).toBeLessThan(0.995)
                 }
                 continue
               }

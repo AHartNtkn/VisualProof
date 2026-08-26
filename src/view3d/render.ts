@@ -333,13 +333,11 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
         scene.background = bg
       }
       restoreLayer(LAMBDA_LAYER)
-      // With the bloom pass in the chain, redraw the pips over the composite:
-      // the composite's disc cores are clipped toward white (see PIP_LAYER),
-      // and this pass restores the authored color there while the bloom halo
-      // around each disc remains from the composite underneath.
-      if (composer.passes.includes(bloom)) {
-        restoreLayer(PIP_LAYER)
-      }
+      // Lambda is restored after the composite, so pips must be restored
+      // after Lambda in both themes to preserve the pip-above-lines law.
+      // In dark mode the same pass additionally restores authored disc cores
+      // while retaining the bloom halo from the composite underneath.
+      restoreLayer(PIP_LAYER)
     },
     resize(w, h) {
       size = { w, h }

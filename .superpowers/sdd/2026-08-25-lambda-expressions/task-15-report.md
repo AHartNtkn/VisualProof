@@ -51,7 +51,7 @@ directory.
 
 ## Machine comparison results
 
-All 61 manifest tests pass. The comparisons require:
+All 65 manifest tests pass. The comparisons require:
 
 - exact example, mode, boundary, midpoint, phase, and copy-count coverage;
 - matching structural event flags across reference, 2D, and 3D;
@@ -65,9 +65,15 @@ All 61 manifest tests pass. The comparisons require:
 - complete copy source-address sets and connected shapes, every reference copy
   junction present in each renderer, reference-matched relative geometry, and
   normalized midpoint progress through lift and dock;
-- complete correspondence-addressable polylines with nonzero reference-visible
-  length/extent, length and extent ratios within `0.25`–`4`, at least two raw
-  points, and singleton interior-shape error below `0.18`;
+- complete correspondence-addressable polylines composed by raster group and
+  semantic junction terminals, including renderer-local multi-piece groups.
+  Junction-frame normalization removes translation, rotation, and layout
+  scale while retaining the complete painted interior. Current 2D
+  reference/application ratios are `0.8182`–`1.0054` for length and
+  `0.9497`–`1.0010` for extent with maximum interior error `0.1660`; the
+  enforced bounds are `0.78`–`1.05`, `0.92`–`1.03`, and `0.20`. Current 3D
+  ratios are `0.7500`–`1.0204`, `0.9284`–`1.0053`, and `0.2916`; the
+  projection-aware bounds are `0.70`–`1.08`, `0.89`–`1.04`, and `0.34`;
 - connected complete copies, parked-copy separation greater than `0.025`,
   target/docking errors below `1e-7`, ordered stem/binder cleanup, and final
   static endpoint error below `1e-7`;
@@ -79,10 +85,13 @@ All 61 manifest tests pass. The comparisons require:
   independently supply at least `max(3, ceil(0.2 × screenLength))` pixels from
   its own half-width-plus-`0.75px` AA tube within RGB distance 48 in
   2D/reference and 72 in WebGL;
-- explicit Painter-order witnesses for fully overdrawn semantic paths: later
-  authored tubes must cover at least 98% of the exact centerline, every listed
-  occluder must independently pass its own pixel/color threshold, and removing
-  any listed path must reduce coverage by more than `0.01`;
+- every painted group member retains its own centerline and width. Exact
+  overlap requires at least `99.5%` containment of the earlier member's entire
+  half-width-plus-`0.75px` AA tube. Fully overdrawn semantic paths require a
+  minimal later-Painter tube union with the same `99.5%` full-cross-section
+  coverage; every occluder independently passes its own pixel/color threshold,
+  replay reproduces coverage, and removing any listed occluder drops the union
+  below `99.5%`;
 - canonical 2D fixed-frame camera fit and complete copy-stroke visibility;
 - 2D incident-wire attachment below `1e-8` at every sample.
 
@@ -96,10 +105,17 @@ planarity error was `0`; maximum branch-normal error was
 `2.220446049250313e-16`; maximum attachment error, entity-color mismatch count,
 and base-color raster distance were all `0`. The maximum Lambda-colored
 footprint ratio was `0.11205189146365617`, below the no-filled-surface threshold
-`0.3`. Across 2,157 independently visible semantic stroke observations, the
+`0.3`. Across 2,148 independently visible semantic stroke observations, the
 minimum expected-color pixel margin was `1`, the minimum exclusive-pixel margin
-was `3`, and the maximum best-color distance was `0`. All explicitly overdrawn
-semantic paths measured complete (`1.0`) tube coverage.
+was `3`, and the maximum best-color distance was `0`. Every exact-overlap
+member measured `1.0` full-tube containment; the 11 serialized occlusion
+observations measured at least `0.996212121` full-tube coverage.
+
+A dedicated coincident Lambda/pip WebGL probe runs through the production
+renderer in both themes. In light and dark, the combined center pixel was
+exactly the pip-only pixel `[40,168,255]` (distance `0`) and remained
+`227.1299` RGB units from the Lambda-only pixel, proving the post-composite
+Lambda restoration cannot cover identity pips.
 
 ## Direct inspection
 
@@ -208,6 +224,22 @@ junction; no observation is silently discarded.
     every reference-visible curve, checks each visible semantic group
     independently, and accepts complete overdraw only with the explicit,
     reproducible, contributing-tube witness described above.
+12. The full-curve consumer admitted a copy bar collapsed to `25.9%` of the
+    live reference and skipped interior checks for renderer-local multi-piece
+    groups. Curves are now composed through their raster-group and semantic
+    junction frames, and every singleton or multi-piece interior is compared
+    under the tight renderer-specific bounds above. The exact `17%` serialized
+    mutation and an independently bowed multi-piece path are permanent
+    rejection tests.
+13. Exact-overlap and occlusion evidence compared centerlines while discarding
+    earlier member widths. Each member now retains its own authored centerline
+    and width, and grouping, witness selection, witness minimization, and
+    consumer replay all use complete half-width-plus-AA tubes. Narrower and
+    `0.75px`-offset counterexamples are rejected.
+14. The Lambda restoration pass ran after pips in light mode. Pips are now
+    restored after Lambda in both themes; bloom changes the reason for the
+    dark restoration, not the ordering invariant. The coincident-pixel probe
+    covers both light and dark production rendering.
 
 ## RED/GREEN evidence
 
@@ -260,13 +292,26 @@ junction; no observation is silently discarded.
   defect. Exact per-group tubes plus contributing occlusion witnesses brought
   the final consumer to 61/61 without reducing the pixel, color, curve, or
   coverage thresholds.
+- Semantic-frame curve RED/GREEN: the reviewer mutation retained only `17%`
+  of the application copy bar (`25.9%` of the live reference) and the old
+  consumer accepted it; a bowed multi-piece free-drop interior also passed.
+  Both now fail the semantic composed-curve acceptance, while all five live
+  examples occupy the measured tight envelopes above.
+- Full-tube RED/GREEN: a narrower coincident occluder and an equal-width stroke
+  offset by `0.75px` both measured `1.0` under centerline-only replay. The
+  cross-section/cap sampler rejects both. Fresh evidence gives every grouped
+  member full containment and every selected occluder union at least `0.9962`.
+- Pip-layer RED/GREEN: the manifest initially had no coincident renderer probe.
+  The production probe now distinguishes pip-only, Lambda-only, and combined
+  pixels in both themes, and the renderer restores pips after Lambda regardless
+  of bloom.
 
 ## Validation
 
 - `npx tsx scripts/capture-lambda-comparison.ts`
   - passed; five examples captured, 284 frame PNGs, complete manifest.
 - `npx vitest run tests/visual/lambda-reference.test.ts`
-  - 1 file passed, 61 tests passed.
+  - 1 file passed, 65 tests passed.
 - `npx vitest run tests/view/lambda-motion.test.ts tests/view3d/lambda.test.ts tests/app/motion.test.ts`
   - 3 files passed, 49 tests passed.
 - `npx vitest run --config vitest.physics.config.ts tests/physics/paint.test.ts`

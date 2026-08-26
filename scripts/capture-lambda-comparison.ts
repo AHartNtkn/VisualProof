@@ -139,6 +139,13 @@ type BrowserMeasurement = {
   readonly twoD?: TwoDFrame
   readonly threeD?: ThreeDFrame
 }
+type RendererLayeringProbe = {
+  readonly lambdaPixel: readonly number[]
+  readonly pipPixel: readonly number[]
+  readonly combinedPixel: readonly number[]
+  readonly pipDistance: number
+  readonly lambdaDistance: number
+}
 type ReferenceLoad = {
   readonly copyCount: number
   readonly argumentStrokeAddresses: readonly string[]
@@ -416,30 +423,37 @@ const resamplePolyline = (points,count) => {
     return [points[segment-1][0]+(points[segment][0]-points[segment-1][0])*amount,points[segment-1][1]+(points[segment][1]-points[segment-1][1])*amount]
   })
 }
-const equivalentPolylines = (left,right) => {
-  const leftLength=polylineLength(left),rightLength=polylineLength(right)
-  if(Math.abs(leftLength-rightLength)>Math.max(1,Math.max(leftLength,rightLength)*.02))return false
-  const a=resamplePolyline(left,25),b=resamplePolyline(right,25),reverse=[...b].reverse()
-  const error=points=>Math.max(...a.map((point,index)=>Math.hypot(point[0]-points[index][0],point[1]-points[index][1])))
-  return Math.min(error(b),error(reverse))<=.75
+const FULL_TUBE_COVERAGE=.995
+const tubeSamples=(path,radius)=>{
+  if(path.length===0)return[]
+  const centers=resamplePolyline(path,Math.max(2,Math.ceil(polylineLength(path)/.5)+1))
+  return centers.flatMap(center=>[center,...[.5,1].flatMap(radial=>Array.from({length:16},(_,index)=>{
+    const angle=index*Math.PI*2/16
+    return[center[0]+Math.cos(angle)*radius*radial,center[1]+Math.sin(angle)*radius*radial]
+  }))])
 }
-const polylineCoverage = (source,target) => {
-  const points=resamplePolyline(source,33)
-  return points.length===0?1:points.filter(point=>polylineDistance(point,target)<=.75).length/points.length
+const tubeCoverage=(source,sourceRadius,targets)=>{
+  const points=tubeSamples(source,sourceRadius)
+  return points.length===0?1:points.filter(point=>targets.some(target=>polylineDistance(point,target.path)<=target.radius+1e-6)).length/points.length
 }
-const occlusionWitness = (source,candidates) => {
-  const points=resamplePolyline(source,33),uncovered=new Set(points.map((_,index)=>index)),selected=[]
+const occlusionWitness = (source,sourceRadius,candidates) => {
+  const points=tubeSamples(source,sourceRadius),uncovered=new Set(points.map((_,index)=>index)),selected=[]
   while(uncovered.size>0){
     let best=null,bestCovered=[]
     for(const candidate of candidates){
       if(selected.includes(candidate))continue
-      const covered=[...uncovered].filter(index=>polylineDistance(points[index],candidate.path)<=candidate.radius)
+      const covered=[...uncovered].filter(index=>polylineDistance(points[index],candidate.path)<=candidate.radius+1e-6)
       if(covered.length>bestCovered.length){best=candidate;bestCovered=covered}
     }
     if(best===null||bestCovered.length===0)break
     selected.push(best);for(const index of bestCovered)uncovered.delete(index)
   }
-  return{indices:selected.map(candidate=>candidate.index),coverage:points.length===0?1:(points.length-uncovered.size)/points.length}
+  const coverageOf=values=>points.length===0?1:points.filter(point=>values.some(candidate=>polylineDistance(point,candidate.path)<=candidate.radius+1e-6)).length/points.length
+  for(let index=selected.length-1;index>=0;index--){
+    const without=selected.filter((_,candidate)=>candidate!==index)
+    if(coverageOf(without)>=FULL_TUBE_COVERAGE)selected.splice(index,1)
+  }
+  return{indices:selected.map(candidate=>candidate.index),coverage:selected.length===0?0:coverageOf(selected)}
 }
 const curveEvidence = (screenPoints,frameScale) => {
   const points=resamplePolyline(screenPoints,9)
@@ -463,14 +477,17 @@ const finalizeStrokes = (canvas,drafts,tolerance) => {
   for(let top=drafts.length-1;top>=0;top--){
     if(assigned.has(top))continue
     const members=[top];assigned.add(top)
-    for(let earlier=top-1;earlier>=0;earlier--)if(!assigned.has(earlier)&&(equivalentPolylines(drafts[earlier].screenPoints,drafts[top].screenPoints)||polylineCoverage(drafts[earlier].screenPoints,drafts[top].screenPoints)>=.98)){members.unshift(earlier);assigned.add(earlier)}
+    for(let earlier=top-1;earlier>=0;earlier--)if(!assigned.has(earlier)&&tubeCoverage(
+      drafts[earlier].screenPoints,drafts[earlier].lineWidth/2+.75,
+      [{path:drafts[top].screenPoints,radius:drafts[top].lineWidth/2+.75}],
+    )>=FULL_TUBE_COVERAGE){members.unshift(earlier);assigned.add(earlier)}
     groups.unshift(members)
   }
   const rasterByIndex=new Map()
   for(const members of groups){
     const topIndex=Math.max(...members),top=drafts[topIndex],target=rgb(top.color),seen=new Set()
     let matchingPixels=0,bestColorDistance=Infinity,eligiblePixels=0
-    const radius=top.lineWidth/2+.75,screenLength=polylineLength(top.screenPoints)
+    const radius=top.lineWidth/2+.75
     for(let part=1;part<top.screenPoints.length;part++){
       const a=top.screenPoints[part-1],b=top.screenPoints[part]
       const x0=Math.max(0,Math.floor(Math.min(a[0],b[0])-radius)),x1=Math.min(canvas.width-1,Math.ceil(Math.max(a[0],b[0])+radius))
@@ -489,12 +506,16 @@ const finalizeStrokes = (canvas,drafts,tolerance) => {
       }
     }
     const groupMemberIds=members.map(index=>drafts[index].id),groupId=[...groupMemberIds].sort().join('|')
-    const requiredMatchingPixels=screenLength<3?0:Math.max(3,Math.ceil(screenLength*.2))
-    const coverageByMember=Object.fromEntries(members.map(index=>[drafts[index].id,polylineCoverage(drafts[index].screenPoints,top.screenPoints)]))
-    const witness=occlusionWitness(top.screenPoints,drafts.flatMap((draft,index)=>index>topIndex&&!members.includes(index)?[{index,path:draft.screenPoints,radius:draft.lineWidth/2+.75}]:[]))
+    const coverageByMember=Object.fromEntries(members.map(index=>[drafts[index].id,tubeCoverage(
+      drafts[index].screenPoints,drafts[index].lineWidth/2+.75,[{path:top.screenPoints,radius}],
+    )]))
+    const witness=occlusionWitness(top.screenPoints,radius,drafts.flatMap((draft,index)=>index>topIndex&&!members.includes(index)?[{index,path:draft.screenPoints,radius:draft.lineWidth/2+.75}]:[]))
     let occludedByPieceIds=witness.indices.map(index=>drafts[index].id),occlusionCoverage=witness.coverage
-    if(occlusionCoverage<.98){occlusionCoverage=0;occludedByPieceIds=[]}
-    for(const index of members)rasterByIndex.set(index,{screenPoints:top.screenPoints,lineWidth:top.lineWidth,screenLength,matchingPixels,bestColorDistance,eligiblePixels,requiredMatchingPixels,groupId,groupMemberIds,topPieceId:top.id,targetColor:top.color.toLowerCase(),coverageByMember,occludedByPieceIds,occlusionCoverage})
+    if(occlusionCoverage<FULL_TUBE_COVERAGE){occlusionCoverage=0;occludedByPieceIds=[]}
+    for(const index of members){
+      const member=drafts[index]
+      rasterByIndex.set(index,{screenPoints:member.screenPoints,lineWidth:member.lineWidth,screenLength:polylineLength(member.screenPoints),matchingPixels,bestColorDistance,eligiblePixels,requiredMatchingPixels:polylineLength(member.screenPoints)<3?0:Math.max(3,Math.ceil(polylineLength(member.screenPoints)*.2)),groupId,groupMemberIds,topPieceId:top.id,targetColor:top.color.toLowerCase(),coverageByMember,occludedByPieceIds,occlusionCoverage})
+    }
   }
   return drafts.map((draft,index)=>{const{screenPoints,curvePoints,lineWidth,...stroke}=draft;return{...stroke,curve:curveEvidence(curvePoints??screenPoints,frameScale),raster:rasterByIndex.get(index)}})
 }
@@ -757,7 +778,36 @@ function set3d(progress,themeName='light'){
   return{raw:raw3dFrame(presented,theme,state.pose,canvas,progress,endpointStaticError),raster:raster(canvas,currentTheme.canvas),visualBounds,sourceDimensions:{width:900,height:900},backingDimensions:{width:canvas.width,height:canvas.height},threeD}
 }
 
-window.__lambdaComparison={load,set2d,set3d}
+function probeRendererLayering(themeName){
+  const host=document.createElement('div')
+  host.style.cssText='position:absolute;left:960px;top:0;width:128px;height:128px'
+  document.body.appendChild(host)
+  const dark=themeName==='dark'
+  const theme={
+    mode:themeName,background:dark?'#071921':'#f7fafb',line:'#28a8ff',lineAlt:'#75838a',
+    baseWire:dark?'#5bd2de':'#26343a',hover:'#ffffff',hues:new Map(),
+  }
+  const renderer=mountRender(host,theme)
+  renderer.resize(128,128)
+  renderer.setPose({target:{x:0,y:0,z:0},dist:5,yaw:0,pitch:0})
+  const lambda={kind:'lambda',key:'probe:lambda',pts:[{x:-1,y:0,z:0},{x:1,y:0,z:0}],color:'#f06aa7'}
+  const pip={kind:'pip',key:'probe:pip',node:'probe-node',ownerWire:null,pos:{x:0,y:0,z:0}}
+  const readCenter=()=>{
+    const canvas=host.querySelector('canvas'),gl=canvas.getContext('webgl2')??canvas.getContext('webgl')
+    if(gl===null)throw Error('WebGL layering probe could not read the renderer context')
+    const pixel=new Uint8Array(4)
+    if(gl instanceof WebGL2RenderingContext)gl.readPixels(Math.floor(canvas.width/2),Math.floor(canvas.height/2),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel,0)
+    else gl.readPixels(Math.floor(canvas.width/2),Math.floor(canvas.height/2),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel)
+    return Array.from(pixel.slice(0,3))
+  }
+  const sample=entities=>{renderer.setEntities(entities);renderer.render();return readCenter()}
+  const lambdaPixel=sample([lambda]),pipPixel=sample([pip]),combinedPixel=sample([lambda,pip])
+  const distance=(left,right)=>Math.hypot(left[0]-right[0],left[1]-right[1],left[2]-right[2])
+  renderer.dispose();host.remove()
+  return{lambdaPixel,pipPixel,combinedPixel,pipDistance:distance(combinedPixel,pipPixel),lambdaDistance:distance(combinedPixel,lambdaPixel)}
+}
+
+window.__lambdaComparison={load,set2d,set3d,probeRendererLayering}
 `
 
 async function startHarnessServer(): Promise<{ server: ViteDevServer; url: string }> {
@@ -1124,36 +1174,50 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
         ]
       })
     }
-    const equivalent = (left: readonly Point[], right: readonly Point[]): boolean => {
-      const leftLength = pathLength(left), rightLength = pathLength(right)
-      if (Math.abs(leftLength - rightLength) > Math.max(1, Math.max(leftLength, rightLength) * 0.02)) return false
-      const a = resample(left, 25), b = resample(right, 25), reverse = [...b].reverse()
-      const error = (points: readonly Point[]): number => Math.max(...a.map((point, index) => Math.hypot(
-        point[0] - points[index]![0], point[1] - points[index]![1],
-      )))
-      return Math.min(error(b), error(reverse)) <= 0.75
+    const fullTubeCoverage = 0.995
+    const tubeSamples = (path: readonly Point[], radius: number): Point[] => {
+      if (path.length === 0) return []
+      const centers = resample(path, Math.max(2, Math.ceil(pathLength(path) / 0.5) + 1))
+      return centers.flatMap((center) => [center, ...[0.5, 1].flatMap((radial) => (
+        Array.from({ length: 16 }, (_, index): Point => {
+          const angle = index * Math.PI * 2 / 16
+          return [center[0] + Math.cos(angle) * radius * radial, center[1] + Math.sin(angle) * radius * radial]
+        })
+      ))])
     }
-    const coverage = (source: readonly Point[], target: readonly Point[]): number => {
-      const points = resample(source, 33)
-      return points.length === 0 ? 1 : points.filter((point) => pathDistance(point, target) <= 0.75).length / points.length
+    const tubeCoverage = (
+      source: readonly Point[], sourceRadius: number,
+      targets: readonly { path: readonly Point[]; radius: number }[],
+    ): number => {
+      const points = tubeSamples(source, sourceRadius)
+      return points.length === 0 ? 1 : points.filter((point) => targets.some((target) => (
+        pathDistance(point, target.path) <= target.radius + 1e-6
+      ))).length / points.length
     }
-    const occlusionWitness = (source: readonly Point[], candidates: readonly { index: number; path: readonly Point[]; radius: number }[]): {
+    const occlusionWitness = (source: readonly Point[], sourceRadius: number, candidates: readonly { index: number; path: readonly Point[]; radius: number }[]): {
       indices: readonly number[]; coverage: number
     } => {
-      const points = resample(source, 33), uncovered = new Set(points.map((_, index) => index))
+      const points = tubeSamples(source, sourceRadius), uncovered = new Set(points.map((_, index) => index))
       const selected: Array<{ index: number; path: readonly Point[]; radius: number }> = []
       while (uncovered.size > 0) {
         let best: { index: number; path: readonly Point[]; radius: number } | null = null, bestCovered: number[] = []
         for (const candidate of candidates) {
           if (selected.includes(candidate)) continue
-          const covered = [...uncovered].filter((index) => pathDistance(points[index]!, candidate.path) <= candidate.radius)
+          const covered = [...uncovered].filter((index) => pathDistance(points[index]!, candidate.path) <= candidate.radius + 1e-6)
           if (covered.length > bestCovered.length) { best = candidate; bestCovered = covered }
         }
         if (best === null || bestCovered.length === 0) break
         selected.push(best)
         bestCovered.forEach((index) => uncovered.delete(index))
       }
-      return { indices: selected.map(({ index }) => index), coverage: points.length === 0 ? 1 : (points.length - uncovered.size) / points.length }
+      const coverageOf = (values: typeof selected): number => points.length === 0 ? 1 : points.filter((point) => (
+        values.some((candidate) => pathDistance(point, candidate.path) <= candidate.radius + 1e-6)
+      )).length / points.length
+      for (let index = selected.length - 1; index >= 0; index -= 1) {
+        const without = selected.filter((_, candidate) => candidate !== index)
+        if (coverageOf(without) >= fullTubeCoverage) selected.splice(index, 1)
+      }
+      return { indices: selected.map(({ index }) => index), coverage: selected.length === 0 ? 0 : coverageOf(selected) }
     }
     const semanticLines = rawLines.filter(({ rendererOnly }) => !rendererOnly)
     const allPoints = (semanticLines.length === 0 ? rawLines : semanticLines).flatMap(({ screenPoints }) => screenPoints)
@@ -1188,8 +1252,10 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
       const members = [top]; assigned.add(top)
       for (let earlier = top - 1; earlier >= 0; earlier -= 1) {
         if (assigned.has(earlier)) continue
-        if (equivalent(rawLines[earlier]!.screenPoints, rawLines[top]!.screenPoints)
-          || coverage(rawLines[earlier]!.screenPoints, rawLines[top]!.screenPoints) >= 0.98) {
+        if (tubeCoverage(
+          rawLines[earlier]!.screenPoints, rawLines[earlier]!.lineWidth / 2 + 0.75,
+          [{ path: rawLines[top]!.screenPoints, radius: rawLines[top]!.lineWidth / 2 + 0.75 }],
+        ) >= fullTubeCoverage) {
           members.unshift(earlier); assigned.add(earlier)
         }
       }
@@ -1198,7 +1264,7 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
     const rasterByIndex = new Map<number, StrokeRaster>()
     for (const members of groups) {
       const topIndex = Math.max(...members), top = rawLines[topIndex]!, target = rgb(top.color), seen = new Set<number>()
-      const radius = top.lineWidth / 2 + 0.75, screenLength = pathLength(top.screenPoints)
+      const radius = top.lineWidth / 2 + 0.75
       let matchingPixels = 0, bestColorDistance = Infinity, eligiblePixels = 0
       for (let part = 1; part < top.screenPoints.length; part += 1) {
         const a = top.screenPoints[part - 1]!, b = top.screenPoints[part]!
@@ -1220,24 +1286,28 @@ async function referenceMeasure(page: Page, progress: number): Promise<BrowserMe
         }
       }
       const groupMemberIds = members.map((index) => rawLines[index]!.id), groupId = [...groupMemberIds].sort().join('|')
-      const witness = occlusionWitness(top.screenPoints, rawLines.flatMap((line, index) => (
+      const witness = occlusionWitness(top.screenPoints, radius, rawLines.flatMap((line, index) => (
         index > topIndex && !members.includes(index)
           ? [{ index, path: line.screenPoints, radius: line.lineWidth / 2 + 0.75 }]
           : []
       )))
       let occludedByPieceIds = witness.indices.map((index) => rawLines[index]!.id)
       let occlusionCoverage = witness.coverage
-      if (occlusionCoverage < 0.98) { occlusionCoverage = 0; occludedByPieceIds = [] }
-      const evidence: StrokeRaster = {
-        screenPoints: top.screenPoints, lineWidth: top.lineWidth, screenLength, matchingPixels, bestColorDistance, eligiblePixels,
-        requiredMatchingPixels: screenLength < 3 ? 0 : Math.max(3, Math.ceil(screenLength * 0.2)),
-        groupId, groupMemberIds, topPieceId: top.id, targetColor: top.color.toLowerCase(),
-        coverageByMember: Object.fromEntries(members.map((index) => [
-          rawLines[index]!.id, coverage(rawLines[index]!.screenPoints, top.screenPoints),
-        ])),
-        occludedByPieceIds, occlusionCoverage,
-      }
-      members.forEach((index) => rasterByIndex.set(index, evidence))
+      if (occlusionCoverage < fullTubeCoverage) { occlusionCoverage = 0; occludedByPieceIds = [] }
+      const coverageByMember = Object.fromEntries(members.map((index) => [
+        rawLines[index]!.id,
+        tubeCoverage(rawLines[index]!.screenPoints, rawLines[index]!.lineWidth / 2 + 0.75, [{ path: top.screenPoints, radius }]),
+      ]))
+      members.forEach((index) => {
+        const member = rawLines[index]!, memberLength = pathLength(member.screenPoints)
+        rasterByIndex.set(index, {
+          screenPoints: member.screenPoints, lineWidth: member.lineWidth, screenLength: memberLength,
+          matchingPixels, bestColorDistance, eligiblePixels,
+          requiredMatchingPixels: memberLength < 3 ? 0 : Math.max(3, Math.ceil(memberLength * 0.2)),
+          groupId, groupMemberIds, topPieceId: top.id, targetColor: top.color.toLowerCase(),
+          coverageByMember, occludedByPieceIds, occlusionCoverage,
+        })
+      })
     }
     const observedLines: RawStroke[] = rawLines.map(({ screenPoints, lineWidth: _lineWidth, ...line }, index) => ({
       ...line, curve: curve(screenPoints), raster: rasterByIndex.get(index)!,
@@ -1310,6 +1380,15 @@ async function appMeasure(page: Page, mode: Exclude<ModeName, 'reference'>, prog
 
 async function appLoad(page: Page, source: string): Promise<{ copyCount: number; times: Record<string, number> }> {
   return page.evaluate((value) => (window as unknown as { __lambdaComparison: { load(source: string): unknown } }).__lambdaComparison.load(value), source) as Promise<{ copyCount: number; times: Record<string, number> }>
+}
+
+async function appRendererLayering(page: Page): Promise<Readonly<Record<'light' | 'dark', RendererLayeringProbe>>> {
+  return page.evaluate(() => {
+    const api = (window as unknown as {
+      __lambdaComparison: { probeRendererLayering(theme: 'light' | 'dark'): RendererLayeringProbe }
+    }).__lambdaComparison
+    return { light: api.probeRendererLayering('light'), dark: api.probeRendererLayering('dark') }
+  })
 }
 
 async function screenshotCanvas(page: Page, selector: string, crop: Bounds, path: string): Promise<void> {
@@ -1529,6 +1608,12 @@ async function main(): Promise<void> {
     const appPage = await context.newPage()
     await appPage.goto(harness.url)
     await appPage.waitForFunction(() => '__lambdaComparison' in window)
+    const rendererLayering = await appRendererLayering(appPage)
+    for (const [theme, probe] of Object.entries(rendererLayering)) {
+      if (probe.pipDistance > 3 || probe.lambdaDistance <= 24) {
+        throw new Error(`${theme} renderer layering probe did not keep the pip above Lambda: ${JSON.stringify(probe)}`)
+      }
+    }
     const sheetPage = await context.newPage()
     const examples = []
     for (const example of EXAMPLES) {
@@ -1573,6 +1658,7 @@ async function main(): Promise<void> {
       reference: { path: REFERENCE_PATH, sha256: sha256(referenceBytes) },
       application: { commit: appCommit, sourceHash: appSourceHash },
       palette: PALETTE,
+      rendererLayering,
       examples,
     }
     await writeFile(resolve(output, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
