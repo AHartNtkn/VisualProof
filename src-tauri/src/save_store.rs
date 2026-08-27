@@ -560,6 +560,9 @@ fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
             column("yaw", "REAL", true, 0),
         ],
     )?;
+    if !has_auto_generated_diagram_key(connection)? {
+        return Err(rusqlite::Error::InvalidQuery);
+    }
 
     if !has_unique_key(connection, "metadata", &["slot_id"], false)?
         || !has_unique_key(connection, "diagrams", &["diagram_json"], true)?
@@ -579,6 +582,16 @@ fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
         return Err(rusqlite::Error::InvalidQuery);
     }
     Ok(())
+}
+
+fn has_auto_generated_diagram_key(connection: &Connection) -> rusqlite::Result<bool> {
+    let mut statement = connection.prepare("PRAGMA index_list('diagrams')")?;
+    let primary_key_index = statement
+        .query_map([], |row| row.get::<_, String>(3))?
+        .collect::<rusqlite::Result<Vec<_>>>()?
+        .into_iter()
+        .any(|origin| origin == "pk");
+    Ok(!primary_key_index)
 }
 
 fn validate_required_columns(
@@ -900,7 +913,7 @@ mod tests {
     }
 
     #[test]
-    fn loads_an_equivalent_schema_with_affinity_equivalent_declared_types() {
+    fn rejects_a_diagram_key_without_sqlite_rowid_alias_behavior() {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("affinity.sqlite3");
         let connection = Connection::open(&path).unwrap();
@@ -921,12 +934,74 @@ mod tests {
             )
             .unwrap();
 
-        let loaded = SaveStore::new(temp.path().to_path_buf())
-            .load("affinity")
+        assert!(matches!(
+            SaveStore::new(temp.path().to_path_buf()).load("affinity"),
+            Err(SaveStoreError::InvalidStructure)
+        ));
+    }
+
+    #[test]
+    fn updates_an_affinity_equivalent_schema_with_an_auto_generated_diagram_key() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("affinity.sqlite3");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                &SCHEMA
+                    .replace("INTEGER", "int")
+                    .replace("TEXT", "varchar(256)")
+                    .replace("REAL", "double precision")
+                    .replace(
+                        "diagram_key int PRIMARY KEY",
+                        "diagram_key INTEGER PRIMARY KEY",
+                    ),
+            )
+            .unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO metadata VALUES(1, 'affinity', 'Affinity', 12);
+                 INSERT INTO camera VALUES(1, 1, 2, 3, .25, -.5);
+                 INSERT INTO diagrams VALUES(7, '{\"regions\":[],\"nodes\":[],\"wires\":[]}');
+                 INSERT INTO trees VALUES('tree-a', 7, 4, 5, .75);",
+            )
             .unwrap();
 
+        let store = SaveStore::new(temp.path().to_path_buf());
+        let changed_key = store
+            .update_tree(
+                "affinity",
+                TreeUpdate {
+                    tree_id: "tree-a".into(),
+                    diagram_json: DOUBLE_CUT.into(),
+                    x: 8.0,
+                    z: 9.0,
+                    yaw: 1.0,
+                },
+            )
+            .unwrap();
+        let loaded = store.load("affinity").unwrap();
+
         assert_eq!(loaded.slot_id, "affinity");
-        assert_eq!(loaded.trees.len(), 1);
+        assert_eq!(
+            loaded.trees,
+            vec![TreeRecord {
+                tree_id: "tree-a".into(),
+                diagram_key: changed_key,
+                x: 8.0,
+                z: 9.0,
+                yaw: 1.0,
+            }]
+        );
+        assert_eq!(
+            loaded
+                .diagrams
+                .iter()
+                .find(|diagram| diagram.diagram_key == changed_key),
+            Some(&DiagramRecord {
+                diagram_key: changed_key,
+                diagram_json: DOUBLE_CUT.into(),
+            })
+        );
     }
 
     #[test]
