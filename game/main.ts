@@ -101,7 +101,7 @@ function clearError(): void {
 }
 
 function requestPlayPointerLock(): void {
-  void pointerLock.acquire().catch((error: unknown) => {
+  void pointerLock.acquire().result.catch((error: unknown) => {
     setError(`Pointer lock failed: ${message(error)}`)
     resume.hidden = false
   })
@@ -240,33 +240,59 @@ function animate(now: number): void {
 }
 
 function startWorld(world: GameWorld): void {
-  renderer.setTrees([...world.trees.values()])
-  session = gameSession(world)
-  camera = { mode: 'free', pose: world.camera }
-  writer = new SaveWriter(world.slot.id, saveClient)
-  writer.subscribe((status) => {
-    saveStatus.textContent = status.state === 'idle'
-      ? 'Saved'
-      : status.state === 'saving' ? 'Saving…' : `Save error: ${status.message ?? 'unknown error'}`
-    saveStatus.classList.toggle('error', status.state === 'error')
-    saveRetry.hidden = status.state !== 'error'
-    root.dataset['saveState'] = status.state
-    if (status.state === 'error') setError(saveStatus.textContent)
-  })
-  start.hidden = true
-  hud.hidden = false
-  worldName.textContent = world.slot.name
-  root.dataset['ready'] = 'true'
-  root.dataset['loadedSlotId'] = world.slot.id
-  root.dataset['changedTreeId'] = ''
-  root.dataset['activeTweenCount'] = '0'
-  resize()
-  renderer.setCamera(displayCameraPose(camera))
-  mirrorCamera()
-  previousFrame = performance.now()
-  telemetry.beginTransition()
-  animationFrame = requestAnimationFrame(animate)
-  resume.hidden = document.pointerLockElement === renderer.canvas
+  const nextSession = gameSession(world)
+  const nextCamera: CameraState = { mode: 'free', pose: world.camera }
+  const nextWriter = new SaveWriter(world.slot.id, saveClient)
+  let releaseWriterStatus = (): void => {}
+  let requestedFrame: number | null = null
+
+  try {
+    renderer.setTrees([...world.trees.values()])
+    resize()
+    renderer.setCamera(displayCameraPose(nextCamera))
+    session = nextSession
+    camera = nextCamera
+    writer = nextWriter
+    releaseWriterStatus = nextWriter.subscribe((status) => {
+      saveStatus.textContent = status.state === 'idle'
+        ? 'Saved'
+        : status.state === 'saving' ? 'Saving…' : `Save error: ${status.message ?? 'unknown error'}`
+      saveStatus.classList.toggle('error', status.state === 'error')
+      saveRetry.hidden = status.state !== 'error'
+      root.dataset['saveState'] = status.state
+      if (status.state === 'error') setError(saveStatus.textContent)
+    })
+    start.hidden = true
+    hud.hidden = false
+    worldName.textContent = world.slot.name
+    root.dataset['ready'] = 'true'
+    root.dataset['loadedSlotId'] = world.slot.id
+    root.dataset['changedTreeId'] = ''
+    root.dataset['activeTweenCount'] = '0'
+    mirrorCamera()
+    previousFrame = performance.now()
+    telemetry.beginTransition()
+    requestedFrame = requestAnimationFrame(animate)
+    animationFrame = requestedFrame
+    resume.hidden = document.pointerLockElement === renderer.canvas
+  } catch (error) {
+    if (requestedFrame !== null) cancelAnimationFrame(requestedFrame)
+    releaseWriterStatus()
+    void nextWriter.dispose().catch(() => {})
+    if (session === nextSession) session = null
+    if (camera === nextCamera) camera = null
+    if (writer === nextWriter) writer = null
+    start.hidden = false
+    hud.hidden = true
+    root.dataset['ready'] = 'false'
+    root.dataset['loadedSlotId'] = ''
+    try {
+      renderer.setTrees([])
+    } catch {
+      // Preserve the opening failure as the concrete menu error.
+    }
+    throw error
+  }
 }
 
 function showStartFailure(failure: StartFailure): void {

@@ -38,6 +38,14 @@ class TestPointerLockPort implements PointerLockPort {
   private readonly changes = new Set<() => void>()
   private readonly errors = new Set<(error?: unknown) => void>()
 
+  public get changeListenerCount(): number {
+    return this.changes.size
+  }
+
+  public get errorListenerCount(): number {
+    return this.errors.size
+  }
+
   public request(): void | Promise<void> {
     this.timeline.push('request')
     return this.requestResult
@@ -78,7 +86,7 @@ function lifecycleWith(
   failures: StartFailure[],
 ): StartLifecycle {
   return new StartLifecycle(new PointerLockGate(port), {
-    open: (loaded) => opened.push(loaded),
+    open: (loaded) => { opened.push(loaded) },
     fail: (failure) => failures.push(failure),
   })
 }
@@ -197,5 +205,105 @@ describe('game start lifecycle', () => {
     expect(framesRequested).toBe(0)
     expect(failures).toEqual([])
     expect(port.releases).toBe(1)
+  })
+
+  it('restores the menu after open throws and permits a later start', async () => {
+    const port = new TestPointerLockPort()
+    const failures: StartFailure[] = []
+    const controls = { disabled: false }
+    let openCalls = 0
+    const lifecycle = new StartLifecycle(new PointerLockGate(port), {
+      open: () => {
+        openCalls++
+        if (openCalls === 1) throw new Error('renderer initialization failed')
+      },
+      fail: (failure) => failures.push(failure),
+    })
+    lifecycle.registerControl(controls)
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
+
+    const firstStart = lifecycle.start(async () => world)
+    port.acquire()
+    await firstStart
+
+    expect(failures).toEqual([{
+      kind: 'operation', message: 'renderer initialization failed',
+    }])
+    expect(port.locked).toBe(false)
+    expect(port.releases).toBe(1)
+    expect(controls.disabled).toBe(false)
+
+    const retry = lifecycle.start(async () => world)
+    expect(controls.disabled).toBe(true)
+    port.acquire()
+    await retry
+
+    expect(openCalls).toBe(2)
+    expect(failures).toHaveLength(1)
+    expect(controls.disabled).toBe(false)
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
+  })
+
+  it('cancels a Promise-backed acquisition and releases a late grant after disposal', async () => {
+    const port = new TestPointerLockPort()
+    const requested = deferred<void>()
+    port.requestResult = requested.promise
+    const lifecycle = lifecycleWith(port, [], [])
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
+    let operationCalls = 0
+    let startSettled = false
+
+    const starting = lifecycle.start(async () => {
+      operationCalls++
+      return world
+    }).finally(() => { startSettled = true })
+    lifecycle.dispose()
+    await until(() => startSettled)
+
+    expect(operationCalls).toBe(0)
+    expect(port.releases).toBe(1)
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
+
+    port.locked = true
+    requested.resolve()
+    await starting
+
+    expect(port.locked).toBe(false)
+    expect(port.releases).toBe(2)
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
+  })
+
+  it('settles a cancelled legacy acquisition and rejects a late lock without listener growth', async () => {
+    const port = new TestPointerLockPort()
+    const lifecycle = lifecycleWith(port, [], [])
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
+    let operationCalls = 0
+    let startSettled = false
+
+    const starting = lifecycle.start(async () => {
+      operationCalls++
+      return world
+    }).finally(() => { startSettled = true })
+    lifecycle.dispose()
+    await until(() => startSettled)
+
+    expect(operationCalls).toBe(0)
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
+
+    port.acquire()
+    port.fail(new Error('late denial'))
+    await starting
+
+    expect(port.locked).toBe(false)
+    expect(port.releases).toBe(2)
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
   })
 })
