@@ -1,6 +1,7 @@
 export type { SlotCorrespondence } from './correspondence'
 export {
-  mapTermToCommonCarrier,
+  proposeAttachedSlotCorrespondence,
+  proposeSlotCorrespondence,
   validateSlotCorrespondence,
   validateSlotCorrespondenceCarrier,
   validateSlotCorrespondenceWires,

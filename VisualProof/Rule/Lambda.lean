@@ -1,4 +1,5 @@
 import VisualProof.Rule.Lambda.Spawn
+import VisualProof.Rule.Lambda.Correspondence
 import VisualProof.Rule.Lambda.TermLeaf
 import VisualProof.Rule.Lambda.Fission
 import VisualProof.Rule.Lambda.Congruence
@@ -12,26 +13,6 @@ open Diagram
 open Theory
 
 namespace Conversion
-
-/-- The common positional carrier through which the source and replacement
-free-slot interfaces are compared. Every carrier position is owned by at least
-one side. -/
-structure Correspondence (leftArity rightArity : Nat) where
-  commonArity : Nat
-  left : Fin leftArity → Fin commonArity
-  right : Fin rightArity → Fin commonArity
-  covered : ∀ commonSlot,
-    (∃ leftSlot, left leftSlot = commonSlot) ∨
-      (∃ rightSlot, right rightSlot = commonSlot)
-
-def Correspondence.symm
-    (correspondence : Correspondence leftArity rightArity) :
-    Correspondence rightArity leftArity where
-  commonArity := correspondence.commonArity
-  left := correspondence.right
-  right := correspondence.left
-  covered := fun commonSlot =>
-    (correspondence.covered commonSlot).elim Or.inr Or.inl
 
 /-- One exact term-node replacement. The host output is preserved, while both
 free-slot interfaces are quotiented through the same covered positional carrier. -/

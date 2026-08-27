@@ -12,6 +12,7 @@ import type { ProofStep } from '../kernel/proof/step'
 import { singleStepAction, type ProofAction } from '../kernel/proof/action'
 import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
+import type { LambdaMotionTransition } from '../view/lambda-transition'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, wireRouteSpaces, wireTerminalPoints } from '../view/engine'
 import { route } from '../view/route/freespace'
@@ -174,6 +175,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     engine: () => engine,
     theme: currentTheme,
   })
+  let view3LambdaTransition: LambdaMotionTransition | null = null
   let interaction!: InteractiveViewport
   let construct!: ConstructController
   let proofMoves!: ProofMoveController
@@ -667,7 +669,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       if (mainSearch !== null) attachLayoutSearch(next, mainSearch)
       const carried = carryOver(previous, next)
       seedProject(next, false, carried)
-      mainMotion.observeSwap(
+      view3LambdaTransition = mainMotion.observeSwap(
         previous,
         next,
         performance.now(),
@@ -823,10 +825,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const transition = Math.abs(cursor - previousReplayK) === 1
       ? replay.transitions[transitionIndex]
       : undefined
-    if (transition === undefined) mainMotion.observeSwap(prevEngine, next, performance.now())
+    if (transition === undefined) {
+      view3LambdaTransition = mainMotion.observeSwap(prevEngine, next, performance.now())
+    }
     else {
       const followsRecordedReduction = (cursor > previousReplayK) === (transition.half === 'forward')
-      mainMotion.observeSwap(
+      view3LambdaTransition = mainMotion.observeSwap(
         prevEngine,
         next,
         performance.now(),
@@ -1290,7 +1294,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
     if (view3State.kind === 'open') {
       canvas.hidden = true
-      view3State.view.update({ diagram: currentDiagram(), theme })
+      view3State.view.update({
+        diagram: currentDiagram(),
+        theme,
+        lambdaTransition: view3LambdaTransition,
+      })
       raf = requestAnimationFrame(frame)
       return
     }

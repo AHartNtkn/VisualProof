@@ -8,8 +8,9 @@ import type { ProofContext } from '../../kernel/proof/context'
 import { EMPTY_PROOF_CONTEXT, assertProofContext } from '../../kernel/proof/context'
 import { bareWireDeletionSteps, bareWireInsertSteps } from '../../kernel/proof/bare-wire'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
-import { termNodeAt, wireAt } from '../../kernel/rules/access'
-import { mapTermToCommonCarrier } from '../../kernel/rules/lambda'
+import { termNodeAt } from '../../kernel/rules/access'
+import { proposeAttachedSlotCorrespondence } from '../../kernel/rules/lambda'
+import { mapFreeSlots } from '../../kernel/term/interface'
 import { convertible } from '../../kernel/term/convert'
 import type { ConversionCertificate } from '../../kernel/term/certificate'
 import { parseTerm } from '../../kernel/term/parse'
@@ -26,6 +27,10 @@ import {
   convertToNormal,
   convertToWeakHeadNormal,
 } from '../tactics'
+import {
+  authorLambdaConversionTarget,
+  completeLambdaConversion,
+} from '../lambda-conversion'
 import { absorbHits, orphanedWires } from '../edit'
 import { buildSelection, regionAt, wireManipulationHitTest, type Hit } from '../hittest'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
@@ -39,34 +44,6 @@ import { copyDestinationPreview, copySelectionPreview } from './copy-view'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
 export type ProofOrientation = 'forward' | 'backward'
-
-/** Slot correspondence whose shared columns are already carried by one wire. */
-export function proposeAttachedSlotCorrespondence(
-  diagram: Diagram,
-  a: NodeId,
-  b: NodeId,
-) {
-  const left = termNodeAt(diagram, a)
-  const right = termNodeAt(diagram, b)
-  const columnByWire = new Map<WireId, number>()
-  const columns = (node: NodeId, arity: number): number[] =>
-    Array.from({ length: arity }, (_, slot) => {
-      const wire = wireAt(diagram, node, { kind: 'free', index: slot })
-      let column = columnByWire.get(wire)
-      if (column === undefined) {
-        column = columnByWire.size
-        columnByWire.set(wire, column)
-      }
-      return column
-    })
-  const leftColumns = columns(a, left.freeArity)
-  const rightColumns = columns(b, right.freeArity)
-  return {
-    commonArity: columnByWire.size,
-    left: leftColumns,
-    right: rightColumns,
-  }
-}
 
 function outputNodes(diagram: Diagram, wire: WireId): NodeId[] {
   return diagram.wires[wire]!.endpoints
@@ -137,8 +114,8 @@ export function proofConnectionStep(
       const right = termNodeAt(diagram, b)
       const correspondence = proposeAttachedSlotCorrespondence(diagram, a, b)
       const result = convertible(
-        mapTermToCommonCarrier(left.term, correspondence.left),
-        mapTermToCommonCarrier(right.term, correspondence.right),
+        mapFreeSlots(left.term, correspondence.left),
+        mapFreeSlots(right.term, correspondence.right),
         fuel,
       )
       if (result.status !== 'convertible') continue
@@ -952,44 +929,14 @@ export class ProofMoveController {
         const parsed = parseTerm(value)
         const diagram = this.#options.diagram()
         const source = termNodeAt(diagram, node)
-        if (parsed.freeIdentifiers.length > source.freeArity) {
-          throw new Error(
-            `conversion target uses ${parsed.freeIdentifiers.length} free slots, `
-            + `but the source interface has ${source.freeArity}`,
-          )
-        }
-        const assigned = parsed.freeIdentifiers.map((identifier) => {
-          const match = /^f(0|[1-9][0-9]*)$/u.exec(identifier)
-          if (match === null) return undefined
-          const slot = Number(match[1])
-          if (slot >= source.freeArity) {
-            throw new Error(
-              `conversion target free identifier '${identifier}' is outside `
-              + `the source interface 0..<${source.freeArity}`,
-            )
-          }
-          return slot
-        })
-        const used = new Set(assigned.filter(
-          (slot): slot is number => slot !== undefined,
-        ))
-        if (used.size !== assigned.filter((slot) => slot !== undefined).length) {
-          throw new Error('conversion target maps two free identifiers to one source slot')
-        }
-        let next = 0
-        const mapping = assigned.map((slot) => {
-          if (slot !== undefined) return slot
-          while (used.has(next)) next++
-          if (next >= source.freeArity) {
-            throw new Error('conversion target has no available source free slot')
-          }
-          used.add(next)
-          return next++
-        })
-        const target = mapTermToCommonCarrier(parsed.term, mapping)
+        const target = authorLambdaConversionTarget(
+          diagram,
+          node,
+          { kind: 'parsed', parsed },
+        )
         const conversion = convertible(
-          source.term,
-          target,
+          mapFreeSlots(source.term, target.correspondence.left),
+          mapFreeSlots(target.term, target.correspondence.right),
           this.#options.fuel(),
         )
         if (conversion.status === 'fuel-exhausted') {
@@ -998,22 +945,12 @@ export class ProofMoveController {
         if (conversion.status === 'not-convertible') {
           throw new Error('conversion target is not beta-eta convertible to the source term')
         }
-        const slots = Array.from(
-          { length: source.freeArity },
-          (_, slot) => slot,
-        )
-        this.#commit({
-          rule: 'lambdaConversion',
+        this.#commit(completeLambdaConversion(
+          diagram,
           node,
-          term: target,
-          correspondence: {
-            commonArity: source.freeArity,
-            left: slots,
-            right: [...slots],
-          },
-          certificate: conversion.certificate,
-          attachments: {},
-        })
+          target,
+          conversion.certificate,
+        ).step)
       },
     ))
   }

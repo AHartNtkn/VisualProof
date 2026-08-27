@@ -8,8 +8,13 @@ import { escapesFraming, fitPose, orbited, panned, zoomed, type CamPose } from '
 import { lerp3, type Vec3 } from './vec3'
 import { expandHover, focusPoint } from './pick'
 import { mountRender, type RenderTheme } from './render'
+import type { LambdaMotionTransition } from '../view/lambda-transition'
 
-export type View3State = { diagram: Diagram; theme: Theme }
+export type View3State = {
+  diagram: Diagram
+  theme: Theme
+  lambdaTransition?: LambdaMotionTransition | null
+}
 export type View3 = { update(s: View3State): void; dispose(): void }
 
 export const TWEEN_MS = 350
@@ -185,7 +190,17 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
         // COMPLETED scene) — planning from `scene` would pop the display
         // back to that stale geometry for one frame before animating on.
         const fromScene = presented
-        tween = { plan: planTransition(fromScene, nextScene, theme.wire), poseFrom: pose, poseTo, start: performance.now() }
+        tween = {
+          plan: planTransition(
+            fromScene,
+            nextScene,
+            theme.wire,
+            s.lambdaTransition ?? null,
+          ),
+          poseFrom: pose,
+          poseTo,
+          start: performance.now(),
+        }
         glide = null // the transition's pose tween owns the camera now
         container.dataset['view3Focus'] = ''
         spec = nextSpec

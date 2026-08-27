@@ -1,11 +1,12 @@
 import type { Term } from './term'
+import { defaultFreeIdentifier } from './interface'
 
 type Context = 'top' | 'applicationFn' | 'applicationArgument'
 
 /** Deterministically print a term, consulting optional parser-boundary names for free slots. */
 export function printTerm(term: Term, freeIdentifiers?: readonly string[]): string {
   const freeName = (slot: number): string => {
-    if (freeIdentifiers === undefined) return `f${slot}`
+    if (freeIdentifiers === undefined) return defaultFreeIdentifier(slot)
     const identifier = freeIdentifiers[slot]
     if (identifier === undefined) {
       throw new Error(`free slot ${slot} has no supplied identifier`)

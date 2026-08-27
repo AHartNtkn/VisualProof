@@ -275,12 +275,6 @@ describe('Lambda conversion tactics', () => {
       rule: 'lambdaConversion',
       node,
       term: parseTerm(target).term,
-      correspondence: {
-        commonArity: parsed.freeIdentifiers.length,
-        left: Array.from({ length: parsed.freeIdentifiers.length }, (_, slot) => slot),
-        right: Array.from({ length: parsed.freeIdentifiers.length }, (_, slot) => slot),
-      },
-      attachments: {},
     })
     expect(applyStep(diagram, tactic.step, context)).toEqual(tactic.diagram)
   })
@@ -299,5 +293,34 @@ describe('Lambda conversion tactics', () => {
     )
     const omegaDiagram = omegaBuilder.build()
     expect(() => convertToNormal(omegaDiagram, omega, 1)).toThrow(/fuel/i)
+  })
+
+  it('authors normalization from the free slots used by the reduct', () => {
+    const builder = new DiagramBuilder()
+    const parsed = parseTerm('(\\x. kept) discarded')
+    const node = builder.term(builder.root, parsed.term, parsed.freeIdentifiers.length)
+    const source = builder.build()
+    const discardedWire = Object.entries(source.wires).find(([, wire]) =>
+      wire.endpoints.some((endpoint) => (
+        endpoint.node === node
+        && endpoint.port.kind === 'free'
+        && endpoint.port.index === 1
+      )))![0]
+
+    const conversion = convertToNormal(source, node, 64)
+    const target = conversion.diagram.nodes[node]
+    const context = verifyTheory(tinyTheory())
+
+    expect(conversion.step.rule).toBe('lambdaConversion')
+    expect(applyStep(source, conversion.step, context)).toEqual(conversion.diagram)
+    expect(target?.kind).toBe('term')
+    if (target?.kind !== 'term') throw new Error('normalization lost the term node')
+    expect(target.freeArity).toBe(1)
+    expect(target.term).toEqual(parseTerm('kept').term)
+    expect(source.wires[discardedWire]!.endpoints).toHaveLength(2)
+    expect(conversion.diagram.wires[discardedWire]!.endpoints).toHaveLength(2)
+    expect(conversion.diagram.wires[discardedWire]!.endpoints.every((endpoint) => (
+      conversion.diagram.nodes[endpoint.node]?.kind === 'identity'
+    ))).toBe(true)
   })
 })

@@ -1,7 +1,7 @@
 import type { Entity, Scene3 } from './scene'
-import { applyStepAt, type PathSeg, type ReductionStep } from '../kernel/term/reduce'
-import { termEq, type Term } from '../kernel/term/term'
-import { planBetaMotion, sampleBetaMotion, type LambdaMotionPlan } from '../view/lambda-motion'
+import { termEq } from '../kernel/term/term'
+import { sampleBetaMotion, type LambdaMotionPlan } from '../view/lambda-motion'
+import type { LambdaMotionTransition } from '../view/lambda-transition'
 import { lambdaDiagram, type LambdaEntity } from './lambda'
 import { add3, dist3, dot3, lerp3, scale3, segClosest, sub3, type Vec3 } from './vec3'
 
@@ -58,25 +58,6 @@ export function resample(pts: Vec3[], m: number): Vec3[] {
 const hasPts = (e: Entity): e is Extract<Entity, { pts: Vec3[] }> => 'pts' in e
 const isStrand = (e: Entity): e is Extract<Entity, { kind: 'strand' }> => e.kind === 'strand'
 const isLambda = (e: Entity): e is LambdaEntity => e.kind === 'lambda'
-
-function betaSteps(term: Term, path: readonly PathSeg[] = []): ReductionStep[] {
-  const out: ReductionStep[] = []
-  if (term.kind === 'application' && term.fn.kind === 'lambda') out.push({ kind: 'beta', path })
-  if (term.kind === 'lambda') out.push(...betaSteps(term.body, [...path, 'body']))
-  if (term.kind === 'application') {
-    out.push(...betaSteps(term.fn, [...path, 'fn']))
-    out.push(...betaSteps(term.argument, [...path, 'argument']))
-  }
-  return out
-}
-
-function betaMotion(source: Term, target: Term, interfaceArity: number): LambdaMotionPlan | null {
-  for (const step of betaSteps(source)) {
-    if (!termEq(applyStepAt(source, step), target)) continue
-    return planBetaMotion(source, step, interfaceArity)
-  }
-  return null
-}
 
 type BranchEntity = Extract<Entity, { kind: 'branch' }>
 
@@ -172,7 +153,12 @@ function projectOntoPolylines(p: Vec3, polys: readonly (readonly Vec3[])[]): Vec
   return best
 }
 
-export function planTransition(prev: Scene3, next: Scene3, lambdaBaseColor = '#000000'): TweenPlan {
+export function planTransition(
+  prev: Scene3,
+  next: Scene3,
+  lambdaBaseColor = '#000000',
+  lambdaTransition: LambdaMotionTransition | null = null,
+): TweenPlan {
   const moves: { from: Entity; to: Entity }[] = []
   const enters: Entity[] = []
   const exits: Entity[] = []
@@ -185,13 +171,27 @@ export function planTransition(prev: Scene3, next: Scene3, lambdaBaseColor = '#0
   const previousLambdas = firstLambdaByNode(prev.entities)
   const nextLambdas = firstLambdaByNode(next.entities)
   const lambdaMoves: LambdaTween[] = []
-  for (const [node, to] of nextLambdas) {
+  if (lambdaTransition !== null) {
+    const { node, plan: motion, direction } = lambdaTransition
     const from = previousLambdas.get(node)
-    if (from === undefined || from.interfaceArity !== to.interfaceArity || termEq(from.term, to.term)) continue
-    const forward = betaMotion(from.term, to.term, from.interfaceArity)
-    const reverse = forward === null ? betaMotion(to.term, from.term, from.interfaceArity) : null
-    const motion = forward ?? reverse
-    if (motion !== null) {
+    const to = nextLambdas.get(node)
+    const reverse = direction === 'reverse'
+    const expectedFrom = reverse ? motion.target : motion.source
+    const expectedTo = reverse ? motion.source : motion.target
+    const expectedFromArity = reverse
+      ? motion.targetInterfaceArity
+      : motion.sourceInterfaceArity
+    const expectedToArity = reverse
+      ? motion.sourceInterfaceArity
+      : motion.targetInterfaceArity
+    if (
+      from !== undefined
+      && to !== undefined
+      && termEq(from.term, expectedFrom)
+      && termEq(to.term, expectedTo)
+      && from.interfaceArity === expectedFromArity
+      && to.interfaceArity === expectedToArity
+    ) {
       if (from.region !== to.region) throw new Error(`transition: Lambda node ${node} changed incident region`)
       const fromBranch = branchOf(prev.entities, from.region)
       const toBranch = branchOf(next.entities, to.region)
@@ -214,7 +214,7 @@ export function planTransition(prev: Scene3, next: Scene3, lambdaBaseColor = '#0
         toAlong: polylineFraction(toBranch.pts, to.center),
         attachments: attachmentsTo(next.entities, targetDiagram.anchors),
         baseColor: lambdaBaseColor,
-        reverse: forward === null,
+        reverse,
       })
     }
   }

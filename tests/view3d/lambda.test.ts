@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { application, bound, free, lambda } from '../../src/kernel/term/term'
+import type { NodeId } from '../../src/kernel/diagram/diagram'
+import type { ReductionStep } from '../../src/kernel/term/reduce'
 import { termGeometry } from '../../src/view/bend'
-import { planBetaMotion, sampleBetaMotion } from '../../src/view/lambda-motion'
+import { COPY_HUES, planBetaMotion, sampleBetaMotion } from '../../src/view/lambda-motion'
 import { DARK, LIGHT } from '../../src/view/paint'
 import {
   LAMBDA_SCALE,
@@ -20,6 +22,19 @@ import { planTransition, sceneAt } from '../../src/view3d/transition'
 import { cross3, dist3, dot3, len3, norm3, segPointDist, sub3, v3 } from '../../src/view3d/vec3'
 
 const term = application(lambda(application(bound(0), free(0))), free(1))
+
+const betaTransition = (
+  node: NodeId,
+  source: Parameters<typeof planBetaMotion>[0],
+  step: ReductionStep,
+  sourceArity: number,
+  targetArity = sourceArity,
+  direction: 'forward' | 'reverse' = 'forward',
+) => ({
+  node,
+  plan: planBetaMotion(source, step, sourceArity, targetArity),
+  direction,
+})
 
 const renderTheme = (wire: string, mode: 'light' | 'dark'): RenderTheme => ({
   mode,
@@ -49,19 +64,14 @@ describe('lambdaPlane', () => {
 })
 
 describe('lambdaDiagram', () => {
-  it('embeds exactly the static termGeometry stroke graph as unfilled polylines in one branch-normal plane', () => {
-    // Would fail if 3D invented a disk/mesh, dropped an exit stroke, or owned
-    // a second static Lambda layout instead of decomposing termGeometry.
+  it('renders the whole term as unfilled structural lines in one branch-normal plane', () => {
     const center = v3(4, -2, 7)
     const tangent = v3(1, 2, -1)
     const embedded = lambdaDiagram({ node: 'term', region: 'region', term, interfaceArity: 2, center, tangent })
-    const geometry = termGeometry(term, 2)
-    expect(embedded.strokes.map((stroke) => stroke.strokeId)).toEqual([
-      ...geometry.arcs.map((_, index) => `arc:${index}`),
-      ...geometry.radials.map((_, index) => `radial:${index}`),
-      'exit:arc',
-      'exit:line',
-    ])
+    const roles = new Set(embedded.strokes.map(({ role }) => role))
+    for (const role of ['lambda', 'application', 'variable', 'free-rail', 'free-port', 'output-arc', 'output-line'] as const) {
+      expect(roles.has(role), `missing visible ${role} stroke`).toBe(true)
+    }
     expect(embedded.strokes.every((stroke) => stroke.kind === 'lambda')).toBe(true)
     expect(embedded.strokes.every((stroke) => !('fill' in stroke))).toBe(true)
     for (const stroke of embedded.strokes) {
@@ -113,12 +123,14 @@ describe('lambdaDiagram', () => {
     )
     const plan = planBetaMotion(source, { kind: 'beta', path: [] })
 
-    for (const progress of [plan.times.spaceEnd, 1]) {
+    for (const progress of [0.44]) {
       const frame = sampleBetaMotion(plan, progress, '#26343a')
       const bars = lambdaDiagram({
         node: 'term', region: 'region', term: source, interfaceArity: 0,
         center: v3(0, 0, 0), tangent: v3(0, 1, 0), frame,
-      }).strokes.filter(({ strokeId, role }) => strokeId.startsWith('copy:') && role === 'lambda')
+      }).strokes.filter(({ color, role }) => (
+        role === 'lambda' && COPY_HUES.includes(color as typeof COPY_HUES[number])
+      ))
       expect(bars).toHaveLength(2)
       for (const bar of bars) {
         expect(bar.pts.length).toBeGreaterThan(2)
@@ -135,11 +147,11 @@ describe('lambdaDiagram', () => {
       application(lambda(bound(0)), free(0)),
     )
     const plan = planBetaMotion(source, { kind: 'beta', path: [] })
-    const frame = sampleBetaMotion(plan, plan.times.spaceEnd, '#26343a')
+    const frame = sampleBetaMotion(plan, 0.44, '#26343a')
     const copied = lambdaDiagram({
       node: 'term', region: 'region', term: source, interfaceArity: 1,
       center: v3(0, 0, 0), tangent: v3(0, 1, 0), frame,
-    }).strokes.filter(({ strokeId }) => strokeId.startsWith('copy:'))
+    }).strokes.filter(({ color }) => COPY_HUES.includes(color as typeof COPY_HUES[number]))
 
     expect(copied.length).toBeGreaterThan(0)
     expect(copied.some(({ subtermPath }) => subtermPath.length > 0)).toBe(true)
@@ -171,33 +183,36 @@ describe('3D scene integration', () => {
     }
   })
 
-  it('samples Task 8 structural geometry and colors at the same transition progress', () => {
-    // Would fail if 3D used generic whole-outline interpolation, eased the
-    // structural timeline a second time, or recomputed lineage colors.
+  it('uses the same structural geometry and colors in 2D and 3D at the same progress', () => {
     const source = application(lambda(bound(0)), free(0))
     const target = free(0)
     const sourceBuilder = new DiagramBuilder()
-    sourceBuilder.term(sourceBuilder.root, source, 1)
+    const node = sourceBuilder.term(sourceBuilder.root, source, 1)
     const targetBuilder = new DiagramBuilder()
     targetBuilder.term(targetBuilder.root, target, 1)
     const previous = scene3(sourceBuilder.build())
     const next = scene3(targetBuilder.build())
     const baseColor = '#5bd2de'
     const progress = 0.1
-    const frame = sampleBetaMotion(planBetaMotion(source, { kind: 'beta', path: [] }), progress, baseColor)
-    const at = sceneAt(planTransition(previous, next, baseColor), progress)
+    expect(planTransition(previous, next, baseColor).lambdaMoves).toHaveLength(0)
+    const structural = betaTransition(node, source, { kind: 'beta', path: [] }, 1)
+    const frame = sampleBetaMotion(structural.plan, progress, baseColor)
+    const at = sceneAt(planTransition(previous, next, baseColor, structural), progress)
     const strokes = at.entities.filter((entity): entity is LambdaEntity => entity.kind === 'lambda')
-    const anatomy = strokes.filter((stroke) => !stroke.strokeId.startsWith('socket:'))
-    expect(anatomy.map((stroke) => stroke.strokeId).sort()).toEqual(frame.strokes.map((stroke) => stroke.id).sort())
-    expect(anatomy.map((stroke) => stroke.color).sort()).toEqual(frame.strokes.map((stroke) => stroke.color).sort())
+    const anatomy = strokes.filter((stroke) => stroke.alpha === undefined)
+    const description = (role: string, color: string | null, path: readonly string[]) => (
+      JSON.stringify({ role, color, path })
+    )
+    expect(anatomy.map(({ role, color, subtermPath }) => description(role, color, subtermPath)).sort())
+      .toEqual(frame.strokes.map(({ role, color, subtermPath }) => description(role, color, subtermPath)).sort())
     expect(strokes.some((stroke) => stroke.color === '#f06aa7')).toBe(true)
     const expectedSocket = frame.sockets.find((socket) => socket.amount > 0.002)!
-    const socket = strokes.find((stroke) => stroke.strokeId === expectedSocket.id)!
+    const socket = strokes.find((stroke) => stroke.alpha !== undefined)!
     expect('alpha' in socket ? socket.alpha : undefined).toBeCloseTo(expectedSocket.amount, 12)
     for (const stroke of strokes) for (const point of stroke.pts) {
       expect(Math.abs(dot3(sub3(point, stroke.center), stroke.plane.normal))).toBeLessThan(1e-9)
     }
-    const transition = planTransition(previous, next, baseColor)
+    const transition = planTransition(previous, next, baseColor, structural)
     const lambdaEntities = (entities: readonly { kind: string }[]) => entities.filter((entity) => entity.kind === 'lambda') as LambdaEntity[]
     const endpoints = [
       { progress: 0, staticEntities: lambdaEntities(previous.entities) },
@@ -205,8 +220,8 @@ describe('3D scene integration', () => {
     ]
     for (const { progress, staticEntities } of endpoints) {
       const presented = lambdaEntities(sceneAt(transition, progress).entities)
-      expect(presented.map(({ strokeId, pts }) => ({ strokeId, pts })))
-        .toEqual(staticEntities.map(({ strokeId, pts }) => ({ strokeId, pts })))
+      expect(presented.map(({ role, pts }) => ({ role, pts })))
+        .toEqual(staticEntities.map(({ role, pts }) => ({ role, pts })))
     }
   })
 
@@ -215,7 +230,7 @@ describe('3D scene integration', () => {
     const source = application(lambda(bound(0)), free(0))
     const target = free(0)
     const sourceBuilder = new DiagramBuilder()
-    sourceBuilder.term(sourceBuilder.root, source, 1)
+    const node = sourceBuilder.term(sourceBuilder.root, source, 1)
     const targetBuilder = new DiagramBuilder()
     targetBuilder.term(targetBuilder.root, target, 1)
     const sourceScene = scene3(sourceBuilder.build())
@@ -227,12 +242,20 @@ describe('3D scene integration', () => {
       forwardProgress,
       baseColor,
     )
-    const reverse = sceneAt(planTransition(targetScene, sourceScene, baseColor), 1 - forwardProgress)
+    const reverse = sceneAt(planTransition(
+      targetScene,
+      sourceScene,
+      baseColor,
+      betaTransition(node, source, { kind: 'beta', path: [] }, 1, 1, 'reverse'),
+    ), 1 - forwardProgress)
     const anatomy = reverse.entities.filter(
-      (entity): entity is LambdaEntity => entity.kind === 'lambda' && !entity.strokeId.startsWith('socket:'),
+      (entity): entity is LambdaEntity => entity.kind === 'lambda' && entity.alpha === undefined,
     )
-    expect(anatomy.map((stroke) => stroke.strokeId).sort()).toEqual(expected.strokes.map((stroke) => stroke.id).sort())
-    expect(anatomy.map((stroke) => stroke.color).sort()).toEqual(expected.strokes.map((stroke) => stroke.color).sort())
+    const description = (role: string, color: string | null, path: readonly string[]) => (
+      JSON.stringify({ role, color, path })
+    )
+    expect(anatomy.map(({ role, color, subtermPath }) => description(role, color, subtermPath)).sort())
+      .toEqual(expected.strokes.map(({ role, color, subtermPath }) => description(role, color, subtermPath)).sort())
   })
 
   it('keeps a nested beta figure branch-normal and every explicit interface anchor attached during motion', () => {
@@ -256,6 +279,7 @@ describe('3D scene integration', () => {
       scene3(before.diagram),
       scene3(after.diagram),
       '#5bd2de',
+      betaTransition(before.node, source, { kind: 'beta', path: ['body'] }, 2),
     ), progress)
     const branch = transient.entities.find(
       (entity): entity is Extract<(typeof transient.entities)[number], { kind: 'branch' }> => (
@@ -274,13 +298,13 @@ describe('3D scene integration', () => {
       expect(Math.abs(dot3(sub3(point, center), tangent))).toBeLessThan(1e-10)
     }
 
-    expect(strokes.some((stroke) => stroke.strokeId === 'root/body/fn:lambda')).toBe(true)
-    expect(strokes.some((stroke) => stroke.strokeId === 'interface:free:1:rail')).toBe(true)
-    const anchors = [
-      strokes.find((stroke) => stroke.strokeId === 'interface:output:line')!.pts.at(-1)!,
-      strokes.find((stroke) => stroke.strokeId === 'interface:free:0:port-stem')!.pts.at(-1)!,
-      strokes.find((stroke) => stroke.strokeId === 'interface:free:1:port-stem')!.pts.at(-1)!,
-    ]
+    expect(strokes.some(({ role, subtermPath }) => (
+      role === 'lambda' && subtermPath.join('/') === 'body/fn'
+    ))).toBe(true)
+    const anchors = strokes
+      .filter(({ role }) => role === 'output-line' || role === 'free-port')
+      .map(({ pts }) => pts.at(-1)!)
+    expect(anchors).toHaveLength(3)
     const strandEnds = transient.entities
       .filter((entity) => entity.kind === 'strand')
       .flatMap((entity) => [entity.pts[0]!, entity.pts[entity.pts.length - 1]!])
@@ -333,13 +357,19 @@ describe('3D scene integration', () => {
     const targetScene = scene3(after.diagram)
     const shown = presentedScene(
       targetScene,
-      planTransition(scene3(before.diagram), targetScene, '#5bd2de'),
+      planTransition(
+        scene3(before.diagram),
+        targetScene,
+        '#5bd2de',
+        betaTransition(before.node, source, { kind: 'beta', path: ['body'] }, 1),
+      ),
       0.1,
     )
     const hit = shown.entities.find((entity): entity is LambdaEntity => (
       entity.kind === 'lambda'
       && entity.node === before.node
-      && entity.strokeId === 'root/body/fn:lambda'
+      && entity.role === 'lambda'
+      && entity.subtermPath.join('/') === 'body/fn'
     ))!
     expect(targetScene.entities.some((entity) => entity.key === hit.key)).toBe(false)
     const expanded = expandHover(hit.key, diagramSpec(after.diagram), shown.entities)

@@ -9,6 +9,8 @@ import {
 import { proofConnectionStep } from '../../src/app/interact/moves'
 import type { PointerSample } from '../../src/app/interact/viewport'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { applyStep } from '../../src/kernel/proof/step'
 import { wireAt } from '../../src/kernel/rules/access'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { application, bound, free, lambda } from '../../src/kernel/term/term'
@@ -171,10 +173,11 @@ describe('term interaction surface', () => {
       64,
     )
 
-    expect(step).toMatchObject({
-      rule: 'lambdaCongruenceJoin',
-      correspondence: { commonArity: 1, left: [0, 0], right: [0] },
-    })
+    expect(step?.rule).toBe('lambdaCongruenceJoin')
+    if (step === null) throw new Error('convertible outputs did not produce a proof step')
+    const joined = applyStep(diagram, step, EMPTY_PROOF_CONTEXT)
+    expect(wireAt(joined, left, { kind: 'output' }))
+      .toBe(wireAt(joined, right, { kind: 'output' }))
   })
 
   it('connects two term free-slot wires through the proof wire join', () => {

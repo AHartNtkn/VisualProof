@@ -4,26 +4,16 @@ import { derivedScope } from '../../diagram/regions'
 import { IOTA } from '../../diagram/sig'
 import { freshId, type IdReservation } from '../../diagram/subgraph/freshId'
 import { headSpine, type HeadSpine } from '../../term/hnf'
-import { application, free, lambda, termEq, type Term } from '../../term/term'
+import { lambda, termEq, type Term } from '../../term/term'
+import { compactFreeInterface, mapFreeSlots } from '../../term/interface'
 import { termNodeAt, wireAt } from '../access'
 import { RuleError } from '../error'
 import { completeWireEnds, type PartsInProgress } from '../wire-ends'
 import {
-  mapTermToCommonCarrier,
   validateSlotCorrespondence,
   validateSlotCorrespondenceWires,
   type SlotCorrespondence,
 } from './correspondence'
-
-function mapSlots(term: Term, mapping: readonly number[]): Term {
-  switch (term.kind) {
-    case 'bound': return term
-    case 'free': return free(mapping[term.slot]!)
-    case 'lambda': return lambda(mapSlots(term.body, mapping))
-    case 'application':
-      return application(mapSlots(term.fn, mapping), mapSlots(term.argument, mapping))
-  }
-}
 
 function compactClosure(
   diagram: Diagram,
@@ -31,40 +21,10 @@ function compactClosure(
   sourceArity: number,
   term: Term,
 ): { readonly term: Term; readonly wires: readonly WireId[] } {
-  const used: number[] = []
-  const seenSlots = new Set<number>()
-  const visit = (current: Term): void => {
-    switch (current.kind) {
-      case 'bound': return
-      case 'free':
-        if (!seenSlots.has(current.slot)) {
-          seenSlots.add(current.slot)
-          used.push(current.slot)
-        }
-        return
-      case 'lambda':
-        visit(current.body)
-        return
-      case 'application':
-        visit(current.fn)
-        visit(current.argument)
-    }
-  }
-  visit(term)
-  const mapping: number[] = Array.from({ length: sourceArity })
-  const wires: WireId[] = []
-  const byWire = new Map<WireId, number>()
-  for (const native of used) {
-    const wire = wireAt(diagram, source, { kind: 'free', index: native })
-    let compact = byWire.get(wire)
-    if (compact === undefined) {
-      compact = wires.length
-      byWire.set(wire, compact)
-      wires.push(wire)
-    }
-    mapping[native] = compact
-  }
-  return { term: mapSlots(term, mapping), wires }
+  const nativeWires = Array.from({ length: sourceArity }, (_, slot) =>
+    wireAt(diagram, source, { kind: 'free', index: slot }))
+  const compact = compactFreeInterface(term, nativeWires)
+  return { term: compact.term, wires: compact.carriers }
 }
 
 /** Replace a rigid-head binary equation with pairwise argument equations. */
@@ -163,8 +123,8 @@ export function applyLambdaHeadStrip(
     const leftClosure = close(leftSpine.args[index]!)
     const rightClosure = close(rightSpine.args[index]!)
     if (termEq(
-      mapTermToCommonCarrier(leftClosure, correspondence.left),
-      mapTermToCommonCarrier(rightClosure, correspondence.right),
+      mapFreeSlots(leftClosure, correspondence.left),
+      mapFreeSlots(rightClosure, correspondence.right),
     )) continue
     pairs.push({
       left: compactClosure(diagram, a, left.freeArity, leftClosure),

@@ -486,4 +486,23 @@ describe('proof move vocabulary', () => {
       term: parseTerm('f0').term,
     })
   })
+
+  it('authors a custom conversion through the same compact target interface', () => {
+    const fixture = lambdaHarness('(\\x. kept) discarded')
+    const sample = pointerSample(
+      vec(25, 30),
+      { kind: 'node', id: fixture.node },
+    )
+
+    expect(fixture.controller.contextMenu(sample)).toBe(true)
+    clickMenuRow(fixture.host, 'Convert → custom target…')
+    submitPrompt(fixture.host, 'f0')
+
+    expect(fixture.applied[0]!.steps[0]).toMatchObject({
+      rule: 'lambdaConversion',
+      term: parseTerm('f0').term,
+    })
+    const target = fixture.diagram().nodes[fixture.node]
+    expect(target?.kind === 'term' && target.freeArity).toBe(1)
+  })
 })

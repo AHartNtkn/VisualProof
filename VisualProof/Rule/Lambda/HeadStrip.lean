@@ -45,7 +45,7 @@ structure Description (outer : List Sig) where
   rightArity : Nat
   leftTerm : VisualProof.Lambda.Term 0 (Fin leftArity)
   rightTerm : VisualProof.Lambda.Term 0 (Fin rightArity)
-  correspondence : Congruence.Correspondence leftArity rightArity
+  correspondence : Correspondence leftArity rightArity
   carrier : Fin correspondence.commonArity → Var (outer ++ locals) .iota
   leftSpine : VisualProof.Lambda.HeadSpine 0 (Fin leftArity)
   rightSpine : VisualProof.Lambda.HeadSpine 0 (Fin rightArity)

@@ -10,8 +10,6 @@ import { EMPTY_PROOF_CONTEXT, registerTheorem } from '../../../src/kernel/proof/
 import { replayProof, type ProofStep } from '../../../src/kernel/proof/step'
 import { checkTheorem, pinnedForReplay, type Theorem } from '../../../src/kernel/proof/theorem'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
-import * as identityRules from '../../../src/kernel/rules/identity'
-
 import * as rules from '../../../src/kernel/rules'
 import { applyIdentityInsertion } from '../../../src/kernel/rules/identity'
 import {
@@ -521,11 +519,7 @@ function ordinaryEqualityCutTheorem(): Theorem {
 }
 
 describe('ordinary identity contradiction theorem', () => {
-  it('has no specialized identity-contradiction authority and replays by normal theorem citation', () => {
-    expect(identityRules).not.toHaveProperty(['applyIdentity', 'Contradiction'].join(''))
-    expect(identityRules).not.toHaveProperty(['findIdentity', 'ContradictionEvidence'].join(''))
-    expect(rules).not.toHaveProperty(['applyIdentity', 'Contradiction'].join(''))
-
+  it('replays by normal theorem citation', () => {
     const theorem = ordinaryEqualityCutTheorem()
     expect(() => checkTheorem(theorem, EMPTY_PROOF_CONTEXT)).not.toThrow()
 

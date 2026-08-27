@@ -6,13 +6,16 @@ import type {
   WireId,
 } from '../../diagram/diagram'
 import { DiagramError, mkDiagram } from '../../diagram/diagram'
+import { derivedScope } from '../../diagram/regions'
+import type { IdReservation } from '../../diagram/subgraph/freshId'
 import type { ConversionCertificate } from '../../term/certificate'
 import { checkConversion } from '../../term/certificate'
 import { assertWellFormedTerm, type Term } from '../../term/term'
+import { mapFreeSlots } from '../../term/interface'
 import { termNodeAt, wireAt } from '../access'
 import { RuleError } from '../error'
+import { completeWireEnds, type PartsInProgress } from '../wire-ends'
 import {
-  mapTermToCommonCarrier,
   validateSlotCorrespondence,
   validateSlotMappingWires,
   type SlotCorrespondence,
@@ -73,6 +76,7 @@ function replaceTermNode(
   term: Term,
   correspondence: SlotCorrespondence,
   attachments: Readonly<Record<number, WireId>>,
+  reservation?: IdReservation,
 ): Diagram {
   const added = replacementAttachments(diagram, correspondence, attachments)
   const oldWires = correspondence.left.map((_, slot) =>
@@ -108,12 +112,21 @@ function replaceTermNode(
       freeArity: correspondence.right.length,
     },
   }
-  return mkDiagram({
-    root: diagram.root,
+  const parts: PartsInProgress = {
     regions: { ...diagram.regions },
     nodes,
     wires,
-  })
+  }
+  for (const wire of new Set(oldWires)) {
+    completeWireEnds(
+      parts,
+      wire,
+      derivedScope(diagram, wire),
+      'Lambda conversion',
+      reservation?.nodes,
+    )
+  }
+  return mkDiagram({ root: diagram.root, ...parts })
 }
 
 /** Replay a stored beta-eta conversion certificate and replace one whole term. */
@@ -124,6 +137,7 @@ export function applyLambdaConversion(
   correspondence: SlotCorrespondence,
   certificate: ConversionCertificate,
   attachments: Readonly<Record<number, WireId>> = {},
+  reservation?: IdReservation,
 ): Diagram {
   const source = termNodeAt(diagram, node)
   validateSlotCorrespondence(
@@ -141,8 +155,8 @@ export function applyLambdaConversion(
     )
   }
   const check = checkConversion(
-    mapTermToCommonCarrier(source.term, correspondence.left),
-    mapTermToCommonCarrier(term, correspondence.right),
+    mapFreeSlots(source.term, correspondence.left),
+    mapFreeSlots(term, correspondence.right),
     certificate,
   )
   if (!check.ok) {
@@ -155,5 +169,6 @@ export function applyLambdaConversion(
     term,
     correspondence,
     attachments,
+    reservation,
   )
 }

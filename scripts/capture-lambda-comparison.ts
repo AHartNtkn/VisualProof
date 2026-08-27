@@ -96,7 +96,12 @@ function load(source) {
     engine: () => targetEngine,
     theme: () => currentTheme,
   })
-  motion.observeSwap(sourceEngine, targetEngine, 0, singleStepAction('beta', conversion.step))
+  const lambdaTransition = motion.observeSwap(
+    sourceEngine,
+    targetEngine,
+    0,
+    singleStepAction('beta', conversion.step),
+  )
   state = {
     sourceDiagram,
     targetDiagram,
@@ -105,6 +110,7 @@ function load(source) {
     view: fitCamera({ center: frame.center, radius: frame.frameR }, 900, 900, 1),
     sourceScene: scene3(sourceDiagram),
     targetScene: scene3(targetDiagram),
+    lambdaTransition,
   }
   renderer3?.dispose()
   renderer3 = null
@@ -127,7 +133,12 @@ function show3d(progress, themeName) {
   host3.style.display = 'block'
   currentTheme = themeName === 'dark' ? DARK : LIGHT
   const theme = renderTheme(currentTheme, state.targetDiagram)
-  const transition = planTransition(state.sourceScene, state.targetScene, currentTheme.wire)
+  const transition = planTransition(
+    state.sourceScene,
+    state.targetScene,
+    currentTheme.wire,
+    state.lambdaTransition,
+  )
   const presented = sceneAt(transition, progress)
   const center = transition.toBounds.center
   const radius = Math.max(transition.fromBounds.radius, transition.toBounds.radius) * 1.12

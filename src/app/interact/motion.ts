@@ -1,7 +1,6 @@
 import { ascaleOf, type Engine } from '../../view/engine'
 import type { ProofAction } from '../../kernel/proof/action'
 import {
-  planBetaMotion,
   sampleBetaMotion,
   type LambdaMotionPlan,
   type LambdaStrokeFrame,
@@ -13,9 +12,11 @@ import {
   type Shape,
   type Theme,
 } from '../../view/paint'
-import type { ReductionStep } from '../../kernel/term/reduce'
-import { termEq, type Term } from '../../kernel/term/term'
 import type { Vec2 } from '../../view/vec'
+import {
+  lambdaMotionFromAction,
+  type LambdaMotionTransition,
+} from '../../view/lambda-transition'
 
 export type MotionPreferences = {
   speed: number
@@ -104,8 +105,8 @@ export class MotionCoordinator {
     now: number,
     action?: ProofAction,
     direction: 'forward' | 'reverse' = 'forward',
-  ): void {
-    if (this.#disposed) return
+  ): LambdaMotionTransition | null {
+    if (this.#disposed) return null
     if (this.#options.preferences().transitionGhosts) {
       for (const [id, body] of before.bodies) {
         if (!after.bodies.has(id)) {
@@ -116,9 +117,13 @@ export class MotionCoordinator {
         if (!before.bodies.has(id)) this.#pulses.push({ id, start: now })
       }
     }
-    this.#beta = action === undefined
+    const transition = action === undefined
       ? null
-      : this.#betaFromAction(before, after, action, now, direction)
+      : lambdaMotionFromAction(before.d, after.d, action, direction)
+    this.#beta = transition === null
+      ? null
+      : this.#betaFromTransition(before, after, transition, now)
+    return transition
   }
 
   overlays(now: number): readonly Shape[] {
@@ -173,27 +178,6 @@ export class MotionCoordinator {
     return duration === 0 ? 1 : Math.max(0, Math.min(1, (now - this.#hoverSince) / duration))
   }
 
-  beginBeta(
-    source: Term,
-    step: ReductionStep,
-    baseColor: string,
-    node: string | null = null,
-  ): LambdaMotionPlan {
-    const plan = planBetaMotion(source, step)
-    this.#beta = {
-      plan,
-      baseColor,
-      node,
-      direction: 'forward',
-      sourceEngine: null,
-      targetEngine: null,
-      frame: sampleBetaMotion(plan, 0, baseColor),
-      semanticProgress: 0,
-      startedAt: null,
-    }
-    return plan
-  }
-
   #sampleBeta(progress: number): LambdaStrokeFrame | null {
     if (this.#beta === null) return null
     this.#beta.startedAt = null
@@ -212,21 +196,6 @@ export class MotionCoordinator {
 
   /** Pointer-driven timeline sampling uses the active structural plan verbatim. */
   scrubBeta(progress: number): LambdaStrokeFrame | null {
-    return this.#sampleBeta(progress)
-  }
-
-  /** Clock-driven playback uses the same normalized structural plan. */
-  playBeta(progress: number): LambdaStrokeFrame | null {
-    return this.#sampleBeta(progress)
-  }
-
-  /** A discrete step is the settled endpoint of the active structural plan. */
-  stepBeta(): LambdaStrokeFrame | null {
-    return this.#sampleBeta(1)
-  }
-
-  /** Undo, redo, and replay history sample the same plan as direct scrubbing. */
-  historyBeta(progress: number): LambdaStrokeFrame | null {
     return this.#sampleBeta(progress)
   }
 
@@ -250,8 +219,7 @@ export class MotionCoordinator {
     )
   }
 
-  /** Commit the sampled endpoint to ordinary static rendering. */
-  settleBeta(): void {
+  #settleBeta(): void {
     this.#beta = null
   }
 
@@ -293,38 +261,22 @@ export class MotionCoordinator {
       progress,
     )
     active.semanticProgress = this.#semanticProgress(active.direction, progress)
-    if (progress >= 1) this.settleBeta()
+    if (progress >= 1) this.#settleBeta()
   }
 
-  #betaFromAction(
+  #betaFromTransition(
     before: Engine,
     after: Engine,
-    action: ProofAction,
+    transition: LambdaMotionTransition,
     now: number,
-    direction: 'forward' | 'reverse',
-  ): ActiveBeta | null {
-    if (action.steps.length !== 1) return null
-    const conversion = action.steps[0]
-    if (
-      conversion?.rule !== 'lambdaConversion'
-      || conversion.certificate.leftSteps.length !== 1
-      || conversion.certificate.rightSteps.length !== 0
-    ) return null
-    const reduction = conversion.certificate.leftSteps[0]!
-    if (reduction.kind !== 'beta') return null
+  ): ActiveBeta {
+    const { direction, node, plan } = transition
     const sourceEngine = direction === 'forward' ? before : after
     const targetEngine = direction === 'forward' ? after : before
-    const sourceNode = sourceEngine.d.nodes[conversion.node]
-    const targetNode = targetEngine.d.nodes[conversion.node]
-    if (sourceNode?.kind !== 'term' || targetNode?.kind !== 'term') return null
-    const plan = planBetaMotion(sourceNode.term, reduction, sourceNode.freeArity)
-    if (!termEq(plan.target, conversion.term) || !termEq(plan.target, targetNode.term)) {
-      throw new Error('Lambda motion target does not match the committed beta conversion')
-    }
     return {
       plan,
       baseColor: this.#options.theme().wire,
-      node: conversion.node,
+      node,
       direction,
       sourceEngine,
       targetEngine,

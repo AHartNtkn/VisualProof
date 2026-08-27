@@ -4,9 +4,9 @@ import type { Diagram, NodeId, Wire, WireId } from '../../diagram/diagram'
 import { mkDiagram } from '../../diagram/diagram'
 import { cutDepth, derivedScope, isAncestorOrEqual } from '../../diagram/regions'
 import { termNodeAt, wireAt } from '../access'
+import { mapFreeSlots } from '../../term/interface'
 import { RuleError } from '../error'
 import {
-  mapTermToCommonCarrier,
   validateSlotCorrespondence,
   validateSlotCorrespondenceWires,
   type SlotCorrespondence,
@@ -37,8 +37,8 @@ export function applyLambdaCongruenceJoin(
     right.freeArity,
   )
   const checked = checkConversion(
-    mapTermToCommonCarrier(left.term, correspondence.left),
-    mapTermToCommonCarrier(right.term, correspondence.right),
+    mapFreeSlots(left.term, correspondence.left),
+    mapFreeSlots(right.term, correspondence.right),
     certificate,
   )
   if (!checked.ok) {

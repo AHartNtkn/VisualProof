@@ -1,5 +1,5 @@
-import { application, free, lambda, type Term } from '../../term/term'
 import type { Diagram, NodeId, WireId } from '../../diagram/diagram'
+import { DiagramError } from '../../diagram/diagram'
 import { wireAt } from '../access'
 import { RuleError } from '../error'
 
@@ -8,6 +8,42 @@ export type SlotCorrespondence = {
   readonly commonArity: number
   readonly left: readonly number[]
   readonly right: readonly number[]
+}
+
+/** Author a quotient witness from the carriers of each native slot. */
+export function proposeSlotCorrespondence<T>(
+  leftCarriers: readonly T[],
+  rightCarriers: readonly T[],
+): SlotCorrespondence {
+  const columnByCarrier = new Map<T, number>()
+  const columns = (carriers: readonly T[]): number[] => carriers.map((carrier) => {
+    let column = columnByCarrier.get(carrier)
+    if (column === undefined) {
+      column = columnByCarrier.size
+      columnByCarrier.set(carrier, column)
+    }
+    return column
+  })
+  const left = columns(leftCarriers)
+  const right = columns(rightCarriers)
+  return { commonArity: columnByCarrier.size, left, right }
+}
+
+/** Author a witness for two term interfaces from their physical wires. */
+export function proposeAttachedSlotCorrespondence(
+  diagram: Diagram,
+  leftNode: NodeId,
+  rightNode: NodeId,
+): SlotCorrespondence {
+  const carriers = (node: NodeId): WireId[] => {
+    const term = diagram.nodes[node]
+    if (term?.kind !== 'term') {
+      throw new DiagramError(`node '${node}' is not a term node`)
+    }
+    return Array.from({ length: term.freeArity }, (_, slot) =>
+      wireAt(diagram, node, { kind: 'free', index: slot }))
+  }
+  return proposeSlotCorrespondence(carriers(leftNode), carriers(rightNode))
 }
 
 export function validateSlotCorrespondenceCarrier(
@@ -113,32 +149,5 @@ export function validateSlotCorrespondence(
       `slot correspondence right side must have arity ${rightArity}, `
       + `got ${correspondence.right.length}`,
     )
-  }
-}
-
-/** Rename one term's native slots into the correspondence carrier. */
-export function mapTermToCommonCarrier(
-  term: Term,
-  mapping: readonly number[],
-): Term {
-  switch (term.kind) {
-    case 'bound':
-      return term
-    case 'free': {
-      const column = mapping[term.slot]
-      if (column === undefined) {
-        throw new RuleError(
-          `term free slot ${term.slot} is outside correspondence side arity ${mapping.length}`,
-        )
-      }
-      return free(column)
-    }
-    case 'lambda':
-      return lambda(mapTermToCommonCarrier(term.body, mapping))
-    case 'application':
-      return application(
-        mapTermToCommonCarrier(term.fn, mapping),
-        mapTermToCommonCarrier(term.argument, mapping),
-      )
   }
 }

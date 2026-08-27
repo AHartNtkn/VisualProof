@@ -318,6 +318,7 @@ function applyStepRaw(
         step.correspondence,
         step.certificate,
         step.attachments,
+        reservation,
       )
     case 'lambdaFreeVariableIdentity':
       return applyFreeVariableIdentity(diagram, step.action)

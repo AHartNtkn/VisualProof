@@ -1,6 +1,7 @@
 import VisualProof.Diagram.Algebra
 import VisualProof.Diagram.ScopedRewrite
 import VisualProof.Rule.WireSever
+import VisualProof.Rule.Lambda.Correspondence
 import VisualProof.Lambda.Reduction
 
 namespace VisualProof.Rule.Lambda
@@ -9,17 +10,6 @@ open Diagram
 open Theory
 
 namespace Congruence
-
-/-- The exact quotient interface accepted by the TypeScript Lambda rules.
-Mappings need not be injective: repeated native slots may be carried by one
-physical wire. Coverage excludes unused carrier columns. -/
-structure Correspondence (leftArity rightArity : Nat) where
-  commonArity : Nat
-  left : Fin leftArity → Fin commonArity
-  right : Fin rightArity → Fin commonArity
-  covered : ∀ commonSlot,
-    (∃ leftSlot, left leftSlot = commonSlot) ∨
-      (∃ rightSlot, right rightSlot = commonSlot)
 
 /-- Two same-region terms on distinct local output wires, together with the
 common physical carrier used to check beta-eta conversion. The final local

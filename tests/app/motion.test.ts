@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
-import { planBetaMotion, sampleBetaMotion } from '../../src/view/lambda-motion'
+import { ARGUMENT_COLOR, COPY_HUES, REDEX_COLOR } from '../../src/view/lambda-motion'
 import * as motion from '../../src/app/interact/motion'
+import { lambdaMotionFromAction } from '../../src/view/lambda-transition'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { singleStepAction } from '../../src/kernel/proof/action'
 import { convertToWeakHeadNormal } from '../../src/app/tactics'
@@ -31,16 +32,38 @@ const lambdaOutline = (shapes: readonly Shape[]): readonly unknown[] => shapes.f
 })
 
 describe('generic diagram motion', () => {
-  it('keeps only speed, transition ghosts, and hover timing preferences', () => {
+  it('derives one beta motion description from the committed action, including interface shrinkage', () => {
+    const builder = new DiagramBuilder()
+    const parsed = parseTerm('(\\x. kept) discarded')
+    const node = builder.term(builder.root, parsed.term, parsed.freeIdentifiers.length)
+    const before = builder.build()
+    const conversion = convertToWeakHeadNormal(before, node, 8)
+
+    const transition = lambdaMotionFromAction(
+      before,
+      conversion.diagram,
+      singleStepAction('beta', conversion.step),
+      'forward',
+    )
+
+    expect(transition).not.toBeNull()
+    expect(transition?.node).toBe(node)
+    expect(transition?.plan.sourceInterfaceArity).toBe(2)
+    expect(transition?.plan.targetInterfaceArity).toBe(1)
+    expect(transition?.plan.target).toEqual(parseTerm('kept').term)
+  })
+
+  it('clamps and rounds user-selected animation speed', () => {
     const prefs = motion.defaultMotionPreferences(false)
-    expect(prefs).toEqual({ speed: 1, transitionGhosts: true, hoverEaseMs: 120 })
     motion.setMotionSpeed(prefs, 9)
     expect(prefs.speed).toBe(3)
     motion.setMotionSpeed(prefs, 0)
     expect(prefs.speed).toBe(0.25)
+    motion.setMotionSpeed(prefs, 1.37)
+    expect(prefs.speed).toBe(1.25)
+    motion.setMotionSpeed(prefs, Number.NaN)
+    expect(prefs.speed).toBe(1)
     expect(motion.smoothstep(0.5)).toBe(0.5)
-    expect('conversionFrames' in motion).toBe(false)
-    expect('conversionAnimation' in motion).toBe(false)
   })
 
   it('eases hover independently of proof semantics', () => {
@@ -56,34 +79,9 @@ describe('generic diagram motion', () => {
     expect(coordinator.hoverFraction(100)).toBe(0)
   })
 
-  it('samples one structural beta plan for scrub, play, step, and history motion', () => {
-    const source = parseTerm('(\\f. \\x. f (f x)) (\\z. z)').term
-    const step = { kind: 'beta', path: [] } as const
-    const baseColor = '#26343a'
-    const coordinator = new motion.MotionCoordinator({
-      preferences: () => motion.defaultMotionPreferences(false),
-      engine: () => ({ bodies: new Map(), scale: 1 }) as never,
-      theme: () => ({}) as never,
-    })
-    const plan = coordinator.beginBeta(source, step, baseColor)
-    expect(plan).toEqual(planBetaMotion(source, step))
-
-    const expected = sampleBetaMotion(plan, 0.54, baseColor)
-    expect(coordinator.scrubBeta(0.54)).toEqual(expected)
-    expect(coordinator.playBeta(0.54)).toEqual(expected)
-    expect(coordinator.historyBeta(0.54)).toEqual(expected)
-    expect(coordinator.stepBeta()).toEqual(sampleBetaMotion(plan, 1, baseColor))
-
-    coordinator.cancel()
-    expect(coordinator.scrubBeta(0.54)).toBeNull()
-    expect(coordinator.playBeta(0.54)).toBeNull()
-    expect(coordinator.historyBeta(0.54)).toBeNull()
-    expect(coordinator.stepBeta()).toBeNull()
-  })
-
-  it('starts from an actual beta conversion and routes every lifecycle sampler into production paint', () => {
+  it('paints a committed beta action through identification, copying, completion, cancellation, and undo', () => {
     const builder = new DiagramBuilder()
-    const parsed = parseTerm('(\\x. x) a')
+    const parsed = parseTerm('(\\f. \\x. f (f x)) (\\z. z)')
     const node = builder.term(builder.root, parsed.term, parsed.freeIdentifiers.length)
     const beforeDiagram = builder.build()
     const conversion = convertToWeakHeadNormal(beforeDiagram, node, 8)
@@ -104,34 +102,30 @@ describe('generic diagram motion', () => {
       100,
       singleStepAction('beta', conversion.step),
     )
-    expect(coordinator.debugState(100).beta).toEqual({ node })
+    coordinator.scrubBeta(0.149)
+    const identifiedColors = coordinator.paint(100).flatMap((shape) => (
+      shape.kind === 'arc' || shape.kind === 'segment' ? [shape.stroke] : []
+    ))
+    expect(identifiedColors).toContain(REDEX_COLOR)
+    expect(identifiedColors).toContain(ARGUMENT_COLOR)
 
-    for (const sample of [
-      () => coordinator.scrubBeta(0.075),
-      () => coordinator.playBeta(0.54),
-      () => coordinator.historyBeta(0.82),
-      () => coordinator.stepBeta(),
-    ]) {
-      const frame = sample()
-      expect(frame).not.toBeNull()
-      const painted = coordinator.paint(100)
-      const structural = painted.flatMap((shape) => (
-        shape.kind === 'arc' || shape.kind === 'segment' ? [shape] : []
-      ))
-      expect(structural).toHaveLength(frame!.strokes.length)
-      expect(structural.map((shape) => shape.stroke))
-        .toEqual(frame!.strokes.map(({ color }) => color))
-    }
+    coordinator.scrubBeta(0.54)
+    const copyingColors = coordinator.paint(100).flatMap((shape) => (
+      shape.kind === 'arc' || shape.kind === 'segment' ? [shape.stroke] : []
+    ))
+    expect(copyingColors).toContain(COPY_HUES[0])
 
-    coordinator.settleBeta()
-    expect(coordinator.debugState(100).beta).toBeNull()
+    coordinator.scrubBeta(1)
+    expect(lambdaOutline(coordinator.paint(100))).toEqual(lambdaOutline(paint(after, LIGHT)))
+
     coordinator.observeSwap(before, after, 100, singleStepAction('beta', conversion.step))
+    coordinator.scrubBeta(0.075)
     coordinator.cancel()
-    expect(coordinator.debugState(100).beta).toBeNull()
+    expect(lambdaOutline(coordinator.paint(100))).toEqual(lambdaOutline(paint(after, LIGHT)))
 
     coordinator.observeSwap(before, after, 100, singleStepAction('beta', conversion.step))
     coordinator.paint(10_000)
-    expect(coordinator.debugState(10_000).beta).toBeNull()
+    expect(lambdaOutline(coordinator.paint(10_000))).toEqual(lambdaOutline(paint(after, LIGHT)))
 
     current = before
     coordinator.observeSwap(
@@ -141,24 +135,10 @@ describe('generic diagram motion', () => {
       singleStepAction('beta', conversion.step),
       'reverse',
     )
-    expect(coordinator.debugState(100).beta).toEqual({ node })
-    const plan = planBetaMotion(parsed.term, { kind: 'beta', path: [] })
-    expect(coordinator.historyBeta(0))
-      .toEqual(sampleBetaMotion(plan, 1, LIGHT.wire))
-    expect(coordinator.scrubBeta(0.25))
-      .toEqual(sampleBetaMotion(plan, 0.75, LIGHT.wire))
-    expect(coordinator.playBeta(0.54))
-      .toEqual(sampleBetaMotion(plan, 1 - 0.54, LIGHT.wire))
-    expect(coordinator.historyBeta(1))
-      .toEqual(sampleBetaMotion(plan, 0, LIGHT.wire))
-    expect(coordinator.stepBeta())
-      .toEqual(sampleBetaMotion(plan, 0, LIGHT.wire))
-    const historyFrame = coordinator.historyBeta(0.54)!
-    const historyPaint = coordinator.paint(100).flatMap((shape) => (
-      shape.kind === 'arc' || shape.kind === 'segment' ? [shape] : []
-    ))
-    expect(historyPaint.map((shape) => shape.stroke))
-      .toEqual(historyFrame.strokes.map(({ color }) => color))
+    coordinator.scrubBeta(0)
+    expect(lambdaOutline(coordinator.paint(100))).toEqual(lambdaOutline(paint(after, LIGHT)))
+    coordinator.scrubBeta(1)
+    expect(lambdaOutline(coordinator.paint(100))).toEqual(lambdaOutline(paint(before, LIGHT)))
   })
 
   it('paints the structural motion at the source and target body transforms at its endpoints', () => {

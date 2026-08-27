@@ -12,29 +12,11 @@ import { IOTA } from '../../diagram/sig'
 import { freshId, type IdReservation } from '../../diagram/subgraph/freshId'
 import type { PathSeg } from '../../term/reduce'
 import { isBoundClosed, replaceSubtermAt, subtermAt, substFree } from '../../term/path'
-import { application, free, lambda, type Term } from '../../term/term'
+import { free, type Term } from '../../term/term'
+import { mapFreeSlots } from '../../term/interface'
 import { termNodeAt, wireAt } from '../access'
 import { RuleError } from '../error'
 import { completeWireEnds, type PartsInProgress } from '../wire-ends'
-
-function renameSlots(term: Term, mapping: readonly number[]): Term {
-  switch (term.kind) {
-    case 'bound': return term
-    case 'free': {
-      const slot = mapping[term.slot]
-      if (slot === undefined || slot < 0) {
-        throw new DiagramError(`term free slot ${term.slot} is outside its node interface`)
-      }
-      return free(slot)
-    }
-    case 'lambda': return lambda(renameSlots(term.body, mapping))
-    case 'application':
-      return application(
-        renameSlots(term.fn, mapping),
-        renameSlots(term.argument, mapping),
-      )
-  }
-}
 
 /** Extract one bound-closed occurrence onto a fresh producer and bridge wire. */
 export function applyLambdaFission(
@@ -190,9 +172,9 @@ export function applyLambdaFusion(
     return carrier
   })
   const mergedTerm = substFree(
-    renameSlots(consumer.term, consumerMapping),
+    mapFreeSlots(consumer.term, consumerMapping),
     consumedCarrier,
-    renameSlots(producer.term, producerMapping),
+    mapFreeSlots(producer.term, producerMapping),
   )
 
   const oldScopes = new Map(carrierWires.map((wire) => [wire, derivedScope(diagram, wire)]))

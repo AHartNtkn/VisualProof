@@ -151,7 +151,7 @@ describe('proof-front policy', () => {
     viewport.frame(100)
     expect(canvas.strokeColors).toContain(REDEX_COLOR)
 
-    viewport.motion.settleBeta()
+    viewport.motion.cancel()
     viewport.frame(100)
     expect(canvas.strokeColors).not.toContain(REDEX_COLOR)
     viewport.dispose()

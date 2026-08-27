@@ -63,6 +63,30 @@ describe('applyLambdaConversion', () => {
     expect(wireAt(converted, node, { kind: 'free', index: 1 })).toBe(shared)
   })
 
+  it('completes a source carrier when the replacement no longer uses it', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.term(
+      builder.root,
+      application(lambda(free(0)), free(1)),
+      2,
+    )
+    const source = builder.build()
+    const discarded = wireAt(source, node, { kind: 'free', index: 1 })
+
+    const converted = applyLambdaConversion(
+      source,
+      node,
+      free(0),
+      { commonArity: 2, left: [0, 1], right: [0] },
+      betaIdentity,
+    )
+
+    expect(converted.wires[discarded]!.endpoints).toHaveLength(2)
+    expect(converted.wires[discarded]!.endpoints.every((endpoint) => (
+      converted.nodes[endpoint.node]?.kind === 'identity'
+    ))).toBe(true)
+  })
+
   it('rejects a forged conversion certificate', () => {
     const builder = new DiagramBuilder()
     const node = builder.term(

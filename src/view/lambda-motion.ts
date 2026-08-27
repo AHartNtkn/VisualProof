@@ -1,5 +1,6 @@
 import { applyStepAt, type PathSeg, type ReductionStep } from '../kernel/term/reduce'
 import { application, bound, free, freeArity, lambda, termEq, type Term } from '../kernel/term/term'
+import { mapFreeSlots } from '../kernel/term/interface'
 import { bendMaps, GAP_ANGLE, lambdaBarPadding } from './bend'
 import { trompGrid, type TrompGrid } from './tromp'
 import type { Vec2 } from './vec'
@@ -66,6 +67,8 @@ export type LambdaStageTimes = {
 export type LambdaMotionPlan = {
   readonly source: Term
   readonly target: Term
+  readonly sourceInterfaceArity: number
+  readonly targetInterfaceArity: number
   readonly step: ReductionStep
   readonly copyCount: number
   readonly times: LambdaStageTimes
@@ -83,6 +86,28 @@ type AnnotatedNode = {
   readonly body?: AnnotatedNode
   readonly fn?: AnnotatedNode
   readonly argument?: AnnotatedNode
+}
+
+function mapAnnotatedFreeSlots(
+  node: AnnotatedNode,
+  mapping: readonly number[],
+): AnnotatedNode {
+  switch (node.kind) {
+    case 'bound': return node
+    case 'free': {
+      const slot = mapping[node.slot!]
+      if (slot === undefined || slot < 0) {
+        throw new Error(`motion target still uses removed free slot ${node.slot}`)
+      }
+      return { ...node, slot }
+    }
+    case 'lambda': return { ...node, body: mapAnnotatedFreeSlots(node.body!, mapping) }
+    case 'application': return {
+      ...node,
+      fn: mapAnnotatedFreeSlots(node.fn!, mapping),
+      argument: mapAnnotatedFreeSlots(node.argument!, mapping),
+    }
+  }
 }
 
 type GridCoord = { readonly kind: 'grid'; readonly col: number; readonly row: number }
@@ -662,10 +687,11 @@ function createMotionModel(
   argument: AnnotatedNode,
   targetReduct: AnnotatedNode,
   copies: readonly OccurrenceCopy[],
-  interfaceArity: number,
+  sourceInterfaceArity: number,
+  targetInterfaceArity: number,
 ): MotionModel {
-  const source = buildStrokeModel(sourceRoot, interfaceArity)
-  const target = buildStrokeModel(targetRoot, interfaceArity)
+  const source = buildStrokeModel(sourceRoot, sourceInterfaceArity)
+  const target = buildStrokeModel(targetRoot, targetInterfaceArity)
   const view: ViewFrame = {
     cols: Math.max(source.grid.cols, target.grid.cols),
     rows: Math.max(source.grid.rows, target.grid.rows),
@@ -841,9 +867,13 @@ function createMotionModel(
 export function planBetaMotion(
   source: Term,
   step: ReductionStep,
-  interfaceArity: number = freeArity(source),
+  sourceInterfaceArity: number = freeArity(source),
+  targetInterfaceArity?: number,
+  targetSlotMapping?: readonly number[],
 ): LambdaMotionPlan {
   if (step.kind !== 'beta') throw new Error(`Lambda beta motion cannot plan a '${step.kind}' step`)
+  const nativeKernelTarget = applyStepAt(source, step)
+  const resolvedTargetInterfaceArity = targetInterfaceArity ?? freeArity(nativeKernelTarget)
   const sourceRoot = annotate(source)
   const redex = annotatedAt(sourceRoot, step.path)
   if (redex.kind !== 'application' || redex.fn!.kind !== 'lambda') {
@@ -851,19 +881,38 @@ export function planBetaMotion(
   }
   const binder = redex.fn!, body = binder.body!, argument = redex.argument!
   const copies: OccurrenceCopy[] = []
-  const targetReduct = substituteAnnotated(body, binder.id, argument, copies)
-  const targetRoot = replaceAnnotated(sourceRoot, step.path, targetReduct)
+  const nativeTargetReduct = substituteAnnotated(body, binder.id, argument, copies)
+  const nativeTargetRoot = replaceAnnotated(sourceRoot, step.path, nativeTargetReduct)
+  const targetRoot = targetSlotMapping === undefined
+    ? nativeTargetRoot
+    : mapAnnotatedFreeSlots(nativeTargetRoot, targetSlotMapping)
+  const targetReduct = annotatedById(targetRoot, nativeTargetReduct.id)
   const target = plainTerm(targetRoot)
-  const kernelTarget = applyStepAt(source, step)
+  const kernelTarget = targetSlotMapping === undefined
+    ? nativeKernelTarget
+    : mapFreeSlots(nativeKernelTarget, targetSlotMapping)
   if (!termEq(target, kernelTarget)) throw new Error('motion correspondence disagrees with kernel beta substitution')
   const motion = createMotionModel(
-    sourceRoot, targetRoot, redex, binder, body, argument, targetReduct, copies, interfaceArity,
+    sourceRoot,
+    targetRoot,
+    redex,
+    binder,
+    body,
+    argument,
+    targetReduct,
+    copies,
+    sourceInterfaceArity,
+    resolvedTargetInterfaceArity,
   )
   const times: LambdaStageTimes = copies.length > 0
     ? { split: 0.15, liftEnd: 0.34, spaceEnd: 0.54, dockEnd: 0.82, stemEnd: 0.91, barEnd: 0.965 }
     : { split: 0.15, liftEnd: 0.38, spaceEnd: 0.64, dockEnd: 0.64, stemEnd: 0.64, barEnd: 0.93 }
   return {
-    source, target, step: { kind: step.kind, path: [...step.path] },
+    source,
+    target,
+    sourceInterfaceArity,
+    targetInterfaceArity: resolvedTargetInterfaceArity,
+    step: { kind: step.kind, path: [...step.path] },
     copyCount: copies.length, times, model: motion,
   }
 }
