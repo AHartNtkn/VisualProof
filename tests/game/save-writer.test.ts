@@ -262,4 +262,26 @@ describe('ordered save writer', () => {
 
     expect(attempts).toEqual([update('a', 'one'), update('a', 'one'), update('a', 'one')])
   })
+
+  it('shares concurrent disposal while a macrotask-backed write is in flight', async () => {
+    let attempts = 0
+    const port: SavePort = {
+      updateTree: async () => {
+        attempts++
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
+        return 1
+      },
+      updateCamera: async () => {},
+    }
+    const writer = new SaveWriter('slot-a', port)
+    writer.tree(update('a', 'one'))
+
+    const first = writer.dispose()
+    const second = writer.dispose()
+    expect(second).toBe(first)
+    await Promise.all([first, second])
+
+    expect(attempts).toBe(1)
+    expect(() => writer.tree(update('b', 'late'))).toThrow('disposed')
+  })
 })

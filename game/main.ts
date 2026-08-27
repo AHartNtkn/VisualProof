@@ -19,6 +19,12 @@ import { mountGameWorld } from '../src/game/render/world'
 import { saveClient, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
 import { SaveWriter } from '../src/game/save-writer'
 import { gameSession, useDoubleCut, type GameSession, type PointedTreePart } from '../src/game/session'
+import {
+  PointerLockGate,
+  StartLifecycle,
+  type PointerLockPort,
+  type StartFailure,
+} from '../src/game/start-lifecycle'
 import { scene3 } from '../src/view3d/scene'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
@@ -51,8 +57,26 @@ const initialTree: TreeUpdate = {
   yaw: 0,
 }
 const renderer = mountGameWorld(worldHost, [])
+const pointerLockPort: PointerLockPort = {
+  request: () => renderer.canvas.requestPointerLock(),
+  isLocked: () => document.pointerLockElement === renderer.canvas,
+  onChange(listener) {
+    document.addEventListener('pointerlockchange', listener)
+    return () => document.removeEventListener('pointerlockchange', listener)
+  },
+  onError(listener) {
+    const callback = (): void => listener()
+    document.addEventListener('pointerlockerror', callback)
+    return () => document.removeEventListener('pointerlockerror', callback)
+  },
+  release() {
+    if (document.pointerLockElement !== null) document.exitPointerLock()
+  },
+}
+const pointerLock = new PointerLockGate(pointerLockPort)
 const keys = new Set<string>()
 const activeTweens = new Map<string, number>()
+const slotControlReleases: Array<() => void> = []
 const telemetry = new SettledFrameTelemetry(60)
 let session: GameSession | null = null
 let camera: CameraState | null = null
@@ -60,7 +84,6 @@ let writer: SaveWriter | null = null
 let animationFrame = 0
 let previousFrame = performance.now()
 let disposed = false
-let operationInFlight = false
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -77,32 +100,15 @@ function clearError(): void {
   menuError.textContent = ''
 }
 
-function requestPointerLock(): void {
-  try {
-    const request = renderer.canvas.requestPointerLock() as unknown
-    if (request !== null && typeof request === 'object' && 'catch' in request) {
-      void (request as Promise<void>).catch((error: unknown) => {
-        setError(`Pointer lock failed: ${message(error)}`)
-        resume.hidden = false
-      })
-    }
-  } catch (error) {
+function requestPlayPointerLock(): void {
+  void pointerLock.acquire().catch((error: unknown) => {
     setError(`Pointer lock failed: ${message(error)}`)
     resume.hidden = false
-  }
-}
-
-function releasePointerLock(): void {
-  if (document.pointerLockElement !== null) document.exitPointerLock()
-}
-
-function setMenuBusy(busy: boolean): void {
-  operationInFlight = busy
-  nameInput.disabled = busy
-  for (const button of start.querySelectorAll<HTMLButtonElement>('button')) button.disabled = busy
+  })
 }
 
 function renderSlots(slots: readonly SlotListEntry[]): void {
+  for (const release of slotControlReleases.splice(0)) release()
   slotList.replaceChildren()
   if (slots.length === 0) {
     const empty = document.createElement('li')
@@ -126,9 +132,10 @@ function renderSlots(slots: readonly SlotListEntry[]): void {
       load.type = 'button'
       load.textContent = 'Load'
       load.addEventListener('click', () => {
-        requestPointerLock()
-        void runStartOperation(saveClient.load(slot.slotId))
+        clearError()
+        void startLifecycle.start(() => saveClient.load(slot.slotId))
       })
+      slotControlReleases.push(startLifecycle.registerControl(load))
       item.appendChild(load)
     }
     slotList.appendChild(item)
@@ -262,21 +269,21 @@ function startWorld(world: GameWorld): void {
   resume.hidden = document.pointerLockElement === renderer.canvas
 }
 
-async function runStartOperation(worldPromise: Promise<GameWorld>): Promise<void> {
-  if (operationInFlight || session !== null) return
-  setMenuBusy(true)
-  clearError()
-  try {
-    const world = await worldPromise
-    startWorld(world)
-  } catch (error) {
-    releasePointerLock()
-    const concrete = `Could not open orchard: ${message(error)}`
-    menuError.textContent = concrete
-    root.dataset['errors'] = concrete
-  } finally {
-    setMenuBusy(false)
-  }
+function showStartFailure(failure: StartFailure): void {
+  const concrete = failure.kind === 'pointer-lock'
+    ? `Could not capture mouse: ${failure.message}`
+    : `Could not open orchard: ${failure.message}`
+  menuError.textContent = concrete
+  root.dataset['errors'] = concrete
+}
+
+const startLifecycle = new StartLifecycle(pointerLock, {
+  open: startWorld,
+  fail: showStartFailure,
+})
+startLifecycle.registerControl(nameInput)
+for (const button of createForm.querySelectorAll<HTMLButtonElement>('button')) {
+  startLifecycle.registerControl(button)
 }
 
 function applyDoubleCut(pointed: PointedTreePart | null, now: number): void {
@@ -305,23 +312,22 @@ function applyDoubleCut(pointed: PointedTreePart | null, now: number): void {
 
 createForm.addEventListener('submit', (event) => {
   event.preventDefault()
-  if (operationInFlight || session !== null) return
+  if (startLifecycle.busy || session !== null) return
   const displayName = nameInput.value.trim()
   if (displayName.length === 0) {
     menuError.textContent = 'Enter a name for the new orchard.'
     return
   }
-  requestPointerLock()
-  const worldPromise = saveClient
+  clearError()
+  void startLifecycle.start(() => saveClient
     .create(displayName, initialCameraRecord, [initialTree])
-    .then((created) => saveClient.load(created.slotId))
-  void runStartOperation(worldPromise)
+    .then((created) => saveClient.load(created.slotId)))
 })
 
 renderer.canvas.addEventListener('click', () => {
   if (camera === null || camera.mode !== 'free') return
   if (document.pointerLockElement !== renderer.canvas) {
-    requestPointerLock()
+    requestPlayPointerLock()
     return
   }
   const pointedPart = renderer.pointAt(0, 0, INTERACTION_REACH, null)
@@ -365,7 +371,7 @@ window.addEventListener('keydown', (event) => {
     camera = exitOrbit(camera)
     mirrorPoint(null)
     mirrorCamera()
-    requestPointerLock()
+    requestPlayPointerLock()
     return
   }
   if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight'].includes(event.code)) {
@@ -381,7 +387,7 @@ document.addEventListener('pointerlockchange', () => {
   root.dataset['pointerLock'] = locked ? 'locked' : 'free'
   resume.hidden = camera === null || camera.mode !== 'free' || locked
 })
-resume.addEventListener('click', requestPointerLock)
+resume.addEventListener('click', requestPlayPointerLock)
 saveRetry.addEventListener('click', () => writer?.retry())
 
 const resizeObserver = new ResizeObserver(resize)
@@ -391,6 +397,7 @@ resize()
 window.addEventListener('pagehide', () => {
   if (disposed) return
   disposed = true
+  startLifecycle.dispose()
   cancelAnimationFrame(animationFrame)
   resizeObserver.disconnect()
   keys.clear()
@@ -399,9 +406,11 @@ window.addEventListener('pagehide', () => {
 })
 
 void saveClient.list().then((slots) => {
+  if (disposed) return
   slotLoading.hidden = true
   renderSlots(slots)
 }).catch((error: unknown) => {
+  if (disposed) return
   slotLoading.textContent = `Could not list saves: ${message(error)}`
   menuError.textContent = slotLoading.textContent
   root.dataset['errors'] = slotLoading.textContent

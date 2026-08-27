@@ -62,6 +62,7 @@ export class SaveWriter {
   private lastCamera: CameraRecord | null = null
   private closing = false
   private disposed = false
+  private disposal: Promise<void> | null = null
 
   public constructor(
     private readonly slotId: string,
@@ -105,13 +106,20 @@ export class SaveWriter {
     return () => this.listeners.delete(listener)
   }
 
-  public async dispose(): Promise<void> {
-    if (this.disposed) return
-    if (this.closing) {
-      while (this.closing) await Promise.resolve()
-      if (this.disposed) return
-    }
+  public dispose(): Promise<void> {
+    if (this.disposed) return Promise.resolve()
+    if (this.disposal !== null) return this.disposal
     this.closing = true
+    const disposal = this.finishDisposal()
+    this.disposal = disposal
+    const clear = (): void => {
+      if (this.disposal === disposal) this.disposal = null
+    }
+    void disposal.then(clear, clear)
+    return disposal
+  }
+
+  private async finishDisposal(): Promise<void> {
     this.enqueueCamera()
     this.blocked = false
     this.startDrain()
