@@ -21,6 +21,7 @@ import { SaveWriter } from '../src/game/save-writer'
 import { gameSession, useDoubleCut, type GameSession, type PointedTreePart } from '../src/game/session'
 import {
   PointerLockGate,
+  ResumePointerLock,
   StartLifecycle,
   type PointerLockPort,
   type StartFailure,
@@ -74,6 +75,7 @@ const pointerLockPort: PointerLockPort = {
   },
 }
 const pointerLock = new PointerLockGate(pointerLockPort)
+const resumePointerLock = new ResumePointerLock(pointerLock)
 const keys = new Set<string>()
 const activeTweens = new Map<string, number>()
 const slotControlReleases: Array<() => void> = []
@@ -101,7 +103,8 @@ function clearError(): void {
 }
 
 function requestPlayPointerLock(): void {
-  void pointerLock.acquire().result.catch((error: unknown) => {
+  void resumePointerLock.request().catch((error: unknown) => {
+    if (disposed) return
     setError(`Pointer lock failed: ${message(error)}`)
     resume.hidden = false
   })
@@ -423,7 +426,9 @@ resize()
 window.addEventListener('pagehide', () => {
   if (disposed) return
   disposed = true
+  resumePointerLock.dispose()
   startLifecycle.dispose()
+  pointerLock.dispose()
   cancelAnimationFrame(animationFrame)
   resizeObserver.disconnect()
   keys.clear()

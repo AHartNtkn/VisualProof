@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { GameWorld } from '../../src/game/model'
 import {
   PointerLockGate,
+  ResumePointerLock,
   StartLifecycle,
   type PointerLockPort,
   type StartFailure,
@@ -16,10 +17,15 @@ const world: GameWorld = {
 function deferred<T>(): {
   readonly promise: Promise<T>
   resolve(value: T): void
+  reject(error: unknown): void
 } {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((done) => { resolve = done })
-  return { promise, resolve }
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done
+    reject = fail
+  })
+  return { promise, resolve, reject }
 }
 
 async function until(predicate: () => boolean): Promise<void> {
@@ -246,6 +252,88 @@ describe('game start lifecycle', () => {
     expect(port.errorListenerCount).toBe(1)
   })
 
+  it('restores the menu after asynchronous open rejection and permits a later start', async () => {
+    const port = new TestPointerLockPort()
+    const opening = deferred<void>()
+    const failures: StartFailure[] = []
+    let openCalls = 0
+    const lifecycle = new StartLifecycle(new PointerLockGate(port), {
+      open: () => {
+        openCalls++
+        return openCalls === 1 ? opening.promise : undefined
+      },
+      fail: (failure) => failures.push(failure),
+    })
+
+    const firstStart = lifecycle.start(async () => world)
+    port.acquire()
+    await until(() => openCalls === 1)
+    opening.reject(new Error('asynchronous renderer failure'))
+    await firstStart
+
+    expect(failures).toEqual([{
+      kind: 'operation', message: 'asynchronous renderer failure',
+    }])
+    expect(port.locked).toBe(false)
+
+    const retry = lifecycle.start(async () => world)
+    port.acquire()
+    await retry
+
+    expect(openCalls).toBe(2)
+    expect(failures).toHaveLength(1)
+  })
+
+  it('drains a cancelled Promise request before accepting a fresh acquisition', async () => {
+    const port = new TestPointerLockPort()
+    const oldRequest = deferred<void>()
+    port.requestResult = oldRequest.promise
+    const gate = new PointerLockGate(port)
+
+    const cancelled = gate.acquire()
+    cancelled.cancel()
+    await expect(cancelled.result).rejects.toThrow('cancelled')
+
+    const refusedWhileDraining = gate.acquire()
+    expect(port.timeline).toEqual(['request'])
+    await expect(refusedWhileDraining.result).rejects.toThrow('still settling')
+
+    port.locked = true
+    oldRequest.resolve()
+    await until(() => !port.locked)
+
+    port.requestResult = undefined
+    const fresh = gate.acquire()
+    expect(port.timeline).toEqual(['request', 'request'])
+    port.acquire()
+    await fresh.result
+
+    expect(port.locked).toBe(true)
+    expect(port.releases).toBe(1)
+  })
+
+  it('drains a cancelled legacy error before accepting a fresh acquisition', async () => {
+    const port = new TestPointerLockPort()
+    const gate = new PointerLockGate(port)
+
+    const cancelled = gate.acquire()
+    cancelled.cancel()
+    await expect(cancelled.result).rejects.toThrow('cancelled')
+
+    const refusedWhileDraining = gate.acquire()
+    expect(port.timeline).toEqual(['request'])
+    await expect(refusedWhileDraining.result).rejects.toThrow('still settling')
+
+    port.fail(new Error('late request denial'))
+    const fresh = gate.acquire()
+    expect(port.timeline).toEqual(['request', 'request'])
+    port.acquire()
+    await fresh.result
+
+    expect(port.locked).toBe(true)
+    expect(port.releases).toBe(0)
+  })
+
   it('cancels a Promise-backed acquisition and releases a late grant after disposal', async () => {
     const port = new TestPointerLockPort()
     const requested = deferred<void>()
@@ -305,5 +393,59 @@ describe('game start lifecycle', () => {
     expect(port.releases).toBe(2)
     expect(port.changeListenerCount).toBe(1)
     expect(port.errorListenerCount).toBe(1)
+  })
+
+  it('cancels a Promise-backed resume acquisition before gate teardown', async () => {
+    const port = new TestPointerLockPort()
+    const requested = deferred<void>()
+    port.requestResult = requested.promise
+    const gate = new PointerLockGate(port)
+    const resumePointerLock = new ResumePointerLock(gate)
+
+    const resuming = resumePointerLock.request()
+    resumePointerLock.dispose()
+    gate.dispose()
+    await expect(resuming).rejects.toThrow('cancelled')
+
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
+    port.locked = true
+    requested.resolve()
+    await until(() => port.changeListenerCount === 0)
+
+    expect(port.locked).toBe(false)
+    expect(port.errorListenerCount).toBe(0)
+  })
+
+  it('cancels a legacy resume acquisition and cleans listeners after a late grant', async () => {
+    const grantedPort = new TestPointerLockPort()
+    const grantedGate = new PointerLockGate(grantedPort)
+    const grantedResume = new ResumePointerLock(grantedGate)
+    const granting = grantedResume.request()
+
+    grantedResume.dispose()
+    grantedGate.dispose()
+    await expect(granting).rejects.toThrow('cancelled')
+    grantedPort.acquire()
+
+    expect(grantedPort.locked).toBe(false)
+    expect(grantedPort.changeListenerCount).toBe(0)
+    expect(grantedPort.errorListenerCount).toBe(0)
+  })
+
+  it('cancels a legacy resume acquisition and cleans listeners after a late error', async () => {
+    const deniedPort = new TestPointerLockPort()
+    const deniedGate = new PointerLockGate(deniedPort)
+    const deniedResume = new ResumePointerLock(deniedGate)
+    const denying = deniedResume.request()
+
+    deniedResume.dispose()
+    deniedGate.dispose()
+    await expect(denying).rejects.toThrow('cancelled')
+    deniedPort.fail(new Error('late denial'))
+
+    expect(deniedPort.locked).toBe(false)
+    expect(deniedPort.changeListenerCount).toBe(0)
+    expect(deniedPort.errorListenerCount).toBe(0)
   })
 })

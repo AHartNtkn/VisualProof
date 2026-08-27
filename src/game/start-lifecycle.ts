@@ -15,6 +15,17 @@ export type StartFailure = {
 
 export type StartControl = { disabled: boolean }
 
+type PointerLockAttempt = {
+  readonly resolve: () => void
+  readonly reject: (error: Error) => void
+  requestKind: 'legacy' | 'promise'
+}
+
+type DrainingPointerLockAttempt = {
+  readonly attempt: PointerLockAttempt
+  readonly requestKind: 'legacy' | 'promise'
+}
+
 type StartLifecycleHooks = {
   readonly open: (world: GameWorld) => void | Promise<void>
   readonly fail: (failure: StartFailure) => void
@@ -33,21 +44,33 @@ function promiseLike(value: unknown): value is PromiseLike<void> {
 }
 
 export class PointerLockGate {
-  private active: {
-    readonly resolve: () => void
-    readonly reject: (error: Error) => void
-  } | null = null
-  private rejectUnexpectedLocks = false
+  private active: PointerLockAttempt | null = null
+  private draining: DrainingPointerLockAttempt | null = null
+  private disposed = false
+  private removeChange: () => void
+  private removeError: () => void
 
   public constructor(private readonly port: PointerLockPort) {
     // These are gate-lifetime listeners, not acquisition-lifetime listeners. Keeping
     // one bounded watcher lets a cancelled legacy request reject a late native grant
     // without leaving its acquisition Promise or callbacks pending.
-    this.port.onChange(() => this.handleChange())
-    this.port.onError((error) => this.handleError(error))
+    this.removeChange = this.port.onChange(() => this.handleChange())
+    this.removeError = this.port.onError((error) => this.handleError(error))
   }
 
   public acquire(): PointerLockAcquisition {
+    if (this.disposed) {
+      return {
+        result: Promise.reject(new Error('pointer lock gate is disposed')),
+        cancel: () => {},
+      }
+    }
+    if (this.draining !== null) {
+      return {
+        result: Promise.reject(new Error('previous pointer lock request is still settling')),
+        cancel: () => {},
+      }
+    }
     if (this.active !== null) {
       return {
         result: Promise.reject(new Error('pointer lock acquisition is already in progress')),
@@ -55,18 +78,12 @@ export class PointerLockGate {
       }
     }
 
-    this.rejectUnexpectedLocks = false
-    let attempt!: NonNullable<PointerLockGate['active']>
+    let attempt!: PointerLockAttempt
     const result = new Promise<void>((resolve, reject) => {
-      attempt = { resolve, reject }
+      attempt = { resolve, reject, requestKind: 'legacy' }
       this.active = attempt
     })
-    const cancel = (): void => {
-      if (this.active !== attempt) return
-      this.active = null
-      this.rejectUnexpectedLocks = true
-      attempt.reject(new Error('pointer lock acquisition was cancelled'))
-    }
+    const cancel = (): void => this.cancel(attempt)
 
     let request: void | Promise<void>
     try {
@@ -75,14 +92,12 @@ export class PointerLockGate {
       this.fail(attempt, error)
       return { result, cancel }
     }
+    attempt.requestKind = promiseLike(request) ? 'promise' : 'legacy'
     this.succeed(attempt)
     if (promiseLike(request)) {
       void Promise.resolve(request).then(
-        () => {
-          if (this.active === attempt) this.succeed(attempt)
-          else if (this.rejectUnexpectedLocks && this.port.isLocked()) this.port.release()
-        },
-        (error) => this.fail(attempt, error),
+        () => this.finishPromiseRequest(attempt, true),
+        (error) => this.finishPromiseRequest(attempt, false, error),
       )
     }
     return { result, cancel }
@@ -92,27 +107,79 @@ export class PointerLockGate {
     this.port.release()
   }
 
+  public dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    if (this.active !== null) this.cancel(this.active)
+    this.port.release()
+    this.cleanupListeners()
+  }
+
   private handleChange(): void {
+    const draining = this.draining
+    if (draining !== null) {
+      if (draining.requestKind === 'legacy') this.finishDrain(draining.attempt)
+      if (this.port.isLocked()) this.port.release()
+      return
+    }
     if (!this.port.isLocked()) return
     if (this.active !== null) {
       this.succeed(this.active)
-    } else if (this.rejectUnexpectedLocks) {
-      this.port.release()
     }
   }
 
   private handleError(error?: unknown): void {
+    const draining = this.draining
+    if (draining !== null) {
+      if (draining.requestKind === 'legacy') this.finishDrain(draining.attempt)
+      return
+    }
     if (this.active !== null) this.fail(this.active, error)
   }
 
-  private succeed(attempt: NonNullable<PointerLockGate['active']>): void {
+  private finishPromiseRequest(
+    attempt: PointerLockAttempt,
+    succeeded: boolean,
+    error?: unknown,
+  ): void {
+    if (this.active === attempt) {
+      if (succeeded) this.succeed(attempt)
+      else this.fail(attempt, error)
+      return
+    }
+    if (this.draining?.attempt !== attempt) return
+    this.finishDrain(attempt)
+    if (this.port.isLocked()) this.port.release()
+  }
+
+  private cancel(attempt: PointerLockAttempt): void {
+    if (this.active !== attempt) return
+    this.active = null
+    this.draining = { attempt, requestKind: attempt.requestKind }
+    attempt.reject(new Error('pointer lock acquisition was cancelled'))
+  }
+
+  private finishDrain(attempt: PointerLockAttempt): void {
+    if (this.draining?.attempt !== attempt) return
+    this.draining = null
+    this.cleanupListeners()
+  }
+
+  private cleanupListeners(): void {
+    if (!this.disposed || this.active !== null || this.draining !== null) return
+    this.removeChange()
+    this.removeError()
+    this.removeChange = () => {}
+    this.removeError = () => {}
+  }
+
+  private succeed(attempt: PointerLockAttempt): void {
     if (this.active !== attempt || !this.port.isLocked()) return
     this.active = null
-    this.rejectUnexpectedLocks = false
     attempt.resolve()
   }
 
-  private fail(attempt: NonNullable<PointerLockGate['active']>, error?: unknown): void {
+  private fail(attempt: PointerLockAttempt, error?: unknown): void {
     if (this.active !== attempt) return
     this.active = null
     attempt.reject(new Error(failureMessage(error, 'pointer lock was denied')))
@@ -122,6 +189,33 @@ export class PointerLockGate {
 export type PointerLockAcquisition = {
   readonly result: Promise<void>
   cancel(): void
+}
+
+export class ResumePointerLock {
+  private acquisition: PointerLockAcquisition | null = null
+  private disposed = false
+
+  public constructor(private readonly pointerLock: PointerLockGate) {}
+
+  public request(): Promise<void> {
+    if (this.disposed) return Promise.reject(new Error('resume pointer lock is disposed'))
+    if (this.acquisition !== null) {
+      return Promise.reject(new Error('resume pointer lock request is already in progress'))
+    }
+    const acquisition = this.pointerLock.acquire()
+    this.acquisition = acquisition
+    return acquisition.result.finally(() => {
+      if (this.acquisition === acquisition) this.acquisition = null
+    })
+  }
+
+  public dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    this.acquisition?.cancel()
+    this.acquisition = null
+    this.pointerLock.release()
+  }
 }
 
 type StartPhase = 'idle' | 'starting' | 'started' | 'disposed'
