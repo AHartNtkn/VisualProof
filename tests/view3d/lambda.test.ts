@@ -125,10 +125,13 @@ describe('lambdaDiagram', () => {
 
     for (const progress of [0.44]) {
       const frame = sampleBetaMotion(plan, progress, '#26343a')
-      const bars = lambdaDiagram({
+      const embedded = lambdaDiagram({
         node: 'term', region: 'region', term: source, interfaceArity: 0,
         center: v3(0, 0, 0), tangent: v3(0, 1, 0), frame,
-      }).strokes.filter(({ color, role }) => (
+      })
+      expect([...embedded.anchors.keys()]).toEqual(Object.keys(frame.portAnchors))
+      expect(embedded.radius).toBeCloseTo(frame.outerRadius * LAMBDA_SCALE, 12)
+      const bars = embedded.strokes.filter(({ color, role }) => (
         role === 'lambda' && COPY_HUES.includes(color as typeof COPY_HUES[number])
       ))
       expect(bars).toHaveLength(2)

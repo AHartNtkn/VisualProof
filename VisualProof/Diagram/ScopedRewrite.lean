@@ -242,10 +242,9 @@ theorem replace_self {outer : List Sig} {root : Region outer}
 
 end ScopedRegion
 
-/-- One scoped replacement in a raw recursive region. Raw regions are used so
-an enclosing exact rewrite may pass through the same temporary one-ended
-states as the TypeScript `PartsInProgress` builder; only the final open diagram
-is required to be canonical and two-ended. -/
+/-- One scoped replacement in a raw recursive region. Raw regions admit the
+temporary one-ended intermediates needed by an enclosing exact nested rewrite;
+only the final open diagram is required to be canonical and two-ended. -/
 structure ScopedReplacement (source target : Region outer) where
   site : ScopedRegion source
   after : Region site.wires

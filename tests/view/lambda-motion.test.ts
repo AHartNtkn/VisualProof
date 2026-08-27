@@ -11,9 +11,8 @@ import {
   type LambdaStroke,
   type LambdaStrokeFrame,
 } from '../../src/view/lambda-motion'
-import { lambdaFrameGeometry } from '../../src/view/morph'
 import { paintLambdaFrame } from '../../src/view/paint'
-import { termGeometry, type NodeGeometry } from '../../src/view/bend'
+import { termGeometry } from '../../src/view/bend'
 
 const ROOT_BETA: ReductionStep = { kind: 'beta', path: [] }
 const BASE = '#26343a'
@@ -50,20 +49,10 @@ const centerOf = (strokes: readonly LambdaStroke[]): { readonly x: number; reado
 }
 
 const clean = (value: number): number => Number(value.toFixed(10))
-const cleanAngle = (value: number): number => clean((value % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI))
-const paintGeometry = (geometry: NodeGeometry): unknown => ({
-  outerRadius: clean(geometry.outerRadius),
-  arcs: geometry.arcs.map(({ r, a0, a1, kind }) => ({ r: clean(r), a0: cleanAngle(a0), a1: cleanAngle(a1), kind })),
-  radials: geometry.radials.map(({ angle, r0, r1 }) => ({ angle: cleanAngle(angle), r0: clean(r0), r1: clean(r1) })),
-  portAnchors: Object.fromEntries(Object.entries(geometry.portAnchors)
-    .map(([key, { x, y }]) => [key, { x: clean(x), y: clean(y) }])),
-  exitArc: geometry.exitArc === null ? null : {
-    r: clean(geometry.exitArc.r),
-    a0: cleanAngle(geometry.exitArc.a0),
-    a1: cleanAngle(geometry.exitArc.a1),
-  },
-  exitLine: geometry.exitLine?.map(({ x, y }) => ({ x: clean(x), y: clean(y) })) ?? null,
-})
+const cleanAnchors = (anchors: Readonly<Record<string, { readonly x: number; readonly y: number }>>): unknown => (
+  Object.fromEntries(Object.entries(anchors)
+    .map(([key, { x, y }]) => [key, { x: clean(x), y: clean(y) }]))
+)
 
 describe('corrected structural beta motion', () => {
   for (const fixture of cases) {
@@ -77,8 +66,11 @@ describe('corrected structural beta motion', () => {
         .toEqual(new Set([BASE]))
       expect(strokesWithColor(sampleBetaMotion(plan, IDENTIFY, BASE), REDEX_COLOR).length)
         .toBeGreaterThan(0)
-      expect(paintGeometry(lambdaFrameGeometry(sampleBetaMotion(plan, 1, BASE))))
-        .toEqual(paintGeometry(termGeometry(plan.target, plan.targetInterfaceArity)))
+      const targetFrame = sampleBetaMotion(plan, 1, BASE)
+      const targetGeometry = termGeometry(plan.target, plan.targetInterfaceArity)
+      expect(clean(targetFrame.outerRadius)).toBe(clean(targetGeometry.outerRadius))
+      expect(cleanAnchors(targetFrame.portAnchors))
+        .toEqual(cleanAnchors(targetGeometry.portAnchors))
       expect(new Set(sampleBetaMotion(plan, 1, BASE).strokes.map(({ color }) => color)))
         .toEqual(new Set([BASE]))
     })
@@ -167,11 +159,10 @@ describe('corrected structural beta motion', () => {
   it('feeds circular geometry and stage colors into the 2D painter', () => {
     const plan = planBetaMotion(term(cases[1].source), ROOT_BETA)
     const frame = sampleBetaMotion(plan, MAKE_SPACE, BASE)
-    const geometry = lambdaFrameGeometry(frame)
-    expect(geometry.arcs.length).toBeGreaterThan(0)
-    expect(geometry.radials.length).toBeGreaterThan(0)
-    expect(geometry.exitArc).not.toBeNull()
-    expect(geometry.exitLine).not.toBeNull()
+    expect(frame.outerRadius).toBeGreaterThan(0)
+    expect(Object.keys(frame.portAnchors)).toEqual(['out'])
+    expect(frame.strokes.some(({ role }) => role === 'output-arc')).toBe(true)
+    expect(frame.strokes.some(({ role }) => role === 'output-line')).toBe(true)
 
     const shapes = paintLambdaFrame(frame, { x: 10, y: 20 }, Math.PI / 3, 2, 3, false)
     const paintedColors = shapes.flatMap((shape) => (

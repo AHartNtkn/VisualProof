@@ -67,6 +67,7 @@ import { mountCompass } from './compass'
 import { mountScrubber, type MountedScrubber, type TimelineView } from './interact/scrubber'
 import { previewTransition } from './history-preview'
 import { FixedSideWorkspace } from './fixed-side-workspace'
+import { stepActionLabel } from './proof-front-policy'
 import { defaultMotionPreferences, MotionCoordinator, setMotionSpeed } from './interact/motion'
 import { theoremActionCountLabel } from './shell-label'
 import { mountFormulaEntry } from './formula-entry'
@@ -918,6 +919,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       shellSession = editShellSession()
       throw error
     }
+    if (view3State.kind !== 'closed') closeView3()
     interaction.resetSurface()
     proofMoves.cancel()
     kernelSel = null
@@ -1024,7 +1026,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   const applyProofStep = (step: ProofStep): void => {
-    applyProofAction(singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step))
+    applyProofAction(singleStepAction(stepActionLabel(step), step))
   }
 
   // ---- define relation (EDIT mode, two-phase like relFold) ----
@@ -1071,10 +1073,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     forwardBtn.hidden = mode !== 'edit'
     dualBtn.hidden = mode !== 'edit'
     // A dual (fixed-sides) proof owns the canvas via FixedSideWorkspace, so
-    // the 3D view has no diagram to present alongside it: disable entry,
-    // and leave 3D if a dual proof begins while it's already open.
+    // the 3D view has no diagram to present alongside it. `beginDual` enforces
+    // that mode invariant; chrome only reflects it here.
     view3Btn.disabled = proof?.kind === 'dual'
-    if (proof?.kind === 'dual' && view3State.kind !== 'closed') closeView3()
     leaveBtn.hidden = mode === 'edit'
     leaveBtn.textContent = mode === 'replay' ? 'Exit replay' : 'Return to editing'
     nameInput.hidden = mode === 'edit'

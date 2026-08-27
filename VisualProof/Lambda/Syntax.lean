@@ -122,8 +122,8 @@ theorem Term.freeSupport_nodup [DecidableEq α] (term : Term n α) :
       exact hnot hleft
 
 /-- Replace positional free ports by the outer de Bruijn variables that will
-bind them. Port `0` becomes the outermost of the `ports` new binders, exactly
-matching the TypeScript positional closure convention. -/
+bind them. Port `0` becomes the outermost of the `ports` new binders, so
+reopening that binder block restores the original positional interface. -/
 def Term.closeOverPortsBody :
     (term : Term n (Fin ports)) → Term (ports + n) Empty
   | .bvar index => .bvar ⟨index.val, by omega⟩

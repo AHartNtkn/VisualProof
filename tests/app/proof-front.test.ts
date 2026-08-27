@@ -3,6 +3,7 @@ import {
   frontInputAllowed,
   frontKeyRoute,
   retainedFrontIds,
+  stepActionLabel,
 } from '../../src/app/proof-front-policy'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { UNARY } from '../fixtures/zero-signature'
@@ -84,6 +85,17 @@ class FrontCanvas extends EventTarget {
 afterEach(() => { vi.unstubAllGlobals() })
 
 describe('proof-front policy', () => {
+  it('labels theorem citations by name and other primitive actions by rule', () => {
+    expect(stepActionLabel({
+      rule: 'theorem',
+      name: 'Commutativity',
+      at: { sel: { region: 'r', regions: [], nodes: [], wires: [] }, args: [] },
+      direction: 'forward',
+    })).toBe('cite Commutativity')
+    expect(stepActionLabel({ rule: 'doubleCutElim', region: 'cut' }))
+      .toBe('doubleCutElim')
+  })
+
   it('routes input only to the focused, enabled front', () => {
     const key = {
       key: 'Home',

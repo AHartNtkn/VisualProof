@@ -3,7 +3,6 @@ import type { PathSeg } from '../kernel/term/reduce'
 import type { Term } from '../kernel/term/term'
 import { termGeometry, type NodeGeometry } from '../view/bend'
 import type { LambdaStrokeFrame, LambdaStrokeRole } from '../view/lambda-motion'
-import { lambdaFrameGeometry } from '../view/morph'
 import type { Vec2 } from '../view/vec'
 import {
   add3, anyPerp, cross3, norm3, scale3, type Vec3,
@@ -154,8 +153,10 @@ export function lambdaDiagram(input: LambdaDiagramInput): LambdaDiagram {
   const plane = lambdaPlane(input.tangent)
   const geometry = input.frame === undefined
     ? termGeometry(input.term, input.interfaceArity)
-    : lambdaFrameGeometry(input.frame)
-  const source = input.frame === undefined ? staticStrokes(geometry) : frameStrokes(input.frame)
+    : input.frame
+  const source = input.frame === undefined
+    ? staticStrokes(geometry as NodeGeometry)
+    : frameStrokes(input.frame)
   const strokes = source.map((stroke): LambdaEntity => ({
     kind: 'lambda',
     key: `t:${input.node}:${encodeURIComponent(stroke.strokeId)}`,

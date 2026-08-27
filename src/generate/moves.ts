@@ -6,7 +6,7 @@ import { applyStep, EMPTY_PROOF_CONTEXT } from '../kernel/proof'
 import type { SubgraphSelection } from '../kernel/diagram'
 import { RuleError } from '../kernel/rules'
 import { bareWireDeletionSteps, bareWireInsertSteps } from '../kernel/proof/bare-wire'
-import { deiterationStep, erasureStep } from '../app/interact/moves'
+import { deiterationStep, erasureStep } from '../kernel/proof/selection-step'
 import { bareWires, childCuts, nodesIn, propWires } from './diagram-scan'
 
 export type MoveClass = 'erasure' | 'spawn' | 'doubleCut' | 'iteration' | 'vacuity'
@@ -55,7 +55,7 @@ export function enumerateMoves(
       if (polarity(diagram, sel.region) !== deletionPolarity) continue
       const step = erasureStep(diagram, sel)
       if (sel.regions.length > 0) {
-        // erasureStep's rider computation (src/app/interact/moves.ts) only
+        // erasureStep's rider computation only
         // orphans wires all of whose endpoints sit on the selection's
         // *direct* nodes (`orphanedWires(diagram, new Set(selection.nodes))`);
         // it does not walk the interior of a selected cut subtree, so a

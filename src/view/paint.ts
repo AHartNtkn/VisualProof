@@ -378,15 +378,10 @@ export function paint(
     const center = transform?.center ?? body.pos
     const theta = transform?.theta ?? body.theta
     const scale = transform?.scale ?? ascaleOf(body.kind) * e.scale
-    for (const stroke of frame.strokes) {
-      const key = stroke.id === 'interface:output:line'
-        ? 'out'
-        : /^interface:free:(\d+):port-stem$/.exec(stroke.id)?.[1]
-      if (key === undefined) continue
-      const portKey = key === 'out' ? key : `f:${key}`
+    for (const [portKey, anchor] of Object.entries(frame.portAnchors)) {
       lambdaAnchors.set(
         lambdaWireAnchorKey(node, portKey),
-        transformLambdaPoint(stroke.points[1], center, theta, scale),
+        transformLambdaPoint(anchor, center, theta, scale),
       )
     }
   }

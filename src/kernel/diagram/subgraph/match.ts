@@ -1,5 +1,5 @@
-import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram'
-import { DiagramError, endpointPositionKey } from '../diagram'
+import type { Diagram, NodeId, RegionId, WireId } from '../diagram'
+import { DiagramError } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
 import { cutDepth, derivedScopes, isAncestorOrEqual } from '../regions'
 import { buildRefineIndex, type RefineIndex } from '../canonical/refine'
@@ -7,6 +7,10 @@ import {
   checkOccurrenceCertificate,
   type OccurrenceCertificate,
 } from './occurrence-certificate'
+import {
+  mappedEndpointsMatch,
+  mappedWireIncidencesMatch,
+} from './structural'
 
 export type { OccurrenceCertificate } from './occurrence-certificate'
 
@@ -164,36 +168,18 @@ export function findOccurrences(
     explorationSteps,
   }
 
-  function mappedEndpointKey(endpoint: Endpoint): string {
-    return JSON.stringify([
-      nodeMap.get(endpoint.node)!,
-      endpointPositionKey(patternDiagram, endpoint),
-    ])
-  }
-
-  function hostEndpointKey(endpoint: Endpoint): string {
-    return JSON.stringify([
-      endpoint.node,
-      endpointPositionKey(host, endpoint),
-    ])
-  }
-
   /** Exact endpoint-multiset check (internal) / sub-multiset check (boundary). */
   function endpointsMatch(patternWire: WireId, hostWire: WireId): boolean {
     const source = patternDiagram.wires[patternWire]!
     const target = host.wires[hostWire]!
-    const expected = source.endpoints.map(mappedEndpointKey).sort()
-    const actual = target.endpoints.map(hostEndpointKey).sort()
-    if (!boundarySet.has(patternWire)) {
-      return JSON.stringify(expected) === JSON.stringify(actual)
-    }
-    const remainingEndpoints = [...actual]
-    for (const key of expected) {
-      const index = remainingEndpoints.indexOf(key)
-      if (index < 0) return false
-      remainingEndpoints.splice(index, 1)
-    }
-    return true
+    return mappedEndpointsMatch(
+      patternDiagram,
+      source.endpoints,
+      host,
+      target.endpoints,
+      (node) => nodeMap.get(node)!,
+      boundarySet.has(patternWire),
+    )
   }
 
   function wireContextReady(wire: WireId): boolean {
@@ -207,11 +193,11 @@ export function findOccurrences(
   /** Unordered mapped-incidence equality, ported from the identity check. */
   function identityMatches(patternNode: NodeId): boolean {
     const hostNode = nodeMap.get(patternNode)!
-    const expected = (ctx.patternIdx.identityIncidentWires.get(patternNode) ?? [])
-      .map((wire) => wireMap.get(wire)!)
-      .sort()
-    const actual = [...(ctx.hostIdx.identityIncidentWires.get(hostNode) ?? [])].sort()
-    return JSON.stringify(expected) === JSON.stringify(actual)
+    return mappedWireIncidencesMatch(
+      ctx.patternIdx.identityIncidentWires.get(patternNode) ?? [],
+      ctx.hostIdx.identityIncidentWires.get(hostNode) ?? [],
+      (wire) => wireMap.get(wire)!,
+    )
   }
 
   function afterWireCommit(wire: WireId): boolean {

@@ -1,9 +1,12 @@
-import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram'
-import { endpointPositionKey } from '../diagram'
+import type { Diagram, NodeId, RegionId, WireId } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
 import { derivedScope, derivedScopes, isAncestorOrEqual } from '../regions'
 import { sigEquals, sigKey } from '../sig'
 import { serializeTerm } from '../../term/serialize'
+import {
+  mappedEndpointsMatch,
+  mappedWireIncidencesMatch,
+} from './structural'
 
 /** A complete structural witness that an open pattern occurs in a host. */
 export type OccurrenceCertificate = {
@@ -20,10 +23,6 @@ export type OccurrenceCertificateCheck =
 
 function fail(reason: string): OccurrenceCertificateCheck {
   return { ok: false, reason }
-}
-
-function endpointKey(diagram: Diagram, endpoint: Endpoint): string {
-  return JSON.stringify([endpoint.node, endpointPositionKey(diagram, endpoint)])
 }
 
 /**
@@ -199,25 +198,17 @@ export function checkOccurrenceCertificate(
       }
     }
 
-    const expectedEndpoints = source.endpoints.map((endpoint) =>
-      JSON.stringify([
-        certificate.nodeMap.get(endpoint.node)!,
-        endpointPositionKey(patternDiagram, endpoint),
-      ]),
-    ).sort()
-    const actualEndpoints = target.endpoints.map((endpoint) =>
-      endpointKey(host, endpoint),
-    ).sort()
-    if (isBoundary) {
-      const remaining = [...actualEndpoints]
-      for (const endpoint of expectedEndpoints) {
-        const index = remaining.indexOf(endpoint)
-        if (index < 0) {
-          return fail(`boundary wire '${patternWire}' does not preserve its endpoints`)
-        }
-        remaining.splice(index, 1)
+    if (!mappedEndpointsMatch(
+      patternDiagram,
+      source.endpoints,
+      host,
+      target.endpoints,
+      (node) => certificate.nodeMap.get(node)!,
+      isBoundary,
+    )) {
+      if (isBoundary) {
+        return fail(`boundary wire '${patternWire}' does not preserve its endpoints`)
       }
-    } else if (JSON.stringify(expectedEndpoints) !== JSON.stringify(actualEndpoints)) {
       return fail(`internal wire '${patternWire}' does not preserve its exact endpoints`)
     }
   }
@@ -229,7 +220,7 @@ export function checkOccurrenceCertificate(
     for (const [patternWire, wire] of Object.entries(patternDiagram.wires)) {
       for (const endpoint of wire.endpoints) {
         if (endpoint.node === patternNode) {
-          expectedIncidences.push(certificate.wireMap.get(patternWire)!)
+          expectedIncidences.push(patternWire)
         }
       }
     }
@@ -239,9 +230,11 @@ export function checkOccurrenceCertificate(
         if (endpoint.node === hostNode) actualIncidences.push(hostWire)
       }
     }
-    expectedIncidences.sort()
-    actualIncidences.sort()
-    if (JSON.stringify(expectedIncidences) !== JSON.stringify(actualIncidences)) {
+    if (!mappedWireIncidencesMatch(
+      expectedIncidences,
+      actualIncidences,
+      (wire) => certificate.wireMap.get(wire)!,
+    )) {
       return fail(`identity '${patternNode}' does not preserve its unordered wire incidences`)
     }
   }

@@ -1,5 +1,4 @@
 import type { NodeArc, NodeGeometry, NodeRadial } from './bend'
-import type { LambdaStrokeFrame } from './lambda-motion'
 import type { Vec2 } from './vec'
 
 const lerp = (from: number, to: number, progress: number): number =>
@@ -137,78 +136,5 @@ export function mkGeomMorph(
       exitLine,
       occurrences: [],
     }
-  }
-}
-
-/**
- * Project a sampled structural beta frame back into the established circular
- * node-geometry contract. Motion colors remain on the frame; this projection
- * supplies geometry, anchors, bounds, and the ordinary painter's stroke kinds.
- */
-export function lambdaFrameGeometry(frame: LambdaStrokeFrame): NodeGeometry {
-  const arcs: NodeArc[] = []
-  const radials: NodeRadial[] = []
-  const portAnchors: Record<string, Vec2> = {}
-  let exitArc: NodeGeometry['exitArc'] = null
-  let exitLine: NodeGeometry['exitLine'] = null
-  let outerRadius = 0
-
-  for (const stroke of frame.strokes) {
-    for (const point of stroke.points) outerRadius = Math.max(outerRadius, Math.hypot(point.x, point.y))
-    if (stroke.role === 'free-port') {
-      const slot = /^interface:free:(\d+):/.exec(stroke.id)?.[1]
-      if (slot !== undefined) portAnchors[`f:${slot}`] = { ...stroke.points[1] }
-    }
-    if (stroke.role === 'output-line') {
-      portAnchors.out = { ...stroke.points[1] }
-      if (stroke.geometry.kind !== 'segment') throw new Error('Lambda output line is not a segment')
-      exitLine = [stroke.geometry.from, stroke.geometry.to]
-      continue
-    }
-    if (stroke.role === 'output-arc') {
-      if (stroke.geometry.kind !== 'arc') throw new Error('Lambda output arc is not an arc')
-      exitArc = {
-        r: stroke.geometry.r,
-        a0: stroke.geometry.a0,
-        a1: stroke.geometry.a1,
-      }
-      continue
-    }
-    if (stroke.geometry.kind === 'arc') {
-      arcs.push({
-        r: stroke.geometry.r,
-        a0: stroke.geometry.a0,
-        a1: stroke.geometry.a1,
-        kind: stroke.role === 'lambda' ? 'lam' : stroke.role === 'application' ? 'app' : 'rail',
-        hueRow: stroke.geometry.r,
-        ownerPath: stroke.subtermPath,
-      })
-      continue
-    }
-    const fromRadius = Math.hypot(stroke.geometry.from.x, stroke.geometry.from.y)
-    const toRadius = Math.hypot(stroke.geometry.to.x, stroke.geometry.to.y)
-    radials.push({
-      angle: Math.atan2(stroke.geometry.from.y, stroke.geometry.from.x),
-      r0: fromRadius,
-      r1: toRadius,
-      kind: stroke.role === 'variable'
-        ? 'var'
-        : stroke.role === 'free-drop' || stroke.role === 'free-port'
-          ? 'port'
-          : 'output',
-      hueRow: stroke.role === 'variable' ? fromRadius : null,
-      ownerPath: stroke.subtermPath,
-    })
-  }
-
-  return {
-    outerRadius: outerRadius + 0.5,
-    arcs,
-    radials,
-    headAnchor: null,
-    portAnchors,
-    exitArc,
-    exitLine,
-    occurrences: [],
   }
 }

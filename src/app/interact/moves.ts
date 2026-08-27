@@ -1,5 +1,4 @@
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
-import { derivedScope } from '../../kernel/diagram/regions'
 import { IOTA, relSig, type Sig } from '../../kernel/diagram/sig'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../kernel/proof/action'
@@ -7,7 +6,7 @@ import { applyStep, type ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
 import { EMPTY_PROOF_CONTEXT, assertProofContext } from '../../kernel/proof/context'
 import { bareWireDeletionSteps, bareWireInsertSteps } from '../../kernel/proof/bare-wire'
-import { findDeiterationEvidence } from '../../kernel/rules/iteration'
+import { deiterationStep, erasureStep } from '../../kernel/proof/selection-step'
 import { termNodeAt } from '../../kernel/rules/access'
 import { proposeAttachedSlotCorrespondence } from '../../kernel/rules/lambda'
 import { mapFreeSlots } from '../../kernel/term/interface'
@@ -31,8 +30,9 @@ import {
   authorLambdaConversionTarget,
   completeLambdaConversion,
 } from '../lambda-conversion'
-import { absorbHits, orphanedWires } from '../edit'
+import { absorbHits } from '../edit'
 import { buildSelection, regionAt, wireManipulationHitTest, type Hit } from '../hittest'
+import { stepActionLabel } from '../proof-front-policy'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
 import { CopyDragController } from './copy'
 import { ConnectionDragController, type ConnectionEnd } from './connection'
@@ -185,31 +185,6 @@ export function discoverProofActions(
     }
   } catch {
     return null
-  }
-}
-
-function erasureSelection(diagram: Diagram, selection: SubgraphSelection): SubgraphSelection {
-  const existing = new Set(selection.wires)
-  const riders = orphanedWires(diagram, new Set(selection.nodes))
-    .filter((wire) => !existing.has(wire) && derivedScope(diagram, wire) === selection.region)
-  return riders.length === 0
-    ? selection
-    : { ...selection, wires: [...selection.wires, ...riders] }
-}
-
-export function erasureStep(diagram: Diagram, selection: SubgraphSelection): ProofStep {
-  return { rule: 'erasure', sel: erasureSelection(diagram, selection) }
-}
-
-export function deiterationStep(
-  diagram: Diagram,
-  selection: SubgraphSelection,
-): ProofStep {
-  const evidence = findDeiterationEvidence(diagram, selection)
-  return {
-    rule: 'deiteration',
-    sel: selection,
-    ...evidence,
   }
 }
 
@@ -577,9 +552,12 @@ export class ProofMoveController {
       && sample.key !== 'w'
       && sample.key !== 'W'
     ) return false
+    const isDelete = sample.key === 'Delete' || sample.key === 'Backspace'
+    const diagram = this.#options.diagram()
+    const hits = this.#options.selection()
     if (
       (sample.key === 'w' || sample.key === 'W')
-      && this.#options.selection().length === 0
+      && hits.length === 0
     ) {
       // W with nothing highlighted spawns an empty double cut at the region
       // under the pointer (2026-07-10 approved design; 2026-07-30 ruling).
@@ -592,7 +570,7 @@ export class ProofMoveController {
         sel: {
           region: regionAt(
             this.#options.engine(),
-            this.#options.diagram(),
+            diagram,
             this.#lastWorld,
           ),
           regions: [],
@@ -608,10 +586,8 @@ export class ProofMoveController {
     // floor means that end can't be a detach target) or detaches as a spare
     // pin. Arity ≥ 2 is content in a path, not apparatus, so it falls
     // through to discovery unchanged.
-    if (sample.key === 'Delete' || sample.key === 'Backspace') {
-      const hits = this.#options.selection()
+    if (isDelete) {
       if (hits.length === 1 && hits[0]!.kind === 'node') {
-        const diagram = this.#options.diagram()
         const node = diagram.nodes[hits[0]!.id]
         if (node?.kind === 'identity') {
           if (node.arity === 0) {
@@ -651,10 +627,9 @@ export class ProofMoveController {
     // Delete on a lone attached wire deletes its ends; the wire itself
     // stays, quantified. This never forms a subgraph selection (the ends
     // stay behind), so it dispatches before discovery.
-    if (sample.key === 'Delete' || sample.key === 'Backspace') {
-      const hits = this.#options.selection()
+    if (isDelete) {
       if (hits.length === 1 && hits[0]!.kind === 'wire') {
-        const wire = this.#options.diagram().wires[hits[0]!.id]
+        const wire = diagram.wires[hits[0]!.id]
         if (wire !== undefined && wire.endpoints.length > 0) {
           this.#commit({ rule: 'endsDelete', wire: hits[0]!.id })
           return true
@@ -662,24 +637,24 @@ export class ProofMoveController {
       }
     }
     const discovery = discoverProofActions(
-      this.#options.diagram(),
-      this.#options.selection(),
+      diagram,
+      hits,
       this.#context(),
       this.#options.orientation(),
     )
     if (discovery === null) {
       this.#options.refuse(
-        this.#options.selection().length === 0
+        hits.length === 0
           ? 'select something first'
           : 'this selection spans several regions',
         this.#lastPointer,
       )
       return true
     }
-    if (sample.key === 'Delete' || sample.key === 'Backspace') {
+    if (isDelete) {
       try {
         const steps = contextualDeleteSteps(
-          this.#options.diagram(),
+          diagram,
           discovery,
         )
         if (steps === null) {
@@ -755,10 +730,7 @@ export class ProofMoveController {
   }
 
   #commit(step: ProofStep): boolean {
-    return this.#commitSteps(
-      step.rule === 'theorem' ? `cite ${step.name}` : step.rule,
-      [step],
-    )
+    return this.#commitSteps(stepActionLabel(step), [step])
   }
 
   #commitSteps(label: string, steps: readonly ProofStep[]): boolean {

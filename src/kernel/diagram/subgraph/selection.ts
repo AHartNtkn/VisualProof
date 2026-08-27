@@ -26,6 +26,17 @@ export type SelectionContents = {
   readonly touchingWires: readonly WireId[]
 }
 
+/** Wires whose every endpoint belongs to the supplied node set. */
+export function orphanedWires(
+  diagram: Diagram,
+  nodes: ReadonlySet<NodeId>,
+): readonly WireId[] {
+  return Object.entries(diagram.wires)
+    .filter(([, wire]) => wire.endpoints.every((endpoint) => nodes.has(endpoint.node)))
+    .map(([id]) => id)
+    .sort()
+}
+
 export function mkSelection(d: Diagram, sel: SubgraphSelection): SubgraphSelection {
   if (d.regions[sel.region] === undefined) throw new DiagramError(`unknown selection region '${sel.region}'`)
   const seenR = new Set<RegionId>()

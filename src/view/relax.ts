@@ -58,6 +58,17 @@ export const WIREP = {
 
 /** Natural (scale-1) region padding beyond the minimal enclosing circle. */
 export const REGION_PAD = 5
+
+/** Region ancestry from the supplied region through the containing sheet. */
+export function ancestorRegionIds(e: Engine, region: RegionId): readonly RegionId[] {
+  const ancestors: RegionId[] = []
+  for (let current = region; ;) {
+    ancestors.push(current)
+    const parent = e.d.regions[current]!
+    if (parent.kind === 'sheet') return ancestors
+    current = parent.parent
+  }
+}
 /** Minimum gap enforced between sibling discs/regions by overlap projection. */
 export const SIB_GAP = 5 // structural fallback; live value is PACE.sibGap
 
@@ -1301,13 +1312,7 @@ function projectBodyPos(e: Engine, b: Body, p: Vec2): Vec2 {
     uses, so releasing the drag adds no jump). Ancestors of the body's region (the
     cuts it IS inside) are exempt. */
 export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
-  const ancestors = new Set<RegionId>()
-  for (let r = b.region; ;) {
-    ancestors.add(r)
-    const reg = e.d.regions[r]!
-    if (reg.kind === 'sheet') break
-    r = reg.parent
-  }
+  const ancestors = new Set(ancestorRegionIds(e, b.region))
   const wall = e.frame
   const saved = b.pos
   const dirty = new Set<RegionId>([b.region])

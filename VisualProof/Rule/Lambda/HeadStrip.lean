@@ -17,10 +17,10 @@ def ItemSeq.ofList : List (Item wires) → ItemSeq wires
   | item :: rest => .cons item (ItemSeq.ofList rest)
 
 /-- Proof-relevant quotient from a common positional argument interface to
-the exact first-occurrence physical-wire compaction emitted by TypeScript.
-The empty case covers arguments with no occurring free position; the
-supported case records the quotient slot used by every occurring common
-position without requiring distinct common columns to denote distinct wires. -/
+its first-occurrence physical-wire compaction. The empty case covers arguments
+with no occurring free position; the supported case records the quotient slot
+used by every occurring common position without requiring distinct common
+columns to denote distinct wires. -/
 inductive PhysicalCompaction
     (commonTerm : VisualProof.Lambda.Term 0 (Fin commonArity))
     (commonPorts : Fin commonArity → Var wires .iota)

@@ -43,7 +43,8 @@ namespace Witness
 
 /-- One exact closed term witness selected at the availability region. Its
 output and declared interface are inherited by the separately selected target
-body, which is precisely the TypeScript visibility gate. -/
+body, expressing that the selected body supplies the output and interface
+visible at that target. -/
 structure Description (selected : Region outer) where
   locals : List Sig
   before : ItemSeq (outer ++ locals)

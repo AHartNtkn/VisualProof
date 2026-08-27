@@ -53,6 +53,8 @@ export type LambdaSocket = {
 export type LambdaStrokeFrame = {
   readonly strokes: readonly LambdaStroke[]
   readonly sockets: readonly LambdaSocket[]
+  readonly portAnchors: Readonly<Record<string, Vec2>>
+  readonly outerRadius: number
 }
 
 export type LambdaStageTimes = {
@@ -674,6 +676,26 @@ function strokeFrame(
   }
 }
 
+function makeStrokeFrame(
+  strokes: readonly LambdaStroke[],
+  sockets: readonly LambdaSocket[],
+): LambdaStrokeFrame {
+  const portAnchors: Record<string, Vec2> = {}
+  let outerRadius = 0
+  for (const stroke of strokes) {
+    for (const point of stroke.points) {
+      outerRadius = Math.max(outerRadius, Math.hypot(point.x, point.y))
+    }
+    if (stroke.role === 'free-port') {
+      const slot = /^interface:free:(\d+):port-stem$/.exec(stroke.id)?.[1]
+      if (slot !== undefined) portAnchors[`f:${slot}`] = { ...stroke.points[1] }
+    } else if (stroke.role === 'output-line') {
+      portAnchors.out = { ...stroke.points[1] }
+    }
+  }
+  return { strokes, sockets, portAnchors, outerRadius: outerRadius + 0.5 }
+}
+
 function copyHue(copyIndex: number): string {
   return COPY_HUES[copyIndex % COPY_HUES.length]!
 }
@@ -925,28 +947,28 @@ export function sampleBetaMotion(
   if (!Number.isFinite(progress)) throw new Error(`Lambda motion progress must be finite, got ${progress}`)
   const p = clamp(progress), { times, copyCount } = plan, model = plan.model
   if (p === 0) {
-    return {
-      strokes: model.source.strokes.map((stroke) => strokeFrame(
+    return makeStrokeFrame(
+      model.source.strokes.map((stroke) => strokeFrame(
         stroke,
         shifted(stroke.a.coord, model.view.sourceOffset),
         shifted(stroke.b.coord, model.view.sourceOffset),
         model.view, 0,
         baseColor,
       )),
-      sockets: [],
-    }
+      [],
+    )
   }
   if (p === 1) {
-    return {
-      strokes: model.target.strokes.map((stroke) => strokeFrame(
+    return makeStrokeFrame(
+      model.target.strokes.map((stroke) => strokeFrame(
         stroke,
         shifted(stroke.a.coord, model.view.targetOffset),
         shifted(stroke.b.coord, model.view.targetOffset),
         model.view, 1,
         baseColor,
       )),
-      sockets: [],
-    }
+      [],
+    )
   }
   const identify = stageProgress(p, 0, times.split)
   const lift = stageProgress(p, times.split, times.liftEnd)
@@ -1081,5 +1103,5 @@ export function sampleBetaMotion(
     }
   }
 
-  return { strokes, sockets }
+  return makeStrokeFrame(strokes, sockets)
 }

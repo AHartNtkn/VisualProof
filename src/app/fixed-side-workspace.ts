@@ -26,6 +26,7 @@ import type { KeySample } from './interact/viewport'
 import type { MotionPreferences } from './interact/motion'
 import { proofSnapshot, type ProofSnapshot } from './proof-snapshot'
 import { seedActionHistoryPlacements } from './proof-placement'
+import { stepActionLabel } from './proof-front-policy'
 
 export type FixedSideWorkspaceOptions = {
   readonly host: HTMLElement
@@ -237,7 +238,7 @@ export class FixedSideWorkspace {
   }
 
   #prepare(side: FixedSide, step: ProofStep): () => void {
-    const action = singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step)
+    const action = singleStepAction(stepActionLabel(step), step)
     return this.#prepareAction(side, action)
   }
 

@@ -1,6 +1,11 @@
 import type { Diagram } from '../kernel/diagram/diagram'
+import type { ProofStep } from '../kernel/proof/step'
 import type { Hit } from './hittest'
 import type { KeySample } from './interact/viewport'
+
+export function stepActionLabel(step: ProofStep): string {
+  return step.rule === 'theorem' ? `cite ${step.name}` : step.rule
+}
 
 export function frontKeyRoute(
   focused: boolean,

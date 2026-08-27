@@ -143,8 +143,8 @@ private def insertPhysical [DecidableEq α] (carriers : List α)
     (wire : α) : List α :=
   if wire ∈ carriers then carriers else carriers ++ [wire]
 
-/-- The exact consumer-first carrier order built by TypeScript before producer
-slots are folded through first physical-wire occurrence. -/
+/-- Consumer carriers, except the consumed slot, followed by producer carriers
+in first physical-wire occurrence order. -/
 def carrierWires [DecidableEq α]
     (consumerNative : Fin consumerArity → α)
     (producerNative : Fin producerArity → α)
@@ -192,8 +192,8 @@ owns the private bridge, while `descendant` selects the consumer's own region.
 Extending that recursive context carries the bridge down as an inherited wire;
 the target rebuilds the same context without the bridge and therefore leaves a
 descendant consumer in its original region. `consumerMap` and `producerMap`
-are the positional carrier maps computed by the TypeScript operation, and
-their port equalities retain aliased physical carriers. -/
+are positional carrier maps, and their port equalities retain aliased physical
+carriers. -/
 structure Description (outer : List Sig) where
   anchorLocals : List Sig
   descendantWires : List Sig
