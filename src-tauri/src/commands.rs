@@ -3,6 +3,8 @@ use crate::save_store::{
 };
 use tauri::Manager;
 
+use crate::mouse_capture;
+
 fn store(app: &tauri::AppHandle) -> Result<SaveStore, String> {
     let root = app
         .path()
@@ -50,4 +52,9 @@ pub fn update_camera(
     store(&app)?
         .update_camera(&slot_id, camera)
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn set_game_mouse_capture(window: tauri::WebviewWindow, captured: bool) -> Result<(), String> {
+    mouse_capture::set_game_mouse_capture(&window, captured)
 }

@@ -1,7 +1,8 @@
 import './style.css'
+import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow, LogicalPosition } from '@tauri-apps/api/window'
 import { DiagramBuilder, diagramToJson } from '../src/kernel/diagram'
 import {
-  INTERACTION_REACH,
   displayCameraPose,
   enterOrbit,
   exitOrbit,
@@ -12,20 +13,15 @@ import {
   type CameraState,
   type TreeWorldBounds,
 } from '../src/game/camera'
+import { DesktopMouse } from '../src/game/desktop-mouse'
 import type { GameTree, GameWorld } from '../src/game/model'
 import { SettledFrameTelemetry, frameTiming } from '../src/game/render/frame'
 import { TREE_TWEEN_MS } from '../src/game/render/dynamic-tree'
-import { mountGameWorld } from '../src/game/render/world'
+import { mountGameWorld, type GameWorldRenderer } from '../src/game/render/world'
 import { saveClient, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
 import { SaveWriter } from '../src/game/save-writer'
 import { gameSession, useDoubleCut, type GameSession, type PointedTreePart } from '../src/game/session'
-import {
-  PointerLockGate,
-  ResumePointerLock,
-  StartLifecycle,
-  type PointerLockPort,
-  type StartFailure,
-} from '../src/game/start-lifecycle'
+import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
 import { scene3 } from '../src/view3d/scene'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
@@ -45,37 +41,12 @@ const freeHint = document.querySelector<HTMLElement>('[data-free-hint]')!
 const orbitHint = document.querySelector<HTMLElement>('[data-orbit-hint]')!
 const pointedLabel = document.querySelector<HTMLElement>('[data-pointed]')!
 const feedback = document.querySelector<HTMLElement>('[data-feedback]')!
-const resume = document.querySelector<HTMLButtonElement>('[data-resume]')!
 
 const blankDiagram = new DiagramBuilder().build()
 const blankDiagramJson = JSON.stringify(diagramToJson(blankDiagram))
 const initialCameraRecord: CameraRecord = { x: 0, y: 1.7, z: 8, yaw: 0, pitch: -0.18 }
-const initialTree: TreeUpdate = {
-  treeId: 'tree-0000',
-  diagramJson: blankDiagramJson,
-  x: 0,
-  z: 0,
-  yaw: 0,
-}
-const renderer = mountGameWorld(worldHost, [])
-const pointerLockPort: PointerLockPort = {
-  request: () => renderer.canvas.requestPointerLock(),
-  isLocked: () => document.pointerLockElement === renderer.canvas,
-  onChange(listener) {
-    document.addEventListener('pointerlockchange', listener)
-    return () => document.removeEventListener('pointerlockchange', listener)
-  },
-  onError(listener) {
-    const callback = (): void => listener()
-    document.addEventListener('pointerlockerror', callback)
-    return () => document.removeEventListener('pointerlockerror', callback)
-  },
-  release() {
-    if (document.pointerLockElement !== null) document.exitPointerLock()
-  },
-}
-const pointerLock = new PointerLockGate(pointerLockPort)
-const resumePointerLock = new ResumePointerLock(pointerLock)
+const initialTree: TreeUpdate = { treeId: 'tree-0000', diagramJson: blankDiagramJson, x: 0, z: 0, yaw: 0 }
+const nativeWindow = getCurrentWindow()
 const keys = new Set<string>()
 const activeTweens = new Map<string, number>()
 const slotControlReleases: Array<() => void> = []
@@ -83,6 +54,8 @@ const telemetry = new SettledFrameTelemetry(60)
 let session: GameSession | null = null
 let camera: CameraState | null = null
 let writer: SaveWriter | null = null
+let renderer: GameWorldRenderer | null = null
+let desktopMouse: DesktopMouse | null = null
 let animationFrame = 0
 let previousFrame = performance.now()
 let disposed = false
@@ -100,14 +73,6 @@ function setError(value: string): void {
 function clearError(): void {
   setError('')
   menuError.textContent = ''
-}
-
-function requestPlayPointerLock(): void {
-  void resumePointerLock.request().catch((error: unknown) => {
-    if (disposed) return
-    setError(`Pointer lock failed: ${message(error)}`)
-    resume.hidden = false
-  })
 }
 
 function renderSlots(slots: readonly SlotListEntry[]): void {
@@ -189,7 +154,7 @@ function mirrorPoint(pointed: PointedTreePart | null): void {
 }
 
 function resize(): void {
-  renderer.resize(worldHost.clientWidth, worldHost.clientHeight)
+  renderer?.resize(worldHost.clientWidth, worldHost.clientHeight)
 }
 
 function input(): CameraInput {
@@ -205,28 +170,17 @@ function input(): CameraInput {
 }
 
 function animate(now: number): void {
-  if (disposed || camera === null || writer === null) return
+  const activeRenderer = renderer
+  if (disposed || camera === null || writer === null || activeRenderer === null) return
   const timing = frameTiming(now, previousFrame)
   previousFrame = now
   camera = stepCamera(camera, input(), timing.movementSeconds)
-  const display = displayCameraPose(camera)
-  renderer.setCamera(display)
-  const rendered = renderer.render(now)
+  activeRenderer.setCamera(displayCameraPose(camera))
+  const rendered = activeRenderer.render(now)
   writer.camera(freePoseForPersistence(camera))
-  for (const [treeId, finish] of activeTweens) {
-    if (finish <= now) activeTweens.delete(treeId)
-  }
-  if (camera.mode === 'free' && document.pointerLockElement === renderer.canvas) {
-    mirrorPoint(renderer.pointAt(0, 0, INTERACTION_REACH, null))
-  } else if (camera.mode === 'free') {
-    mirrorPoint(null)
-  }
-  const settled = telemetry.record({
-    frameMs: timing.sampleMs,
-    pending: rendered.pending,
-    buildMs: rendered.buildMs,
-    operations: rendered.representationOperations,
-  })
+  for (const [treeId, finish] of activeTweens) if (finish <= now) activeTweens.delete(treeId)
+  if (camera.mode === 'free') mirrorPoint(activeRenderer.pointAt(0, 0, null))
+  const settled = telemetry.record({ frameMs: timing.sampleMs, pending: rendered.pending, buildMs: rendered.buildMs, operations: rendered.representationOperations })
   root.dataset['activeTweenCount'] = String(activeTweens.size)
   root.dataset['representedCount'] = String(rendered.representedEntities)
   root.dataset['residentCount'] = String(rendered.resident)
@@ -242,20 +196,72 @@ function animate(now: number): void {
   animationFrame = requestAnimationFrame(animate)
 }
 
-function startWorld(world: GameWorld): void {
-  const nextSession = gameSession(world)
+function applyDoubleCut(pointed: PointedTreePart | null, now: number): void {
+  if (session === null || writer === null || renderer === null) return
+  if (pointed === null) {
+    setError('Double cut requires an ordinary branch within reach.')
+    return
+  }
+  try {
+    const mutation = useDoubleCut(session, pointed, now, {
+      beginTreeTween: (treeId, before, after, startedAt) => {
+        renderer!.beginTreeTween(treeId, before, after, startedAt)
+        activeTweens.set(treeId, startedAt + TREE_TWEEN_MS)
+      },
+      persistTree: (update) => writer!.tree(update),
+    })
+    root.dataset['changedTreeId'] = mutation.treeId
+    setError('')
+    feedback.textContent = `Double cut applied to ${mutation.treeId}.`
+  } catch (error) {
+    setError(`Double cut failed: ${message(error)}`)
+  }
+}
+
+function attachWorldInput(activeRenderer: GameWorldRenderer): void {
+  activeRenderer.canvas.addEventListener('click', () => {
+    if (renderer !== activeRenderer || camera === null || camera.mode !== 'free' || session === null) return
+    const pointedPart = activeRenderer.pointAt(0, 0, null)
+    if (pointedPart === null) return
+    const tree = session.trees.get(pointedPart.treeId)
+    if (tree === undefined) return
+    camera = enterOrbit(camera, tree.id, worldBounds(tree))
+    mirrorCamera()
+    mirrorPoint(pointedPart)
+    void desktopMouse?.release().catch((error: unknown) => setError(`Could not release mouse: ${message(error)}`))
+  })
+  activeRenderer.canvas.addEventListener('contextmenu', (event) => {
+    event.preventDefault()
+    if (renderer !== activeRenderer || camera === null) return
+    const [x, y] = camera.mode === 'free' ? [0, 0] : pointerNdc(event, activeRenderer.canvas)
+    const orbitTarget = camera.mode === 'orbit' ? camera.orbitTarget : null
+    applyDoubleCut(activeRenderer.pointAt(x, y, orbitTarget), performance.now())
+  })
+  activeRenderer.canvas.addEventListener('mousemove', (event) => {
+    if (renderer !== activeRenderer || camera?.mode !== 'orbit') return
+    const [x, y] = pointerNdc(event, activeRenderer.canvas)
+    mirrorPoint(activeRenderer.pointAt(x, y, camera.orbitTarget))
+  })
+}
+
+async function startWorld(world: GameWorld): Promise<void> {
+  const nextRenderer = mountGameWorld(worldHost, [...world.trees.values()])
+  const nextSession = gameSession(world.trees)
   const nextCamera: CameraState = { mode: 'free', pose: world.camera }
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
+  const nextMouse = new DesktopMouse(nextRenderer.canvas, {
+    setCaptured: (captured) => invoke('set_game_mouse_capture', { captured }),
+    setCursorVisible: (visible) => nativeWindow.setCursorVisible(visible),
+    setCursorPosition: ({ x, y }) => nativeWindow.setCursorPosition(new LogicalPosition(x, y)),
+  }, (delta) => {
+    if (camera?.mode === 'free') camera = lookCamera(camera, delta)
+  })
   let releaseWriterStatus = (): void => {}
-  let requestedFrame: number | null = null
-
   try {
-    renderer.setTrees([...world.trees.values()])
-    resize()
-    renderer.setCamera(displayCameraPose(nextCamera))
-    session = nextSession
-    camera = nextCamera
-    writer = nextWriter
+    nextRenderer.resize(worldHost.clientWidth, worldHost.clientHeight)
+    nextRenderer.setCamera(displayCameraPose(nextCamera))
+    attachWorldInput(nextRenderer)
+    await nextMouse.capture()
     releaseWriterStatus = nextWriter.subscribe((status) => {
       saveStatus.textContent = status.state === 'idle'
         ? 'Saved'
@@ -265,6 +271,11 @@ function startWorld(world: GameWorld): void {
       root.dataset['saveState'] = status.state
       if (status.state === 'error') setError(saveStatus.textContent)
     })
+    renderer = nextRenderer
+    session = nextSession
+    camera = nextCamera
+    writer = nextWriter
+    desktopMouse = nextMouse
     start.hidden = true
     hud.hidden = false
     worldName.textContent = world.slot.name
@@ -272,72 +283,32 @@ function startWorld(world: GameWorld): void {
     root.dataset['loadedSlotId'] = world.slot.id
     root.dataset['changedTreeId'] = ''
     root.dataset['activeTweenCount'] = '0'
+    telemetry.beginTransition()
     mirrorCamera()
     previousFrame = performance.now()
-    telemetry.beginTransition()
-    requestedFrame = requestAnimationFrame(animate)
-    animationFrame = requestedFrame
-    resume.hidden = document.pointerLockElement === renderer.canvas
+    animationFrame = requestAnimationFrame(animate)
   } catch (error) {
-    if (requestedFrame !== null) cancelAnimationFrame(requestedFrame)
     releaseWriterStatus()
-    void nextWriter.dispose().catch(() => {})
-    if (session === nextSession) session = null
-    if (camera === nextCamera) camera = null
-    if (writer === nextWriter) writer = null
+    await nextMouse.release().catch(() => {})
+    await nextWriter.dispose().catch(() => {})
+    nextRenderer.dispose()
     start.hidden = false
     hud.hidden = true
     root.dataset['ready'] = 'false'
     root.dataset['loadedSlotId'] = ''
-    try {
-      renderer.setTrees([])
-    } catch {
-      // Preserve the opening failure as the concrete menu error.
-    }
     throw error
   }
 }
 
 function showStartFailure(failure: StartFailure): void {
-  const concrete = failure.kind === 'pointer-lock'
-    ? `Could not capture mouse: ${failure.message}`
-    : `Could not open orchard: ${failure.message}`
+  const concrete = `Could not open orchard: ${failure.message}`
   menuError.textContent = concrete
   root.dataset['errors'] = concrete
 }
 
-const startLifecycle = new StartLifecycle(pointerLock, {
-  open: startWorld,
-  fail: showStartFailure,
-})
+const startLifecycle = new StartLifecycle({ open: startWorld, fail: showStartFailure })
 startLifecycle.registerControl(nameInput)
-for (const button of createForm.querySelectorAll<HTMLButtonElement>('button')) {
-  startLifecycle.registerControl(button)
-}
-
-function applyDoubleCut(pointed: PointedTreePart | null, now: number): void {
-  if (session === null || writer === null || camera === null) return
-  if (pointed === null) {
-    setError('Double cut requires an ordinary branch within reach.')
-    return
-  }
-  const cameraBefore = camera
-  try {
-    const mutation = useDoubleCut(session, pointed, now, {
-      beginTreeTween: (treeId, before, after, startedAt) => {
-        renderer.beginTreeTween(treeId, before, after, startedAt)
-        activeTweens.set(treeId, startedAt + TREE_TWEEN_MS)
-      },
-      persistTree: (update) => writer!.tree(update),
-    })
-    if (camera !== cameraBefore) throw new Error('tool use changed camera state')
-    root.dataset['changedTreeId'] = mutation.treeId
-    setError('')
-    feedback.textContent = `Double cut applied to ${mutation.treeId}.`
-  } catch (error) {
-    setError(`Double cut failed: ${message(error)}`)
-  }
-}
+for (const button of createForm.querySelectorAll<HTMLButtonElement>('button')) startLifecycle.registerControl(button)
 
 createForm.addEventListener('submit', (event) => {
   event.preventDefault()
@@ -348,49 +319,7 @@ createForm.addEventListener('submit', (event) => {
     return
   }
   clearError()
-  void startLifecycle.start(() => saveClient
-    .create(displayName, initialCameraRecord, [initialTree])
-    .then((created) => saveClient.load(created.slotId)))
-})
-
-renderer.canvas.addEventListener('click', () => {
-  if (camera === null || camera.mode !== 'free') return
-  if (document.pointerLockElement !== renderer.canvas) {
-    requestPlayPointerLock()
-    return
-  }
-  const pointedPart = renderer.pointAt(0, 0, INTERACTION_REACH, null)
-  if (pointedPart === null || session === null) return
-  const tree = session.world.trees.get(pointedPart.treeId)
-  if (tree === undefined) return
-  camera = enterOrbit(camera, tree.id, worldBounds(tree))
-  pointerLock.release()
-  mirrorCamera()
-  mirrorPoint(pointedPart)
-})
-
-renderer.canvas.addEventListener('contextmenu', (event) => {
-  event.preventDefault()
-  if (camera === null) return
-  if (camera.mode === 'free' && document.pointerLockElement !== renderer.canvas) {
-    setError('Click to resume flight before using double cut.')
-    return
-  }
-  const [x, y] = camera.mode === 'free' ? [0, 0] : pointerNdc(event, renderer.canvas)
-  const orbitTarget = camera.mode === 'orbit' ? camera.orbitTarget : null
-  applyDoubleCut(renderer.pointAt(x, y, INTERACTION_REACH, orbitTarget), performance.now())
-})
-
-renderer.canvas.addEventListener('mousemove', (event) => {
-  if (camera === null) return
-  if (camera.mode === 'free') {
-    if (document.pointerLockElement === renderer.canvas) {
-      camera = lookCamera(camera, { x: event.movementX, y: event.movementY })
-    }
-    return
-  }
-  const [x, y] = pointerNdc(event, renderer.canvas)
-  mirrorPoint(renderer.pointAt(x, y, INTERACTION_REACH, camera.orbitTarget))
+  void startLifecycle.start(() => saveClient.create(displayName, initialCameraRecord, [initialTree]).then((created) => saveClient.load(created.slotId)))
 })
 
 window.addEventListener('keydown', (event) => {
@@ -400,7 +329,7 @@ window.addEventListener('keydown', (event) => {
     camera = exitOrbit(camera)
     mirrorPoint(null)
     mirrorCamera()
-    requestPlayPointerLock()
+    void desktopMouse?.capture().catch((error: unknown) => setError(`Could not capture mouse: ${message(error)}`))
     return
   }
   if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight'].includes(event.code)) {
@@ -408,32 +337,24 @@ window.addEventListener('keydown', (event) => {
     keys.add(event.code)
   }
 })
-
 window.addEventListener('keyup', (event) => keys.delete(event.code))
 window.addEventListener('blur', () => keys.clear())
-document.addEventListener('pointerlockchange', () => {
-  const locked = document.pointerLockElement === renderer.canvas
-  root.dataset['pointerLock'] = locked ? 'locked' : 'free'
-  resume.hidden = camera === null || camera.mode !== 'free' || locked
-})
-resume.addEventListener('click', requestPlayPointerLock)
 saveRetry.addEventListener('click', () => writer?.retry())
 
 const resizeObserver = new ResizeObserver(resize)
 resizeObserver.observe(worldHost)
-resize()
 
 window.addEventListener('pagehide', () => {
   if (disposed) return
   disposed = true
-  resumePointerLock.dispose()
   startLifecycle.dispose()
-  pointerLock.dispose()
   cancelAnimationFrame(animationFrame)
   resizeObserver.disconnect()
   keys.clear()
+  void desktopMouse?.release().catch(() => {})
   void writer?.dispose().catch((error: unknown) => setError(`Save shutdown failed: ${message(error)}`))
-  renderer.dispose()
+  renderer?.dispose()
+  renderer = null
 })
 
 void saveClient.list().then((slots) => {

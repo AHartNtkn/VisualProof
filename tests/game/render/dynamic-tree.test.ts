@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
 import { describe, expect, it, vi } from 'vitest'
-import { INTERACTION_REACH } from '../../../src/game/camera'
 import {
   DynamicTreeObjects,
   TREE_TWEEN_MS,
@@ -10,6 +9,8 @@ import {
 } from '../../../src/game/render/dynamic-tree'
 import type { RenderTree } from '../../../src/game/render/runtime'
 import { pointAtVisibleParts } from '../../../src/game/render/tree-objects'
+
+const interactionReach = 100
 
 function branchScene(key: string, x: number): TreeRenderSnapshot {
   return {
@@ -57,7 +58,7 @@ describe('ordinary visible tree-part picking', () => {
     const pointedPart = pointAtVisibleParts(
       { intersectObjects } as unknown as THREE.Raycaster,
       [foreground, orbit],
-      INTERACTION_REACH,
+      interactionReach,
       'orbit',
     )
 
@@ -72,9 +73,9 @@ describe('ordinary visible tree-part picking', () => {
       intersectObjects: () => [{ distance, point: new THREE.Vector3(), object: ring }],
     }) as unknown as THREE.Raycaster
 
-    expect(pointAtVisibleParts(rayAt(INTERACTION_REACH), [root], INTERACTION_REACH, null))
-      .toEqual({ treeId: 'tree-a', entityKey: 'r:n0', distance: INTERACTION_REACH })
-    expect(pointAtVisibleParts(rayAt(INTERACTION_REACH + 0.001), [root], INTERACTION_REACH, null))
+    expect(pointAtVisibleParts(rayAt(interactionReach), [root], interactionReach, null))
+      .toEqual({ treeId: 'tree-a', entityKey: 'r:n0', distance: interactionReach })
+    expect(pointAtVisibleParts(rayAt(interactionReach + 0.001), [root], interactionReach, null))
       .toBeNull()
   })
 
@@ -95,7 +96,7 @@ describe('ordinary visible tree-part picking', () => {
       }],
     } as unknown as THREE.Raycaster
 
-    expect(pointAtVisibleParts(ray, [root], INTERACTION_REACH, null)).toEqual({
+    expect(pointAtVisibleParts(ray, [root], interactionReach, null)).toEqual({
       treeId: 'tree-a', entityKey: 'b:side', distance: 7,
     })
   })

@@ -8,7 +8,6 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import type { Diagram } from '../../kernel/diagram'
 import { diagramToJson } from '../../kernel/diagram'
 import type { GameTree } from '../model'
-import { INTERACTION_REACH } from '../camera'
 import type { PointedTreePart } from '../session'
 import { DARK } from '../../view/paint'
 import { TreeRenderAssetCache } from './assets'
@@ -40,13 +39,14 @@ const TERRAIN_COLOR = '#010101'
 const SKY_COLOR = '#000000'
 const FOG_NEAR = 170
 const FOG_FAR = 780
+const INTERACTION_REACH = 100
 
 export type GameWorldRenderer = {
   readonly canvas: HTMLCanvasElement
   setTrees(trees: readonly GameTree[]): void
   setCamera(pose: DisplayCameraPose): void
   setRenderMode(mode: RenderMode): void
-  pointAt(ndcX: number, ndcY: number, reach: number, orbitTarget: string | null): PointedTreePart | null
+  pointAt(ndcX: number, ndcY: number, orbitTarget: string | null): PointedTreePart | null
   beginTreeTween(treeId: string, before: Diagram, after: Diagram, now: number): void
   resize(width: number, height: number): void
   render(now: number): GameFrameStats
@@ -215,10 +215,7 @@ export function mountGameWorld(
     setRenderMode(mode) {
       runtime.setMode(mode)
     },
-    pointAt(ndcX, ndcY, reach, orbitTarget) {
-      if (!Number.isFinite(reach) || reach !== INTERACTION_REACH) {
-        throw new Error(`interaction reach must be exactly ${INTERACTION_REACH}`)
-      }
+    pointAt(ndcX, ndcY, orbitTarget) {
       camera.updateMatrixWorld()
       treeObjects.updateMatrixWorld(true)
       raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)

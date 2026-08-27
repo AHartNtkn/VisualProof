@@ -1,8 +1,7 @@
 import type { Diagram } from '../kernel/diagram'
 import { diagramToJson } from '../kernel/diagram'
 import { applyDoubleCutIntro } from '../kernel/rules/doublecut'
-import { INTERACTION_REACH } from './camera'
-import type { FreeCameraPose, GameWorld } from './model'
+import type { GameTree } from './model'
 import type { TreeUpdate } from './save-client'
 
 export type PointedTreePart = {
@@ -27,26 +26,16 @@ export class ToolError extends Error {
 }
 
 function branchRegion(key: string): string {
-  if (!key.startsWith('b:') || key.length === 2) {
-    throw new ToolError('double cut requires a branch')
-  }
+  if (!key.startsWith('b:') || key.length === 2) throw new ToolError('double cut requires a branch')
   return key.slice(2)
 }
 
 export class GameSession {
-  public constructor(public world: GameWorld) {}
-
-  public get camera(): FreeCameraPose {
-    return this.world.camera
-  }
+  public constructor(public trees: ReadonlyMap<string, GameTree>) {}
 
   public applyDoubleCut(pointedPart: PointedTreePart): TreeMutation {
-    if (!Number.isFinite(pointedPart.distance) || pointedPart.distance > INTERACTION_REACH) {
-      throw new ToolError(`double cut target is beyond interaction reach ${INTERACTION_REACH}`)
-    }
-    const tree = this.world.trees.get(pointedPart.treeId)
+    const tree = this.trees.get(pointedPart.treeId)
     if (tree === undefined) throw new ToolError(`unknown tree '${pointedPart.treeId}'`)
-
     const after = applyDoubleCutIntro(tree.diagram, {
       region: branchRegion(pointedPart.entityKey),
       regions: [],
@@ -54,30 +43,17 @@ export class GameSession {
       wires: [],
     })
     const afterJson = JSON.stringify(diagramToJson(after))
-    const trees = new Map(this.world.trees)
+    const trees = new Map(this.trees)
     trees.set(tree.id, { ...tree, diagram: after, diagramJson: afterJson })
-    this.world = { ...this.world, trees }
-    return {
-      treeId: tree.id,
-      before: tree.diagram,
-      beforeJson: tree.diagramJson,
-      after,
-      afterJson,
-    }
+    this.trees = trees
+    return { treeId: tree.id, before: tree.diagram, beforeJson: tree.diagramJson, after, afterJson }
   }
 }
 
-export function gameSession(world: GameWorld): GameSession {
-  return new GameSession(world)
-}
+export function gameSession(trees: ReadonlyMap<string, GameTree>): GameSession { return new GameSession(trees) }
 
 export type DoubleCutEffects = {
-  readonly beginTreeTween: (
-    treeId: string,
-    before: Diagram,
-    after: Diagram,
-    now: number,
-  ) => void
+  readonly beginTreeTween: (treeId: string, before: Diagram, after: Diagram, now: number) => void
   readonly persistTree: (update: TreeUpdate) => void
 }
 
@@ -87,9 +63,8 @@ export function useDoubleCut(
   now: number,
   effects: DoubleCutEffects,
 ): TreeMutation {
-  const camera = session.camera
   const mutation = session.applyDoubleCut(pointedPart)
-  const tree = session.world.trees.get(mutation.treeId)
+  const tree = session.trees.get(mutation.treeId)
   if (tree === undefined) throw new Error(`mutated tree '${mutation.treeId}' is missing`)
   effects.beginTreeTween(tree.id, mutation.before, mutation.after, now)
   effects.persistTree({
@@ -99,6 +74,5 @@ export function useDoubleCut(
     z: tree.placement.z,
     yaw: tree.placement.yaw,
   })
-  if (session.camera !== camera) throw new Error('tool use changed camera state')
   return mutation
 }

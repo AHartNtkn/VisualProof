@@ -135,7 +135,6 @@ vi.mock('../../../src/game/render/glow-render', () => ({
 }))
 
 import type { GameTree } from '../../../src/game/model'
-import { INTERACTION_REACH } from '../../../src/game/camera'
 import { mountGameWorld } from '../../../src/game/render/world'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { diagramToJson } from '../../../src/kernel/diagram/json'
@@ -244,7 +243,7 @@ describe('production game world', () => {
     world.setRenderMode('raw')
     world.render(0)
 
-    expect(world.pointAt(0, 0, 100, null)).toMatchObject({
+    expect(world.pointAt(0, 0, null)).toMatchObject({
       treeId: 'tree-a', entityKey: 'b:r0',
     })
 
@@ -257,7 +256,7 @@ describe('production game world', () => {
     world.dispose()
   })
 
-  it('rejects caller attempts to lower or bypass the fixed production interaction reach', () => {
+  it('points a production branch just inside 100 units but not just outside it', () => {
     const diagram = new DiagramBuilder().build()
     const tree: GameTree = {
       id: 'tree-a',
@@ -267,11 +266,24 @@ describe('production game world', () => {
     }
     const container = { appendChild() {} } as unknown as HTMLElement
     const world = mountGameWorld(container, [tree])
+    const branch = scene3(diagram).entities[0]!
+    if (!('pts' in branch)) throw new Error('expected branch fixture')
+    const point = branch.pts[0]!
+    world.setRenderMode('raw')
+    world.setCamera({
+      eye: { x: point.x, y: point.y, z: point.z + tree.placement.z + 99.999 },
+      forward: { x: 0, y: 0, z: -1 },
+    })
+    world.render(0)
 
-    expect(() => world.pointAt(0, 0, INTERACTION_REACH / 2, null))
-      .toThrow('interaction reach must be exactly 100')
-    expect(() => world.pointAt(0, 0, Number.NaN, null))
-      .toThrow('interaction reach must be exactly 100')
+    expect(world.pointAt(0, 0, null)).toMatchObject({ treeId: 'tree-a', entityKey: 'b:r0' })
+
+    world.setCamera({
+      eye: { x: point.x, y: point.y, z: point.z + tree.placement.z + 100.001 },
+      forward: { x: 0, y: 0, z: -1 },
+    })
+
+    expect(world.pointAt(0, 0, null)).toBeNull()
     world.dispose()
   })
 
@@ -337,7 +349,7 @@ describe('production game world', () => {
     const completed = world.render(350)
 
     expect(completed.representedEntities).toBe(scene3(replacementDiagram).entities.length)
-    expect(world.pointAt(0, 0, INTERACTION_REACH, null)).toMatchObject({ treeId: 'tree-a' })
+    expect(world.pointAt(0, 0, null)).toMatchObject({ treeId: 'tree-a' })
     world.dispose()
   })
 })

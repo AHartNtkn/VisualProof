@@ -1,329 +1,29 @@
 import type { GameWorld } from './model'
 
-export type PointerLockPort = {
-  request(): void | Promise<void>
-  isLocked(): boolean
-  onChange(listener: () => void): () => void
-  onError(listener: (error?: unknown) => void): () => void
-  release(): void
-}
-
-export type StartFailure = {
-  readonly kind: 'pointer-lock' | 'operation'
-  readonly message: string
-}
-
+export type StartFailure = { readonly kind: 'operation'; readonly message: string }
 export type StartControl = { disabled: boolean }
-
-type PointerLockAttempt = {
-  readonly resolve: () => void
-  readonly reject: (error: Error) => void
-  requestKind: 'legacy' | 'promise'
-}
-
-type DrainingPointerLockAttempt = {
-  readonly kind: 'request'
-  readonly attempt: PointerLockAttempt
-  readonly requestKind: 'legacy' | 'promise'
-  requestSettled: boolean
-  releaseRequested: boolean
-  unlockedObserved: boolean
-}
-
-type DrainingPointerLockRelease = {
-  readonly kind: 'release'
-  releaseRequested: boolean
-  unlockedObserved: boolean
-}
-
-type PointerLockDrain = DrainingPointerLockAttempt | DrainingPointerLockRelease
 
 type StartLifecycleHooks = {
   readonly open: (world: GameWorld) => void | Promise<void>
   readonly fail: (failure: StartFailure) => void
 }
 
-function failureMessage(error: unknown, fallback: string): string {
+type StartPhase = 'idle' | 'starting' | 'started' | 'disposed'
+
+function failureMessage(error: unknown): string {
   if (error instanceof Error && error.message.length > 0) return error.message
   if (typeof error === 'string' && error.length > 0) return error
-  return fallback
+  return 'start operation failed'
 }
-
-function promiseLike(value: unknown): value is PromiseLike<void> {
-  return (typeof value === 'object' && value !== null || typeof value === 'function')
-    && 'then' in value
-    && typeof (value as { readonly then?: unknown }).then === 'function'
-}
-
-export class PointerLockGate {
-  private active: PointerLockAttempt | null = null
-  private draining: PointerLockDrain | null = null
-  private disposed = false
-  private removeChange: (() => void) | null = null
-  private removeError: (() => void) | null = null
-
-  public constructor(private readonly port: PointerLockPort) {}
-
-  public acquire(): PointerLockAcquisition {
-    if (this.disposed) {
-      return {
-        result: Promise.reject(new Error('pointer lock gate is disposed')),
-        cancel: () => {},
-      }
-    }
-    if (this.draining !== null) {
-      return {
-        result: Promise.reject(new Error('previous pointer lock request is still settling')),
-        cancel: () => {},
-      }
-    }
-    if (this.active !== null) {
-      return {
-        result: Promise.reject(new Error('pointer lock acquisition is already in progress')),
-        cancel: () => {},
-      }
-    }
-
-    let attempt!: PointerLockAttempt
-    const result = new Promise<void>((resolve, reject) => {
-      attempt = { resolve, reject, requestKind: 'legacy' }
-      this.active = attempt
-    })
-    const cancel = (): void => this.cancel(attempt)
-
-    try {
-      this.listen()
-    } catch (error) {
-      this.fail(attempt, error)
-      return { result, cancel }
-    }
-
-    let request: void | Promise<void>
-    try {
-      request = this.port.request()
-    } catch (error) {
-      this.fail(attempt, error)
-      return { result, cancel }
-    }
-    attempt.requestKind = promiseLike(request) ? 'promise' : 'legacy'
-    if (promiseLike(request)) {
-      void Promise.resolve(request).then(
-        () => this.finishPromiseRequest(attempt, true),
-        (error) => this.finishPromiseRequest(attempt, false, error),
-      )
-    }
-    return { result, cancel }
-  }
-
-  public release(): void {
-    const draining = this.draining
-    if (draining !== null) {
-      if (this.port.isLocked()) this.requestUnlock(draining)
-      else this.invokeRelease()
-      return
-    }
-    if (!this.port.isLocked()) {
-      this.invokeRelease()
-      return
-    }
-
-    const release: DrainingPointerLockRelease = {
-      kind: 'release',
-      releaseRequested: false,
-      unlockedObserved: false,
-    }
-    this.draining = release
-    try {
-      this.listen()
-    } catch {
-      this.draining = null
-      this.invokeRelease()
-      return
-    }
-    this.requestUnlock(release)
-  }
-
-  public dispose(): void {
-    if (this.disposed) return
-    this.disposed = true
-    if (this.active !== null) this.cancel(this.active)
-    this.release()
-    this.cleanupListeners()
-  }
-
-  private handleChange(): void {
-    const draining = this.draining
-    if (draining !== null) {
-      if (this.port.isLocked()) {
-        this.requestUnlock(draining)
-        return
-      }
-      draining.unlockedObserved = true
-      if (draining.kind === 'release'
-        || draining.requestKind === 'legacy'
-        || draining.requestSettled) {
-        this.finishDrain(draining)
-      }
-      return
-    }
-    if (!this.port.isLocked()) return
-    if (this.active !== null) {
-      this.succeed(this.active)
-    }
-  }
-
-  private handleError(error?: unknown): void {
-    const draining = this.draining
-    if (draining !== null) {
-      if (draining.kind === 'release') return
-      draining.requestSettled = true
-      if (this.port.isLocked()) this.requestUnlock(draining)
-      else this.finishDrain(draining)
-      return
-    }
-    if (this.active !== null) this.fail(this.active, error)
-  }
-
-  private finishPromiseRequest(
-    attempt: PointerLockAttempt,
-    succeeded: boolean,
-    error?: unknown,
-  ): void {
-    if (this.active === attempt) {
-      if (succeeded) this.succeed(attempt)
-      else this.fail(attempt, error)
-      return
-    }
-    const draining = this.draining
-    if (draining?.kind !== 'request' || draining.attempt !== attempt) return
-    draining.requestSettled = true
-    if (this.port.isLocked()) {
-      this.requestUnlock(draining)
-    } else if (!succeeded || draining.unlockedObserved) {
-      this.finishDrain(draining)
-    }
-  }
-
-  private cancel(attempt: PointerLockAttempt): void {
-    if (this.active !== attempt) return
-    this.active = null
-    this.draining = {
-      kind: 'request',
-      attempt,
-      requestKind: attempt.requestKind,
-      requestSettled: false,
-      releaseRequested: false,
-      unlockedObserved: false,
-    }
-    attempt.reject(new Error('pointer lock acquisition was cancelled'))
-  }
-
-  private finishDrain(draining: PointerLockDrain): void {
-    if (this.draining !== draining) return
-    this.draining = null
-    this.cleanupListeners()
-  }
-
-  private listen(): void {
-    if (this.removeChange !== null || this.removeError !== null) return
-    const removeChange = this.port.onChange(() => this.handleChange())
-    try {
-      const removeError = this.port.onError((error) => this.handleError(error))
-      this.removeChange = removeChange
-      this.removeError = removeError
-    } catch (error) {
-      removeChange()
-      throw error
-    }
-  }
-
-  private cleanupListeners(): void {
-    if (this.active !== null || this.draining !== null) return
-    this.removeChange?.()
-    this.removeError?.()
-    this.removeChange = null
-    this.removeError = null
-  }
-
-  private requestUnlock(draining: PointerLockDrain): void {
-    if (this.draining !== draining || draining.releaseRequested) return
-    draining.releaseRequested = true
-    draining.unlockedObserved = false
-    this.invokeRelease()
-  }
-
-  private invokeRelease(): void {
-    try {
-      this.port.release()
-    } catch {
-      // A failed exit cannot make the old lock safe for another acquisition.
-      // The current drain therefore remains until an authoritative unlocked event.
-    }
-  }
-
-  private succeed(attempt: PointerLockAttempt): void {
-    if (this.active !== attempt || !this.port.isLocked()) return
-    this.active = null
-    attempt.resolve()
-    this.cleanupListeners()
-  }
-
-  private fail(attempt: PointerLockAttempt, error?: unknown): void {
-    if (this.active !== attempt) return
-    this.active = null
-    attempt.reject(new Error(failureMessage(error, 'pointer lock was denied')))
-    this.cleanupListeners()
-  }
-}
-
-export type PointerLockAcquisition = {
-  readonly result: Promise<void>
-  cancel(): void
-}
-
-export class ResumePointerLock {
-  private acquisition: PointerLockAcquisition | null = null
-  private disposed = false
-
-  public constructor(private readonly pointerLock: PointerLockGate) {}
-
-  public request(): Promise<void> {
-    if (this.disposed) return Promise.reject(new Error('resume pointer lock is disposed'))
-    if (this.acquisition !== null) {
-      return Promise.reject(new Error('resume pointer lock request is already in progress'))
-    }
-    const acquisition = this.pointerLock.acquire()
-    this.acquisition = acquisition
-    return acquisition.result.finally(() => {
-      if (this.acquisition === acquisition) this.acquisition = null
-    })
-  }
-
-  public dispose(): void {
-    if (this.disposed) return
-    this.disposed = true
-    this.acquisition?.cancel()
-    this.acquisition = null
-    this.pointerLock.release()
-  }
-}
-
-type StartPhase = 'idle' | 'starting' | 'started' | 'disposed'
 
 export class StartLifecycle {
   private phase: StartPhase = 'idle'
   private generation = 0
   private readonly controls = new Set<StartControl>()
-  private acquisition: PointerLockAcquisition | null = null
 
-  public constructor(
-    private readonly pointerLock: PointerLockGate,
-    private readonly hooks: StartLifecycleHooks,
-  ) {}
+  public constructor(private readonly hooks: StartLifecycleHooks) {}
 
-  public get busy(): boolean {
-    return this.phase === 'starting'
-  }
+  public get busy(): boolean { return this.phase === 'starting' }
 
   public registerControl(control: StartControl): () => void {
     this.controls.add(control)
@@ -336,9 +36,7 @@ export class StartLifecycle {
     this.phase = 'starting'
     const generation = ++this.generation
     this.syncControls()
-    const acquisition = this.pointerLock.acquire()
-    this.acquisition = acquisition
-    return this.finishStart(generation, acquisition, operation)
+    return this.finishStart(generation, operation)
   }
 
   public dispose(): void {
@@ -346,22 +44,11 @@ export class StartLifecycle {
     this.phase = 'disposed'
     this.generation++
     this.syncControls()
-    this.acquisition?.cancel()
-    this.acquisition = null
-    this.pointerLock.release()
     this.controls.clear()
   }
 
-  private async finishStart(
-    generation: number,
-    acquisition: PointerLockAcquisition,
-    operation: () => Promise<GameWorld>,
-  ): Promise<void> {
-    let acquired = false
+  private async finishStart(generation: number, operation: () => Promise<GameWorld>): Promise<void> {
     try {
-      await acquisition.result
-      acquired = true
-      if (!this.isCurrent(generation)) return
       const world = await operation()
       if (!this.isCurrent(generation)) return
       await this.hooks.open(world)
@@ -370,15 +57,9 @@ export class StartLifecycle {
       this.syncControls()
     } catch (error) {
       if (!this.isCurrent(generation)) return
-      this.pointerLock.release()
       this.phase = 'idle'
       this.syncControls()
-      this.hooks.fail({
-        kind: acquired ? 'operation' : 'pointer-lock',
-        message: failureMessage(error, acquired ? 'start operation failed' : 'pointer lock was denied'),
-      })
-    } finally {
-      if (this.acquisition === acquisition) this.acquisition = null
+      this.hooks.fail({ kind: 'operation', message: failureMessage(error) })
     }
   }
 

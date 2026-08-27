@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { INTERACTION_REACH } from '../../src/game/camera'
 import type { GameTree, GameWorld } from '../../src/game/model'
 import { gameSession, useDoubleCut } from '../../src/game/session'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
@@ -37,8 +36,7 @@ function newRegions(before: Diagram, after: Diagram): string[] {
 
 describe('game tool session', () => {
   it('spawns a real empty double cut on the pointed branch of any generic tree', () => {
-    const session = gameSession(worldWithTree('large', largeDiagram))
-    const beforeCamera = session.camera
+    const session = gameSession(worldWithTree('large', largeDiagram).trees)
     const mutation = session.applyDoubleCut({
       treeId: 'large', entityKey: `b:${nestedRegion}`, distance: 12,
     })
@@ -56,40 +54,31 @@ describe('game tool session', () => {
     })!
     expect(mutation.after.regions[inner]).toEqual({ kind: 'cut', parent: outer })
     expect(mutation.afterJson).toBe(JSON.stringify(diagramToJson(mutation.after)))
-    expect(session.world.trees.get('large')).toMatchObject({
+    expect(session.trees.get('large')).toMatchObject({
       diagram: mutation.after,
       diagramJson: mutation.afterJson,
     })
-    expect(session.camera).toBe(beforeCamera)
+    expect('camera' in session).toBe(false)
+    expect('world' in session).toBe(false)
   })
 
-  it('rejects non-branches, unknown trees, and pointed parts beyond 100 without mutation', () => {
-    const session = gameSession(worldWithTree('tree-a', blankDiagram))
-    const beforeWorld = session.world
+  it('rejects non-branches and unknown trees without mutation', () => {
+    const session = gameSession(worldWithTree('tree-a', blankDiagram).trees)
+    const beforeTrees = session.trees
     expect(() => session.applyDoubleCut({
       treeId: 'tree-a', entityKey: 'r:n0', distance: 5,
     })).toThrow(/branch/)
     expect(() => session.applyDoubleCut({
       treeId: 'missing', entityKey: 'b:r0', distance: 5,
     })).toThrow(/unknown tree/)
-    expect(() => session.applyDoubleCut({
-      treeId: 'tree-a', entityKey: 'b:r0', distance: INTERACTION_REACH + 0.001,
-    })).toThrow(/reach/)
-    expect(session.world).toBe(beforeWorld)
-    expect(session.world.trees.get('tree-a')!.diagram).toBe(blankDiagram)
+    expect(session.trees).toBe(beforeTrees)
+    expect(session.trees.get('tree-a')!.diagram).toBe(blankDiagram)
   })
 
-  it('accepts the strict reach boundary', () => {
-    const session = gameSession(worldWithTree('tree-a', blankDiagram))
-
-    expect(() => session.applyDoubleCut({
-      treeId: 'tree-a', entityKey: 'b:r0', distance: INTERACTION_REACH,
-    })).not.toThrow()
-  })
-
-  it('coordinates one real tree mutation with one tween and one persistence record', () => {
-    const session = gameSession(worldWithTree('large', largeDiagram))
-    const beforeCamera = session.camera
+  it('changes and persists only the pointed generic tree', () => {
+    const world = worldWithTree('large', largeDiagram)
+    const untouched = tree('other', blankDiagram)
+    const session = gameSession(new Map([...world.trees, ['other', untouched]]))
     const tweens: Array<{ readonly treeId: string; readonly now: number }> = []
     const writes: Array<{ readonly treeId: string; readonly diagramJson: string }> = []
 
@@ -105,7 +94,9 @@ describe('game tool session', () => {
 
     expect(tweens).toEqual([{ treeId: 'large', now: 250 }])
     expect(writes).toEqual([{ treeId: 'large', diagramJson: mutation.afterJson }])
-    expect(session.camera).toBe(beforeCamera)
-    expect(session.world.trees.get('large')?.diagram).toBe(mutation.after)
+    expect(session.trees.get('large')?.diagram).toBe(mutation.after)
+    expect(session.trees.get('other')).toEqual(untouched)
+    expect('camera' in session).toBe(false)
+    expect('world' in session).toBe(false)
   })
 })

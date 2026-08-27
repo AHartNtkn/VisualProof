@@ -30,7 +30,6 @@ export type CameraInput = {
 export type CameraLookDelta = { readonly x: number; readonly y: number }
 export type TreeWorldBounds = { readonly center: Vec3; readonly radius: number }
 
-export const INTERACTION_REACH = 100
 export const FREE_SPEED = 12
 export const SPRINT_MULTIPLIER = 2
 export const ORBIT_ANGULAR_SPEED = 1.2

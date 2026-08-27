@@ -1,4 +1,5 @@
 mod commands;
+mod mouse_capture;
 pub mod save_store;
 
 pub fn run() {
@@ -8,7 +9,8 @@ pub fn run() {
             commands::create_slot,
             commands::load_slot,
             commands::update_tree,
-            commands::update_camera
+            commands::update_camera,
+            commands::set_game_mouse_capture
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Orchard");
