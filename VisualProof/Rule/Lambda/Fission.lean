@@ -1,6 +1,6 @@
 import VisualProof.Diagram.Algebra
 import VisualProof.Diagram.NestedScopedRewrite
-import VisualProof.Lambda.Certificate
+import VisualProof.Lambda.Substitute
 import VisualProof.Rule.Relation
 
 namespace VisualProof.Rule.Lambda
@@ -10,13 +10,20 @@ open Theory
 
 namespace Fission
 
+/-- A structural path to a subterm occurrence selected for fission. -/
+inductive PathSegment
+  | fn
+  | arg
+  | body
+  deriving DecidableEq, Repr
+
 /-- Exact capture-avoiding replacement of one bound-closed subterm by the
 last free slot.  The selected term is intrinsically closed with respect to
 every binder crossed by `path`; untouched siblings retain their native free
 slots through `Fin.castSucc`. -/
 inductive At (selected : VisualProof.Lambda.Term 0 (Fin arity)) :
     {bound : Nat} → VisualProof.Lambda.Term bound (Fin arity) →
-      List VisualProof.Lambda.PathSegment →
+      List PathSegment →
       VisualProof.Lambda.Term bound (Fin (arity + 1)) → Prop
   | root : At selected (selected.renameBound Fin.elim0) []
       (.port (Fin.last arity))
@@ -45,7 +52,7 @@ structure Description (outer : List Sig) where
   whole : VisualProof.Lambda.Term 0 (Fin arity)
   selected : VisualProof.Lambda.Term 0 (Fin arity)
   residual : VisualProof.Lambda.Term 0 (Fin (arity + 1))
-  path : List VisualProof.Lambda.PathSegment
+  path : List PathSegment
   pathEvidence : At selected whole path residual
   reconstruct : residual.bindFree (bridgeSubstitution selected) = whole
   output : Var (outer ++ locals) .iota
