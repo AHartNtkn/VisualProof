@@ -284,7 +284,7 @@ impl SaveStore {
         validate_tree_numbers(update.x, update.z, update.yaw)?;
         let path = self.existing_slot_path(slot_id)?;
         let mut connection = open_connection(&path, true)?;
-        validate_database(&connection)?;
+        validate_update_safety(&connection)?;
         let transaction = connection.transaction()?;
         let diagram_key = intern_diagram(&transaction, &update.diagram_json)?;
         let changed = transaction.execute(
@@ -303,7 +303,7 @@ impl SaveStore {
         validate_camera(&camera)?;
         let path = self.existing_slot_path(slot_id)?;
         let mut connection = open_connection(&path, true)?;
-        validate_database(&connection)?;
+        validate_update_safety(&connection)?;
         let transaction = connection.transaction()?;
         let changed = transaction.execute(
             "UPDATE camera SET x = ?1, y = ?2, z = ?3, yaw = ?4, pitch = ?5 WHERE singleton = 1",
@@ -495,6 +495,15 @@ struct Column {
     primary_key_position: i64,
 }
 
+#[derive(PartialEq)]
+enum Affinity {
+    Integer,
+    Text,
+    Real,
+    Numeric,
+    Blob,
+}
+
 fn column(name: &str, declared_type: &str, not_null: bool, primary_key_position: i64) -> Column {
     Column {
         name: name.to_owned(),
@@ -509,6 +518,7 @@ fn validate_database(connection: &Connection) -> Result<()> {
 }
 
 fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
+    validate_no_required_table_triggers(connection)?;
     validate_required_columns(
         connection,
         "metadata",
@@ -591,7 +601,7 @@ fn validate_required_columns(
         let Some(actual) = actual.iter().find(|actual| actual.name == required.name) else {
             return Err(rusqlite::Error::InvalidQuery);
         };
-        if actual.declared_type != required.declared_type
+        if sqlite_affinity(&actual.declared_type) != sqlite_affinity(&required.declared_type)
             || actual.not_null != required.not_null
             || actual.primary_key_position != required.primary_key_position
         {
@@ -599,6 +609,48 @@ fn validate_required_columns(
         }
     }
     Ok(())
+}
+
+fn sqlite_affinity(declared_type: &str) -> Affinity {
+    let declared_type = declared_type.to_ascii_uppercase();
+    if declared_type.contains("INT") {
+        Affinity::Integer
+    } else if declared_type.contains("CHAR")
+        || declared_type.contains("CLOB")
+        || declared_type.contains("TEXT")
+    {
+        Affinity::Text
+    } else if declared_type.is_empty() || declared_type.contains("BLOB") {
+        Affinity::Blob
+    } else if declared_type.contains("REAL")
+        || declared_type.contains("FLOA")
+        || declared_type.contains("DOUB")
+    {
+        Affinity::Real
+    } else {
+        Affinity::Numeric
+    }
+}
+
+fn validate_update_safety(connection: &Connection) -> Result<()> {
+    validate_no_required_table_triggers(connection).map_err(|_| SaveStoreError::InvalidStructure)
+}
+
+fn validate_no_required_table_triggers(connection: &Connection) -> rusqlite::Result<()> {
+    let active_trigger: bool = connection.query_row(
+        "SELECT EXISTS(
+           SELECT 1 FROM sqlite_schema
+           WHERE type = 'trigger'
+             AND tbl_name IN ('metadata', 'camera', 'diagrams', 'trees')
+         )",
+        [],
+        |row| row.get(0),
+    )?;
+    if active_trigger {
+        Err(rusqlite::Error::InvalidQuery)
+    } else {
+        Ok(())
+    }
 }
 
 fn has_unique_key(
@@ -749,15 +801,35 @@ mod tests {
                 TreeUpdate {
                     tree_id: "a".into(),
                     diagram_json: DOUBLE_CUT.into(),
-                    x: 0.0,
-                    z: 0.0,
-                    yaw: 0.0,
+                    x: 4.0,
+                    z: 5.0,
+                    yaw: 0.75,
                 },
             )
             .unwrap();
         let after = store.load(&slot.slot_id).unwrap();
 
         assert_ne!(changed_key, before.trees[0].diagram_key);
+        assert_eq!(
+            after.trees.iter().find(|tree| tree.tree_id == "a"),
+            Some(&TreeRecord {
+                tree_id: "a".into(),
+                diagram_key: changed_key,
+                x: 4.0,
+                z: 5.0,
+                yaw: 0.75,
+            })
+        );
+        assert_eq!(
+            after
+                .diagrams
+                .iter()
+                .find(|diagram| diagram.diagram_key == changed_key),
+            Some(&DiagramRecord {
+                diagram_key: changed_key,
+                diagram_json: DOUBLE_CUT.into(),
+            })
+        );
         assert_eq!(
             after
                 .trees
@@ -772,7 +844,9 @@ mod tests {
                 .unwrap()
                 .diagram_key
         );
+        assert_eq!(after.camera, before.camera);
         assert_eq!(after.diagrams.len(), 2);
+        assert!(after.updated_at_ms > before.updated_at_ms);
     }
 
     #[test]
@@ -823,6 +897,66 @@ mod tests {
                 diagram_json: BLANK.into()
             }]
         );
+    }
+
+    #[test]
+    fn loads_an_equivalent_schema_with_affinity_equivalent_declared_types() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("affinity.sqlite3");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                &SCHEMA
+                    .replace("INTEGER", "int")
+                    .replace("TEXT", "varchar(256)")
+                    .replace("REAL", "double precision"),
+            )
+            .unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO metadata VALUES(1, 'affinity', 'Affinity', 12);
+                 INSERT INTO camera VALUES(1, 1, 2, 3, .25, -.5);
+                 INSERT INTO diagrams VALUES(7, '{\"regions\":[],\"nodes\":[],\"wires\":[]}');
+                 INSERT INTO trees VALUES('tree-a', 7, 4, 5, .75);",
+            )
+            .unwrap();
+
+        let loaded = SaveStore::new(temp.path().to_path_buf())
+            .load("affinity")
+            .unwrap();
+
+        assert_eq!(loaded.slot_id, "affinity");
+        assert_eq!(loaded.trees.len(), 1);
+    }
+
+    #[test]
+    fn rejects_required_table_triggers_before_load_or_update() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = SaveStore::new(temp.path().to_path_buf());
+        let slot = store.create(basic_input()).unwrap();
+        let before = store.load(&slot.slot_id).unwrap();
+        let path = temp.path().join(format!("{}.sqlite3", slot.slot_id));
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TRIGGER mutate_camera AFTER UPDATE ON trees
+                 BEGIN UPDATE camera SET x = x + 1; END;",
+            )
+            .unwrap();
+
+        assert!(matches!(
+            store.load(&slot.slot_id),
+            Err(SaveStoreError::InvalidStructure)
+        ));
+        assert!(matches!(
+            store.update_tree(&slot.slot_id, tree("a", DOUBLE_CUT)),
+            Err(SaveStoreError::InvalidStructure)
+        ));
+
+        connection
+            .execute_batch("DROP TRIGGER mutate_camera;")
+            .unwrap();
+        assert_eq!(store.load(&slot.slot_id).unwrap(), before);
     }
 
     #[test]
@@ -961,9 +1095,7 @@ mod tests {
         );
 
         let after = store.load(&slot.slot_id).unwrap();
-        assert_eq!(after.camera, before.camera);
-        assert_eq!(after.diagrams, before.diagrams);
-        assert_eq!(after.trees, before.trees);
+        assert_eq!(after, before);
     }
 
     #[test]
@@ -1018,6 +1150,7 @@ mod tests {
         assert_eq!(after.camera, updated_camera);
         assert_eq!(after.trees, before.trees);
         assert_eq!(after.diagrams, before.diagrams);
+        assert!(after.updated_at_ms > before.updated_at_ms);
     }
 
     #[test]
