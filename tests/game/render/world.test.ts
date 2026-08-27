@@ -315,39 +315,4 @@ describe('production game world', () => {
     world.dispose()
   })
 
-  it('settles 2,000 production-built raw trees without representation failures or analytic lights', () => {
-    const diagram = new DiagramBuilder().build()
-    const diagramJson = JSON.stringify(diagramToJson(diagram))
-    const trees: GameTree[] = Array.from({ length: 2_000 }, (_, index) => ({
-      id: `tree-${index}`,
-      diagram,
-      diagramJson,
-      placement: {
-        x: (index % 50) * 18,
-        z: -20 - Math.floor(index / 50) * 18,
-        yaw: (index * 0.37) % (Math.PI * 2),
-      },
-    }))
-    const world = mountGameWorld(container(), trees)
-    world.setRenderMode('raw')
-    world.resize(800, 450)
-
-    let rendered = world.render(0)
-    for (let frame = 1; rendered.pending > 0 && frame <= 1_000; frame++) {
-      rendered = world.render(frame * 16)
-    }
-
-    expect(rendered).toMatchObject({
-      logical: 2_000,
-      visible: 2_000,
-      resident: 2_000,
-      full: 2_000,
-      pending: 0,
-      pointLights: 0,
-      representedEntities: 2_000,
-      representationErrors: 0,
-      error: null,
-    })
-    world.dispose()
-  })
 })

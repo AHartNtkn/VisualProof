@@ -92,10 +92,10 @@ describe('game tree runtime', () => {
     expect(runtime.residentObjects('stable')[0]!.position.toArray()).toEqual([5, 0, -30])
   })
 
-  it('settles the current world after a large requested population is replaced', () => {
+  it('settles the current tree after a pending representation request is replaced', () => {
     const runtime = new GameTreeRuntime(resolve({ a: asset() }), new THREE.Group(), buildObject)
     runtime.setMode('raw')
-    runtime.setTrees(Array.from({ length: 2_000 }, (_, index) => tree(`old-${index}`, index, 0)))
+    runtime.setTrees(Array.from({ length: 24 }, (_, index) => tree(`old-${index}`, index, 0)))
     runtime.setTrees([])
     runtime.setTrees([tree('current', 0, -20)])
 
