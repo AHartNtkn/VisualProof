@@ -43,7 +43,8 @@
 | `src/game/save-client.ts` | Typed `invoke` boundary for list/create/load/update operations. |
 | `src/game/save-writer.ts` | Ordered per-slot tree writes and debounced camera writes. |
 | `src/game/camera.ts` | Pure free-flight/orbit state transitions and keyboard motion. |
-| `src/game/desktop-mouse.ts` | Native Tauri window capture, cursor visibility, centering, and relative-motion interpretation. |
+| `src/game/desktop-mouse.ts` | Frontend boundary for native capture, cursor centering, and relative-motion interpretation. |
+| `src-tauri/src/mouse_capture.rs` | Native desktop pointer confinement and visibility for the game window. |
 | `src/game/session.ts` | Kernel-backed generic tree state and the milestone double-cut operation. |
 | `src/game/render/assets.ts` | Diagram-to-render-asset derivation and exact-JSON asset sharing. |
 | `src/game/render/world.ts` | One Three.js world, camera, terrain, LOD runtime, picking, telemetry, and lifecycle. |
@@ -928,6 +929,11 @@ git commit -m "feat: integrate Orchard desktop game loop"
 - Modify: `src/game/start-lifecycle.ts`
 - Modify: `src/game/session.ts`
 - Modify: `src/game/render/world.ts`
+- Create: `src-tauri/src/mouse_capture.rs`
+- Modify: `src-tauri/src/commands.rs`
+- Modify: `src-tauri/src/lib.rs`
+- Modify: `src-tauri/src/main.rs`
+- Modify: `src-tauri/Cargo.toml`
 - Modify: `src-tauri/capabilities/default.json`
 - Modify: `tests/game/start-lifecycle.test.ts`
 - Modify: `tests/game/session.test.ts`
@@ -935,7 +941,7 @@ git commit -m "feat: integrate Orchard desktop game loop"
 
 **Interfaces:**
 - The menu owns no renderer and makes no capture request.
-- `DesktopMouse` uses Tauri window cursor-grab, cursor-visibility, and cursor-position operations to provide relative movement without browser Pointer Lock or browser activation gates.
+- `DesktopMouse` uses a narrow native Tauri command for real game-window pointer confinement and visibility plus native cursor positioning for relative movement, without browser Pointer Lock or browser activation gates. On the current Linux target the shell runs through X11 and the command must verify a real X11 pointer grab; Tauri/Tao's Linux no-op `set_cursor_grab` is not acceptance evidence.
 - `GameSession` owns only trees and the kernel move.
 - `GameWorldRenderer.pointAt(ndcX, ndcY, orbitTarget)` owns the fixed interaction reach.
 
@@ -947,7 +953,7 @@ Prove that loading is attempted with a free cursor, a world opens only after a s
 
 Remove Pointer Lock requests, activation queues, stale-grant handling, pointer-lock listeners, and the resume overlay. Do not mount `GameWorldRenderer` before a successful load. On world entry, mount the renderer and activate `DesktopMouse`; on orbit entry release it and show the cursor; on Escape leave orbit at the equivalent displayed pose and reactivate it. On failed world opening and teardown, restore a visible free cursor and dispose partial resources.
 
-Implement relative free-flight motion by measuring cursor displacement from the window/canvas center and recentering through the Tauri window API. Ignore the recentered event. Treat cursor grab as an additional native confinement request, not as evidence that motion works; the displacement/recenter behavior is the authoritative path. Grant only the needed core window permissions.
+Implement relative free-flight motion by measuring cursor displacement from the window/canvas center and recentering through the Tauri window API. Ignore the recentered event. On Linux, initialize GTK on the X11 backend before Tauri starts and confine the pointer to the actual game window with a checked native X11 grab; release it on orbit, failure, and teardown. Hiding or recentering without successful confinement is not capture. Grant only the needed command/window permissions and keep platform code in the native boundary.
 
 - [ ] **Step 3: Enforce permanent tool/camera separation structurally**
 
