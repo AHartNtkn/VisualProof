@@ -24,6 +24,10 @@
 - Each named slot is one SQLite database. The current database shape has no format version, version check, migration, legacy reader, compatibility branch, or fallback parser.
 - Runtime worlds are built only by loading ordinary saves. The standard stress counts are `10, 50, 100, 250, 500, 1000, 2000`, one save per count.
 - Render data is derived state. Generated save databases are regenerated with the production TypeScript-plus-Rust toolchain whenever their authoritative inputs change.
+- The start menu never mounts a playable world or attempts mouse capture. Successful loading mounts the world and activates native desktop mouse capture for free flight; orbit releases capture and Escape restores it. Browser Pointer Lock is not part of the game.
+- Tool/session code owns no camera state and receives no camera object. Camera invariance is proven at the integrated input boundary.
+- The renderer owns the `100`-unit reach constant; callers cannot select another reach. Tests prove the boundary with production-built geometry instead of validating an argument value.
+- Tests prove observable game, persistence, and renderer behavior. Object or promise identity, private metadata, internal call choreography, SQL source text, and renderer construction details are not contracts.
 
 ---
 
@@ -32,13 +36,14 @@
 | File | Responsibility |
 |---|---|
 | `game/index.html` | Tauri/Vite document and accessible application root. |
-| `game/main.ts` | Start-menu/world lifecycle, DOM feedback, pointer-lock wiring, and frame loop. |
+| `game/main.ts` | Start-menu/world lifecycle, DOM feedback, desktop input wiring, and frame loop. |
 | `game/style.css` | Minimal start-menu, world HUD, reticle, and error presentation. |
 | `game/icon.svg` | Authoritative application icon source. |
 | `src/game/model.ts` | Generic loaded-slot, tree, placement, and camera wire/runtime types plus strict frontend decoding. |
 | `src/game/save-client.ts` | Typed `invoke` boundary for list/create/load/update operations. |
 | `src/game/save-writer.ts` | Ordered per-slot tree writes and debounced camera writes. |
 | `src/game/camera.ts` | Pure free-flight/orbit state transitions and keyboard motion. |
+| `src/game/desktop-mouse.ts` | Native Tauri window capture, cursor visibility, centering, and relative-motion interpretation. |
 | `src/game/session.ts` | Kernel-backed generic tree state and the milestone double-cut operation. |
 | `src/game/render/assets.ts` | Diagram-to-render-asset derivation and exact-JSON asset sharing. |
 | `src/game/render/world.ts` | One Three.js world, camera, terrain, LOD runtime, picking, telemetry, and lifecycle. |
@@ -219,7 +224,7 @@ fn creates_loads_and_updates_only_one_tree() {
 }
 
 #[test]
-fn rejects_any_database_without_the_exact_current_tables_and_columns() {
+fn rejects_a_database_missing_required_current_tables_and_columns() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("foreign.sqlite3");
     rusqlite::Connection::open(&path).unwrap()
@@ -230,7 +235,10 @@ fn rejects_any_database_without_the_exact_current_tables_and_columns() {
 }
 ```
 
-Also test exact JSON deduplication, unknown slot/tree errors, finite numbers, transaction rollback, camera-only updates, and `create_at` producing a file loadable by `load`.
+Also test exact JSON deduplication, unknown slot/tree errors, finite numbers,
+atomic loaded state after a failed update, camera-only updates, and `create_at`
+producing a file loadable by `load`. Tests operate through public store behavior;
+they do not compare SQL source strings, index names, or private statement order.
 
 - [ ] **Step 2: Run Rust tests and verify RED**
 
@@ -680,7 +688,7 @@ git commit -m "feat: add Orchard free-flight and orbit camera"
 
 **Interfaces:**
 - Produces `GameSession.applyDoubleCut(pointedPart): TreeMutation`.
-- Produces `GameWorldRenderer.pointAt(ndcX, ndcY, reach, orbitTarget): PointedTreePart | null`.
+- Produces `GameWorldRenderer.pointAt(ndcX, ndcY, orbitTarget): PointedTreePart | null`; the renderer applies the milestone's `100`-unit reach internally.
 - Produces `GameWorldRenderer.beginTreeTween(treeId, before, after, now)` with one independent track per tree.
 - `PointedTreePart = { treeId: string; entityKey: string; distance: number }` is concrete raycast output for this milestone, not a universal tool contract.
 
@@ -703,7 +711,7 @@ it('rejects non-branches, unknown trees, and pointed parts beyond 100 without mu
   const session = gameSession(worldWithTree('tree-a', blankDiagram))
   expect(() => session.applyDoubleCut({ treeId: 'tree-a', entityKey: 'r:n0', distance: 5 })).toThrow(/branch/)
   expect(() => session.applyDoubleCut({ treeId: 'missing', entityKey: 'b:r0', distance: 5 })).toThrow(/unknown tree/)
-  expect(() => session.applyDoubleCut({ treeId: 'tree-a', entityKey: 'b:r0', distance: 100.001 })).toThrow(/reach/)
+  expect(renderer.pointAt(0, 0, null)).toBeNull() // production-built branch lies just beyond 100 units
   expect(session.world.trees.get('tree-a')!.diagram).toBe(blankDiagram)
 })
 ```
@@ -758,7 +766,7 @@ const after = applyDoubleCutIntro(tree.diagram, {
 })
 ```
 
-Snapshot the camera object before dispatch and assert in tests that the returned session retains it by identity. Return before/after diagrams and exact serialized JSON for renderer and persistence consumers.
+The session owns only generic tree state and never receives or exposes camera state. Return before/after diagrams and exact serialized JSON for renderer and persistence consumers. Integrated input tests prove that using the tool leaves camera mode, pose, and orbit target unchanged.
 
 - [ ] **Step 5: Implement visible-object picking**
 
@@ -789,11 +797,13 @@ git commit -m "feat: apply and animate Orchard double cuts"
 
 ---
 
-### Task 7: Start menu, pointer lock, world controls, and incremental persistence
+### Task 7: Start menu, desktop controls, and incremental persistence
 
 **Files:**
 - Create: `src/game/save-writer.ts`
+- Create: `src/game/desktop-mouse.ts`
 - Create: `tests/game/save-writer.test.ts`
+- Create: `tests/game/desktop-mouse.test.ts`
 - Modify: `game/index.html`
 - Modify: `game/main.ts`
 - Modify: `game/style.css`
@@ -803,7 +813,7 @@ git commit -m "feat: apply and animate Orchard double cuts"
 **Interfaces:**
 - Produces a start menu that lists slots and creates/loads through `SaveClient`.
 - Produces `SaveWriter` with per-tree latest-state coalescing and camera debounce.
-- Connects free-flight and orbit controls, pointer lock, picking, the temporary right-click binding, feedback, tweening, and telemetry without another world startup path.
+- Connects free-flight and orbit controls, native desktop mouse capture, picking, the temporary right-click binding, feedback, tweening, and telemetry without another world startup path.
 
 - [ ] **Step 1: Write failing save-writer tests**
 
@@ -860,15 +870,13 @@ One async drain loop owns writes for the slot. A failed call retains the newest 
 
 - [ ] **Step 4: Build the real start-menu lifecycle**
 
-On application boot:
-
-1. mount the canvas behind the start menu;
-2. call `saveClient.list()`;
-3. render valid Load buttons and inline invalid-slot errors;
-4. on Create, build the blank kernel diagram, call `create`, then call `load` on the returned slot ID;
-5. on Load, call only `load`;
-6. request pointer lock from the initiating button event before awaiting persistence;
-7. mount the loaded `GameWorld` only after strict decoding succeeds.
+On application boot, render only the start menu and call `saveClient.list()`.
+Render valid Load buttons and inline invalid-slot errors. On Create, build the
+blank kernel diagram, call `create`, then call `load` on the returned slot ID.
+On Load, call only `load`. Mount the renderer and activate desktop mouse capture
+only after strict decoding succeeds. If loading, renderer construction, or
+capture fails, dispose any partially opened world, restore a free cursor, and
+show the concrete error on the menu.
 
 The new-slot request contains one blank diagram at `{ x: 0, z: 0, yaw: 0 }` with tree ID `tree-0000` and camera `{ x: 0, y: 1.7, z: 8, yaw: 0, pitch: -0.18 }`, putting the seedling under the center reticle and comfortably inside the fixed reach. No tree or world is handed directly to the renderer before a successful `load` response.
 
@@ -878,8 +886,8 @@ The animation loop calls `stepCamera`, `renderer.setCamera`, `renderer.render(no
 
 ```ts
 canvas.addEventListener('click', () => {
-  if (camera.mode !== 'free' || document.pointerLockElement !== canvas) return
-  const pointedPart = renderer.pointAt(0, 0, INTERACTION_REACH, null)
+  if (camera.mode !== 'free' || !desktopMouse.captured) return
+  const pointedPart = renderer.pointAt(0, 0, null)
   if (pointedPart !== null) enterOrbitFor(pointedPart.treeId)
 })
 
@@ -887,15 +895,15 @@ canvas.addEventListener('contextmenu', (event) => {
   event.preventDefault()
   const [x, y] = camera.mode === 'free' ? [0, 0] : pointerNdc(event, canvas)
   const orbitTarget = camera.mode === 'orbit' ? camera.orbitTarget : null
-  useDoubleCut(renderer.pointAt(x, y, INTERACTION_REACH, orbitTarget))
+  useDoubleCut(renderer.pointAt(x, y, orbitTarget))
 })
 ```
 
-`useDoubleCut` snapshots camera state, applies the session operation, begins only that tree's tween, enqueues only that tree's database update, and verifies no camera transition occurred. Escape in orbit converts to free flight and requests pointer lock. Escape released by the platform during free flight shows the resume overlay without changing camera mode.
+`useDoubleCut` applies the session operation, begins only that tree's tween, and enqueues only that tree's database update. It has no camera argument or camera access. Entering orbit releases desktop mouse capture; Escape in orbit converts to free flight and restores it.
 
 - [ ] **Step 6: Add milestone UI and observable runtime evidence**
 
-Render the title, slot list, name field, reticle, mode-specific keyboard hints, hover highlight, invalid-target message, saving/error status, and resume overlay. Mirror only test-relevant state to `data-*`: ready state, loaded slot ID, camera mode and displayed pose, orbit target, pointer-lock state, pointed tree/entity IDs, changed tree ID, active tween count, represented/resident/LOD counts, errors, and settled-frame telemetry.
+Render the title, slot list, name field, reticle, mode-specific keyboard hints, hover highlight, invalid-target message, and saving/error status. Mirror only state needed to observe behavior in native tests: ready state, loaded slot ID, camera mode and displayed pose, orbit target, desktop capture state, pointed tree/entity IDs, changed tree ID, active tween count, represented/resident/LOD counts, errors, and settled-frame telemetry.
 
 - [ ] **Step 7: Run GREEN validation and commit**
 
@@ -909,128 +917,151 @@ git commit -m "feat: integrate Orchard desktop game loop"
 
 ---
 
-### Task 8: Native save-driven E2E, stress migration, and sole frontend
+### Task 8: Correct desktop input ownership and interaction boundaries
 
 **Files:**
-- Create: `game/wdio.conf.ts`
-- Create: `game/e2e/start-menu.e2e.ts`
-- Create: `game/e2e/camera.e2e.ts`
+- Create: `src/game/desktop-mouse.ts`
+- Create: `tests/game/desktop-mouse.test.ts`
+- Modify: `game/index.html`
+- Modify: `game/main.ts`
+- Modify: `game/style.css`
+- Modify: `src/game/start-lifecycle.ts`
+- Modify: `src/game/session.ts`
+- Modify: `src/game/render/world.ts`
+- Modify: `src-tauri/capabilities/default.json`
+- Modify: `tests/game/start-lifecycle.test.ts`
+- Modify: `tests/game/session.test.ts`
+- Modify: `tests/game/render/world.test.ts`
+
+**Interfaces:**
+- The menu owns no renderer and makes no capture request.
+- `DesktopMouse` uses Tauri window cursor-grab, cursor-visibility, and cursor-position operations to provide relative movement without browser Pointer Lock or browser activation gates.
+- `GameSession` owns only trees and the kernel move.
+- `GameWorldRenderer.pointAt(ndcX, ndcY, orbitTarget)` owns the fixed interaction reach.
+
+- [ ] **Step 1: Write behavioral RED tests**
+
+Prove that loading is attempted with a free cursor, a world opens only after a successful decoded load, opening failure returns to the menu, and a late load cannot open after disposal. Prove native relative motion from cursor displacement around the viewport center, capture/release idempotence, and no camera motion from mouse movement in orbit. Prove with production-built geometry that a branch just inside `100` units is pointable and the same branch just outside is not, without a reach argument. Prove a real double-cut changes only its tree and persists that tree without placing a camera on the session interface.
+
+- [ ] **Step 2: Replace the browser lifecycle with the native desktop boundary**
+
+Remove Pointer Lock requests, activation queues, stale-grant handling, pointer-lock listeners, and the resume overlay. Do not mount `GameWorldRenderer` before a successful load. On world entry, mount the renderer and activate `DesktopMouse`; on orbit entry release it and show the cursor; on Escape leave orbit at the equivalent displayed pose and reactivate it. On failed world opening and teardown, restore a visible free cursor and dispose partial resources.
+
+Implement relative free-flight motion by measuring cursor displacement from the window/canvas center and recentering through the Tauri window API. Ignore the recentered event. Treat cursor grab as an additional native confinement request, not as evidence that motion works; the displacement/recenter behavior is the authoritative path. Grant only the needed core window permissions.
+
+- [ ] **Step 3: Enforce permanent tool/camera separation structurally**
+
+Remove camera from `GameSession` construction and state. The right-click handler computes a pointed branch, asks the session to apply the kernel move, updates only that tree's renderer track, and enqueues only that tree's save. No tool or session function can call camera transitions. In orbit, pass the orbit target to pointing so background trees are excluded before intersection.
+
+- [ ] **Step 4: Validate and commit**
+
+Run the focused lifecycle, mouse, camera, session, and world tests; then the game test suite, typecheck, Vite build, Rust tests, and ordinary Cargo check. The production Cargo build must not scan test-plugin capabilities.
+
+---
+
+### Task 9: Replace persistence implementation tests with behavior
+
+**Files:**
+- Modify: `src-tauri/src/save_store.rs`
+- Modify: `src-tauri/src/lib.rs`
+- Modify: `scripts/emit-game-saves.ts`
+- Delete: `scripts/game-save-publication.ts`
+- Modify: `tests/game/model.test.ts`
+- Modify: `tests/game/save-writer.test.ts`
+- Delete: `tests/game/save-publication.test.ts`
+
+**Interfaces:**
+- Save validation recognizes the one current logical schema through required tables, columns, keys, references, integrity, finite values, and kernel parsing; it does not authenticate SQL source strings, index names, or unrelated inert objects.
+- Generated saves are written to a temporary output directory, validated through `SaveStore::load`, and replaced per file. The generator is rerunnable and repairs a partially published derived set.
+- Frontend persistence tests assert decoded values, durable writes, errors, and coalescing results rather than object or Promise identity or drain-loop choreography.
+
+- [ ] **Step 1: Write public-store RED tests**
+
+Create logically valid databases with equivalent DDL formatting and an inert view and prove they load. Prove missing required tables/columns, dangling references, non-finite values, and malformed diagrams fail. Prove byte-identical diagram JSON shares a store row while byte-distinct JSON remains distinct. Prove updating one tree changes only that durable tree and a failed unknown-tree update exposes no changed loaded state.
+
+- [ ] **Step 2: Simplify validation and fixture publication**
+
+Replace compacted-SQL and exact-schema-object comparisons with SQLite metadata and integrity checks for the required semantics. Keep ordinary transactions for one-tree and camera writes. Remove cross-file rollback publication machinery; generate in a temporary directory, production-load every expected save, then replace each derived output. A failed run reports failure and a later run repairs the set.
+
+- [ ] **Step 3: Rewrite frontend tests around results**
+
+Remove reference-equality assertions for decoded diagrams and sessions and Promise-equality assertions for writer disposal. Preserve meaningful behavior: malformed data rejection, equivalent decoded diagrams, newest pending state coalescing, awaitable concurrent disposal, surfaced failure, and the ability to persist a later state.
+
+- [ ] **Step 4: Validate and commit**
+
+Run the focused Vitest and Rust store suites, regenerate saves, prove a second generation is byte-identical, then run typecheck and Cargo hygiene.
+
+---
+
+### Task 10: Make renderer tests prove rendered behavior
+
+**Files:**
+- Modify: `tests/game/render/assets.test.ts`
+- Modify: `tests/game/render/dynamic-tree.test.ts`
+- Modify: `tests/game/render/frame.test.ts`
+- Modify: `tests/game/render/placement.test.ts`
+- Modify: `tests/game/render/runtime.test.ts`
+- Modify: `tests/game/render/spatial-index.test.ts`
+- Modify: `tests/game/render/tree-objects.test.ts`
+- Modify: `tests/game/render/world.test.ts`
+- Modify production renderer modules only when a behavioral test exposes a real defect or when a public helper exists solely for an implementation assertion.
+
+**Interfaces:**
+- Renderer tests observe requested trees becoming representable and pointable, authoritative replacement/removal, tween progress/completion, orbit filtering, resize, disposal, and stress settlement.
+- Tests do not prescribe Three.js object identity, buffer ownership layout, `userData` shape, pass-by-pass calls, queue operation counts, cache instance identity, spatial-index visitation counts, or fabricated synchronization counters.
+
+- [ ] **Step 1: Inventory each test against player/renderer behavior**
+
+For every assertion in the listed files, retain it only if the wrong visible tree, point result, transition, lifecycle result, or stress outcome could fail it. Replace mock call assertions with the smallest production-built scene or renderer boundary that proves the result. Remove tautologies and public helpers that exist only to expose implementation choices.
+
+- [ ] **Step 2: Preserve the real performance contract**
+
+Keep deterministic placement, LOD/residency correctness, no representation failures, no analytic point lights, and eventual settlement. Record draw calls, geometry counts, build time, and frame statistics as diagnostics. Do not hard-code internal batching, allocation, or telemetry-generation mechanics as pass conditions.
+
+- [ ] **Step 3: Validate and commit**
+
+Run all renderer tests, the complete game test suite, typecheck, production Vite build, and generated-save reproducibility.
+
+---
+
+### Task 11: Native save-driven E2E, stress migration, and sole frontend
+
+**Files:**
+- Create or complete: `game/wdio.conf.ts`
+- Create or complete: `game/e2e/start-menu.e2e.ts`
+- Create or complete: `game/e2e/camera.e2e.ts`
 - Create: `game/e2e/double-cut.e2e.ts`
 - Create: `game/e2e/stress.e2e.ts`
 - Create: `scripts/check-game-desktop.sh`
-- Create: `src-tauri/tauri.e2e.conf.json`
-- Create: `src-tauri/capabilities/wdio.json`
+- Create or complete: `src-tauri/tauri.e2e.conf.json`
 - Modify: `src-tauri/Cargo.toml`
 - Modify: `src-tauri/src/lib.rs`
 - Modify: `game/main.ts`
 - Modify: `package.json`
 - Modify: `package-lock.json`
-- Delete: `tests/orchard/walk.test.ts`
-- Delete: `tests/orchard/world.test.ts`
-- Delete: tracked `orchard/` frontend, save, config, and E2E files after their production/test responsibilities have moved
-- Delete: `scripts/emit-orchard-world.ts`
-- Delete: obsolete orchard package scripts
+- Delete: tracked `orchard/` frontend, its browser E2E/config/save, `scripts/emit-orchard-world.ts`, and superseded orchard tests and scripts after replacement evidence passes
 
 **Interfaces:**
-- Produces `npm run e2e:game` for native application behavior.
-- Produces `npm run stress:game` loading one standard save per count.
-- Produces `scripts/check-game-desktop.sh` for build/launch/window evidence.
-- Final repository has one world frontend and one renderer authority.
+- `npm run e2e:game` drives the actual feature-gated Tauri binary on a private X11 display.
+- `npm run stress:game` loads one ordinary generated save per count through the start menu.
+- The feature-gated test capability is outside the ordinary production capability scan and grants no host-window focus or pointer-control helper.
+- Final repository has one world frontend and one renderer/world authority.
 
-- [ ] **Step 1: Add native WebdriverIO support and write failing start-menu E2E**
+- [ ] **Step 1: Establish isolated native RED coverage**
 
-Install the current official native-test packages:
+Run WebDriver beneath `xvfb-run` with `WAYLAND_DISPLAY` removed and `GDK_BACKEND=x11`; never focus or move the host cursor. The menu test creates a named seedling save, relaunches to a fresh app session, waits for its Load button, and loads the same slot. The camera test proves: menu cursor is free; loaded world begins in captured free flight; mouse motion changes free-flight view; a nearby center-click enters orbit and releases capture; mouse motion alone does not rotate orbit; `A/D`, `W/S`, and `Ctrl/Space` move the orbit camera; Escape returns to free flight and restores capture.
 
-```bash
-npm install --save-dev @wdio/cli @wdio/globals @wdio/local-runner @wdio/mocha-framework @wdio/spec-reporter @wdio/tauri-service @wdio/tauri-plugin
-```
+- [ ] **Step 2: Prove the real move, tween, and persistence**
 
-Add optional `tauri-plugin-wdio = "1"` and `tauri-plugin-wdio-webdriver = "1"` Rust dependencies behind a `wdio-tests` Cargo feature, and register both only under that feature. `tauri.e2e.conf.json` overrides the frontend build command to use Vite's E2E mode and enables a separate `wdio.json` capability containing only the documented `wdio` and `wdio-webdriver` permissions. Import `@wdio/tauri-plugin` only when that Vite mode sets `VITE_WDIO=true`. The ordinary Tauri config, capability, frontend build, and production Cargo build contain no registered WebDriver or JavaScript-execution plugin. Configure `@wdio/tauri-service` with `driverProvider: 'embedded'` and the feature-built debug application binary, following the current official Tauri/WebdriverIO setup.
+Exercise the seedling double-cut from free flight and a nested large-tree branch from orbit through ordinary right-click input. Assert the move starts a tween, completes after the configured `350` ms transition, and leaves camera mode, pose, and orbit target unchanged. Relaunch and load through the menu, then verify the durable diagram has exactly two new correctly parented cuts.
 
-```ts
-// game/e2e/start-menu.e2e.ts
-describe('ordinary save lifecycle', () => {
-  it('creates a named seedling save and reloads it through the menu', async () => {
-    await $('[data-new-slot-name]').setValue('First Orchard')
-    await $('[data-create-slot]').click()
-    await expect($('[data-game]')).toHaveAttribute('data-ready', 'true')
-    const slotId = await $('[data-game]').getAttribute('data-loaded-slot')
-    await browser.reloadSession()
-    await $(`[data-load-slot="${slotId}"]`).click()
-    await expect($('[data-game]')).toHaveAttribute('data-loaded-slot', slotId)
-  })
-})
-```
+- [ ] **Step 3: Prove save-driven stress behavior**
 
-Run with an isolated `XDG_DATA_HOME` populated only by the test. Expected RED: the native E2E script or debug WebDriver plugin is absent.
+For each of `10, 50, 100, 250, 500, 1000, 2000`, preload exactly that generated SQLite save into isolated app data, launch the native game, load it through the menu, and wait for the production renderer to settle. Assert the loaded logical count, no representation error, no analytic point lights, correct visible/resident counts, and full Raw representation through the diagnostic mode switch. Record timing and renderer counters as diagnostics, not fixed implementation thresholds. The bridge may change only the mounted renderer mode; it cannot supply world data or construct a scene.
 
-Add `camera.e2e.ts` using a newly created seedling slot. Assert that load begins in free flight with the canvas pointer-locked; center-clicking the nearby seedling enters orbit, sets that tree as the orbit target, and unlocks the pointer; pointer movement alone leaves the displayed camera pose unchanged; `A/D`, `W/S`, and `Ctrl/Space` change the corresponding orbit coordinates; and Escape returns to free flight with pointer lock restored. Also release pointer lock in free flight and assert that the resume overlay restores it without changing camera mode.
+- [ ] **Step 4: Establish the sole frontend and run completion gates**
 
-- [ ] **Step 2: Add the native double-cut persistence test**
-
-Copy `large-1.sqlite3` into the isolated app-data saves directory before launch, load it through the menu, drive close enough to the large tree, enter orbit, use the exposed pointed entity key to aim at a nested branch through ordinary pointer movement, right-click, and wait for `data-active-tween-count` to return to `0`. Relaunch, load the same slot, and use `browser.tauri.execute()` to call the production `load_slot` command and assert exactly two new cuts with the expected parent chain.
-
-Also perform the seedling path in free flight so the same binding is proven with and without an orbit target. Assert camera mode and orbit target are unchanged across each tool use.
-
-- [ ] **Step 3: Replace dynamic tree-count stress with one-save-per-count stress**
-
-For each of `10, 50, 100, 250, 500, 1000, 2000`:
-
-1. start with an isolated app-data directory containing that generated save;
-2. launch the native app;
-3. load the save through its menu button;
-4. wait for pending representation work to reach zero and 60 settled frames;
-5. record Game telemetry;
-6. use the diagnostic renderer API to run Raw mode without adding player UI;
-7. assert no representation errors, no analytic point lights, exact logical count, bounded 12-operation frames, per-tree buffer ownership, and Raw full residency.
-
-Do not alter tree count after load and do not inject a constructed world.
-
-In E2E Vite mode only, `game/main.ts` exposes a narrow `setRenderMode('game' | 'raw')` bridge that delegates to the already-mounted production renderer. The native stress test calls that bridge through `browser.tauri.execute()`; it cannot provide trees, geometry, diagrams, or another world authority.
-
-- [ ] **Step 4: Establish `game/` as the sole frontend**
-
-Keep every still-relevant renderer assertion under `tests/game/render`. The flat-walking and serialized-render-world tests have direct replacement coverage in the camera, save-decoder, Rust persistence, and native load suites; they do not move forward as parallel authorities. Use `git rm` for the tracked orchard frontend, render-world JSON, browser configuration, generator, and those two superseded tests only after their replacement suites pass. Update scripts to:
-
-```json
-{
-  "build:game:web:e2e": "VITE_WDIO=true vite build game --outDir dist",
-  "build:game:e2e": "tauri build --debug --no-bundle --features wdio-tests --config src-tauri/tauri.e2e.conf.json",
-  "e2e:game": "npm run build:game:e2e && wdio run game/wdio.conf.ts",
-  "stress:game": "npm run build:game:e2e && GAME_STRESS=1 wdio run game/wdio.conf.ts --spec game/e2e/stress.e2e.ts",
-  "emit:game-saves": "tsx scripts/emit-game-saves.ts"
-}
-```
-
-Run `rg` to prove no production or test import refers to `orchard/`, `world.json`, `parseWorldSave`, or the old tree-count runtime. Also require camera-focus naming under `game/`, `src/game/`, and `tests/game/` to use `orbitTarget` exclusively.
-
-- [ ] **Step 5: Run full verification**
-
-Run:
-
-```bash
-npm test
-npm run typecheck
-cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-cargo test --manifest-path src-tauri/Cargo.toml
-npm run emit:game-saves
-git diff --exit-code -- game/generated-saves
-npm run build:game
-npm run e2e:game
-npm run stress:game
-npm run build:game:desktop
-scripts/check-game-desktop.sh
-```
-
-Expected: every command passes; the native desktop window launches; the large-tree and seedling moves persist; all stress saves load through the menu; the 2,000-tree sweep settles without representation failures.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add -A
-git commit -m "test: validate save-driven Orchard desktop milestone"
-```
+After replacement suites pass, remove the old browser orchard frontend, dynamic tree-count path, serialized render-world input, and obsolete scripts/tests. Prove no production or test import retains those authorities. Run the full Vitest suite, typecheck, formatting, Clippy, Rust tests, generated-save reproducibility, production Vite build, native E2E, every stress save including 2,000 trees, Tauri production build, and isolated native-window smoke check.
 
 ---
 
@@ -1040,7 +1071,7 @@ git commit -m "test: validate save-driven Orchard desktop milestone"
 - The renderer has one generic tree model and no seedling, stress-tree, or editable-tree variant.
 - Interaction tests use the fixed 100-unit reach without consulting LOD state or creating hidden geometry.
 - Orbit filtering occurs before ray intersection, so background trees cannot intercept.
-- The concrete double-cut handler cannot call camera transition functions and is tested to retain camera state.
+- Tool/session code has no camera dependency; integrated input tests prove camera mode, pose, and orbit target remain unchanged across tool use.
 - The right-click binding appears only in milestone UI/session integration, not in a generic tool interface.
 - Independent tween tracks are keyed by tree ID and can overlap.
 - Save SQL contains no format field, version branch, migration, alternate parser, or explicit player-supplied path.

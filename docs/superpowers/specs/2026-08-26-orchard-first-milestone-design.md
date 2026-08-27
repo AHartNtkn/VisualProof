@@ -52,7 +52,9 @@ interaction reach.
 Save format evolution is replacement-only. Save databases contain no format
 version, and the application contains no version checks, migrations, legacy
 readers, compatibility branches, or fallback parsing. A database that does
-not have the exact current structure is invalid.
+not provide the current required tables, columns, relationships, and value
+invariants is invalid. Equivalent SQLite DDL spelling and unrelated inert
+database objects are not part of the game format.
 
 Runtime world state is constructed only by loading a save. Offline fixtures
 are ordinary save databases produced through the same persistence library as
@@ -117,9 +119,11 @@ Writes use SQLite transactions. Frontend writes are ordered per slot;
 successive pending camera poses and tree snapshots for the same tree may
 coalesce to the newest state before their transaction begins.
 
-Loading checks the exact current table and column structure, finite placement
-and camera numbers, unique IDs, valid diagram references, and every diagram
-through the kernel JSON parser before mounting the world. An invalid slot
+Loading checks the current required table and column structure, finite
+placement and camera numbers, unique IDs, valid diagram references, and every
+diagram through the kernel JSON parser before mounting the world. It validates
+those semantics through SQLite metadata and ordinary store operations, never
+by matching `CREATE TABLE` source text. An invalid slot
 stays on the start menu with a concrete load error. There is no partially
 loaded world.
 
@@ -190,26 +194,24 @@ trees may hold that role concurrently.
 
 ## Camera and Input
 
-The start menu leaves the mouse free. The world canvas exists before Create
-or Load completes so that the initiating click can request pointer lock
-immediately. A failed create or load releases the pointer and retains the
-menu.
+The start menu leaves the mouse free and does not mount a playable world. After
+Create or Load succeeds and the decoded world is mounted, a desktop-window
+mouse controller captures and hides the cursor for free flight. Save discovery,
+creation, and loading never depend on mouse capture. A failed create or load
+retains the menu and its free cursor.
 
 ### Free flight
 
-- Mouse movement changes yaw and pitch while pointer lock is active.
+- Native relative mouse movement changes yaw and pitch while desktop capture is
+  active.
 - `W` and `S` move forward and backward.
 - `A` and `D` strafe left and right.
 - `Space` and `Ctrl` move up and down.
 - `Shift` increases movement speed.
 - A left-click points through the center reticle. A tree under the reticle
   within `100` units becomes the orbit target, orbit mode begins, and pointer
-  lock exits.
+  capture is released and the cursor becomes visible.
 - A left-click without a tree under the reticle in reach changes nothing.
-
-If the platform's own Escape handling releases pointer lock during free
-flight, camera mode remains free flight and a click-to-resume overlay requests
-pointer lock again.
 
 ### Orbit
 
@@ -218,7 +220,7 @@ pointer lock again.
 - `W` and `S` decrease and increase orbit radius.
 - `Space` and `Ctrl` move the camera vertically around the orbit target.
 - Escape converts the displayed orbit eye and direction into a free-flight
-  pose, ends orbit, and requests pointer lock.
+  pose, ends orbit, and restores desktop mouse capture.
 - World-tree raycasts contain only objects belonging to the orbit target.
 
 Camera persistence stores a free-flight pose. While orbiting, the displayed
@@ -279,8 +281,7 @@ The world presents only milestone-essential feedback:
 - pointer hover in orbit;
 - concise control hints appropriate to the camera mode;
 - invalid double-cut target feedback;
-- persistent save-write failure status;
-- click-to-resume pointer-lock overlay when required.
+- persistent save-write failure status.
 
 No catalog, pot, order, progression, decoration, settings, or final visual
 identity belongs to this milestone.
@@ -314,29 +315,35 @@ diagram serialization, large-tree source, or placement algorithm.
 ### TypeScript unit and integration tests
 
 - camera transitions and keyboard motion in free flight and orbit;
-- the exact `100`-unit interaction boundary independent of render LOD;
+- real geometry immediately inside and outside the `100`-unit interaction
+  boundary, independent of render LOD;
 - free-flight raycasts across trees and orbit raycasts restricted to the
   orbit target;
 - permanent tool/camera independence;
 - branch-key decoding and real kernel double-cut introduction on the blank
   seedling and a nested branch of `zeroIsNat` step 20;
 - `350` ms tween endpoints and interruption continuity;
-- shared-diagram render-cache reuse and one-tree invalidation;
+- equivalent render results for shared diagrams and one-tree invalidation;
 - independent concurrent tweens on different trees.
+
+Tests assert observable game, persistence, and renderer results. They do not
+make object or promise identity, private metadata, call ordering, SQL source
+text, or renderer construction details part of the product contract.
 
 ### Rust persistence tests
 
 - create, list, load, update-tree, and update-camera behavior in temporary
   application-data directories;
-- exact current database-structure rejection without format versions or
-  compatibility behavior;
+- rejection of saves missing required current-format semantics, without format
+  versions or compatibility behavior;
 - diagram content deduplication;
 - transactions affecting only the intended tree or camera row;
 - generation and reloading of every standard stress save.
 
 ### Native Tauri WebDriver tests
 
-The native application is built and driven through the start menu. Tests:
+The native application is built and driven on an isolated desktop display
+through the start menu. Tests:
 
 - create a named seedling slot, enter free flight, enter and leave orbit, use
   the double-cut binding, observe the tween, relaunch, and confirm the changed
@@ -347,9 +354,9 @@ The native application is built and driven through the start menu. Tests:
 - load each stress-count save through the normal menu, wait for representation
   residency and settled frame sampling, and record the existing labeled Game
   and Raw telemetry;
-- retain the current invariants: no representation errors, no analytic point
-  lights, no cross-tree geometry buffers, bounded per-frame residency work,
-  and correct visible/resident/full counts.
+- retain the current outcomes: no representation errors, no analytic point
+  lights, bounded frame-time residency work, and correct
+  visible/resident/full counts.
 
 ### Completion commands
 
