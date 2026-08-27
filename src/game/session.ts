@@ -3,6 +3,7 @@ import { diagramToJson } from '../kernel/diagram'
 import { applyDoubleCutIntro } from '../kernel/rules/doublecut'
 import { INTERACTION_REACH } from './camera'
 import type { FreeCameraPose, GameWorld } from './model'
+import type { TreeUpdate } from './save-client'
 
 export type PointedTreePart = {
   readonly treeId: string
@@ -68,4 +69,36 @@ export class GameSession {
 
 export function gameSession(world: GameWorld): GameSession {
   return new GameSession(world)
+}
+
+export type DoubleCutEffects = {
+  readonly beginTreeTween: (
+    treeId: string,
+    before: Diagram,
+    after: Diagram,
+    now: number,
+  ) => void
+  readonly persistTree: (update: TreeUpdate) => void
+}
+
+export function useDoubleCut(
+  session: GameSession,
+  pointedPart: PointedTreePart,
+  now: number,
+  effects: DoubleCutEffects,
+): TreeMutation {
+  const camera = session.camera
+  const mutation = session.applyDoubleCut(pointedPart)
+  const tree = session.world.trees.get(mutation.treeId)
+  if (tree === undefined) throw new Error(`mutated tree '${mutation.treeId}' is missing`)
+  effects.beginTreeTween(tree.id, mutation.before, mutation.after, now)
+  effects.persistTree({
+    treeId: tree.id,
+    diagramJson: mutation.afterJson,
+    x: tree.placement.x,
+    z: tree.placement.z,
+    yaw: tree.placement.yaw,
+  })
+  if (session.camera !== camera) throw new Error('tool use changed camera state')
+  return mutation
 }

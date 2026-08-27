@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { INTERACTION_REACH } from '../../src/game/camera'
 import type { GameTree, GameWorld } from '../../src/game/model'
-import { gameSession } from '../../src/game/session'
+import { gameSession, useDoubleCut } from '../../src/game/session'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { diagramToJson } from '../../src/kernel/diagram/json'
@@ -85,5 +85,27 @@ describe('game tool session', () => {
     expect(() => session.applyDoubleCut({
       treeId: 'tree-a', entityKey: 'b:r0', distance: INTERACTION_REACH,
     })).not.toThrow()
+  })
+
+  it('coordinates one real tree mutation with one tween and one persistence record', () => {
+    const session = gameSession(worldWithTree('large', largeDiagram))
+    const beforeCamera = session.camera
+    const tweens: Array<{ readonly treeId: string; readonly now: number }> = []
+    const writes: Array<{ readonly treeId: string; readonly diagramJson: string }> = []
+
+    const mutation = useDoubleCut(
+      session,
+      { treeId: 'large', entityKey: `b:${nestedRegion}`, distance: 12 },
+      250,
+      {
+        beginTreeTween: (treeId, _before, _after, now) => tweens.push({ treeId, now }),
+        persistTree: ({ treeId, diagramJson }) => writes.push({ treeId, diagramJson }),
+      },
+    )
+
+    expect(tweens).toEqual([{ treeId: 'large', now: 250 }])
+    expect(writes).toEqual([{ treeId: 'large', diagramJson: mutation.afterJson }])
+    expect(session.camera).toBe(beforeCamera)
+    expect(session.world.trees.get('large')?.diagram).toBe(mutation.after)
   })
 })

@@ -6,6 +6,7 @@ import {
   displayCameraPose,
   enterOrbit,
   exitOrbit,
+  freePoseForPersistence,
   lookCamera,
   stepCamera,
   type CameraInput,
@@ -52,6 +53,18 @@ describe('camera state', () => {
     const free = exitOrbit(orbit)
     expect(free.pose.position).toEqual(display.eye)
     expect(displayCameraPose(free).forward).toEqual(display.forward)
+  })
+
+  it('derives an equivalent displayed free pose for persistence without changing orbit mode', () => {
+    const orbit = orbitState()
+    const display = displayCameraPose(orbit)
+
+    const persisted = freePoseForPersistence(orbit)
+
+    expect(persisted.position).toEqual(display.eye)
+    expect(displayCameraPose({ mode: 'free', pose: persisted }).forward).toEqual(display.forward)
+    expect(orbit).toBe(orbit)
+    expect(orbit.mode).toBe('orbit')
   })
 
   it('normalizes diagonal free-flight movement', () => {

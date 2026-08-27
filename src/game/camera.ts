@@ -190,3 +190,7 @@ export function exitOrbit(state: CameraState): FreeCameraState {
     },
   }
 }
+
+export function freePoseForPersistence(state: CameraState): FreeCameraPose {
+  return exitOrbit(state).pose
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { decodeLoadedSlot } from '../../src/game/model'
-import { decodeSlotList } from '../../src/game/save-client'
+import { decodeCreatedSlot, decodeSlotList } from '../../src/game/save-client'
 
 const diagramJson = JSON.stringify({
   root: 'r0',
@@ -72,6 +72,17 @@ describe('loaded game slot decoding', () => {
 })
 
 describe('save slot list decoding', () => {
+  it('strictly decodes the slot returned by create before it can be loaded', () => {
+    expect(decodeCreatedSlot({
+      slotId: 'created', displayName: 'New orchard', updatedAtMs: 12, error: null,
+    })).toEqual({
+      slotId: 'created', displayName: 'New orchard', updatedAtMs: 12, error: null,
+    })
+    expect(() => decodeCreatedSlot({
+      slotId: 3, displayName: 'Bad', updatedAtMs: 12, error: null,
+    })).toThrow('created slot.slotId must be a string')
+  })
+
   it('keeps valid and invalid ordinary slots visible to the start menu', () => {
     expect(decodeSlotList([
       { slotId: 'good', displayName: 'Good', updatedAtMs: 12, error: null },

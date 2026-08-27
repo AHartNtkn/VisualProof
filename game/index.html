@@ -6,7 +6,55 @@
     <title>Orchard</title>
   </head>
   <body>
-    <main data-game aria-label="Orchard"></main>
+    <main
+      class="game"
+      data-game
+      data-ready="false"
+      data-camera-mode="menu"
+      data-pointer-lock="free"
+      aria-label="Orchard"
+    >
+      <div class="world" data-world aria-hidden="true"></div>
+
+      <section class="start" data-start aria-labelledby="orchard-title">
+        <p class="eyebrow">Visual Proof Assistant</p>
+        <h1 id="orchard-title">Orchard</h1>
+        <p class="introduction">Walk among proof trees and transform them in place.</p>
+
+        <form class="create" data-create-form>
+          <label for="orchard-name">New orchard</label>
+          <div class="create-row">
+            <input id="orchard-name" name="name" value="My Orchard" maxlength="80" required>
+            <button type="submit">Create</button>
+          </div>
+        </form>
+
+        <div class="slots" aria-labelledby="saved-heading">
+          <h2 id="saved-heading">Saved orchards</h2>
+          <p class="slot-loading" data-slot-loading>Reading save slots…</p>
+          <ul data-slot-list></ul>
+        </div>
+        <p class="menu-error" data-menu-error role="alert"></p>
+      </section>
+
+      <div class="reticle" data-reticle hidden aria-hidden="true"></div>
+      <aside class="hud" data-hud hidden aria-live="polite">
+        <div class="hud-row">
+          <strong data-world-name>Orchard</strong>
+          <span class="save-status" data-save-status>Saved</span>
+          <button class="retry" data-save-retry type="button" hidden>Retry save</button>
+        </div>
+        <p class="hint" data-free-hint><kbd>WASD</kbd> move · <kbd>Space</kbd>/<kbd>Ctrl</kbd> rise/fall · <kbd>Shift</kbd> sprint · click a tree to orbit · right-click a branch to double cut</p>
+        <p class="hint" data-orbit-hint hidden><kbd>A/D</kbd> orbit · <kbd>W/S</kbd> zoom · <kbd>Space</kbd>/<kbd>Ctrl</kbd> rise/fall · <kbd>Esc</kbd> return to flight · right-click a branch to double cut</p>
+        <p class="pointed" data-pointed hidden></p>
+        <p class="feedback" data-feedback role="status"></p>
+      </aside>
+
+      <button class="resume" data-resume type="button" hidden>
+        <strong>Flight paused</strong>
+        <span>Click to resume mouse look</span>
+      </button>
+    </main>
     <script type="module" src="/main.ts"></script>
   </body>
 </html>
