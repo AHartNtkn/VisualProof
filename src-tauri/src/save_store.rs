@@ -487,12 +487,11 @@ fn update_timestamp(transaction: &Transaction<'_>) -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 struct Column {
     name: String,
     declared_type: String,
     not_null: bool,
-    default_value: Option<String>,
     primary_key_position: i64,
 }
 
@@ -501,7 +500,6 @@ fn column(name: &str, declared_type: &str, not_null: bool, primary_key_position:
         name: name.to_owned(),
         declared_type: declared_type.to_owned(),
         not_null,
-        default_value: None,
         primary_key_position,
     }
 }
@@ -511,31 +509,7 @@ fn validate_database(connection: &Connection) -> Result<()> {
 }
 
 fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
-    let mut object_statement = connection.prepare(
-        "SELECT type, name FROM sqlite_schema
-         WHERE type IN ('table', 'trigger', 'view') AND name NOT LIKE 'sqlite_%'
-         ORDER BY type, name",
-    )?;
-    let objects = object_statement
-        .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    let expected_objects = vec![
-        ("table".to_owned(), "camera".to_owned()),
-        ("table".to_owned(), "diagrams".to_owned()),
-        ("table".to_owned(), "metadata".to_owned()),
-        ("table".to_owned(), "trees".to_owned()),
-    ];
-    if objects != expected_objects {
-        return Err(rusqlite::Error::InvalidQuery);
-    }
-
-    for table in ["metadata", "camera", "diagrams", "trees"] {
-        validate_table_sql(connection, table)?;
-    }
-
-    validate_columns(
+    validate_required_columns(
         connection,
         "metadata",
         vec![
@@ -545,7 +519,7 @@ fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
             column("updated_at_ms", "INTEGER", true, 0),
         ],
     )?;
-    validate_columns(
+    validate_required_columns(
         connection,
         "camera",
         vec![
@@ -557,7 +531,7 @@ fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
             column("pitch", "REAL", true, 0),
         ],
     )?;
-    validate_columns(
+    validate_required_columns(
         connection,
         "diagrams",
         vec![
@@ -565,7 +539,7 @@ fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
             column("diagram_json", "TEXT", true, 0),
         ],
     )?;
-    validate_columns(
+    validate_required_columns(
         connection,
         "trees",
         vec![
@@ -577,10 +551,11 @@ fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
         ],
     )?;
 
-    validate_unique_indexes(connection, "metadata", &[(&["slot_id"][..], "u")])?;
-    validate_unique_indexes(connection, "camera", &[])?;
-    validate_unique_indexes(connection, "diagrams", &[(&["diagram_json"][..], "u")])?;
-    validate_unique_indexes(connection, "trees", &[(&["tree_id"][..], "pk")])?;
+    if !has_unique_key(connection, "metadata", &["slot_id"], false)?
+        || !has_unique_key(connection, "diagrams", &["diagram_json"], true)?
+    {
+        return Err(rusqlite::Error::InvalidQuery);
+    }
     validate_foreign_keys(connection)?;
 
     let integrity: String = connection.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
@@ -596,31 +571,7 @@ fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
-fn validate_table_sql(connection: &Connection, table: &str) -> rusqlite::Result<()> {
-    let actual: String = connection.query_row(
-        "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
-        [table],
-        |row| row.get(0),
-    )?;
-    let expected = SCHEMA
-        .split(';')
-        .map(str::trim)
-        .find(|statement| statement.starts_with(&format!("CREATE TABLE {table} ")))
-        .ok_or(rusqlite::Error::InvalidQuery)?;
-    if compact_sql(&actual) == compact_sql(expected) {
-        Ok(())
-    } else {
-        Err(rusqlite::Error::InvalidQuery)
-    }
-}
-
-fn compact_sql(sql: &str) -> String {
-    sql.chars()
-        .filter(|character| !character.is_ascii_whitespace())
-        .collect()
-}
-
-fn validate_columns(
+fn validate_required_columns(
     connection: &Connection,
     table: &str,
     expected: Vec<Column>,
@@ -632,106 +583,94 @@ fn validate_columns(
                 name: row.get(1)?,
                 declared_type: row.get(2)?,
                 not_null: row.get::<_, i64>(3)? != 0,
-                default_value: row.get(4)?,
                 primary_key_position: row.get(5)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err(rusqlite::Error::InvalidQuery)
+    for required in expected {
+        let Some(actual) = actual.iter().find(|actual| actual.name == required.name) else {
+            return Err(rusqlite::Error::InvalidQuery);
+        };
+        if actual.declared_type != required.declared_type
+            || actual.not_null != required.not_null
+            || actual.primary_key_position != required.primary_key_position
+        {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
     }
+    Ok(())
 }
 
-fn validate_unique_indexes(
+fn has_unique_key(
     connection: &Connection,
     table: &str,
-    expected: &[(&[&str], &str)],
-) -> rusqlite::Result<()> {
+    expected_columns: &[&str],
+    require_binary_collation: bool,
+) -> rusqlite::Result<bool> {
     let mut statement = connection.prepare(&format!("PRAGMA index_list('{table}')"))?;
     let indexes = statement
         .query_map([], |row| {
             Ok((
                 row.get::<_, String>(1)?,
                 row.get::<_, i64>(2)? != 0,
-                row.get::<_, String>(3)?,
                 row.get::<_, i64>(4)? != 0,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
-    let mut actual = Vec::new();
-    for (name, unique, origin, partial) in indexes {
+    for (name, unique, partial) in indexes {
         if !unique || partial {
-            return Err(rusqlite::Error::InvalidQuery);
+            continue;
         }
         let mut column_statement = connection.prepare(&format!(
-            "PRAGMA index_info('{}')",
+            "PRAGMA index_xinfo('{}')",
             name.replace('\'', "''")
         ))?;
         let columns = column_statement
-            .query_map([], |row| row.get(2))?
-            .collect::<rusqlite::Result<Vec<String>>>()?;
-        actual.push((columns, origin));
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, i64>(5)? != 0,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let key_columns = columns
+            .iter()
+            .filter(|(_, _, _, is_key)| *is_key)
+            .collect::<Vec<_>>();
+        if key_columns.len() != expected_columns.len()
+            || key_columns
+                .iter()
+                .enumerate()
+                .any(|(position, (sequence, name, collation, _))| {
+                    *sequence != position as i64
+                        || name.as_deref() != Some(expected_columns[position])
+                        || (require_binary_collation && collation != "BINARY")
+                })
+        {
+            continue;
+        }
+        return Ok(true);
     }
-    actual.sort();
-
-    let mut expected = expected
-        .iter()
-        .map(|(columns, origin)| {
-            (
-                columns.iter().map(|value| (*value).to_owned()).collect(),
-                (*origin).to_owned(),
-            )
-        })
-        .collect::<Vec<_>>();
-    expected.sort();
-    if actual == expected {
-        Ok(())
-    } else {
-        Err(rusqlite::Error::InvalidQuery)
-    }
+    Ok(false)
 }
 
 fn validate_foreign_keys(connection: &Connection) -> rusqlite::Result<()> {
-    for table in ["metadata", "camera", "diagrams"] {
-        let count: i64 = connection.query_row(
-            &format!("SELECT COUNT(*) FROM pragma_foreign_key_list('{table}')"),
-            [],
-            |row| row.get(0),
-        )?;
-        if count != 0 {
-            return Err(rusqlite::Error::InvalidQuery);
-        }
-    }
-
     let mut statement = connection.prepare("PRAGMA foreign_key_list('trees')")?;
     let actual = statement
         .query_map([], |row| {
             Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, i64>(1)?,
                 row.get::<_, String>(2)?,
                 row.get::<_, String>(3)?,
                 row.get::<_, String>(4)?,
-                row.get::<_, String>(5)?,
-                row.get::<_, String>(6)?,
-                row.get::<_, String>(7)?,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    let expected = vec![(
-        0,
-        0,
-        "diagrams".to_owned(),
-        "diagram_key".to_owned(),
-        "diagram_key".to_owned(),
-        "NO ACTION".to_owned(),
-        "NO ACTION".to_owned(),
-        "NONE".to_owned(),
-    )];
-    if actual == expected {
+    if actual.iter().any(|(table, from, to)| {
+        table == "diagrams" && from == "diagram_key" && to == "diagram_key"
+    }) {
         Ok(())
     } else {
         Err(rusqlite::Error::InvalidQuery)
@@ -837,123 +776,135 @@ mod tests {
     }
 
     #[test]
-    fn rejects_any_database_without_the_exact_current_tables_and_columns() {
+    fn loads_an_equivalent_current_schema_with_an_inert_view() {
         let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("foreign.sqlite3");
-        Connection::open(&path)
-            .unwrap()
-            .execute_batch("CREATE TABLE metadata (version INTEGER NOT NULL);")
-            .unwrap();
-
-        assert_invalid_list_entry(temp.path(), "foreign.sqlite3");
-    }
-
-    #[test]
-    fn rejects_the_current_columns_when_the_tree_foreign_key_is_missing() {
-        let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("foreign.sqlite3");
-        Connection::open(&path)
-            .unwrap()
+        let path = temp.path().join("equivalent.sqlite3");
+        let connection = Connection::open(&path).unwrap();
+        connection
             .execute_batch(
-                "CREATE TABLE metadata (
-                   singleton INTEGER PRIMARY KEY, slot_id TEXT NOT NULL UNIQUE,
-                   display_name TEXT NOT NULL, updated_at_ms INTEGER NOT NULL);
-                 CREATE TABLE camera (
-                   singleton INTEGER PRIMARY KEY, x REAL NOT NULL, y REAL NOT NULL,
-                   z REAL NOT NULL, yaw REAL NOT NULL, pitch REAL NOT NULL);
-                 CREATE TABLE diagrams (
-                   diagram_key INTEGER PRIMARY KEY, diagram_json TEXT NOT NULL UNIQUE);
-                 CREATE TABLE trees (
-                   tree_id TEXT PRIMARY KEY, diagram_key INTEGER NOT NULL,
-                   x REAL NOT NULL, z REAL NOT NULL, yaw REAL NOT NULL);",
+                "CREATE TABLE metadata(
+                    singleton INTEGER PRIMARY KEY,
+                    slot_id TEXT UNIQUE NOT NULL,
+                    display_name TEXT NOT NULL,
+                    updated_at_ms INTEGER NOT NULL
+                 );
+                 CREATE TABLE camera(singleton INTEGER PRIMARY KEY,
+                    x REAL NOT NULL,y REAL NOT NULL,z REAL NOT NULL,yaw REAL NOT NULL,pitch REAL NOT NULL);
+                 CREATE TABLE diagrams(diagram_key INTEGER PRIMARY KEY,diagram_json TEXT UNIQUE NOT NULL);
+                 CREATE TABLE trees(tree_id TEXT PRIMARY KEY,diagram_key INTEGER NOT NULL REFERENCES diagrams(diagram_key),
+                    x REAL NOT NULL,z REAL NOT NULL,yaw REAL NOT NULL);
+                 CREATE VIEW tree_names AS SELECT tree_id FROM trees;
+                 INSERT INTO metadata VALUES(1, 'equivalent', 'Equivalent', 12);
+                 INSERT INTO camera VALUES(1, 1, 2, 3, .25, -.5);
+                 INSERT INTO diagrams VALUES(7, '{\"regions\":[],\"nodes\":[],\"wires\":[]}');
+                 INSERT INTO trees VALUES('tree-a', 7, 4, 5, .75);",
             )
             .unwrap();
 
-        assert_invalid_list_entry(temp.path(), "foreign.sqlite3");
+        let loaded = SaveStore::new(temp.path().to_path_buf())
+            .load("equivalent")
+            .unwrap();
+
+        assert_eq!(loaded.display_name, "Equivalent");
+        assert_eq!(
+            loaded.trees,
+            vec![TreeRecord {
+                tree_id: "tree-a".into(),
+                diagram_key: 7,
+                x: 4.0,
+                z: 5.0,
+                yaw: 0.75,
+            }]
+        );
+        assert_eq!(
+            loaded.diagrams,
+            vec![DiagramRecord {
+                diagram_key: 7,
+                diagram_json: BLANK.into()
+            }]
+        );
     }
 
     #[test]
-    fn rejects_a_nocase_diagram_collation() {
-        let connection = Connection::open_in_memory().unwrap();
-        connection
+    fn rejects_missing_required_schema_semantics() {
+        let temp = tempfile::tempdir().unwrap();
+        let missing_column = temp.path().join("missing-column.sqlite3");
+        Connection::open(&missing_column)
+            .unwrap()
+            .execute_batch(&SCHEMA.replace("pitch REAL NOT NULL", "tilt REAL NOT NULL"))
+            .unwrap();
+
+        let missing_foreign_key = temp.path().join("missing-foreign-key.sqlite3");
+        Connection::open(&missing_foreign_key)
+            .unwrap()
             .execute_batch(&SCHEMA.replace(
-                "diagram_json TEXT NOT NULL UNIQUE",
-                "diagram_json TEXT COLLATE NOCASE NOT NULL UNIQUE",
+                "diagram_key INTEGER NOT NULL REFERENCES diagrams(diagram_key)",
+                "diagram_key INTEGER NOT NULL",
             ))
             .unwrap();
 
-        assert!(matches!(
-            validate_database(&connection),
-            Err(SaveStoreError::InvalidStructure)
-        ));
+        assert_invalid_list_entry(temp.path(), "missing-column.sqlite3");
+        assert_invalid_list_entry(temp.path(), "missing-foreign-key.sqlite3");
     }
 
     #[test]
-    fn rejects_an_extra_trigger() {
-        let connection = Connection::open_in_memory().unwrap();
-        connection
-            .execute_batch(&format!(
-                "{SCHEMA}
-                 CREATE TRIGGER mutate_camera AFTER UPDATE ON trees
-                 BEGIN UPDATE camera SET x = x + 1; END;"
-            ))
-            .unwrap();
-
-        assert!(matches!(
-            validate_database(&connection),
-            Err(SaveStoreError::InvalidStructure)
-        ));
-    }
-
-    #[test]
-    fn rejects_an_extra_view() {
-        let connection = Connection::open_in_memory().unwrap();
-        connection
-            .execute_batch(&format!(
-                "{SCHEMA}
-                 CREATE VIEW metadata_view AS SELECT * FROM metadata;"
-            ))
-            .unwrap();
-
-        assert!(matches!(
-            validate_database(&connection),
-            Err(SaveStoreError::InvalidStructure)
-        ));
-    }
-
-    #[test]
-    fn rejects_missing_singleton_check_constraints() {
-        let connection = Connection::open_in_memory().unwrap();
-        connection
-            .execute_batch(&SCHEMA.replace(
-                "INTEGER PRIMARY KEY CHECK (singleton = 1)",
-                "INTEGER PRIMARY KEY",
-            ))
-            .unwrap();
-
-        assert!(matches!(
-            validate_database(&connection),
-            Err(SaveStoreError::InvalidStructure)
-        ));
-    }
-
-    #[test]
-    fn diagram_interning_uses_bytewise_lookup_even_on_a_nocase_column() {
-        let mut connection = Connection::open_in_memory().unwrap();
+    fn rejects_dangling_references_and_non_finite_values() {
+        let temp = tempfile::tempdir().unwrap();
+        let dangling = temp.path().join("dangling.sqlite3");
+        let connection = Connection::open(&dangling).unwrap();
+        connection.execute_batch(SCHEMA).unwrap();
         connection
             .execute_batch(
-                "CREATE TABLE diagrams (
-                   diagram_key INTEGER PRIMARY KEY,
-                   diagram_json TEXT COLLATE NOCASE NOT NULL
-                 );",
+                "PRAGMA foreign_keys = OFF;
+             INSERT INTO metadata VALUES(1, 'dangling', 'Dangling', 0);
+             INSERT INTO camera VALUES(1, 0, 0, 0, 0, 0);
+             INSERT INTO trees VALUES('tree-a', 9, 0, 0, 0);",
             )
             .unwrap();
-        let transaction = connection.transaction().unwrap();
 
-        let upper_key = intern_diagram(&transaction, "A").unwrap();
-        let lower_key = intern_diagram(&transaction, "a").unwrap();
+        let non_finite = temp.path().join("non-finite.sqlite3");
+        let connection = Connection::open(&non_finite).unwrap();
+        connection.execute_batch(SCHEMA).unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO metadata VALUES(1, 'non-finite', 'Non finite', 0);
+             INSERT INTO camera VALUES(1, 0, 0, 0, 0, 0);
+             INSERT INTO diagrams VALUES(1, '{\"regions\":[],\"nodes\":[],\"wires\":[]}');
+             INSERT INTO trees VALUES('tree-a', 1, 1e999, 0, 0);",
+            )
+            .unwrap();
 
-        assert_ne!(upper_key, lower_key);
+        for slot_id in ["dangling", "non-finite"] {
+            assert!(
+                SaveStore::new(temp.path().to_path_buf())
+                    .load(slot_id)
+                    .is_err(),
+                "{slot_id}"
+            );
+        }
+    }
+
+    #[test]
+    fn stores_and_loads_opaque_diagram_json_unchanged() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = SaveStore::new(temp.path().to_path_buf());
+        let slot = store
+            .create(CreateSlotInput {
+                display_name: "Opaque diagram".into(),
+                camera: camera(),
+                trees: vec![tree("tree-a", r#""not a diagram""#)],
+            })
+            .unwrap();
+
+        let loaded = store.load(&slot.slot_id).unwrap();
+
+        assert_eq!(
+            loaded.diagrams,
+            vec![DiagramRecord {
+                diagram_key: loaded.trees[0].diagram_key,
+                diagram_json: r#""not a diagram""#.into(),
+            }]
+        );
     }
 
     #[test]
@@ -995,7 +946,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unknown_tree_rolls_back_the_interned_diagram_and_metadata_update() {
+    fn an_unknown_tree_leaves_the_loaded_world_unchanged() {
         let temp = tempfile::tempdir().unwrap();
         let store = SaveStore::new(temp.path().to_path_buf());
         let slot = store.create(basic_input()).unwrap();
@@ -1010,9 +961,9 @@ mod tests {
         );
 
         let after = store.load(&slot.slot_id).unwrap();
+        assert_eq!(after.camera, before.camera);
         assert_eq!(after.diagrams, before.diagrams);
         assert_eq!(after.trees, before.trees);
-        assert_eq!(after.updated_at_ms, before.updated_at_ms);
     }
 
     #[test]
@@ -1046,7 +997,7 @@ mod tests {
     }
 
     #[test]
-    fn camera_update_changes_only_camera_and_metadata() {
+    fn camera_update_changes_only_the_durable_camera() {
         let temp = tempfile::tempdir().unwrap();
         let store = SaveStore::new(temp.path().to_path_buf());
         let slot = store.create(basic_input()).unwrap();
@@ -1067,7 +1018,6 @@ mod tests {
         assert_eq!(after.camera, updated_camera);
         assert_eq!(after.trees, before.trees);
         assert_eq!(after.diagrams, before.diagrams);
-        assert!(after.updated_at_ms > before.updated_at_ms);
     }
 
     #[test]

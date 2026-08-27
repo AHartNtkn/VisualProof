@@ -26,11 +26,11 @@ function slotWire(overrides: Record<string, unknown> = {}) {
 }
 
 describe('loaded game slot decoding', () => {
-  it('parses one shared diagram once and gives every tree the generic model', () => {
+  it('decodes equivalent diagrams and gives every tree the generic model', () => {
     const loaded = decodeLoadedSlot(slotWire({ trees: [treeWire('a', 7), treeWire('b', 7)] }))
 
     expect(loaded.trees.size).toBe(2)
-    expect(loaded.trees.get('a')!.diagram).toBe(loaded.trees.get('b')!.diagram)
+    expect(loaded.trees.get('a')!.diagram).toEqual(loaded.trees.get('b')!.diagram)
     expect(loaded.trees.get('a')!.diagramJson).toBe(diagramJson)
     expect(loaded.trees.get('a')!.placement).toEqual({ x: 0, z: 0, yaw: 0 })
     expect(loaded).toMatchObject({

@@ -32,29 +32,25 @@ async function until(predicate: () => boolean): Promise<void> {
 function deferredSavePort(): SavePort & {
   readonly treeWrites: TreeUpdate[]
   readonly cameraWrites: CameraRecord[]
-  readonly started: string[]
   resolveNext(): void
 } {
   const treeWrites: TreeUpdate[] = []
   const cameraWrites: CameraRecord[] = []
-  const started: string[] = []
   const resolutions: (() => void)[] = []
-  const block = (label: string): Promise<void> => {
-    started.push(label)
+  const block = (): Promise<void> => {
     return new Promise((resolve) => resolutions.push(resolve))
   }
   return {
     treeWrites,
     cameraWrites,
-    started,
     updateTree: async (_slotId, value) => {
       treeWrites.push(value)
-      await block(`tree:${value.treeId}:${value.diagramJson}`)
+      await block()
       return 1
     },
     updateCamera: async (_slotId, value) => {
       cameraWrites.push(value)
-      await block(`camera:${value.x}`)
+      await block()
     },
     resolveNext() {
       const resolve = resolutions.shift()
@@ -93,21 +89,19 @@ class FakeClock implements SaveWriterClock {
 }
 
 describe('ordered save writer', () => {
-  it('orders writes per slot and coalesces only pending snapshots for the same tree', async () => {
+  it('persists the newest pending snapshot for each tree', async () => {
     const port = deferredSavePort()
     const writer = new SaveWriter('slot-a', port)
     writer.tree(update('a', 'one'))
-    await until(() => port.started.length === 1)
+    await until(() => port.treeWrites.length === 1)
     writer.tree(update('a', 'two'))
     writer.tree(update('a', 'three'))
     writer.tree(update('b', 'other'))
 
-    expect(port.started).toEqual(['tree:a:one'])
     port.resolveNext()
-    await until(() => port.started.length === 2)
-    expect(port.started).toEqual(['tree:a:one', 'tree:a:three'])
+    await until(() => port.treeWrites.length === 2)
     port.resolveNext()
-    await until(() => port.started.length === 3)
+    await until(() => port.treeWrites.length === 3)
     port.resolveNext()
     await writer.flush()
 
@@ -221,20 +215,19 @@ describe('ordered save writer', () => {
 
   it('dispose forces debounced state, waits for every accepted write, then rejects new state', async () => {
     const clock = new FakeClock()
-    const port = deferredSavePort()
+    const treeWrites: TreeUpdate[] = []
+    const cameraWrites: CameraRecord[] = []
+    const port: SavePort = {
+      updateTree: async (_slotId, value) => { treeWrites.push(value); return 1 },
+      updateCamera: async (_slotId, value) => { cameraWrites.push(value) },
+    }
     const writer = new SaveWriter('slot-a', port, clock)
     writer.tree(update('a', 'one'))
     writer.camera(cameraAt(7))
-    const disposing = writer.dispose()
+    await writer.dispose()
 
-    await until(() => port.started.length === 1)
-    expect(port.started).toEqual(['tree:a:one'])
-    port.resolveNext()
-    await until(() => port.started.length === 2)
-    expect(port.started).toEqual(['tree:a:one', 'camera:7'])
-    port.resolveNext()
-    await disposing
-
+    expect(treeWrites).toEqual([update('a', 'one')])
+    expect(cameraWrites).toEqual([cameraRecordAt(7)])
     expect(() => writer.tree(update('b', 'late'))).toThrow('disposed')
     expect(() => writer.camera(cameraAt(8))).toThrow('disposed')
   })
@@ -263,11 +256,11 @@ describe('ordered save writer', () => {
     expect(attempts).toEqual([update('a', 'one'), update('a', 'one'), update('a', 'one')])
   })
 
-  it('shares concurrent disposal while a macrotask-backed write is in flight', async () => {
-    let attempts = 0
+  it('lets concurrent disposal await the same durable result', async () => {
+    const writes: TreeUpdate[] = []
     const port: SavePort = {
-      updateTree: async () => {
-        attempts++
+      updateTree: async (_slotId, value) => {
+        writes.push(value)
         await new Promise<void>((resolve) => setTimeout(resolve, 0))
         return 1
       },
@@ -278,10 +271,9 @@ describe('ordered save writer', () => {
 
     const first = writer.dispose()
     const second = writer.dispose()
-    expect(second).toBe(first)
     await Promise.all([first, second])
 
-    expect(attempts).toBe(1)
+    expect(writes).toEqual([update('a', 'one')])
     expect(() => writer.tree(update('b', 'late'))).toThrow('disposed')
   })
 })

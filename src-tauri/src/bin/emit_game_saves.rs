@@ -74,6 +74,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 trees,
             },
         )?;
+        store.load(&save.slot_id)?;
     }
 
     Ok(())

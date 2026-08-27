@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GameWorld } from '../../src/game/model'
+import { decodeLoadedSlot, type GameWorld } from '../../src/game/model'
 import { StartLifecycle, type StartFailure } from '../../src/game/start-lifecycle'
 
 const world: GameWorld = {
@@ -73,6 +73,27 @@ describe('game start lifecycle', () => {
 
     await lifecycle.start(async () => world)
     expect(attempts).toBe(2)
+  })
+
+  it('keeps structurally invalid decoded data out of the world opener', async () => {
+    const opened: GameWorld[] = []
+    const failures: StartFailure[] = []
+    const lifecycle = new StartLifecycle({
+      open: (loaded) => { opened.push(loaded) },
+      fail: (failure) => failures.push(failure),
+    })
+
+    await lifecycle.start(async () => decodeLoadedSlot({
+      slotId: 'invalid-diagram',
+      displayName: 'Invalid diagram',
+      updatedAtMs: 0,
+      camera: { x: 0, y: 1.7, z: 8, yaw: 0, pitch: -0.18 },
+      diagrams: [{ diagramKey: 1, diagramJson: '{}' }],
+      trees: [{ treeId: 'tree-a', diagramKey: 1, x: 0, z: 0, yaw: 0 }],
+    }))
+
+    expect(opened).toEqual([])
+    expect(failures).toEqual([{ kind: 'operation', message: expect.stringMatching(/malformed diagram JSON/) }])
   })
 
   it('does not open a late load after disposal', async () => {
