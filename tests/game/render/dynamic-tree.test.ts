@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
-import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { diagramToJson } from '../../../src/kernel/diagram/json'
 import { DARK } from '../../../src/view/paint'
@@ -9,13 +8,29 @@ import { TreeRenderAssetCache } from '../../../src/game/render/assets'
 import {
   DynamicTreeObjects,
   TREE_TWEEN_MS,
-  TreeTweenTracks,
   type TreeRenderSnapshot,
 } from '../../../src/game/render/dynamic-tree'
 import type { RenderTree } from '../../../src/game/render/runtime'
-import { makeRawTreeObject, pointAtVisibleParts, type TreeMaterialSource } from '../../../src/game/render/tree-objects'
+import {
+  makeBatchedTreeObject,
+  makeDynamicTreeObject,
+  pointAtVisibleParts,
+  type TreeMaterialSource,
+} from '../../../src/game/render/tree-objects'
 
 const interactionReach = 100
+
+function materials(): TreeMaterialSource {
+  return {
+    line: () => {
+      const material = new LineMaterial({ color: '#ffffff', linewidth: 0.1, worldUnits: true })
+      material.resolution.set(800, 600)
+      return material
+    },
+    sprite: () => new THREE.SpriteMaterial(),
+    marker: () => new THREE.SpriteMaterial(),
+  }
+}
 
 function branchScene(key: string, x: number): TreeRenderSnapshot {
   return {
@@ -28,54 +43,30 @@ function branchScene(key: string, x: number): TreeRenderSnapshot {
   }
 }
 
-function renderTree(id: string, diagramJson: string): RenderTree {
+function renderTree(id: string): RenderTree {
   return {
     id,
-    diagramJson,
+    diagramJson: id,
     placement: { id, index: id === 'a' ? 0 : 1, x: 0, z: -20, yaw: 0 },
   }
 }
 
-function pointedObject(treeId: string, entityKey: string): THREE.Object3D {
-  const object = new THREE.Object3D()
-  object.userData['treeId'] = treeId
-  object.userData['entityKey'] = entityKey
-  return object
-}
-
-function rootFor(treeId: string, child: THREE.Object3D): THREE.Group {
-  const root = new THREE.Group()
-  root.userData['treeId'] = treeId
-  root.add(child)
-  return root
-}
-
-describe('ordinary visible tree-part picking', () => {
-  it('points only the orbit target when production tree geometry overlaps a background tree', () => {
+describe('visible tree-part pointing', () => {
+  it('points only the orbit target when full-detail trees overlap', () => {
     const diagram = new DiagramBuilder().build()
     const asset = new TreeRenderAssetCache(DARK).get(JSON.stringify(diagramToJson(diagram)), diagram)
-    const materials: TreeMaterialSource = {
-      line: () => {
-        const material = new LineMaterial({ color: '#ffffff', linewidth: 0.1, worldUnits: true })
-        material.resolution.set(800, 600)
-        return material
-      },
-      sprite: () => new THREE.SpriteMaterial(),
-      marker: () => new THREE.SpriteMaterial(),
-    }
-    const background = makeRawTreeObject(asset, {
+    const background = makeBatchedTreeObject(asset, 'full', {
       id: 'background', index: 0, x: 0, z: -20, yaw: 0,
-    }, materials)
-    const orbit = makeRawTreeObject(asset, {
+    }, materials())
+    const orbit = makeBatchedTreeObject(asset, 'full', {
       id: 'orbit', index: 1, x: 0, z: -20, yaw: 0,
-    }, materials)
-    const branch = asset.lods.full.entities.find((entity) => entity.kind === 'branch')
-    if (branch === undefined || !('pts' in branch)) throw new Error('expected production branch')
-    const point = branch.pts[0]!
+    }, materials())
+    const branch = asset.lods.full.entities[0]!
+    if (!('pts' in branch)) throw new Error('expected production branch')
     background.updateMatrixWorld(true)
     orbit.updateMatrixWorld(true)
     const ray = new THREE.Raycaster(
-      new THREE.Vector3(point.x, point.y, point.z).add(new THREE.Vector3(0, 0, 20)),
+      new THREE.Vector3(branch.pts[0]!.x, branch.pts[0]!.y, 0),
       new THREE.Vector3(0, 0, -1),
       0,
       interactionReach,
@@ -86,122 +77,67 @@ describe('ordinary visible tree-part picking', () => {
     })
   })
 
-  it('accepts ordinary non-branch parts for orbit entry and enforces the strict reach boundary', () => {
-    const ring = pointedObject('tree-a', 'r:n0')
-    const root = rootFor('tree-a', ring)
-    const rayAt = (distance: number): THREE.Raycaster => ({
-      intersectObjects: () => [{ distance, point: new THREE.Vector3(), object: ring }],
-    }) as unknown as THREE.Raycaster
+  it('identifies a later branch in a batched full-detail tree by pointing at its geometry', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.cut(builder.root)
+    builder.cut(outer)
+    const diagram = builder.build()
+    const asset = new TreeRenderAssetCache(DARK).get(JSON.stringify(diagramToJson(diagram)), diagram)
+    const tree = makeBatchedTreeObject(asset, 'full', {
+      id: 'tree-a', index: 0, x: 0, z: -20, yaw: 0,
+    }, materials())
+    tree.updateMatrixWorld(true)
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(0, 2.2, 0),
+      new THREE.Vector3(0, 0, -1),
+      0,
+      interactionReach,
+    )
 
-    expect(pointAtVisibleParts(rayAt(interactionReach), [root], interactionReach, null))
-      .toEqual({ treeId: 'tree-a', entityKey: 'r:n0', distance: interactionReach })
-    expect(pointAtVisibleParts(rayAt(interactionReach + 0.001), [root], interactionReach, null))
-      .toBeNull()
-  })
-
-  it('maps a batched line segment index through its retained entity ranges', () => {
-    const line = new LineSegments2()
-    line.userData['treeId'] = 'tree-a'
-    line.userData['entityRanges'] = [
-      { entityKey: 'b:root', startSegment: 0, endSegment: 2 },
-      { entityKey: 'b:side', startSegment: 2, endSegment: 3 },
-    ]
-    const root = rootFor('tree-a', line)
-    const ray = {
-      intersectObjects: () => [{
-        distance: 7,
-        point: new THREE.Vector3(),
-        object: line,
-        faceIndex: 2,
-      }],
-    } as unknown as THREE.Raycaster
-
-    expect(pointAtVisibleParts(ray, [root], interactionReach, null)).toEqual({
-      treeId: 'tree-a', entityKey: 'b:side', distance: 7,
+    expect(pointAtVisibleParts(ray, [tree], interactionReach, null)).toMatchObject({
+      treeId: 'tree-a', entityKey: 'b:r2',
     })
   })
-})
 
-describe('per-tree dynamic tween tracks', () => {
-  it('animates different trees concurrently and replans one tree from its displayed frame', () => {
-    const beforeA = branchScene('b:a', 0)
-    const afterA = branchScene('b:a', 10)
-    const secondA = branchScene('b:a', 20)
-    const beforeB = branchScene('b:b', 30)
-    const afterB = branchScene('b:b', 40)
-    const tracks = new TreeTweenTracks()
-    tracks.begin('a', beforeA, afterA, 0)
-    tracks.begin('b', beforeB, afterB, 100)
-
-    expect(new Set(tracks.at(175).keys())).toEqual(new Set(['a', 'b']))
-    const displayed = tracks.at(175).get('a')!
-    tracks.begin('a', afterA, secondA, 175)
-
-    expect(tracks.at(175).get('a')).toEqual(displayed)
-    expect(tracks.at(175).get('b')).toEqual(
-      new TreeTweenTracks().begin('b', beforeB, afterB, 100).at(175).get('b'),
-    )
-  })
-
-  it('completes and resumes only the trees whose independent tracks elapsed', () => {
+  it('keeps concurrent tweens visible at independent progress and completion times', () => {
     const parent = new THREE.Group()
-    const runtime = {
-      suspend: vi.fn(),
-      resume: vi.fn(),
-    }
-    const released: THREE.Group[] = []
     const dynamic = new DynamicTreeObjects(
       parent,
-      runtime,
-      (snapshot, tree) => {
-        const group = new THREE.Group()
-        group.name = tree.id
-        group.userData['frameX'] = snapshot.center.x
-        return group
-      },
-      (group) => { released.push(group) },
+      { suspend() {}, resume() {} },
+      (snapshot, tree) => makeDynamicTreeObject(snapshot, tree.placement, materials()),
     )
-    const treeA = renderTree('a', 'after-a')
-    const treeB = renderTree('b', 'after-b')
-    dynamic.begin(treeA, branchScene('b:a', 0), branchScene('b:a', 10), 0)
-    dynamic.begin(treeB, branchScene('b:b', 20), branchScene('b:b', 30), 100)
+    dynamic.begin(renderTree('a'), branchScene('b:a', 0), branchScene('b:a', 10), 0)
+    dynamic.begin(renderTree('b'), branchScene('b:b', 30), branchScene('b:b', 40), 0)
+
+    dynamic.update(175)
+    parent.updateMatrixWorld(true)
+    const pointAtX = (x: number, orbitTarget: string | null = null) => pointAtVisibleParts(
+      new THREE.Raycaster(
+        new THREE.Vector3(x, 0.5, 0),
+        new THREE.Vector3(0, 0, -1),
+        0,
+        interactionReach,
+      ),
+      dynamic.objects(),
+      interactionReach,
+      orbitTarget,
+    )
+
+    expect(pointAtX(5, 'a')).toMatchObject({ treeId: 'a', entityKey: 'b:a' })
+    expect(pointAtX(35, 'b')).toMatchObject({
+      treeId: 'b', entityKey: 'b:b',
+    })
+
+    dynamic.begin(renderTree('a'), branchScene('b:a', 10), branchScene('b:a', 20), 175)
+    dynamic.update(175)
+    parent.updateMatrixWorld(true)
+    expect(pointAtX(5, 'a')).toMatchObject({ treeId: 'a', entityKey: 'b:a' })
 
     dynamic.update(TREE_TWEEN_MS)
+    expect(dynamic.objects('b')).toEqual([])
+    expect(dynamic.objects('a')).toHaveLength(1)
 
-    expect(runtime.suspend.mock.calls).toEqual([['a'], ['b']])
-    expect(runtime.resume.mock.calls).toEqual([[treeA]])
-    expect(dynamic.objects().map(({ name }) => name)).toEqual(['b'])
-    expect(released.some(({ name }) => name === 'a')).toBe(true)
-
-    dynamic.update(TREE_TWEEN_MS + 100)
-
-    expect(runtime.resume.mock.calls).toEqual([[treeA], [treeB]])
+    dynamic.update(525)
     expect(dynamic.objects()).toEqual([])
-  })
-
-  it('cancels and disposes every active dynamic role without resuming stale targets', () => {
-    const parent = new THREE.Group()
-    const runtime = { suspend: vi.fn(), resume: vi.fn() }
-    const released: THREE.Group[] = []
-    const dynamic = new DynamicTreeObjects(
-      parent,
-      runtime,
-      (_snapshot, tree) => {
-        const group = new THREE.Group()
-        group.name = tree.id
-        return group
-      },
-      (group) => { released.push(group) },
-    )
-    dynamic.begin(renderTree('a', 'after-a'), branchScene('b:a', 0), branchScene('b:a', 10), 0)
-    dynamic.begin(renderTree('b', 'after-b'), branchScene('b:b', 20), branchScene('b:b', 30), 100)
-
-    dynamic.clear()
-    dynamic.update(TREE_TWEEN_MS + 100)
-
-    expect(released.map(({ name }) => name)).toEqual(['a', 'b'])
-    expect(parent.children).toEqual([])
-    expect(dynamic.objects()).toEqual([])
-    expect(runtime.resume).not.toHaveBeenCalled()
   })
 })

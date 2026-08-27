@@ -7,7 +7,7 @@ export type SpatialBounds = {
 
 type SpatialItem = { readonly id: string; readonly x: number; readonly z: number }
 
-export function fixedCellCoordinate(value: number, cellSize: number): number {
+function fixedCellCoordinate(value: number, cellSize: number): number {
   return Math.floor(value / cellSize)
 }
 

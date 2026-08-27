@@ -14,7 +14,7 @@ type TweenTrack = {
   readonly start: number
 }
 
-export class TreeTweenTracks {
+class TreeTweenTracks {
   private readonly tracks = new Map<string, TweenTrack>()
 
   public begin(

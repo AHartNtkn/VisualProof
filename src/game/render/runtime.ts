@@ -138,7 +138,7 @@ export type TreeRuntimeSnapshot = {
   readonly failureCount: number
 }
 
-export function treeWorldSphere(tree: RenderTree, asset: TreeRenderAsset): THREE.Sphere {
+function treeWorldSphere(tree: RenderTree, asset: TreeRenderAsset): THREE.Sphere {
   const center = new THREE.Vector3(
     asset.bounds.center.x,
     asset.bounds.center.y,

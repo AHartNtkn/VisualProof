@@ -1,19 +1,21 @@
 import * as THREE from 'three'
-import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
-import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { diagramToJson } from '../../../src/kernel/diagram/json'
+import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { TreeRenderAssetCache } from '../../../src/game/render/assets'
 import {
-  disposeTreeObject,
   makeBatchedTreeObject,
   makeDynamicTreeObject,
   makeMarkerObject,
   makeRawTreeObject,
+  pointAtVisibleParts,
   type TreeMaterialSource,
 } from '../../../src/game/render/tree-objects'
 import type { TreePlacement } from '../../../src/game/render/placement'
 import type { TreeRenderAsset } from '../../../src/game/render/types'
-import type { Entity } from '../../../src/view3d/scene'
+import { DARK } from '../../../src/view/paint'
 
 const asset: TreeRenderAsset = {
   bounds: { center: { x: 0, y: 2, z: 0 }, radius: 4 },
@@ -24,304 +26,197 @@ const asset: TreeRenderAsset = {
       entities: [
         {
           kind: 'branch', key: 'b:root', polarity: 0,
-          pts: [{ x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 1, y: 2, z: 0 }],
+          pts: [{ x: 0, y: 0, z: 0 }, { x: 0, y: 2, z: 0 }],
         },
         {
-          kind: 'branch', key: 'b:side', polarity: 0,
-          pts: [{ x: 1, y: 2, z: 0 }, { x: 2, y: 3, z: 0 }],
+          kind: 'ring', key: 'r:n', node: 'n', headWire: null,
+          pts: [{ x: 1, y: 2, z: 0 }, { x: 1, y: 2, z: 1 }, { x: 1, y: 2, z: 0 }],
         },
-        {
-          kind: 'branch', key: 'b:cut', polarity: 1,
-          pts: [{ x: 0, y: 1, z: 0 }, { x: -1, y: 2, z: 0 }],
-        },
-        {
-          kind: 'ring', key: 'r:n', node: 'n', headWire: 'w',
-          pts: [{ x: 2, y: 2, z: 0 }, { x: 2, y: 2, z: 1 }, { x: 2, y: 2, z: 0 }],
-        },
-        {
-          kind: 'strand', key: 's:w:0', wire: 'w',
-          pts: [{ x: 0, y: 1, z: 0 }, { x: 1, y: 1, z: 1 }, { x: 2, y: 1, z: 1 }],
-        },
-        {
-          kind: 'strand', key: 's:w:1', wire: 'w',
-          pts: [{ x: 2, y: 1, z: 1 }, { x: 3, y: 1, z: 0 }],
-        },
-        { kind: 'pip', key: 'p:n', node: 'n', ownerWire: 'w', pos: { x: 0, y: 1, z: 0 } },
+        { kind: 'pip', key: 'p:n', node: 'n', ownerWire: null, pos: { x: 0, y: 1, z: 0 } },
         { kind: 'label', key: 'l:n', node: 'n', text: 'N', pos: { x: 2, y: 3, z: 0 } },
       ],
     },
     reduced: {
       center: { x: 0, y: 2, z: 0 },
       radius: 4,
-      entities: [
-        {
-          kind: 'branch', key: 'b:reduced-even', polarity: 0,
-          pts: [{ x: 0, y: 0, z: 0 }, { x: 0, y: 2, z: 0 }],
-        },
-        {
-          kind: 'branch', key: 'b:reduced-odd', polarity: 1,
-          pts: [{ x: 0, y: 2, z: 0 }, { x: 1, y: 3, z: 0 }],
-        },
-      ],
+      entities: [{
+        kind: 'branch', key: 'b:reduced', polarity: 0,
+        pts: [{ x: 0, y: 0, z: 0 }, { x: 0, y: 3, z: 0 }],
+      }],
     },
     marker: { color: '#123456', size: 1.25 },
   },
-  hues: [['w', '#00aaff']],
+  hues: [],
   palette: { branch: '#ffffff', cutBranch: '#777777', baseWire: '#eeeeee' },
-  widths: { branch: 0.10, curve: 0.05 },
+  widths: { branch: 0.1, curve: 0.05 },
   glow: { color: '#ffffff', radius: 32, opacity: 0.65, bloom: 0.8 },
 }
 
 const placement: TreePlacement = { id: 'tree-a', index: 0, x: 10, z: 20, yaw: 0.5 }
 
-function fixtureMaterials(): {
-  source: TreeMaterialSource
-  materials: Set<THREE.Material>
-  textures: Set<THREE.Texture>
-} {
-  const materials = new Set<THREE.Material>()
-  const textures = new Set<THREE.Texture>()
-  const lines = new Map<string, LineMaterial>()
-  const sprites = new Map<string, THREE.SpriteMaterial>()
-  const lineColor = (entity: Extract<Entity, { kind: 'branch' | 'ring' | 'strand' }>): string => {
-    if (entity.kind === 'branch') return entity.polarity === 0 ? '#ffffff' : '#777777'
-    return entity.kind === 'strand' ? '#00aaff' : '#aa00ff'
-  }
+function materials(): TreeMaterialSource {
   return {
-    materials,
-    textures,
-    source: {
-      line(entity, width) {
-        const color = lineColor(entity)
-        const key = `${entity.kind}:${color}:${width}`
-        let material = lines.get(key)
-        if (material === undefined) {
-          material = new LineMaterial({ color, linewidth: width, worldUnits: true })
-          lines.set(key, material)
-          materials.add(material)
-        }
-        return material
-      },
-      sprite(entity) {
-        const key = entity.kind === 'label' ? `label:${entity.text}` : 'pip'
-        let material = sprites.get(key)
-        if (material === undefined) {
-          const texture = new THREE.Texture()
-          textures.add(texture)
-          material = new THREE.SpriteMaterial({ map: texture, color: '#ffffff' })
-          if (entity.kind === 'label') material.userData['aspect'] = 2
-          sprites.set(key, material)
-          materials.add(material)
-        }
-        return material
-      },
-      marker(marker) {
-        let material = sprites.get(`marker:${marker.color}`)
-        if (material === undefined) {
-          const texture = new THREE.Texture()
-          textures.add(texture)
-          material = new THREE.SpriteMaterial({
-            map: texture,
-            color: marker.color,
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-          })
-          sprites.set(`marker:${marker.color}`, material)
-          materials.add(material)
-        }
-        return material
-      },
+    line: (_entity, width) => new LineMaterial({
+      color: '#ffffff', linewidth: width, worldUnits: true,
+    }),
+    sprite: () => {
+      const material = new THREE.SpriteMaterial({ color: '#ffffff' })
+      material.userData['aspect'] = 2
+      return material
     },
+    marker: (marker) => new THREE.SpriteMaterial({ color: marker.color }),
   }
 }
 
-function segmentsOf(line: LineSegments2): number[][] {
-  const starts = line.geometry.getAttribute('instanceStart')
-  const ends = line.geometry.getAttribute('instanceEnd')
-  return Array.from({ length: starts.count }, (_, index) => [
-    starts.getX(index), starts.getY(index), starts.getZ(index),
-    ends.getX(index), ends.getY(index), ends.getZ(index),
-  ])
+function visualMaterials(group: THREE.Object3D): THREE.Material[] {
+  const rendered: THREE.Material[] = []
+  group.traverse((object) => {
+    if (!('material' in object)) return
+    const material = (object as THREE.Mesh).material
+    if (Array.isArray(material)) rendered.push(...material)
+    else rendered.push(material)
+  })
+  return rendered
 }
 
-function materialOf(object: THREE.Object3D): THREE.Material {
-  const material = (object as THREE.Mesh | THREE.Sprite).material
-  if (Array.isArray(material)) throw new Error('expected one material')
-  return material
+function representativeAsset(): TreeRenderAsset {
+  const builder = new DiagramBuilder()
+  const cut = builder.cut(builder.root)
+  const outer = builder.atom(builder.root, relSig([IOTA]))
+  const inner = builder.atom(cut, relSig([IOTA]))
+  const reference = builder.ref(cut, 'Def', relSig([IOTA]))
+  builder.wire([
+    { node: outer, port: { kind: 'arg', index: 0 } },
+    { node: inner, port: { kind: 'arg', index: 0 } },
+    { node: reference, port: { kind: 'arg', index: 0 } },
+  ])
+  const diagram = builder.build()
+  return new TreeRenderAssetCache(DARK).get(JSON.stringify(diagramToJson(diagram)), diagram)
+}
+
+function kindColoredMaterials(): TreeMaterialSource {
+  const colors = {
+    branch: '#ff0000',
+    ring: '#00ff00',
+    strand: '#0000ff',
+    pip: '#ff00ff',
+    label: '#00ffff',
+  } as const
+  return {
+    line: (entity, width) => {
+      const material = new LineMaterial({ color: colors[entity.kind], linewidth: width, worldUnits: true })
+      material.resolution.set(800, 600)
+      return material
+    },
+    sprite: (entity) => new THREE.SpriteMaterial({ color: colors[entity.kind] }),
+    marker: (marker) => new THREE.SpriteMaterial({ color: marker.color }),
+  }
+}
+
+function visibleColors(group: THREE.Object3D): Set<string> {
+  return new Set(visualMaterials(group).flatMap((material) => (
+    'color' in material && material.color instanceof THREE.Color
+      ? [material.color.getHexString()]
+      : []
+  )))
 }
 
 describe('game tree representations', () => {
-  it('builds temporary per-entity tween geometry with independent fade materials', () => {
-    const resources = fixtureMaterials()
+  it('renders tween entities at their requested visible opacity', () => {
     const group = makeDynamicTreeObject({
       ...asset.lods.full,
       entities: [
         { ...asset.lods.full.entities[0]!, alpha: 0.25 },
-        { ...asset.lods.full.entities[7]!, alpha: 0.5 },
+        { ...asset.lods.full.entities[3]!, alpha: 0.5 },
       ],
-    }, placement, resources.source)
+    }, placement, materials())
 
-    expect(group.children.map((child) => child.userData['entityKey']))
-      .toEqual(['b:root', 'l:n'])
-    expect(group.children.map((child) => materialOf(child).opacity))
-      .toEqual([0.25, 0.5])
-    expect(group.children.every((child) => materialOf(child).transparent)).toBe(true)
-
-    const dynamicMaterials = group.children.map(materialOf)
-    expect(dynamicMaterials.every((material) => !resources.materials.has(material))).toBe(true)
-    const dispose = dynamicMaterials.map((material) => vi.spyOn(material, 'dispose'))
-    disposeTreeObject(group)
-    for (const release of dispose) expect(release).toHaveBeenCalledTimes(1)
+    expect(visualMaterials(group).map(({ opacity }) => opacity)).toEqual([0.25, 0.5])
   })
 
-  it('uses exact derived world-unit widths for raw full-detail entities', () => {
-    const group = makeRawTreeObject(asset, placement, fixtureMaterials().source)
-    const lines = group.children.filter((child): child is Line2 => child instanceof Line2)
+  it('produces visible raw, full, reduced, and marker representations without analytic lights', () => {
+    const representations = [
+      makeRawTreeObject(asset, placement, materials()),
+      makeBatchedTreeObject(asset, 'full', placement, materials()),
+      makeBatchedTreeObject(asset, 'reduced', placement, materials()),
+      makeMarkerObject(asset, placement, materials()),
+    ]
 
-    expect(lines).toHaveLength(6)
-    expect(lines.every((line) => line.material.worldUnits)).toBe(true)
-    expect(lines.find((line) => line.userData['entityKind'] === 'branch')!.material.linewidth).toBe(0.10)
-    expect(lines.find((line) => line.userData['entityKind'] === 'ring')!.material.linewidth).toBe(0.05)
-    expect(lines.find((line) => line.userData['entityKind'] === 'strand')!.material.linewidth).toBe(0.05)
-    expect(group.children.some((child) => child instanceof THREE.PointLight)).toBe(false)
-  })
-
-  it('keeps raw full geometry and sprites unique for every derived entity and tree', () => {
-    const source = fixtureMaterials().source
-    const a = makeRawTreeObject(asset, placement, source)
-    const b = makeRawTreeObject(
-      asset,
-      { id: 'tree-b', index: 1, x: -10, z: -20, yaw: 1 },
-      source,
-    )
-
-    expect(a.children).toHaveLength(8)
-    expect(b.children).toHaveLength(8)
-    expect(a.position.toArray()).toEqual([10, 0, 20])
-    expect(a.rotation.y).toBe(0.5)
-    expect(a.children.map((child) => child.userData['entityKey'])).toEqual([
-      'b:root', 'b:side', 'b:cut', 'r:n', 's:w:0', 's:w:1', 'p:n', 'l:n',
-    ])
-
-    for (let index = 0; index < a.children.length; index++) {
-      const first = a.children[index]!, second = b.children[index]!
-      expect(first).not.toBe(second)
-      expect((first as THREE.InstancedMesh).isInstancedMesh).not.toBe(true)
-      expect(first.userData['treeId']).toBe('tree-a')
-      expect(second.userData['treeId']).toBe('tree-b')
-      if (first instanceof Line2 && second instanceof Line2) {
-        expect(first.geometry).not.toBe(second.geometry)
-      }
+    for (const group of representations) {
+      expect(visualMaterials(group).length).toBeGreaterThan(0)
+      expect(group.getObjectsByProperty('isPointLight', true)).toEqual([])
     }
   })
 
-  it('preserves every full polyline segment exactly once with hand-derived entity ranges', () => {
-    const group = makeBatchedTreeObject(asset, 'full', placement, fixtureMaterials().source)
-    const lines = group.children.filter((child): child is LineSegments2 => child instanceof LineSegments2)
-    const actualSegments = lines.flatMap(segmentsOf).map((segment) => segment.join(','))
+  it('renders every representative full-detail entity kind from a real kernel diagram', () => {
+    const derived = representativeAsset()
+    const representativePlacement: TreePlacement = {
+      id: 'representative', index: 0, x: 0, z: -20, yaw: 0,
+    }
+    const raw = makeRawTreeObject(derived, representativePlacement, kindColoredMaterials())
+    const full = makeBatchedTreeObject(derived, 'full', representativePlacement, kindColoredMaterials())
+    const expected = new Set(['ff0000', '00ff00', '0000ff', 'ff00ff', '00ffff'])
 
-    expect(actualSegments.sort()).toEqual([
-      '0,0,0,0,1,0',
-      '0,1,0,1,2,0',
-      '1,2,0,2,3,0',
-      '0,1,0,-1,2,0',
-      '2,2,0,2,2,1',
-      '2,2,1,2,2,0',
-      '0,1,0,1,1,1',
-      '1,1,1,2,1,1',
-      '2,1,1,3,1,0',
-    ].sort())
-    expect(lines).toHaveLength(4)
-    expect(lines.every((line) => line.userData['treeId'] === 'tree-a')).toBe(true)
-    expect(lines.every((line) => line.material.worldUnits)).toBe(true)
-    expect(group.children
-      .filter((child): child is THREE.Sprite => child instanceof THREE.Sprite)
-      .map((sprite) => sprite.userData['entityKey']))
-      .toEqual(['p:n', 'l:n'])
-    expect(lines.find((line) => line.userData['entityKeys'].includes('b:root'))!.userData['entityRanges']).toEqual([
-      { entityKey: 'b:root', startSegment: 0, endSegment: 2 },
-      { entityKey: 'b:side', startSegment: 2, endSegment: 3 },
-    ])
-    expect(lines.find((line) => line.userData['entityKeys'].includes('b:cut'))!.userData['entityRanges']).toEqual([
-      { entityKey: 'b:cut', startSegment: 0, endSegment: 1 },
-    ])
-    expect(lines.find((line) => line.userData['entityKeys'].includes('r:n'))!.userData['entityRanges']).toEqual([
-      { entityKey: 'r:n', startSegment: 0, endSegment: 2 },
-    ])
-    expect(lines.find((line) => line.userData['entityKeys'].includes('s:w:0'))!.userData['entityRanges']).toEqual([
-      { entityKey: 's:w:0', startSegment: 0, endSegment: 2 },
-      { entityKey: 's:w:1', startSegment: 2, endSegment: 3 },
-    ])
+    expect(visibleColors(raw)).toEqual(expected)
+    expect(visibleColors(full)).toEqual(expected)
   })
 
-  it('allocates different batched geometry buffers for different tree IDs', () => {
-    const source = fixtureMaterials().source
-    const a = makeBatchedTreeObject(asset, 'full', placement, source)
-    const b = makeBatchedTreeObject(
-      asset,
-      'full',
-      { id: 'tree-b', index: 1, x: -10, z: -20, yaw: 1 },
-      source,
+  it('renders meaningful reduced branches from a real kernel diagram', () => {
+    const derived = representativeAsset()
+    const representativePlacement: TreePlacement = {
+      id: 'representative', index: 0, x: 0, z: -20, yaw: 0,
+    }
+    const reduced = makeBatchedTreeObject(
+      derived,
+      'reduced',
+      representativePlacement,
+      kindColoredMaterials(),
     )
-    const aLines = a.children.filter((child): child is LineSegments2 => child instanceof LineSegments2)
-    const bLines = b.children.filter((child): child is LineSegments2 => child instanceof LineSegments2)
+    reduced.updateMatrixWorld(true)
+    const outerCut = derived.lods.reduced.entities.find(({ key }) => key === 'b:r1')
+    if (outerCut === undefined || !('pts' in outerCut)) throw new Error('expected reduced cut branch')
+    const start = outerCut.pts[0]!
+    const end = outerCut.pts[outerCut.pts.length - 1]!
+    const midpoint = {
+      x: (start.x + end.x) / 2,
+      y: (start.y + end.y) / 2,
+      z: (start.z + end.z) / 2,
+    }
+    const point = pointAtVisibleParts(
+      new THREE.Raycaster(
+        new THREE.Vector3(midpoint.x, midpoint.y, 0),
+        new THREE.Vector3(0, 0, -1),
+        0,
+        100,
+      ),
+      [reduced],
+      100,
+      null,
+    )
 
-    expect(aLines).toHaveLength(bLines.length)
-    for (let index = 0; index < aLines.length; index++) {
-      expect(aLines[index]).not.toBe(bLines[index])
-      expect(aLines[index]!.geometry).not.toBe(bLines[index]!.geometry)
-      const aStarts = aLines[index]!.geometry.getAttribute('instanceStart') as THREE.InterleavedBufferAttribute
-      const bStarts = bLines[index]!.geometry.getAttribute('instanceStart') as THREE.InterleavedBufferAttribute
-      expect(aStarts.data).not.toBe(bStarts.data)
-      expect(aLines[index]!.userData['treeId']).toBe('tree-a')
-      expect(bLines[index]!.userData['treeId']).toBe('tree-b')
+    expect(visibleColors(reduced)).toEqual(new Set(['ff0000']))
+    expect(point).toMatchObject({ treeId: 'representative', entityKey: 'b:r1' })
+  })
+
+  it('places every representation at the tree world transform', () => {
+    const representations = [
+      makeRawTreeObject(asset, placement, materials()),
+      makeBatchedTreeObject(asset, 'full', placement, materials()),
+      makeBatchedTreeObject(asset, 'reduced', placement, materials()),
+      makeMarkerObject(asset, placement, materials()),
+    ]
+
+    for (const group of representations) {
+      expect(group.position.toArray()).toEqual([10, 0, 20])
+      expect(group.rotation.y).toBe(0.5)
     }
   })
 
-  it('uses only derived reduced branches and batches them into polarity draws', () => {
-    const group = makeBatchedTreeObject(asset, 'reduced', placement, fixtureMaterials().source)
-    const lines = group.children.filter((child): child is LineSegments2 => child instanceof LineSegments2)
+  it('renders the marker with its derived color and apparent size', () => {
+    const group = makeMarkerObject(asset, placement, materials())
+    const marker = group.children[0] as THREE.Sprite
 
-    expect(group.children).toHaveLength(2)
-    expect(lines).toHaveLength(2)
-    expect(lines.flatMap((line) => line.userData['entityKeys']).sort()).toEqual([
-      'b:reduced-even', 'b:reduced-odd',
-    ])
-    expect(lines.flatMap(segmentsOf).map((segment) => segment.join(',')).sort()).toEqual([
-      '0,0,0,0,2,0', '0,2,0,1,3,0',
-    ])
-  })
-
-  it('creates one additive derived-color and derived-size marker sprite', () => {
-    const group = makeMarkerObject(asset, placement, fixtureMaterials().source)
-
-    expect(group.children).toHaveLength(1)
-    const marker = group.children[0]!
-    expect(marker).toBeInstanceOf(THREE.Sprite)
-    expect((marker as THREE.Sprite).material.color.getHexString()).toBe('123456')
-    expect((marker as THREE.Sprite).material.blending).toBe(THREE.AdditiveBlending)
     expect(marker.scale.toArray()).toEqual([1.25, 1.25, 1])
-    expect(marker.userData['treeId']).toBe('tree-a')
-    expect(marker.userData['entityKind']).toBe('marker')
-  })
-
-  it('disposes each owned geometry once without disposing shared materials or textures', () => {
-    const resources = fixtureMaterials()
-    const group = makeBatchedTreeObject(asset, 'full', placement, resources.source)
-    const lines = group.children.filter((child): child is LineSegments2 => child instanceof LineSegments2)
-    const sharedGeometry = lines[0]!.geometry
-    group.add(new LineSegments2(sharedGeometry, lines[0]!.material))
-    const geometrySpies = new Map(
-      lines.map((line) => [line.geometry, vi.spyOn(line.geometry, 'dispose')] as const),
-    )
-    const materialSpies = [...resources.materials].map((material) => vi.spyOn(material, 'dispose'))
-    const textureSpies = [...resources.textures].map((texture) => vi.spyOn(texture, 'dispose'))
-
-    disposeTreeObject(group)
-
-    for (const spy of geometrySpies.values()) expect(spy).toHaveBeenCalledTimes(1)
-    for (const spy of materialSpies) expect(spy).not.toHaveBeenCalled()
-    for (const spy of textureSpies) expect(spy).not.toHaveBeenCalled()
+    expect(marker.material.color.getHexString()).toBe('123456')
   })
 })

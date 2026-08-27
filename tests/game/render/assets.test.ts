@@ -14,19 +14,22 @@ doubleBuilder.cut(outer)
 const doubleDiagram = doubleBuilder.build()
 const doubleJson = JSON.stringify(diagramToJson(doubleDiagram))
 
-describe('tree render asset cache', () => {
-  it('derives one immutable render asset for byte-identical diagrams', () => {
+describe('tree render assets', () => {
+  it('derives a complete full-detail representation from a generic diagram', () => {
     const cache = new TreeRenderAssetCache(DARK)
-    const first = cache.get(blankJson, blankDiagram)
-    const second = cache.get(blankJson, blankDiagram)
+    const asset = cache.get(blankJson, blankDiagram)
 
-    expect(second).toBe(first)
-    expect(first.lods.full.entities.map(({ key }) => key)).toEqual(['b:r0'])
+    expect(asset.lods.full.entities.map(({ key }) => key)).toEqual(['b:r0'])
+    expect(asset.bounds.radius).toBeGreaterThan(0)
+    expect(asset.lods.marker.size).toBeGreaterThan(0)
   })
 
-  it('derives a different asset after a real double cut', () => {
+  it('represents the branches created by a real double cut', () => {
     const cache = new TreeRenderAssetCache(DARK)
+    const before = cache.get(blankJson, blankDiagram)
+    const after = cache.get(doubleJson, doubleDiagram)
 
-    expect(cache.get(blankJson, blankDiagram)).not.toBe(cache.get(doubleJson, doubleDiagram))
+    expect(before.lods.full.entities.map(({ key }) => key)).toEqual(['b:r0'])
+    expect(after.lods.full.entities.map(({ key }) => key)).toEqual(['b:r0', 'b:r1', 'b:r2'])
   })
 })

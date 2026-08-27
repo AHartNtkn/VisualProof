@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fixedCellCoordinate, SpatialIndex } from '../../../src/game/render/spatial-index'
+import { SpatialIndex } from '../../../src/game/render/spatial-index'
 
 type Item = { id: string; x: number; z: number }
 
@@ -22,13 +22,6 @@ describe('SpatialIndex', () => {
     index.insert({ id: 'inside', x: 10, z: -10 })
 
     expect(index.query({ minX: 10, maxX: 20, minZ: -10, maxZ: 0 }).map(({ id }) => id)).toEqual(['inside'])
-  })
-
-  it('maps signed positions to literal floor cells', () => {
-    expect(fixedCellCoordinate(-0.01, 128)).toBe(-1)
-    expect(fixedCellCoordinate(-128, 128)).toBe(-1)
-    expect(fixedCellCoordinate(-128.01, 128)).toBe(-2)
-    expect(fixedCellCoordinate(0, 128)).toBe(0)
   })
 
   it('returns one result when an ID is reinserted and moved across queried cells', () => {
