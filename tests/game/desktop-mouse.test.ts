@@ -1,4 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import {
+  displayCameraPose,
+  enterOrbit,
+  lookCamera,
+  type CameraState,
+  type FreeCameraState,
+} from '../../src/game/camera'
 import { DesktopMouse, type DesktopMousePort } from '../../src/game/desktop-mouse'
 
 class NativeMouse implements DesktopMousePort {
@@ -70,5 +77,31 @@ describe('desktop mouse', () => {
     expect(native.captureChanges).toBe(2)
     expect(native.captured).toBe(false)
     expect(native.visible).toBe(true)
+  })
+
+  it('leaves the displayed orbit pose unchanged when native motion arrives during the orbit handoff', async () => {
+    const native = new NativeMouse()
+    const fixture = canvasForMouse()
+    let camera: CameraState = {
+      mode: 'free',
+      pose: { position: { x: 0, y: 1.7, z: 20 }, yaw: 0, pitch: 0 },
+    }
+    const mouse = new DesktopMouse(fixture.canvas, native, (delta) => {
+      camera = lookCamera(camera, delta)
+    })
+
+    await mouse.capture()
+    fixture.move(112, 66)
+    if (camera.mode !== 'free') throw new Error('expected free camera before orbit')
+    camera = enterOrbit(camera as FreeCameraState, 'tree-a', {
+      center: { x: 0, y: 0, z: 0 }, radius: 2,
+    })
+    const displayedBefore = displayCameraPose(camera)
+    const orbitBefore = { orbitTarget: camera.orbitTarget, pose: { ...camera.pose } }
+
+    fixture.move(88, 74)
+
+    expect(camera).toEqual({ mode: 'orbit', ...orbitBefore })
+    expect(displayCameraPose(camera)).toEqual(displayedBefore)
   })
 })

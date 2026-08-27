@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GameTree, GameWorld } from '../../src/game/model'
+import type { TreeUpdate } from '../../src/game/save-client'
 import { gameSession, useDoubleCut } from '../../src/game/session'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
@@ -34,6 +35,18 @@ function newRegions(before: Diagram, after: Diagram): string[] {
   return Object.keys(after.regions).filter((id) => before.regions[id] === undefined)
 }
 
+function treeValues(trees: ReadonlyMap<string, GameTree>): readonly {
+  readonly id: string
+  readonly diagramJson: string
+  readonly placement: GameTree['placement']
+}[] {
+  return [...trees.values()].map((entry) => ({
+    id: entry.id,
+    diagramJson: entry.diagramJson,
+    placement: entry.placement,
+  }))
+}
+
 describe('game tool session', () => {
   it('spawns a real empty double cut on the pointed branch of any generic tree', () => {
     const session = gameSession(worldWithTree('large', largeDiagram).trees)
@@ -54,49 +67,60 @@ describe('game tool session', () => {
     })!
     expect(mutation.after.regions[inner]).toEqual({ kind: 'cut', parent: outer })
     expect(mutation.afterJson).toBe(JSON.stringify(diagramToJson(mutation.after)))
-    expect(session.trees.get('large')).toMatchObject({
-      diagram: mutation.after,
+    expect(treeValues(session.trees)).toEqual([{
+      id: 'large',
       diagramJson: mutation.afterJson,
-    })
-    expect('camera' in session).toBe(false)
-    expect('world' in session).toBe(false)
+      placement: { x: 0, z: -20, yaw: 0 },
+    }])
   })
 
   it('rejects non-branches and unknown trees without mutation', () => {
     const session = gameSession(worldWithTree('tree-a', blankDiagram).trees)
-    const beforeTrees = session.trees
+    const beforeTrees = treeValues(session.trees)
     expect(() => session.applyDoubleCut({
       treeId: 'tree-a', entityKey: 'r:n0', distance: 5,
     })).toThrow(/branch/)
     expect(() => session.applyDoubleCut({
       treeId: 'missing', entityKey: 'b:r0', distance: 5,
     })).toThrow(/unknown tree/)
-    expect(session.trees).toBe(beforeTrees)
-    expect(session.trees.get('tree-a')!.diagram).toBe(blankDiagram)
+    expect(treeValues(session.trees)).toEqual(beforeTrees)
   })
 
   it('changes and persists only the pointed generic tree', () => {
     const world = worldWithTree('large', largeDiagram)
     const untouched = tree('other', blankDiagram)
     const session = gameSession(new Map([...world.trees, ['other', untouched]]))
-    const tweens: Array<{ readonly treeId: string; readonly now: number }> = []
-    const writes: Array<{ readonly treeId: string; readonly diagramJson: string }> = []
+    const treesBefore = treeValues(session.trees)
+    const tweens: Array<{ readonly treeId: string; readonly beforeJson: string; readonly afterJson: string; readonly now: number }> = []
+    const writes: TreeUpdate[] = []
 
     const mutation = useDoubleCut(
       session,
       { treeId: 'large', entityKey: `b:${nestedRegion}`, distance: 12 },
       250,
       {
-        beginTreeTween: (treeId, _before, _after, now) => tweens.push({ treeId, now }),
-        persistTree: ({ treeId, diagramJson }) => writes.push({ treeId, diagramJson }),
+        beginTreeTween: (treeId, before, after, now) => tweens.push({
+          treeId,
+          beforeJson: JSON.stringify(diagramToJson(before)),
+          afterJson: JSON.stringify(diagramToJson(after)),
+          now,
+        }),
+        persistTree: (update) => writes.push(update),
       },
     )
 
-    expect(tweens).toEqual([{ treeId: 'large', now: 250 }])
-    expect(writes).toEqual([{ treeId: 'large', diagramJson: mutation.afterJson }])
-    expect(session.trees.get('large')?.diagram).toBe(mutation.after)
-    expect(session.trees.get('other')).toEqual(untouched)
-    expect('camera' in session).toBe(false)
-    expect('world' in session).toBe(false)
+    expect(tweens).toEqual([{
+      treeId: 'large', beforeJson: mutation.beforeJson, afterJson: mutation.afterJson, now: 250,
+    }])
+    expect(writes).toEqual([{
+      treeId: 'large', diagramJson: mutation.afterJson, x: 0, z: -20, yaw: 0,
+    }])
+    expect(treeValues(session.trees)).toEqual([
+      { id: 'large', diagramJson: mutation.afterJson, placement: { x: 0, z: -20, yaw: 0 } },
+      { id: 'other', diagramJson: untouched.diagramJson, placement: untouched.placement },
+    ])
+    expect(treeValues(session.trees).filter(({ id }) => id === 'other')).toEqual(
+      treesBefore.filter(({ id }) => id === 'other'),
+    )
   })
 })

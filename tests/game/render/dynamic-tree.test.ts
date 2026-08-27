@@ -1,6 +1,11 @@
 import * as THREE from 'three'
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
 import { describe, expect, it, vi } from 'vitest'
+import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { diagramToJson } from '../../../src/kernel/diagram/json'
+import { DARK } from '../../../src/view/paint'
+import { TreeRenderAssetCache } from '../../../src/game/render/assets'
 import {
   DynamicTreeObjects,
   TREE_TWEEN_MS,
@@ -8,7 +13,7 @@ import {
   type TreeRenderSnapshot,
 } from '../../../src/game/render/dynamic-tree'
 import type { RenderTree } from '../../../src/game/render/runtime'
-import { pointAtVisibleParts } from '../../../src/game/render/tree-objects'
+import { makeRawTreeObject, pointAtVisibleParts, type TreeMaterialSource } from '../../../src/game/render/tree-objects'
 
 const interactionReach = 100
 
@@ -46,24 +51,39 @@ function rootFor(treeId: string, child: THREE.Object3D): THREE.Group {
 }
 
 describe('ordinary visible tree-part picking', () => {
-  it('filters orbit raycasts to the exact orbit target before intersecting background trees', () => {
-    const foreground = rootFor('foreground', pointedObject('foreground', 'b:r0'))
-    const orbit = rootFor('orbit', pointedObject('orbit', 'b:r0'))
-    const intersectObjects = vi.fn((objects: THREE.Object3D[]) => objects.map((root, index) => ({
-      distance: index + 1,
-      point: new THREE.Vector3(),
-      object: root.children[0]!,
-    })))
-
-    const pointedPart = pointAtVisibleParts(
-      { intersectObjects } as unknown as THREE.Raycaster,
-      [foreground, orbit],
+  it('points only the orbit target when production tree geometry overlaps a background tree', () => {
+    const diagram = new DiagramBuilder().build()
+    const asset = new TreeRenderAssetCache(DARK).get(JSON.stringify(diagramToJson(diagram)), diagram)
+    const materials: TreeMaterialSource = {
+      line: () => {
+        const material = new LineMaterial({ color: '#ffffff', linewidth: 0.1, worldUnits: true })
+        material.resolution.set(800, 600)
+        return material
+      },
+      sprite: () => new THREE.SpriteMaterial(),
+      marker: () => new THREE.SpriteMaterial(),
+    }
+    const background = makeRawTreeObject(asset, {
+      id: 'background', index: 0, x: 0, z: -20, yaw: 0,
+    }, materials)
+    const orbit = makeRawTreeObject(asset, {
+      id: 'orbit', index: 1, x: 0, z: -20, yaw: 0,
+    }, materials)
+    const branch = asset.lods.full.entities.find((entity) => entity.kind === 'branch')
+    if (branch === undefined || !('pts' in branch)) throw new Error('expected production branch')
+    const point = branch.pts[0]!
+    background.updateMatrixWorld(true)
+    orbit.updateMatrixWorld(true)
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(point.x, point.y, point.z).add(new THREE.Vector3(0, 0, 20)),
+      new THREE.Vector3(0, 0, -1),
+      0,
       interactionReach,
-      'orbit',
     )
 
-    expect(intersectObjects).toHaveBeenCalledWith([orbit], true)
-    expect(pointedPart?.treeId).toBe('orbit')
+    expect(pointAtVisibleParts(ray, [background, orbit], interactionReach, 'orbit')).toMatchObject({
+      treeId: 'orbit', entityKey: `b:${diagram.root}`,
+    })
   })
 
   it('accepts ordinary non-branch parts for orbit entry and enforces the strict reach boundary', () => {
