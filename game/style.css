@@ -223,7 +223,7 @@ input:disabled {
   pointer-events: none;
 }
 
-.game[data-pointed-tree-id]:not([data-pointed-tree-id=""]) .reticle {
+.game.has-pointed .reticle {
   border-color: #baff9b;
   box-shadow: 0 0 10px rgb(166 255 128 / 65%);
 }

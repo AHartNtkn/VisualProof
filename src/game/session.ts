@@ -53,20 +53,19 @@ export class GameSession {
 export function gameSession(trees: ReadonlyMap<string, GameTree>): GameSession { return new GameSession(trees) }
 
 export type DoubleCutEffects = {
-  readonly beginTreeTween: (treeId: string, before: Diagram, after: Diagram, now: number) => void
+  readonly beginTreeTween: (treeId: string, before: Diagram, after: Diagram) => void
   readonly persistTree: (update: TreeUpdate) => void
 }
 
 export function useDoubleCut(
   session: GameSession,
   pointedPart: PointedTreePart,
-  now: number,
   effects: DoubleCutEffects,
 ): TreeMutation {
   const mutation = session.applyDoubleCut(pointedPart)
   const tree = session.trees.get(mutation.treeId)
   if (tree === undefined) throw new Error(`mutated tree '${mutation.treeId}' is missing`)
-  effects.beginTreeTween(tree.id, mutation.before, mutation.after, now)
+  effects.beginTreeTween(tree.id, mutation.before, mutation.after)
   effects.persistTree({
     treeId: tree.id,
     diagramJson: mutation.afterJson,

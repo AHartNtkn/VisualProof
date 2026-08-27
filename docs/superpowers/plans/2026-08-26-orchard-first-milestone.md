@@ -17,7 +17,7 @@
 - An orbit target exists only in orbit mode. Using a tool never changes camera state or the orbit target.
 - Camera-focus names in migrated game code and tests use `orbitTarget`; render-representation state uses representation-specific names.
 - While orbiting, world-tree interaction is restricted to the orbit target; background trees do not intercept its interaction ray.
-- Interaction reach is exactly `100` world units for this milestone and never reads LOD state. Raycasting uses ordinary visible tree geometry; no hidden interaction geometry or interaction-triggered LOD change. Orbit entry accepts any pointed tree part, while double-cut accepts only a branch.
+- Interaction reach is exactly `100` world units for this milestone and never reads LOD state. Pointing resolves identity from the tree's cached derived render asset when the current LOD representation does not carry it; this does not change the displayed LOD or create another diagram/world authority. Orbit entry accepts any pointed tree part, while double-cut resolves the closest branch specifically.
 - Right-click is only this milestone's double-cut binding and does not define a universal tool gesture.
 - Double-cut spawning calls the real kernel on the region encoded by `b:<regionId>` with empty region, node, and wire arrays.
 - The tween duration remains exactly `350` ms. Different trees may tween concurrently; a repeated move on one tree starts from that tree's displayed interpolated geometry.
@@ -230,7 +230,7 @@ fn rejects_a_database_missing_required_current_tables_and_columns() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("foreign.sqlite3");
     rusqlite::Connection::open(&path).unwrap()
-        .execute_batch("CREATE TABLE metadata (version INTEGER NOT NULL);").unwrap();
+        .execute_batch("CREATE TABLE slots (slot_id TEXT NOT NULL);").unwrap();
     let store = SaveStore::new(temp.path().to_path_buf());
     let entries = store.list().unwrap();
     assert_eq!(entries[0].error.as_deref(), Some("save database has an invalid structure"));
@@ -677,7 +677,7 @@ git commit -m "feat: add Orchard free-flight and orbit camera"
 
 ---
 
-### Task 6: Generic picking, real double-cut use, and concurrent tweens
+### Task 6: Generic pointing, real double-cut use, and concurrent tweens
 
 **Files:**
 - Create: `src/game/session.ts`
@@ -690,7 +690,7 @@ git commit -m "feat: add Orchard free-flight and orbit camera"
 
 **Interfaces:**
 - Produces `GameSession.applyDoubleCut(pointedPart): TreeMutation`.
-- Produces `GameWorldRenderer.pointAt(ndcX, ndcY, orbitTarget): PointedTreePart | null`; the renderer applies the milestone's `100`-unit reach internally.
+- Produces `GameWorldRenderer.pointAt(ndcX, ndcY, orbitTarget): PointedTreePart | null` for orbit entry and `pointAtBranch(ndcX, ndcY, orbitTarget)` for this concrete tool; the renderer applies the milestone's `100`-unit reach internally.
 - Produces `GameWorldRenderer.beginTreeTween(treeId, before, after, now)` with one independent track per tree.
 - `PointedTreePart = { treeId: string; entityKey: string; distance: number }` is concrete raycast output for this milestone, not a universal tool contract.
 
@@ -699,14 +699,13 @@ git commit -m "feat: add Orchard free-flight and orbit camera"
 ```ts
 it('spawns a real empty double cut on the pointed branch of any generic tree', () => {
   const session = gameSession(worldWithTree('large', largeDiagram))
-  const beforeCamera = session.camera
   const mutation = session.applyDoubleCut({ treeId: 'large', entityKey: `b:${nestedRegion}`, distance: 12 })
 
   expect(Object.keys(mutation.after.regions)).toHaveLength(Object.keys(largeDiagram.regions).length + 2)
   const outer = newRegions(mutation.before, mutation.after).find((id) => mutation.after.regions[id]!.parent === nestedRegion)!
   const inner = newRegions(mutation.before, mutation.after).find((id) => mutation.after.regions[id]!.parent === outer)!
   expect(mutation.after.regions[inner]).toEqual({ kind: 'cut', parent: outer })
-  expect(session.camera).toBe(beforeCamera)
+  expect('camera' in session).toBe(false)
 })
 
 it('rejects non-branches, unknown trees, and pointed parts beyond 100 without mutation', () => {
@@ -718,17 +717,21 @@ it('rejects non-branches, unknown trees, and pointed parts beyond 100 without mu
 })
 ```
 
-- [ ] **Step 2: Write failing picking and concurrent-tween tests**
+- [ ] **Step 2: Write failing pointing and concurrent-tween tests**
 
 ```ts
-it('filters orbit raycasts to the orbit target before intersecting background trees', () => {
-  const pointedPart = pointAtVisibleParts(ray, objectsFor(['foreground', 'orbit']), 100, 'orbit')
+it('filters orbit pointing to the orbit target before intersecting background trees', () => {
+  const pointedPart = renderer.pointAt(0, 0, 'orbit')
   expect(pointedPart?.treeId).toBe('orbit')
 })
 
-it('accepts ordinary tree parts for orbit entry and rejects every intersection beyond 100', () => {
-  expect(pointAtVisibleParts(rayAt('r:n0'), objectsFor(['tree-a']), 100, null)?.entityKey).toBe('r:n0')
-  expect(pointAtVisibleParts(rayAtDistance(100.001), objectsFor(['tree-a']), 100, null)).toBeNull()
+it('keeps interaction reach independent of the displayed LOD', () => {
+  expect(rendererWithMarkerTreeAt(99.999).pointAt(0, 0, null)?.treeId).toBe('tree-a')
+  expect(rendererWithMarkerTreeAt(100.001).pointAt(0, 0, null)).toBeNull()
+})
+
+it('resolves the closest branch for double-cut even when a non-branch is nearer', () => {
+  expect(renderer.pointAtBranch(0, 0, null)?.entityKey).toBe('b:r0')
 })
 
 it('animates different trees concurrently and replans one tree from its displayed frame', () => {
@@ -770,11 +773,11 @@ const after = applyDoubleCutIntro(tree.diagram, {
 
 The session owns only generic tree state and never receives or exposes camera state. Return before/after diagrams and exact serialized JSON for renderer and persistence consumers. Integrated input tests prove that using the tool leaves camera mode, pose, and orbit target unchanged.
 
-- [ ] **Step 5: Implement visible-object picking**
+- [ ] **Step 5: Implement LOD-independent pointing**
 
-Retain `treeId`, `entityKey`, and any batched entity segment ranges on ordinary visible tree-part objects. Gather those objects without reading or changing LOD state, and discard intersections beyond `INTERACTION_REACH`. Orbit entry can use any pointed tree part; the session's concrete double-cut operation rejects non-branch keys. In orbit, obtain candidate objects by exact tree ID before calling the Three.js raycaster so background trees neither win nor occlude the result.
+Retain `treeId`, `entityKey`, and any batched entity segment ranges on ordinary tree-part objects. Use the resident representation when it carries entity identity; otherwise intersect the same cached full derived asset without mounting it or changing LOD state. Discard intersections beyond `INTERACTION_REACH`. Orbit entry can use any pointed tree part. The concrete double-cut path considers branch intersections specifically so a nearer non-branch does not reject a valid branch. In orbit, filter candidates by exact tree ID before intersection so background trees neither win nor occlude the result.
 
-Map a batched `LineSegments2` intersection's segment index through its existing `entityRanges`; map raw line/sprite objects through `userData.entityKey`. Do not allocate or promote another representation during picking.
+Map a batched `LineSegments2` intersection's segment index through its existing `entityRanges`; map raw line/sprite objects through `userData.entityKey`. Reuse cached assets and scratch vectors so pointing does not allocate per segment or promote another displayed representation.
 
 - [ ] **Step 6: Implement per-tree dynamic objects and tween tracks**
 
@@ -905,7 +908,7 @@ canvas.addEventListener('contextmenu', (event) => {
 
 - [ ] **Step 6: Add milestone UI and observable runtime evidence**
 
-Render the title, slot list, name field, reticle, mode-specific keyboard hints, hover highlight, invalid-target message, and saving/error status. Mirror only state needed to observe behavior in native tests: ready state, loaded slot ID, camera mode and displayed pose, orbit target, desktop capture state, pointed tree/entity IDs, changed tree ID, active tween count, represented/resident/LOD counts, errors, and settled-frame telemetry.
+Render the title, slot list, name field, reticle, mode-specific keyboard hints, hover highlight, invalid-target message, and saving/error status. Expose player-visible state through the UI and keep only the renderer counters needed for save-driven stress diagnostics. Native tests verify camera/tool behavior from displayed pose, ordinary pointing feedback, visible animation, and durable diagrams rather than production-only test state.
 
 - [ ] **Step 7: Run GREEN validation and commit**
 
@@ -942,7 +945,7 @@ git commit -m "feat: integrate Orchard desktop game loop"
 
 **Interfaces:**
 - The menu owns no renderer and makes no capture request.
-- `DesktopMouse` uses a narrow native Tauri command for real game-window pointer confinement and visibility plus native cursor positioning for relative movement, without browser Pointer Lock or browser activation gates. On the current Linux target the shell runs through X11 and the command must verify a real X11 pointer grab; Tauri/Tao's Linux no-op `set_cursor_grab` is not acceptance evidence.
+- `DesktopMouse` uses a narrow native Tauri command for real game-window pointer confinement and visibility plus native cursor positioning for relative movement, without browser Pointer Lock or browser activation gates. On the current Linux target the shell runs through X11. Acceptance requires observed confinement inside the game window while ordinary mouse buttons still reach the world; a particular X11 API or internal call pattern is not part of the contract.
 - `GameSession` owns only trees and the kernel move.
 - `GameWorldRenderer.pointAt(ndcX, ndcY, orbitTarget)` owns the fixed interaction reach.
 
@@ -954,7 +957,7 @@ Prove that loading is attempted with a free cursor, a world opens only after a s
 
 Remove Pointer Lock requests, activation queues, stale-grant handling, pointer-lock listeners, and the resume overlay. Do not mount `GameWorldRenderer` before a successful load. On world entry, mount the renderer and activate `DesktopMouse`; on orbit entry release it and show the cursor; on Escape leave orbit at the equivalent displayed pose and reactivate it. On failed world opening and teardown, restore a visible free cursor and dispose partial resources.
 
-Implement relative free-flight motion by measuring cursor displacement from the window/canvas center and recentering through the Tauri window API. Ignore the recentered event. On Linux, initialize GTK on the X11 backend before Tauri starts and confine the pointer to the actual game window with a checked native X11 grab; release it on orbit, failure, and teardown. Hiding or recentering without successful confinement is not capture. Grant only the needed command/window permissions and keep platform code in the native boundary.
+Implement relative free-flight motion by measuring cursor displacement from the window/canvas center and recentering through the Tauri window API. Ignore the recentered event. On Linux, initialize GTK on the X11 backend before Tauri starts and confine the pointer to the actual game window with a checked native X11 mechanism that preserves ordinary mouse-button delivery; release confinement on orbit, failure, and teardown. Hiding or recentering without successful confinement is not capture. Grant only the needed command/window permissions and keep platform code in the native boundary.
 
 - [ ] **Step 3: Enforce permanent tool/camera separation structurally**
 
@@ -1060,11 +1063,11 @@ Run WebDriver beneath `xvfb-run` with `WAYLAND_DISPLAY` removed and `GDK_BACKEND
 
 - [ ] **Step 2: Prove the real move, tween, and persistence**
 
-Exercise the seedling double-cut from free flight and a nested large-tree branch from orbit through ordinary right-click input. Assert the move starts a tween, completes after the configured `350` ms transition, and leaves camera mode, pose, and orbit target unchanged. Relaunch and load through the menu, then verify the durable diagram has exactly two new correctly parented cuts.
+Exercise the seedling double-cut from free flight and a known nested large-tree branch at its fixture's predictable interaction point through an OS-delivered right-click. Observe the short visible transition and prove camera mode, displayed pose, and orbit target are unchanged. Relaunch and load through the menu, then verify the durable diagram has exactly two new correctly parented cuts.
 
 - [ ] **Step 3: Prove save-driven stress behavior**
 
-For each of `10, 50, 100, 250, 500, 1000, 2000`, preload exactly that generated SQLite save into isolated app data, launch the native game, load it through the menu, and wait for the production renderer to settle. Assert the loaded logical count, no representation error, no analytic point lights, correct visible/resident counts, and full Raw representation through the diagnostic mode switch. Record timing and renderer counters as diagnostics, not fixed implementation thresholds. The bridge may change only the mounted renderer mode; it cannot supply world data or construct a scene.
+For each of `10, 50, 100, 250, 500, 1000, 2000`, preload exactly that generated SQLite save into isolated app data, launch the native game, load it through the menu, and wait for the production renderer to settle. Assert the loaded logical count, no representation error, no analytic point lights, and correct visible/resident counts. Compare Game and Raw representation only at the representative `10`- and `2000`-tree endpoints. Record timing and renderer counters as diagnostics, not fixed implementation thresholds. The feature-gated bridge may change only the mounted renderer mode; it cannot supply world data or construct a scene.
 
 - [ ] **Step 4: Establish the sole frontend and run completion gates**
 
@@ -1076,7 +1079,7 @@ After replacement suites pass, remove the old browser orchard frontend, dynamic 
 
 - Every runtime world begins with `create_slot`/`load_slot`; generated stress inputs are ordinary SQLite saves.
 - The renderer has one generic tree model and no seedling, stress-tree, or editable-tree variant.
-- Interaction tests use the fixed 100-unit reach without consulting LOD state or creating hidden geometry.
+- Interaction tests prove the fixed 100-unit reach in normal Game mode while the displayed LOD remains unchanged.
 - Orbit filtering occurs before ray intersection, so background trees cannot intercept.
 - Tool/session code has no camera dependency; integrated input tests prove camera mode, pose, and orbit target remain unchanged across tool use.
 - The right-click binding appears only in milestone UI/session integration, not in a generic tool interface.

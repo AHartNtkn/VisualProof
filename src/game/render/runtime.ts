@@ -181,6 +181,7 @@ export type GameTreeRuntimeApi = {
   suspend(treeId: string): void
   resume(tree: RenderTree): void
   residentObjects(treeId?: string): readonly THREE.Object3D[]
+  interactionTrees(ray: THREE.Ray, reach: number): readonly RenderTree[]
   updateGame(camera: THREE.PerspectiveCamera, fogFar: number, viewportHeight: number): LodUpdate
   processOperations(budget?: number): RepresentationWork
 }
@@ -311,6 +312,19 @@ export class GameTreeRuntime implements GameTreeRuntimeApi {
     return [...this.states.values()]
       .map(({ object }) => object)
       .filter((object): object is THREE.Group => object?.parent === this.parent)
+  }
+
+  public interactionTrees(ray: THREE.Ray, reach: number): readonly RenderTree[] {
+    this.assertActive()
+    if (!Number.isFinite(reach) || reach < 0) throw new Error('interaction reach must be finite and non-negative')
+    const endX = ray.origin.x + ray.direction.x * reach
+    const endZ = ray.origin.z + ray.direction.z * reach
+    return this.spatial.query({
+      minX: Math.min(ray.origin.x, endX) - this.maxRadius,
+      maxX: Math.max(ray.origin.x, endX) + this.maxRadius,
+      minZ: Math.min(ray.origin.z, endZ) - this.maxRadius,
+      maxZ: Math.max(ray.origin.z, endZ) + this.maxRadius,
+    }).map(({ state }) => state.tree)
   }
 
   public updateGame(

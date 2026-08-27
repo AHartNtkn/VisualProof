@@ -180,14 +180,14 @@ Derived render assets are cached by exact diagram JSON. The generated stress
 saves therefore derive the large tree once per loaded save even when 2,000
 tree rows refer to it. Render assets are never an authority in the save.
 
-Ordinary visible tree-part objects retain `treeId` and their existing stable
-entity key. The `100`-unit reach is calibrated at the farthest comfortable
-full-detail distance. Raycasting uses that ordinary visible tree geometry
-without querying or changing LOD state. There is no hidden picking
-representation, temporary interaction geometry, or interaction-triggered LOD
-change. Interaction checks only ray distance, and rendering chooses LOD
-normally. Orbit entry accepts any pointed tree part; the concrete double-cut
-operation accepts only a branch key.
+Ordinary tree-part objects retain `treeId` and their existing stable entity
+key. The `100`-unit reach is calibrated at the farthest comfortable
+full-detail distance, but eligibility never reads or changes LOD state. When
+the displayed representation has no entity identity, pointing intersects the
+same cached full derived asset without mounting it or changing the displayed
+LOD. Orbit entry accepts any pointed tree part; the concrete double-cut path
+resolves the closest branch specifically so another entity kind cannot block
+a valid branch.
 
 The renderer can update any tree from a sequence of derived tree render
 snapshots. A tree currently changing receives per-frame dynamic geometry.
@@ -353,9 +353,9 @@ through the start menu. Tests:
 - load the one-large-tree save, orbit it, use double-cut spawning on a nested
   branch, and confirm the persisted diagram gained exactly two correctly
   parented cut regions;
-- load each stress-count save through the normal menu, wait for representation
-  residency and settled frame sampling, and record the existing labeled Game
-  and Raw telemetry;
+- load each stress-count save through the normal menu and wait for
+  representation residency and settled frame sampling; compare Game and Raw
+  telemetry only at the representative 10- and 2,000-tree endpoints;
 - retain the current outcomes: no representation errors, no analytic point
   lights, bounded frame-time residency work, and correct
   visible/resident/full counts.

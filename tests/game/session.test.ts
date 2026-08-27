@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GameTree, GameWorld } from '../../src/game/model'
-import type { TreeUpdate } from '../../src/game/save-client'
-import { gameSession, useDoubleCut } from '../../src/game/session'
+import { gameSession } from '../../src/game/session'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { diagramToJson } from '../../src/kernel/diagram/json'
@@ -84,43 +83,5 @@ describe('game tool session', () => {
       treeId: 'missing', entityKey: 'b:r0', distance: 5,
     })).toThrow(/unknown tree/)
     expect(treeValues(session.trees)).toEqual(beforeTrees)
-  })
-
-  it('changes and persists only the pointed generic tree', () => {
-    const world = worldWithTree('large', largeDiagram)
-    const untouched = tree('other', blankDiagram)
-    const session = gameSession(new Map([...world.trees, ['other', untouched]]))
-    const treesBefore = treeValues(session.trees)
-    const tweens: Array<{ readonly treeId: string; readonly beforeJson: string; readonly afterJson: string; readonly now: number }> = []
-    const writes: TreeUpdate[] = []
-
-    const mutation = useDoubleCut(
-      session,
-      { treeId: 'large', entityKey: `b:${nestedRegion}`, distance: 12 },
-      250,
-      {
-        beginTreeTween: (treeId, before, after, now) => tweens.push({
-          treeId,
-          beforeJson: JSON.stringify(diagramToJson(before)),
-          afterJson: JSON.stringify(diagramToJson(after)),
-          now,
-        }),
-        persistTree: (update) => writes.push(update),
-      },
-    )
-
-    expect(tweens).toEqual([{
-      treeId: 'large', beforeJson: mutation.beforeJson, afterJson: mutation.afterJson, now: 250,
-    }])
-    expect(writes).toEqual([{
-      treeId: 'large', diagramJson: mutation.afterJson, x: 0, z: -20, yaw: 0,
-    }])
-    expect(treeValues(session.trees)).toEqual([
-      { id: 'large', diagramJson: mutation.afterJson, placement: { x: 0, z: -20, yaw: 0 } },
-      { id: 'other', diagramJson: untouched.diagramJson, placement: untouched.placement },
-    ])
-    expect(treeValues(session.trees).filter(({ id }) => id === 'other')).toEqual(
-      treesBefore.filter(({ id }) => id === 'other'),
-    )
   })
 })

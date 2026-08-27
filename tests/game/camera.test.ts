@@ -57,14 +57,14 @@ describe('camera state', () => {
 
   it('derives an equivalent displayed free pose for persistence without changing orbit mode', () => {
     const orbit = orbitState()
+    const before = structuredClone(orbit)
     const display = displayCameraPose(orbit)
 
     const persisted = freePoseForPersistence(orbit)
 
     expect(persisted.position).toEqual(display.eye)
     expect(displayCameraPose({ mode: 'free', pose: persisted }).forward).toEqual(display.forward)
-    expect(orbit).toBe(orbit)
-    expect(orbit.mode).toBe('orbit')
+    expect(orbit).toEqual(before)
   })
 
   it('normalizes diagonal free-flight movement', () => {

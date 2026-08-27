@@ -3,7 +3,12 @@ mod mouse_capture;
 pub mod save_store;
 
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(feature = "wdio-tests")]
+    let builder = builder
+        .plugin(tauri_plugin_wdio::init())
+        .plugin(tauri_plugin_wdio_webdriver::init());
+    builder
         .invoke_handler(tauri::generate_handler![
             commands::list_slots,
             commands::create_slot,
@@ -47,12 +52,22 @@ mod generated_save_tests {
             assert_eq!(loaded.updated_at_ms, 0);
             assert_eq!(
                 loaded.camera,
-                CameraRecord {
-                    x: 0.0,
-                    y: 1.7,
-                    z: 82.0,
-                    yaw: 0.0,
-                    pitch: -0.04,
+                if count == 1 {
+                    CameraRecord {
+                        x: 0.0,
+                        y: 1.7,
+                        z: 82.0,
+                        yaw: -0.00841,
+                        pitch: 0.15565,
+                    }
+                } else {
+                    CameraRecord {
+                        x: 0.0,
+                        y: 1.7,
+                        z: 82.0,
+                        yaw: 0.0,
+                        pitch: -0.04,
+                    }
                 }
             );
             assert_eq!(loaded.trees.len(), count);

@@ -16,6 +16,9 @@ import { orchardPlacements } from '../src/game/render/placement'
 const counts = [1, 10, 50, 100, 250, 500, 1000, 2000] as const
 const largeDiagram = mkReplay('zeroIsNat', verifyTheory(buildFregeTheory())).diagramAt(20)
 const diagramJson = JSON.stringify(diagramToJson(largeDiagram))
+const stressCamera = { x: 0, y: 1.7, z: 82, yaw: 0, pitch: -0.04 }
+const largeInteractionCamera = { x: 0, y: 1.7, z: 82, yaw: -0.00841, pitch: 0.15565 }
+const largeInteractionTree = { id: 'tree-0000', index: 0, x: 0, z: 0, yaw: 0 }
 const saves = counts.map((count) => {
   const slotId = count === 1 ? 'large-1' : `stress-${count}`
   return {
@@ -23,8 +26,9 @@ const saves = counts.map((count) => {
     filename: `${slotId}.sqlite3`,
     displayName: count === 1 ? 'Large Tree' : `Renderer Stress ${count}`,
     updatedAtMs: 0,
-    camera: { x: 0, y: 1.7, z: 82, yaw: 0, pitch: -0.04 },
-    trees: orchardPlacements(count, 34).map((placement) => ({ ...placement, diagramJson })),
+    camera: count === 1 ? largeInteractionCamera : stressCamera,
+    trees: (count === 1 ? [largeInteractionTree] : orchardPlacements(count, 34))
+      .map((placement) => ({ ...placement, diagramJson })),
   }
 })
 
@@ -37,7 +41,16 @@ const temporaryDirectory = mkdtempSync(join(outputDirectory, '.emit-'))
 try {
   const emitted = spawnSync(
     'cargo',
-    ['run', '--quiet', '--manifest-path', manifestPath, '--bin', 'emit_game_saves'],
+    [
+      'run',
+      '--quiet',
+      '--manifest-path',
+      manifestPath,
+      '--features',
+      'save-emitter',
+      '--bin',
+      'emit_game_saves',
+    ],
     {
       input: JSON.stringify({ outputDirectory: temporaryDirectory, saves }),
       encoding: 'utf8',

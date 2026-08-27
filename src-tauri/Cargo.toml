@@ -4,10 +4,25 @@ version = "0.1.0"
 description = "Orchard desktop game shell"
 authors = ["Visual Proof Assistant"]
 edition = "2021"
+default-run = "orchard-game"
+
+[[bin]]
+name = "orchard-game"
+path = "src/main.rs"
+
+[[bin]]
+name = "emit_game_saves"
+path = "src/bin/emit_game_saves.rs"
+required-features = ["save-emitter"]
 
 [lib]
 name = "orchard_game"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+default = []
+save-emitter = []
+wdio-tests = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -18,11 +33,13 @@ raw-window-handle = "0.6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2", features = [] }
+tauri-plugin-wdio = { version = "1", optional = true }
+tauri-plugin-wdio-webdriver = { version = "1", optional = true }
 thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-x11 = { version = "2", features = ["xlib"] }
+x11 = { version = "2", features = ["xfixes", "xlib"] }
 
 [dev-dependencies]
 tempfile = "3"
