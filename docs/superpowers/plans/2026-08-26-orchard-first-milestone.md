@@ -28,6 +28,7 @@
 - Tool/session code owns no camera state and receives no camera object. Camera invariance is proven at the integrated input boundary.
 - The renderer owns the `100`-unit reach constant; callers cannot select another reach. Tests prove the boundary with production-built geometry instead of validating an argument value.
 - Tests prove observable game, persistence, and renderer behavior. Object or promise identity, private metadata, internal call choreography, SQL source text, and renderer construction details are not contracts.
+- Rust treats stored diagram JSON as opaque text. The existing TypeScript kernel decoder is the sole diagram-validity authority and must succeed before a world is mounted.
 
 ---
 
@@ -977,13 +978,13 @@ Run the focused lifecycle, mouse, camera, session, and world tests; then the gam
 - Delete: `tests/game/save-publication.test.ts`
 
 **Interfaces:**
-- Save validation recognizes the one current logical schema through required tables, columns, keys, references, integrity, finite values, and kernel parsing; it does not authenticate SQL source strings, index names, or unrelated inert objects.
+- Rust save validation recognizes the one current logical schema through required tables, columns, keys, references, integrity, and finite values; it treats diagram JSON as opaque bytes/text and does not authenticate SQL source strings, index names, unrelated inert objects, or kernel structure. The existing TypeScript decoder is the sole diagram-validity authority before world mounting.
 - Generated saves are written to a temporary output directory, validated through `SaveStore::load`, and replaced per file. The generator is rerunnable and repairs a partially published derived set.
 - Frontend persistence tests assert decoded values, durable writes, errors, and coalescing results rather than object or Promise identity or drain-loop choreography.
 
 - [ ] **Step 1: Write public-store RED tests**
 
-Create logically valid databases with equivalent DDL formatting and an inert view and prove they load. Prove missing required tables/columns, dangling references, non-finite values, and malformed diagrams fail. Prove byte-identical diagram JSON shares a store row while byte-distinct JSON remains distinct. Prove updating one tree changes only that durable tree and a failed unknown-tree update exposes no changed loaded state.
+Create logically valid databases with equivalent DDL formatting and an inert view and prove they load. Prove missing required tables/columns, dangling references, and non-finite values fail. Prove syntactically valid but structurally invalid diagram JSON survives the Rust store byte-for-byte and is rejected by the public TypeScript loaded-slot decoder before `StartLifecycle` opens a world. Prove byte-identical diagram JSON shares a store row while byte-distinct JSON remains distinct. Prove updating one tree changes only that durable tree and a failed unknown-tree update exposes no changed loaded state.
 
 - [ ] **Step 2: Simplify validation and fixture publication**
 

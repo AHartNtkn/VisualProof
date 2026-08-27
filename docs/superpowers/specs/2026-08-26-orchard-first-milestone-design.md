@@ -119,13 +119,15 @@ Writes use SQLite transactions. Frontend writes are ordered per slot;
 successive pending camera poses and tree snapshots for the same tree may
 coalesce to the newest state before their transaction begins.
 
-Loading checks the current required table and column structure, finite
-placement and camera numbers, unique IDs, valid diagram references, and every
-diagram through the kernel JSON parser before mounting the world. It validates
-those semantics through SQLite metadata and ordinary store operations, never
-by matching `CREATE TABLE` source text. An invalid slot
-stays on the start menu with a concrete load error. There is no partially
-loaded world.
+Rust loading checks the current required table and column structure, finite
+placement and camera numbers, unique IDs, valid diagram references, and
+database integrity through SQLite metadata and ordinary store operations,
+never by matching `CREATE TABLE` source text. Diagram JSON is opaque stored
+text at that boundary. The frontend then passes every distinct diagram through
+the existing TypeScript kernel decoder before mounting the world. Either a
+database failure or a diagram-decoding failure keeps the slot on the start menu
+with a concrete load error. There is no partially loaded world and no second
+diagram parser in Rust.
 
 The milestone has no rename, deletion, thumbnails, manual save history, or
 alternate save format.
