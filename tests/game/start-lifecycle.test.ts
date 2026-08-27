@@ -41,6 +41,8 @@ class TestPointerLockPort implements PointerLockPort {
   public releases = 0
   public readonly timeline: string[] = []
   public requestResult: void | Promise<void> = undefined
+  public requestError: unknown | null = null
+  public releaseError: unknown | null = null
   private readonly changes = new Set<() => void>()
   private readonly errors = new Set<(error?: unknown) => void>()
 
@@ -54,6 +56,7 @@ class TestPointerLockPort implements PointerLockPort {
 
   public request(): void | Promise<void> {
     this.timeline.push('request')
+    if (this.requestError !== null) throw this.requestError
     return this.requestResult
   }
 
@@ -73,11 +76,16 @@ class TestPointerLockPort implements PointerLockPort {
 
   public release(): void {
     this.releases++
-    this.locked = false
+    if (this.releaseError !== null) throw this.releaseError
   }
 
   public acquire(): void {
     this.locked = true
+    for (const listener of this.changes) listener()
+  }
+
+  public unlock(): void {
+    this.locked = false
     for (const listener of this.changes) listener()
   }
 
@@ -119,6 +127,8 @@ describe('game start lifecycle', () => {
     expect(opened).toEqual([])
     expect(port.releases).toBe(1)
     expect(failures).toEqual([{ kind: 'pointer-lock', message: 'permission denied' }])
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
   })
 
   it('treats legacy pointerlockerror as failure without starting persistence', async () => {
@@ -140,6 +150,8 @@ describe('game start lifecycle', () => {
     expect(failures).toEqual([{
       kind: 'pointer-lock', message: 'pointer lock was denied',
     }])
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
   })
 
   it('keeps controls rendered by a late slot list disabled and rejects overlapping factories', async () => {
@@ -211,6 +223,12 @@ describe('game start lifecycle', () => {
     expect(framesRequested).toBe(0)
     expect(failures).toEqual([])
     expect(port.releases).toBe(1)
+    expect(port.locked).toBe(true)
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
+    port.unlock()
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
   })
 
   it('restores the menu after open throws and permits a later start', async () => {
@@ -226,19 +244,26 @@ describe('game start lifecycle', () => {
       fail: (failure) => failures.push(failure),
     })
     lifecycle.registerControl(controls)
-    expect(port.changeListenerCount).toBe(1)
-    expect(port.errorListenerCount).toBe(1)
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
 
     const firstStart = lifecycle.start(async () => world)
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
     port.acquire()
     await firstStart
 
     expect(failures).toEqual([{
       kind: 'operation', message: 'renderer initialization failed',
     }])
-    expect(port.locked).toBe(false)
+    expect(port.locked).toBe(true)
     expect(port.releases).toBe(1)
     expect(controls.disabled).toBe(false)
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
+    port.unlock()
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
 
     const retry = lifecycle.start(async () => world)
     expect(controls.disabled).toBe(true)
@@ -248,8 +273,8 @@ describe('game start lifecycle', () => {
     expect(openCalls).toBe(2)
     expect(failures).toHaveLength(1)
     expect(controls.disabled).toBe(false)
-    expect(port.changeListenerCount).toBe(1)
-    expect(port.errorListenerCount).toBe(1)
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
   })
 
   it('restores the menu after asynchronous open rejection and permits a later start', async () => {
@@ -274,7 +299,10 @@ describe('game start lifecycle', () => {
     expect(failures).toEqual([{
       kind: 'operation', message: 'asynchronous renderer failure',
     }])
-    expect(port.locked).toBe(false)
+    expect(port.locked).toBe(true)
+    port.unlock()
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
 
     const retry = lifecycle.start(async () => world)
     port.acquire()
@@ -284,25 +312,66 @@ describe('game start lifecycle', () => {
     expect(failures).toHaveLength(1)
   })
 
-  it('drains a cancelled Promise request before accepting a fresh acquisition', async () => {
+  it('keeps a cancelled Promise grant isolated until asynchronous unlock', async () => {
     const port = new TestPointerLockPort()
     const oldRequest = deferred<void>()
     port.requestResult = oldRequest.promise
     const gate = new PointerLockGate(port)
 
     const cancelled = gate.acquire()
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
     cancelled.cancel()
     await expect(cancelled.result).rejects.toThrow('cancelled')
 
-    const refusedWhileDraining = gate.acquire()
-    expect(port.timeline).toEqual(['request'])
-    await expect(refusedWhileDraining.result).rejects.toThrow('still settling')
-
-    port.locked = true
+    port.acquire()
     oldRequest.resolve()
-    await until(() => !port.locked)
+    await oldRequest.promise
+    await Promise.resolve()
 
-    port.requestResult = undefined
+    expect(port.locked).toBe(true)
+    expect(port.releases).toBeGreaterThan(0)
+    const refusedWhileUnlocking = gate.acquire()
+    expect(port.timeline).toEqual(['request'])
+    await expect(refusedWhileUnlocking.result).rejects.toThrow('still settling')
+
+    port.unlock()
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
+
+    const freshRequest = deferred<void>()
+    port.requestResult = freshRequest.promise
+    const fresh = gate.acquire()
+    expect(port.timeline).toEqual(['request', 'request'])
+    port.acquire()
+    freshRequest.resolve()
+    await fresh.result
+
+    expect(port.locked).toBe(true)
+    expect(port.releases).toBe(1)
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
+  })
+
+  it('keeps a cancelled legacy grant isolated until asynchronous unlock', async () => {
+    const port = new TestPointerLockPort()
+    const gate = new PointerLockGate(port)
+
+    const cancelled = gate.acquire()
+    cancelled.cancel()
+    await expect(cancelled.result).rejects.toThrow('cancelled')
+
+    port.acquire()
+    expect(port.locked).toBe(true)
+    expect(port.releases).toBe(1)
+    const refusedWhileUnlocking = gate.acquire()
+    expect(port.timeline).toEqual(['request'])
+    await expect(refusedWhileUnlocking.result).rejects.toThrow('still settling')
+
+    port.unlock()
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
+
     const fresh = gate.acquire()
     expect(port.timeline).toEqual(['request', 'request'])
     port.acquire()
@@ -310,28 +379,94 @@ describe('game start lifecycle', () => {
 
     expect(port.locked).toBe(true)
     expect(port.releases).toBe(1)
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
   })
 
-  it('drains a cancelled legacy error before accepting a fresh acquisition', async () => {
+  it('does not let a released lock satisfy a retry before asynchronous unlock', async () => {
     const port = new TestPointerLockPort()
     const gate = new PointerLockGate(port)
+    const first = gate.acquire()
+    port.acquire()
+    await first.result
 
+    gate.release()
+    expect(port.locked).toBe(true)
+    expect(port.releases).toBe(1)
+    expect(port.changeListenerCount).toBe(1)
+    const refusedWhileUnlocking = gate.acquire()
+    expect(port.timeline).toEqual(['request'])
+    await expect(refusedWhileUnlocking.result).rejects.toThrow('still settling')
+
+    port.unlock()
+    const retry = gate.acquire()
+    expect(port.timeline).toEqual(['request', 'request'])
+    port.acquire()
+    await retry.result
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
+  })
+
+  it('cleans an idle gate after request throw and a cancelled denial', async () => {
+    const port = new TestPointerLockPort()
+    const gate = new PointerLockGate(port)
+    port.requestError = new Error('request exploded')
+
+    await expect(gate.acquire().result).rejects.toThrow('request exploded')
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
+
+    port.requestError = null
+    const cancelled = gate.acquire()
+    cancelled.cancel()
+    await expect(cancelled.result).rejects.toThrow('cancelled')
+    port.fail(new Error('late denial'))
+
+    expect(port.locked).toBe(false)
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
+  })
+
+  it('preserves a cancelled drain when release throws until unlock is observed', async () => {
+    const port = new TestPointerLockPort()
+    const gate = new PointerLockGate(port)
+    port.releaseError = new Error('release exploded')
     const cancelled = gate.acquire()
     cancelled.cancel()
     await expect(cancelled.result).rejects.toThrow('cancelled')
 
-    const refusedWhileDraining = gate.acquire()
+    expect(() => port.acquire()).not.toThrow()
+    expect(port.locked).toBe(true)
+    expect(port.releases).toBe(1)
+    await expect(gate.acquire().result).rejects.toThrow('still settling')
     expect(port.timeline).toEqual(['request'])
-    await expect(refusedWhileDraining.result).rejects.toThrow('still settling')
 
-    port.fail(new Error('late request denial'))
+    port.releaseError = null
+    port.unlock()
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
+  })
+
+  it('finishes a cancelled Promise drain on asynchronous denial', async () => {
+    const port = new TestPointerLockPort()
+    const request = deferred<void>()
+    port.requestResult = request.promise
+    const gate = new PointerLockGate(port)
+    const cancelled = gate.acquire()
+    cancelled.cancel()
+    await expect(cancelled.result).rejects.toThrow('cancelled')
+
+    request.reject(new Error('late denial'))
+    await expect(request.promise).rejects.toThrow('late denial')
+    await until(() => port.changeListenerCount === 0)
+
+    expect(port.locked).toBe(false)
+    expect(port.errorListenerCount).toBe(0)
+    port.requestResult = undefined
     const fresh = gate.acquire()
     expect(port.timeline).toEqual(['request', 'request'])
     port.acquire()
     await fresh.result
-
-    expect(port.locked).toBe(true)
-    expect(port.releases).toBe(0)
   })
 
   it('cancels a Promise-backed acquisition and releases a late grant after disposal', async () => {
@@ -339,8 +474,8 @@ describe('game start lifecycle', () => {
     const requested = deferred<void>()
     port.requestResult = requested.promise
     const lifecycle = lifecycleWith(port, [], [])
-    expect(port.changeListenerCount).toBe(1)
-    expect(port.errorListenerCount).toBe(1)
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
     let operationCalls = 0
     let startSettled = false
 
@@ -348,6 +483,8 @@ describe('game start lifecycle', () => {
       operationCalls++
       return world
     }).finally(() => { startSettled = true })
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
     lifecycle.dispose()
     await until(() => startSettled)
 
@@ -356,21 +493,24 @@ describe('game start lifecycle', () => {
     expect(port.changeListenerCount).toBe(1)
     expect(port.errorListenerCount).toBe(1)
 
-    port.locked = true
+    port.acquire()
     requested.resolve()
     await starting
 
-    expect(port.locked).toBe(false)
+    expect(port.locked).toBe(true)
     expect(port.releases).toBe(2)
     expect(port.changeListenerCount).toBe(1)
     expect(port.errorListenerCount).toBe(1)
+    port.unlock()
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
   })
 
   it('settles a cancelled legacy acquisition and rejects a late lock without listener growth', async () => {
     const port = new TestPointerLockPort()
     const lifecycle = lifecycleWith(port, [], [])
-    expect(port.changeListenerCount).toBe(1)
-    expect(port.errorListenerCount).toBe(1)
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
     let operationCalls = 0
     let startSettled = false
 
@@ -378,6 +518,8 @@ describe('game start lifecycle', () => {
       operationCalls++
       return world
     }).finally(() => { startSettled = true })
+    expect(port.changeListenerCount).toBe(1)
+    expect(port.errorListenerCount).toBe(1)
     lifecycle.dispose()
     await until(() => startSettled)
 
@@ -389,10 +531,13 @@ describe('game start lifecycle', () => {
     port.fail(new Error('late denial'))
     await starting
 
-    expect(port.locked).toBe(false)
+    expect(port.locked).toBe(true)
     expect(port.releases).toBe(2)
     expect(port.changeListenerCount).toBe(1)
     expect(port.errorListenerCount).toBe(1)
+    port.unlock()
+    expect(port.changeListenerCount).toBe(0)
+    expect(port.errorListenerCount).toBe(0)
   })
 
   it('cancels a Promise-backed resume acquisition before gate teardown', async () => {
@@ -409,11 +554,33 @@ describe('game start lifecycle', () => {
 
     expect(port.changeListenerCount).toBe(1)
     expect(port.errorListenerCount).toBe(1)
-    port.locked = true
+    port.acquire()
     requested.resolve()
+    await requested.promise
+    await Promise.resolve()
+
+    expect(port.locked).toBe(true)
+    expect(port.changeListenerCount).toBe(1)
+    port.unlock()
     await until(() => port.changeListenerCount === 0)
 
     expect(port.locked).toBe(false)
+    expect(port.errorListenerCount).toBe(0)
+  })
+
+  it('rejects a concurrent resume request before a second platform call', async () => {
+    const port = new TestPointerLockPort()
+    const gate = new PointerLockGate(port)
+    const resumePointerLock = new ResumePointerLock(gate)
+
+    const first = resumePointerLock.request()
+    const overlapping = resumePointerLock.request()
+    expect(port.timeline).toEqual(['request'])
+    await expect(overlapping).rejects.toThrow('already in progress')
+
+    port.acquire()
+    await first
+    expect(port.changeListenerCount).toBe(0)
     expect(port.errorListenerCount).toBe(0)
   })
 
@@ -427,6 +594,11 @@ describe('game start lifecycle', () => {
     grantedGate.dispose()
     await expect(granting).rejects.toThrow('cancelled')
     grantedPort.acquire()
+
+    expect(grantedPort.locked).toBe(true)
+    expect(grantedPort.changeListenerCount).toBe(1)
+    expect(grantedPort.errorListenerCount).toBe(1)
+    grantedPort.unlock()
 
     expect(grantedPort.locked).toBe(false)
     expect(grantedPort.changeListenerCount).toBe(0)

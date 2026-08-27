@@ -364,7 +364,7 @@ renderer.canvas.addEventListener('click', () => {
   const tree = session.world.trees.get(pointedPart.treeId)
   if (tree === undefined) return
   camera = enterOrbit(camera, tree.id, worldBounds(tree))
-  document.exitPointerLock()
+  pointerLock.release()
   mirrorCamera()
   mirrorPoint(pointedPart)
 })
