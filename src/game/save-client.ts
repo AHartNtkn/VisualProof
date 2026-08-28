@@ -131,7 +131,7 @@ export function httpSaveTransport(config: {
   const baseUrl = config.baseUrl.replace(/\/$/, '')
   return {
     async request(operation, input): Promise<unknown> {
-      const response = await config.fetch(`${baseUrl}${playtestPaths[operation]}`, {
+      const response = await config.fetch.call(globalThis, `${baseUrl}${playtestPaths[operation]}`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',

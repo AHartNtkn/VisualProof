@@ -89,6 +89,28 @@ describe('save client transports', () => {
     expect(requests).toHaveLength(1)
   })
 
+  // This fails if a browser-native fetch is invoked with the transport config as its receiver.
+  it('HTTP transport invokes browser-native fetch with globalThis as its receiver', async () => {
+    const fetch: typeof globalThis.fetch = function (
+      this: typeof globalThis,
+      _url: RequestInfo | URL,
+      _init?: RequestInit,
+    ): Promise<Response> {
+      if (this !== globalThis) throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation")
+      return Promise.resolve(new Response('[]', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+    const client = createSaveClient(httpSaveTransport({
+      baseUrl: 'http://127.0.0.1:1421',
+      token: 'test-token',
+      fetch,
+    }))
+
+    await expect(client.list()).resolves.toEqual([])
+  })
+
   // This fails if a route, token header, JSON envelope, or decoded HTTP response drifts.
   it('HTTP transport sends every SaveClient operation using the Task 1 wire contract', async () => {
     const requests: RecordedHttpRequest[] = []
