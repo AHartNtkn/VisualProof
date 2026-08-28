@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FreeCameraPose } from '../../src/game/model'
+import type { CameraPose } from '../../src/game/model'
 import type { CameraRecord, SaveClient, TreeUpdate } from '../../src/game/save-client'
 import {
   SaveWriter,
@@ -13,7 +13,7 @@ function update(treeId: string, diagramJson: string): TreeUpdate {
   return { treeId, diagramJson, x: 1, z: 2, yaw: 3 }
 }
 
-function cameraAt(x: number): FreeCameraPose {
+function cameraAt(x: number): CameraPose {
   return { position: { x, y: 1.7, z: 8 }, yaw: x / 10, pitch: -0.18 }
 }
 
@@ -109,7 +109,7 @@ describe('ordered save writer', () => {
       .toEqual([['a', 'one'], ['a', 'three'], ['b', 'other']])
   })
 
-  it('debounces camera changes for 500 ms and writes the newest displayed free pose', async () => {
+  it('debounces camera changes for 500 ms and writes the newest displayed pose', async () => {
     const clock = new FakeClock()
     const cameraWrites: CameraRecord[] = []
     const port: SavePort = {

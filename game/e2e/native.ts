@@ -1,7 +1,6 @@
 import { $, browser, expect } from '@wdio/globals'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { Key } from 'webdriverio'
 
 export type DisplayPose = {
   readonly eye: { readonly x: number; readonly y: number; readonly z: number }
@@ -37,22 +36,6 @@ export async function displayedPose(): Promise<DisplayPose> {
   }
 }
 
-export async function settledDisplayedPose(): Promise<DisplayPose> {
-  let previous = ''
-  let stableSamples = 0
-  let settled: DisplayPose | null = null
-  await browser.waitUntil(async () => {
-    const current = await displayedPose()
-    const serialized = JSON.stringify(current)
-    stableSamples = serialized === previous ? stableSamples + 1 : 0
-    previous = serialized
-    settled = current
-    return stableSamples >= 2
-  }, { interval: 20, timeout: 2_000, timeoutMsg: 'displayed camera pose did not settle after input ended' })
-  if (settled === null) throw new Error('displayed camera pose did not produce a sample')
-  return settled
-}
-
 export function expectPoseClose(actual: DisplayPose, expected: DisplayPose): void {
   for (const axis of ['x', 'y', 'z'] as const) {
     expect(actual.eye[axis]).toBeCloseTo(expected.eye[axis], 7)
@@ -64,14 +47,6 @@ export async function hold(key: string, milliseconds = 180): Promise<void> {
   await browser.action('key').down(key).pause(milliseconds).up(key).perform()
 }
 
-export async function holdTogether(keys: readonly string[], milliseconds: number): Promise<void> {
-  const action = browser.action('key')
-  for (const key of keys) action.down(key)
-  action.pause(milliseconds)
-  for (const key of [...keys].reverse()) action.up(key)
-  await action.perform()
-}
-
 export async function createSlot(name: string): Promise<string> {
   await $('[data-new-slot-name]').setValue(name)
   await $('[data-create-slot]').click()
@@ -81,7 +56,6 @@ export async function createSlot(name: string): Promise<string> {
     if (error.length > 0) throw new Error(`creating the native save failed: ${error}`)
     return false
   }, { timeout: 30_000, interval: 100 })
-  await resumeFreeControls()
   return attribute('loaded-slot')
 }
 
@@ -91,15 +65,6 @@ export async function loadSlot(slotId: string): Promise<void> {
   await load.click()
   await expect(game()).toHaveAttribute('data-loaded-slot', slotId)
   await expect(game()).toHaveAttribute('data-ready', 'true')
-  await resumeFreeControls()
-}
-
-export async function resumeFreeControls(): Promise<void> {
-  const resume = $('[data-free-resume]')
-  if (!await resume.isDisplayed()) return
-  await canvas().click()
-  await expect(resume).not.toBeDisplayed()
-  await expect($('[data-reticle]')).toBeDisplayed()
 }
 
 export async function rightClickWorld(x = 0, y = 0): Promise<void> {
@@ -108,33 +73,6 @@ export async function rightClickWorld(x = 0, y = 0): Promise<void> {
     .down({ button: 2 })
     .up({ button: 2 })
     .perform()
-}
-
-export function expectDoubleCut(before: StoredDiagram, after: StoredDiagram, parent: string): void {
-  const added = Object.keys(after.regions).filter((id) => before.regions[id] === undefined)
-  expect(added).toHaveLength(2)
-  const outer = added.find((id) => after.regions[id]?.kind === 'cut' && after.regions[id].parent === parent)
-  expect(outer).toBeDefined()
-  const inner = added.find((id) => after.regions[id]?.kind === 'cut' && after.regions[id].parent === outer)
-  expect(inner).toBeDefined()
-}
-
-export async function waitForVisibleTreeTween(): Promise<void> {
-  const worldCanvas = await canvas()
-  const elementId = await worldCanvas.elementId
-  const during = await browser.takeElementScreenshot(elementId)
-  let previous = ''
-  let settled = ''
-  let stableSamples = 0
-  await browser.waitUntil(async () => {
-    const current = await browser.takeElementScreenshot(elementId)
-    stableSamples = current === previous ? stableSamples + 1 : 0
-    previous = current
-    settled = current
-    return stableSamples >= 2
-  }, { interval: 75, timeout: 2_000, timeoutMsg: 'tree tween did not visibly settle' })
-  expect(settled).not.toEqual(during)
-  await expect(game()).toHaveAttribute('data-save-state', 'idle')
 }
 
 export function storedTreeDiagram(slotId: string, treeId: string): StoredDiagram {
@@ -160,8 +98,4 @@ export function storedTreeDiagram(slotId: string, treeId: string): StoredDiagram
 
 export async function setRenderMode(mode: 'game' | 'raw'): Promise<void> {
   await browser.execute((nextMode) => window.__ORCHARD_WDIO__?.setRenderMode(nextMode), mode)
-}
-
-export async function pressEscape(): Promise<void> {
-  await browser.keys(Key.Escape)
 }

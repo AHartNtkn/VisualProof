@@ -1,7 +1,7 @@
 import type { Diagram } from '../kernel/diagram'
 import { diagramFromJson } from '../kernel/diagram'
 
-export type FreeCameraPose = {
+export type CameraPose = {
   readonly position: { readonly x: number; readonly y: number; readonly z: number }
   readonly yaw: number
   readonly pitch: number
@@ -16,7 +16,7 @@ export type GameTree = {
 
 export type GameWorld = {
   readonly slot: { readonly id: string; readonly name: string; readonly updatedAtMs: number }
-  readonly camera: FreeCameraPose
+  readonly camera: CameraPose
   readonly trees: ReadonlyMap<string, GameTree>
 }
 
@@ -87,7 +87,7 @@ export function decodeLoadedSlot(value: unknown): GameWorld {
     ['x', 'y', 'z', 'yaw', 'pitch'],
     'camera',
   )
-  const cameraPose: FreeCameraPose = {
+  const cameraPose: CameraPose = {
     position: {
       x: finiteNumber(camera.x, 'camera.x'),
       y: finiteNumber(camera.y, 'camera.y'),

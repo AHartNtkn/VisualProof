@@ -60,12 +60,7 @@ case "$mode" in
   e2e)
     npm run build:game:e2e
     new_data_root
-    run_scenario free-controls-resume free-controls-resume "$current_data_root"
-    new_data_root
-    run_scenario camera camera "$current_data_root"
-    for phase in seedling-read large-write large-read; do
-      run_scenario double-cut "$phase" "$current_data_root"
-    done
+    run_scenario passive-world passive-world "$current_data_root"
     ;;
   stress)
     npm run build:game:e2e

@@ -1,4 +1,4 @@
-import type { FreeCameraPose } from './model'
+import type { CameraPose } from './model'
 import type { CameraRecord, SaveClient, TreeUpdate } from './save-client'
 
 export type SaveWriterStatus = {
@@ -24,7 +24,7 @@ const systemClock: SaveWriterClock = {
   clearTimeout: (id) => globalThis.clearTimeout(id as ReturnType<typeof setTimeout>),
 }
 
-function cameraRecord(pose: FreeCameraPose): CameraRecord {
+function cameraRecord(pose: CameraPose): CameraRecord {
   return {
     x: pose.position.x,
     y: pose.position.y,
@@ -75,7 +75,7 @@ export class SaveWriter {
     this.enqueue({ kind: 'tree', update })
   }
 
-  public camera(camera: FreeCameraPose): void {
+  public camera(camera: CameraPose): void {
     this.assertAccepting()
     const next = cameraRecord(camera)
     if (sameCamera(this.lastCamera, next)) return

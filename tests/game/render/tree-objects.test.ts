@@ -10,7 +10,6 @@ import {
   makeDynamicTreeObject,
   makeMarkerObject,
   makeRawTreeObject,
-  pointAtVisibleParts,
   type TreeMaterialSource,
 } from '../../../src/game/render/tree-objects'
 import type { TreePlacement } from '../../../src/game/render/placement'
@@ -173,29 +172,7 @@ describe('game tree representations', () => {
       kindColoredMaterials(),
     )
     reduced.updateMatrixWorld(true)
-    const outerCut = derived.lods.reduced.entities.find(({ key }) => key === 'b:r1')
-    if (outerCut === undefined || !('pts' in outerCut)) throw new Error('expected reduced cut branch')
-    const start = outerCut.pts[0]!
-    const end = outerCut.pts[outerCut.pts.length - 1]!
-    const midpoint = {
-      x: (start.x + end.x) / 2,
-      y: (start.y + end.y) / 2,
-      z: (start.z + end.z) / 2,
-    }
-    const point = pointAtVisibleParts(
-      new THREE.Raycaster(
-        new THREE.Vector3(midpoint.x, midpoint.y, 0),
-        new THREE.Vector3(0, 0, -1),
-        0,
-        100,
-      ),
-      [reduced],
-      100,
-      null,
-    )
-
     expect(visibleColors(reduced)).toEqual(new Set(['ff0000']))
-    expect(point).toMatchObject({ treeId: 'representative', entityKey: 'b:r1' })
   })
 
   it('places every representation at the tree world transform', () => {

@@ -4,10 +4,9 @@
 
 ## Goal
 
-Deliver the first playable Orchard vertical slice in a real Tauri desktop
-shell: create or load a named save, fly through a generic tree scene, enter
-orbit around a nearby tree, point at a branch, apply real double-cut spawning,
-watch the existing 3D tween, and persist the changed tree.
+Deliver the first Orchard world viewer in a real Tauri desktop shell: create or
+load a named save, render its generic tree scene from the saved camera, and
+keep the world and save status live.
 
 The default new save contains one blank seedling. Generated validation saves
 contain the same large `zeroIsNat` step-20 trees used by the current renderer
@@ -19,33 +18,8 @@ trees.
 ### Trees are generic
 
 Every runtime tree has one identity, one kernel diagram, and one placement.
-A seedling is merely a tree whose diagram is the blank sheet. Any tree can be
-orbited, targeted by a tool, changed by the kernel, animated, and persisted.
-There is no special editable-tree, seedling, stress-tree, or live-tree data
-model.
-
-### Orbit target is the only focus term
-
-An **orbit target** is the tree the camera is currently orbiting. It exists
-only in orbit mode. Free-flight mode has no orbit target.
-
-Using a tool never changes camera state or the orbit target. This is a
-permanent development rule, independent of any particular tool or binding.
-A future tool may use any gesture or physical interaction its design requires;
-the rule does not impose a universal targeting model.
-
-While orbiting, world-tree interactions are restricted to entities belonging
-to the orbit target. Background trees remain visible but do not receive hover,
-tool use, or other world interactions, and they do not intercept the orbit
-target's interaction ray.
-
-### Interaction reach is independent of LOD
-
-Orbit entry and tool use both require the world-space ray intersection to be
-within `100` units of the camera. This is a standalone gameplay tuning value,
-initially chosen to approximate the current large-tree full-detail distance.
-The interaction code never reads render LOD state, and LOD policy never reads
-interaction reach.
+A seedling is merely a tree whose diagram is the blank sheet. There is no
+special editable-tree, seedling, stress-tree, or live-tree data model.
 
 ### Saves have one current format
 
@@ -71,8 +45,7 @@ Production modules under `src/game/` own:
 
 - generic saved-tree and camera types;
 - the frontend save client;
-- game-session and camera state;
-- input interpretation and tool dispatch;
+- fixed saved-camera presentation;
 - the Three.js world renderer;
 - dynamic tree geometry and picking;
 - migrated spatial indexing, LOD, glow, residency, and stress telemetry.
@@ -146,7 +119,7 @@ type GameTree = {
 
 type GameWorld = {
   readonly trees: ReadonlyMap<string, GameTree>
-  readonly camera: FreeCameraPose
+  readonly camera: CameraPose
 }
 ```
 
@@ -180,96 +153,10 @@ Derived render assets are cached by exact diagram JSON. The generated stress
 saves therefore derive the large tree once per loaded save even when 2,000
 tree rows refer to it. Render assets are never an authority in the save.
 
-Ordinary tree-part objects retain `treeId` and their existing stable entity
-key. The `100`-unit reach is calibrated at the farthest comfortable
-full-detail distance, but eligibility never reads or changes LOD state. When
-the displayed representation has no entity identity, pointing intersects the
-same cached full derived asset without mounting it or changing the displayed
-LOD. Orbit entry accepts any pointed tree part; the concrete double-cut path
-resolves the closest branch specifically so another entity kind cannot block
-a valid branch.
-
-The renderer can update any tree from a sequence of derived tree render
-snapshots. A tree currently changing receives per-frame dynamic geometry.
-This is a render role, not a different tree population or model, and multiple
-trees may hold that role concurrently.
-
-## Camera and Input
-
-The start menu has an ordinary cursor and does not mount a playable world. A
-valid Create submission or Load button activation may request relative mouse
-input synchronously, but save I/O and world opening neither await nor depend on
-that request. A decoded world always mounts with its loaded free-flight camera,
-renderer, session, and writer. When free controls are inactive, the world keeps
-rendering and saving while mouse-look, movement, tool use, and orbit entry are
-inert; it presents the ordinary cue `Click the orchard to resume controls.` A
-primary world click retries acquisition without also entering orbit. Losing
-relative input clears held keys and pointing only: it preserves the camera pose,
-world readiness, renderer, session, writer, and animation loop. A successful
-retry restores free controls without changing the pose.
-
-### Free flight
-
-- Free controls are active exactly when the camera is in free flight and the
-  world host owns relative mouse input. Only then do `MouseEvent.movementX` and
-  `MouseEvent.movementY` change yaw and pitch, `W`/`S` move forward and
-  backward, `A`/`D` strafe, `Space`/`Ctrl` move vertically, and `Shift`
-  increases movement speed.
-- A left-click points through the center reticle. A tree under the reticle
-  within `100` units becomes the orbit target, orbit mode begins, and pointer
-  lock is released so the ordinary cursor becomes visible.
-- A left-click without a tree under the reticle in reach changes nothing.
-
-### Orbit
-
-- The ordinary cursor points at the orbit target and does not move the camera.
-- `A` and `D` change horizontal orbit angle.
-- `W` and `S` decrease and increase orbit radius.
-- `Space` and `Ctrl` move the camera vertically around the orbit target.
-- Escape requests Pointer Lock. After it succeeds, it converts the displayed
-  orbit eye and direction into a free-flight pose and ends orbit.
-- World-tree raycasts contain only objects belonging to the orbit target.
-
-Camera persistence stores a free-flight pose. While orbiting, the displayed
-eye and look direction are converted to the equivalent free-flight pose for
-the debounced camera-row update; loading always begins in free flight.
-
-## First Tool Binding and Kernel Move
-
-Right-click is the temporary milestone binding for double-cut spawning. It
-does not establish a permanent meaning for right-click or a universal tool
-gesture.
-
-- In free flight, right-click raycasts through the center reticle across all
-  trees.
-- In orbit, right-click raycasts through the cursor against only the orbit
-  target's entities.
-- The closest branch intersection within `100` units supplies a tree ID and
-  the region ID encoded by `b:<regionId>`.
-- The session calls `applyDoubleCutIntro` for that diagram and region with
-  empty region, node, and wire arrays.
-- A non-branch or out-of-reach click produces concise invalid-target feedback
-  and no mutation.
-- The move never changes camera state or the orbit target.
-
-The kernel result immediately becomes the tree's authoritative in-memory
-diagram. The corresponding tree-row transaction begins asynchronously. A
-write failure leaves the proven in-memory result visible, reports a persistent
-save error, and retries the newest tree state on the next persistence attempt.
-
-## Tween
-
-The old and new diagrams produce derived tree render snapshots, which pass
-through the existing transition planner and interpolator. The tween lasts the
-existing `350` milliseconds. Terrain, camera, and all other tree
-representations continue normally during the tween.
-
-If another valid use targets the same tree during its tween, the next plan
-starts from that tree's currently displayed interpolated geometry. Different
-trees own independent tweens and may animate concurrently.
-
-On completion the renderer installs the clean target render snapshot so
-zero-alpha entities do not remain pickable.
+The renderer presents every tree from the loaded save and continuously updates
+representation residency and performance telemetry. The loaded camera pose is
+fixed for the lifetime of the opened world. The world surface has no keyboard,
+mouse, orbit, selection, or tool behavior.
 
 ## Start Menu and Feedback
 
@@ -282,14 +169,7 @@ The start menu contains:
 - inline, specific errors for invalid names, unreadable slots, and load
   failures.
 
-The world presents only milestone-essential feedback:
-
-- center reticle and free-flight hint while free controls are active, otherwise
-  the concise resume cue;
-- pointer hover in orbit;
-- concise control hints appropriate to the camera mode;
-- invalid double-cut target feedback;
-- persistent save-write failure status.
+The world presents the orchard name and persistent save-write failure status.
 
 No catalog, pot, order, progression, decoration, settings, or final visual
 identity belongs to this milestone.
@@ -322,17 +202,11 @@ diagram serialization, large-tree source, or placement algorithm.
 
 ### TypeScript unit and integration tests
 
-- camera transitions and keyboard motion in free flight and orbit;
-- real geometry immediately inside and outside the `100`-unit interaction
-  boundary, independent of render LOD;
-- free-flight raycasts across trees and orbit raycasts restricted to the
-  orbit target;
-- permanent tool/camera independence;
-- branch-key decoding and real kernel double-cut introduction on the blank
-  seedling and a nested branch of `zeroIsNat` step 20;
-- `350` ms tween endpoints and interruption continuity;
+- fixed-camera rendering and persistence;
+- no visible in-world input affordances;
+- keyboard and mouse input leave the displayed camera and saved trees unchanged;
 - equivalent render results for shared diagrams and one-tree invalidation;
-- independent concurrent tweens on different trees.
+- stable renderer behavior across the supported orchard sizes.
 
 Tests assert observable game, persistence, and renderer results. They do not
 make object or promise identity, private metadata, call ordering, SQL source
@@ -353,12 +227,9 @@ text, or renderer construction details part of the product contract.
 The native application is built and driven on an isolated desktop display
 through the start menu. Tests:
 
-- create a named seedling slot, enter free flight, enter and leave orbit, use
-  the double-cut binding, observe the tween, relaunch, and confirm the changed
-  tree loads;
-- load the one-large-tree save, orbit it, use double-cut spawning on a nested
-  branch, and confirm the persisted diagram gained exactly two correctly
-  parented cut regions;
+- reject blank orchard names and report unreadable saves;
+- load the one-large-tree save, verify the fixed camera, and confirm keyboard
+  and mouse input do not change camera or tree state;
 - load each stress-count save through the normal menu and wait for
   representation residency and settled frame sampling; compare Game and Raw
   telemetry only at the representative 10- and 2,000-tree endpoints;
@@ -377,12 +248,8 @@ window smoke check.
 
 `docs/orchard-game-design.md` records these durable rules:
 
-- orbit target is the only camera-focus term;
-- using a tool never changes camera state or the orbit target;
-- gestures remain tool-specific and right-click is only this milestone's
-  binding;
-- orbit mode restricts world-tree interaction to the orbit target;
-- interaction reach is independent of render LOD;
+- the loaded world uses the camera stored in its save;
+- the world surface has no keyboard, mouse, selection, or tool behavior;
 - saves use one exact current format with no versions or migrations;
 - runtime worlds come only from ordinary saves, including stress workloads;
 - `game/` is the sole 3D world frontend and stress tests exercise its

@@ -26,17 +26,10 @@ Accept orders from a catalog; grow the ordered tree; deliver it by iterating a c
 
 ## Interaction
 
-- **Movement** is creative-mode flight (Minecraft creative / Halo Forge monitor), not full six-axis. The stress-test demo's flat walking is throwaway.
-- **Mouse interaction.** Free flight uses cursorless relative mouse-look through
-  Pointer Lock and targets through the center reticle. Orbit restores the ordinary
-  cursor for pointing and never maps mouse motion to camera rotation.
-- **Orbit view.** Focusing a tree opens an orbit view like the proof assistant's existing 3D view. It is a convenience only. Hard law: **every edit must be performable from any perspective** — there is no dedicated proof mode, because iterating trees into each other requires acting across the world view.
-- **Orbit target.** The tree currently being orbited is the orbit target; an orbit target exists only in orbit mode. Free motion has none. While orbiting, only parts of the orbit target receive world interaction, so a background tree cannot intercept or receive an action.
-- **The cutting** is the one universal verb for iteration everywhere: within a tree (deeper copies), between trees (citation), and into pots (delivery). Physically: clip a copy, carry it, insert it at a legal spot. The kernel validates every insertion.
-- **Tools** are intuitive physical actions that may each span several rules (e.g. one eraser-like tool covering aspects of multiple deletion rules). Tools attempt; the kernel validates; tools never propose moves. Using a tool never changes camera state or the orbit target. Each tool owns its own gesture and physical interaction; no milestone binding establishes a universal tool gesture. The tool taxonomy and its gestures are otherwise deferred to implementation (see below).
-- **Interaction reach.** Orbit entry and tool use are limited by an independently tuned world-space reach. Interaction never depends on render LOD, even when its initial reach is calibrated near a full-detail distance.
-- **Undo** is a hotkeyed (Ctrl+Z) per-tree tool, scoped to the current orbit target — never a global stack, so repeated undo cannot spill into edits on a distant tree. World operations (spawning, deleting trees) are not undo targets; they have their own inverse actions.
-- **Fences and signs** are semantically inert world objects for player organization only. Signs are the home for player-typed text. The game never interprets either.
+The current orchard world is a passive viewer. Loading an orchard presents its
+saved camera continuously. The world surface has no movement, camera, selection,
+editing, keyboard, or mouse behavior. The start menu remains responsible for
+creating and loading orchards, and the HUD reports persistence state.
 
 ## Progression and economy
 

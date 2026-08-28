@@ -169,25 +169,6 @@ describe('game tree runtime', () => {
     })
   })
 
-  it('finds nearby logical interaction candidates before any representation is resident', () => {
-    const runtime = new GameTreeRuntime(resolve({ a: asset() }), new THREE.Group(), buildObject)
-    runtime.setTrees([
-      tree('near', 0, -20),
-      tree('bounds-touching', 5, -40),
-      tree('off-ray', 6, -40),
-      tree('past-reach', 0, -106),
-      tree('behind', 0, 6),
-    ])
-
-    const candidates = runtime.interactionTrees(
-      new THREE.Ray(new THREE.Vector3(0, 1.7, 0), new THREE.Vector3(0, 0, -1)),
-      100,
-    )
-
-    expect(runtime.snapshot()).toMatchObject({ logical: 5, resident: 0 })
-    expect(candidates.map(({ id }) => id).sort()).toEqual(['bounds-touching', 'near'])
-  })
-
   it('uses the rotated derived bounds when deciding whether a tree is nearby', () => {
     const runtime = new GameTreeRuntime(
       resolve({ offset: asset({ x: 3, y: 1.7, z: 2 }, 4, 0.1) }),

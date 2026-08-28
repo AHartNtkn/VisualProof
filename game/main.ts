@@ -2,25 +2,13 @@ import './style.css'
 if (import.meta.env.VITE_WDIO === 'true') void import('@wdio/tauri-plugin')
 
 import { DiagramBuilder, diagramToJson } from '../src/kernel/diagram'
-import {
-  displayCameraPose,
-  enterOrbit,
-  exitOrbit,
-  freePoseForPersistence,
-  lookCamera,
-  stepCamera,
-  type CameraInput,
-  type CameraState,
-  type TreeWorldBounds,
-} from '../src/game/camera'
-import type { GameTree, GameWorld } from '../src/game/model'
+import type { CameraPose, GameWorld } from '../src/game/model'
 import { SettledFrameTelemetry, frameTiming, percentile } from '../src/game/render/frame'
 import { mountGameWorld, type GameWorldRenderer } from '../src/game/render/world'
+import type { DisplayCameraPose } from '../src/game/render/types'
 import { saveClient, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
 import { SaveWriter } from '../src/game/save-writer'
-import { gameSession, useDoubleCut, type GameSession, type PointedTreePart } from '../src/game/session'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
-import { scene3 } from '../src/view3d/scene'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
 const worldHost = document.querySelector<HTMLElement>('[data-world]')!
@@ -30,27 +18,20 @@ const nameInput = document.querySelector<HTMLInputElement>('#orchard-name')!
 const slotLoading = document.querySelector<HTMLElement>('[data-slot-loading]')!
 const slotList = document.querySelector<HTMLUListElement>('[data-slot-list]')!
 const menuError = document.querySelector<HTMLElement>('[data-menu-error]')!
-const reticle = document.querySelector<HTMLElement>('[data-reticle]')!
 const hud = document.querySelector<HTMLElement>('[data-hud]')!
 const worldName = document.querySelector<HTMLElement>('[data-world-name]')!
 const saveStatus = document.querySelector<HTMLElement>('[data-save-status]')!
 const saveRetry = document.querySelector<HTMLButtonElement>('[data-save-retry]')!
-const freeHint = document.querySelector<HTMLElement>('[data-free-hint]')!
-const freeResume = document.querySelector<HTMLElement>('[data-free-resume]')!
-const orbitHint = document.querySelector<HTMLElement>('[data-orbit-hint]')!
-const pointedLabel = document.querySelector<HTMLElement>('[data-pointed]')!
 const feedback = document.querySelector<HTMLElement>('[data-feedback]')!
 
 const blankDiagram = new DiagramBuilder().build()
 const blankDiagramJson = JSON.stringify(diagramToJson(blankDiagram))
 const initialCameraRecord: CameraRecord = { x: 0, y: 1.7, z: 8, yaw: 0, pitch: -0.18 }
 const initialTree: TreeUpdate = { treeId: 'tree-0000', diagramJson: blankDiagramJson, x: 0, z: 0, yaw: 0 }
-const keys = new Set<string>()
 const slotControlReleases: Array<() => void> = []
 const telemetry = new SettledFrameTelemetry(60)
 let maxRepresentationOperations = 0
-let session: GameSession | null = null
-let camera: CameraState | null = null
+let camera: CameraPose | null = null
 let writer: SaveWriter | null = null
 let renderer: GameWorldRenderer | null = null
 let animationFrame = 0
@@ -116,7 +97,7 @@ function renderSlots(slots: readonly SlotListEntry[]): void {
       load.dataset['loadSlot'] = slot.slotId
       load.addEventListener('click', () => {
         clearError()
-        startFromActivation(() => saveClient.load(slot.slotId))
+        startOpening(() => saveClient.load(slot.slotId))
       })
       slotControlReleases.push(startLifecycle.registerControl(load))
       item.appendChild(load)
@@ -125,88 +106,28 @@ function renderSlots(slots: readonly SlotListEntry[]): void {
   }
 }
 
-function pointerNdc(event: MouseEvent, canvas: HTMLCanvasElement): readonly [number, number] {
-  const bounds = canvas.getBoundingClientRect()
-  return [
-    ((event.clientX - bounds.left) / Math.max(1, bounds.width)) * 2 - 1,
-    1 - ((event.clientY - bounds.top) / Math.max(1, bounds.height)) * 2,
-  ]
-}
-
-async function enterFreeLook(): Promise<void> {
-  await worldHost.requestPointerLock()
-}
-
-function freeControlsActive(): boolean {
-  return camera?.mode === 'free' && document.pointerLockElement === worldHost
-}
-
-function requestFreeControls(): void {
-  void enterFreeLook().catch(() => {
-    if (camera?.mode !== 'free') return
-    keys.clear()
-    mirrorPoint(null)
-    mirrorCamera()
-  })
-}
-
-function leaveFreeLook(): void {
-  if (document.pointerLockElement === worldHost) document.exitPointerLock()
-}
-
-function worldBounds(tree: GameTree): TreeWorldBounds {
-  const bounds = scene3(tree.diagram)
-  const cosine = Math.cos(tree.placement.yaw)
-  const sine = Math.sin(tree.placement.yaw)
+function displayCameraPose(pose: CameraPose): DisplayCameraPose {
+  const horizontal = Math.cos(pose.pitch)
   return {
-    center: {
-      x: tree.placement.x + bounds.center.x * cosine + bounds.center.z * sine,
-      y: bounds.center.y,
-      z: tree.placement.z - bounds.center.x * sine + bounds.center.z * cosine,
+    eye: pose.position,
+    forward: {
+      x: -Math.sin(pose.yaw) * horizontal,
+      y: Math.sin(pose.pitch),
+      z: -Math.cos(pose.yaw) * horizontal,
     },
-    radius: bounds.radius,
   }
 }
 
 function mirrorCamera(): void {
   if (camera === null) return
   const display = displayCameraPose(camera)
-  root.dataset['cameraMode'] = camera.mode
+  root.dataset['cameraMode'] = 'fixed'
   root.dataset['displayedEye'] = JSON.stringify(display.eye)
   root.dataset['displayedDirection'] = JSON.stringify(display.forward)
-  root.dataset['orbitTarget'] = camera.mode === 'orbit' ? camera.orbitTarget : ''
-  const freeActive = freeControlsActive()
-  freeHint.hidden = !freeActive
-  freeResume.hidden = camera.mode !== 'free' || freeActive
-  orbitHint.hidden = camera.mode !== 'orbit'
-  reticle.hidden = !freeActive
-}
-
-function mirrorPoint(pointed: PointedTreePart | null): void {
-  root.classList.toggle('has-pointed', pointed !== null)
-  pointedLabel.hidden = pointed === null
-  pointedLabel.textContent = pointed === null
-    ? ''
-    : `${pointed.treeId} · ${pointed.entityKey} · ${pointed.distance.toFixed(1)} m`
 }
 
 function resize(): void {
   renderer?.resize(worldHost.clientWidth, worldHost.clientHeight)
-}
-
-function input(): CameraInput {
-  if (camera?.mode === 'free' && !freeControlsActive()) {
-    return { w: false, a: false, s: false, d: false, space: false, ctrl: false, shift: false }
-  }
-  return {
-    w: keys.has('KeyW'),
-    a: keys.has('KeyA'),
-    s: keys.has('KeyS'),
-    d: keys.has('KeyD'),
-    space: keys.has('Space'),
-    ctrl: keys.has('ControlLeft') || keys.has('ControlRight'),
-    shift: keys.has('ShiftLeft') || keys.has('ShiftRight'),
-  }
 }
 
 function animate(now: number): void {
@@ -214,15 +135,10 @@ function animate(now: number): void {
   if (disposed || camera === null || writer === null || activeRenderer === null) return
   const timing = frameTiming(now, previousFrame)
   previousFrame = now
-  camera = stepCamera(camera, input(), timing.movementSeconds)
   activeRenderer.setCamera(displayCameraPose(camera))
   const rendered = activeRenderer.render(now)
   maxRepresentationOperations = Math.max(maxRepresentationOperations, rendered.representationOperations)
-  writer.camera(freePoseForPersistence(camera))
-  if (camera.mode === 'free') {
-    if (freeControlsActive()) mirrorPoint(activeRenderer.pointAt(0, 0, null))
-    else mirrorPoint(null)
-  }
+  writer.camera(camera)
   const settled = telemetry.record({ frameMs: timing.sampleMs, pending: rendered.pending, buildMs: rendered.buildMs, operations: rendered.representationOperations })
   root.dataset['representedCount'] = String(rendered.representedEntities)
   root.dataset['logicalCount'] = String(rendered.logical)
@@ -251,76 +167,9 @@ function animate(now: number): void {
   animationFrame = requestAnimationFrame(animate)
 }
 
-function applyDoubleCut(pointed: PointedTreePart | null): void {
-  if (session === null || writer === null || renderer === null) return
-  if (pointed === null) {
-    setError('Double cut requires an ordinary branch within reach.')
-    return
-  }
-  try {
-    const mutation = useDoubleCut(session, pointed, {
-      beginTreeTween: (treeId, before, after) => {
-        renderer!.beginTreeTween(treeId, before, after)
-      },
-      persistTree: (update) => writer!.tree(update),
-    })
-    setError('')
-    feedback.textContent = `Double cut applied to ${mutation.treeId}.`
-  } catch (error) {
-    setError(`Double cut failed: ${message(error)}`)
-  }
-}
-
-function attachWorldInput(): void {
-  worldHost.addEventListener('click', (event) => {
-    if (event.button !== 0) return
-    const activeRenderer = renderer
-    if (
-      activeRenderer === null
-      || camera === null
-      || camera.mode !== 'free'
-    ) return
-    if (!freeControlsActive()) {
-      requestFreeControls()
-      return
-    }
-    if (session === null) return
-    const pointedPart = activeRenderer.pointAt(0, 0, null)
-    if (pointedPart === null) return
-    const tree = session.trees.get(pointedPart.treeId)
-    if (tree === undefined) return
-    camera = enterOrbit(camera, tree.id, worldBounds(tree))
-    leaveFreeLook()
-    mirrorCamera()
-    mirrorPoint(pointedPart)
-  })
-  worldHost.addEventListener('mousedown', (event) => {
-    if (event.button !== 2) return
-    event.preventDefault()
-    const activeRenderer = renderer
-    if (activeRenderer === null || camera === null) return
-    if (camera.mode === 'free' && document.pointerLockElement !== worldHost) return
-    const [x, y] = camera.mode === 'free' ? [0, 0] : pointerNdc(event, activeRenderer.canvas)
-    const orbitTarget = camera.mode === 'orbit' ? camera.orbitTarget : null
-    applyDoubleCut(activeRenderer.pointAtBranch(x, y, orbitTarget))
-  })
-  worldHost.addEventListener('contextmenu', (event) => event.preventDefault())
-  worldHost.addEventListener('mousemove', (event) => {
-    if (renderer === null || camera === null) return
-    if (camera.mode === 'free') {
-      if (document.pointerLockElement !== worldHost) return
-      camera = lookCamera(camera, { x: event.movementX, y: event.movementY })
-      return
-    }
-    const [x, y] = pointerNdc(event, renderer.canvas)
-    mirrorPoint(renderer.pointAt(x, y, camera.orbitTarget))
-  })
-}
-
 async function startWorld(world: GameWorld): Promise<void> {
   const nextRenderer = mountGameWorld(worldHost, [...world.trees.values()])
-  const nextSession = gameSession(world.trees)
-  const nextCamera: CameraState = { mode: 'free', pose: world.camera }
+  const nextCamera = world.camera
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
   let releaseWriterStatus = (): void => {}
   try {
@@ -336,7 +185,6 @@ async function startWorld(world: GameWorld): Promise<void> {
       if (status.state === 'error') setError(saveStatus.textContent)
     })
     renderer = nextRenderer
-    session = nextSession
     camera = nextCamera
     writer = nextWriter
     start.hidden = true
@@ -363,7 +211,6 @@ async function startWorld(world: GameWorld): Promise<void> {
 }
 
 function showStartFailure(failure: StartFailure): void {
-  leaveFreeLook()
   const concrete = `Could not open orchard: ${failure.message}`
   menuError.textContent = concrete
   root.dataset['errors'] = concrete
@@ -372,58 +219,21 @@ function showStartFailure(failure: StartFailure): void {
 const startLifecycle = new StartLifecycle({ open: startWorld, fail: showStartFailure })
 startLifecycle.registerControl(nameInput)
 for (const button of createForm.querySelectorAll<HTMLButtonElement>('button')) startLifecycle.registerControl(button)
-attachWorldInput()
 
-function startFromActivation(operation: () => Promise<GameWorld>): void {
-  requestFreeControls()
+function startOpening(operation: () => Promise<GameWorld>): void {
   void startLifecycle.start(operation)
 }
 
 createForm.addEventListener('submit', (event) => {
   event.preventDefault()
-  if (startLifecycle.busy || session !== null) return
+  if (startLifecycle.busy || camera !== null) return
   const displayName = nameInput.value.trim()
   if (displayName.length === 0) {
     menuError.textContent = 'Enter a name for the new orchard.'
     return
   }
   clearError()
-  startFromActivation(() => saveClient.create(displayName, initialCameraRecord, [initialTree]).then((created) => saveClient.load(created.slotId)))
-})
-
-window.addEventListener('keydown', (event) => {
-  if (event.repeat) return
-  if (camera === null) return
-  if (event.code === 'Escape' && camera.mode === 'orbit' && renderer !== null) {
-    event.preventDefault()
-    const orbitCamera = camera
-    const activeRenderer = renderer
-    void enterFreeLook().then(() => {
-      if (renderer !== activeRenderer || camera !== orbitCamera) return
-      camera = exitOrbit(orbitCamera)
-      mirrorPoint(null)
-      mirrorCamera()
-      if ((root.dataset['errors'] ?? '').startsWith('Could not resume free look:')) clearError()
-    }).catch((error: unknown) => setError(`Could not resume free look: ${message(error)}`))
-    return
-  }
-  if (camera.mode === 'free' && !freeControlsActive()) return
-  if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight'].includes(event.code)) {
-    event.preventDefault()
-    keys.add(event.code)
-  }
-})
-window.addEventListener('keyup', (event) => keys.delete(event.code))
-window.addEventListener('blur', () => keys.clear())
-document.addEventListener('pointerlockchange', () => {
-  if (camera?.mode !== 'free') return
-  if (freeControlsActive()) {
-    mirrorCamera()
-    return
-  }
-  keys.clear()
-  mirrorPoint(null)
-  mirrorCamera()
+  startOpening(() => saveClient.create(displayName, initialCameraRecord, [initialTree]).then((created) => saveClient.load(created.slotId)))
 })
 saveRetry.addEventListener('click', () => writer?.retry())
 
@@ -436,7 +246,6 @@ window.addEventListener('pagehide', () => {
   startLifecycle.dispose()
   cancelAnimationFrame(animationFrame)
   resizeObserver.disconnect()
-  keys.clear()
   void writer?.dispose().catch((error: unknown) => setError(`Save shutdown failed: ${message(error)}`))
   renderer?.dispose()
   renderer = null

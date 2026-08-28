@@ -8,7 +8,6 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import type { Diagram } from '../../kernel/diagram'
 import { diagramToJson } from '../../kernel/diagram'
 import type { GameTree } from '../model'
-import type { PointedTreePart } from '../session'
 import { DARK } from '../../view/paint'
 import { TreeRenderAssetCache } from './assets'
 import { mountGlowRenderer } from './glow-render'
@@ -28,9 +27,6 @@ import {
   makeDynamicTreeObject,
   makeMarkerObject,
   makeRawTreeObject,
-  pointAtTreeAssets,
-  pointAtVisibleParts,
-  type EntityKeyFilter,
   type TreeMaterialSource,
 } from './tree-objects'
 import type { DisplayCameraPose, TreeRenderAsset } from './types'
@@ -41,15 +37,12 @@ const TERRAIN_COLOR = '#010101'
 const SKY_COLOR = '#000000'
 const FOG_NEAR = 170
 const FOG_FAR = 780
-const INTERACTION_REACH = 100
 
 export type GameWorldRenderer = {
   readonly canvas: HTMLCanvasElement
   setTrees(trees: readonly GameTree[]): void
   setCamera(pose: DisplayCameraPose): void
   setRenderMode(mode: RenderMode): void
-  pointAt(ndcX: number, ndcY: number, orbitTarget: string | null): PointedTreePart | null
-  pointAtBranch(ndcX: number, ndcY: number, orbitTarget: string | null): PointedTreePart | null
   beginTreeTween(treeId: string, before: Diagram, after: Diagram): void
   resize(width: number, height: number): void
   render(now: number): GameFrameStats
@@ -66,7 +59,7 @@ export function mountGameWorld(
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.shadowMap.enabled = false
   renderer.info.autoReset = false
-  renderer.domElement.setAttribute('aria-label', 'Walkable proof-tree game world')
+  renderer.domElement.setAttribute('aria-label', 'Proof-tree orchard view')
   container.appendChild(renderer.domElement)
 
   const scene = new THREE.Scene()
@@ -161,8 +154,6 @@ export function mountGameWorld(
       return makeDynamicTreeObject(snapshot, tree.placement, materialsFor(asset))
     },
   )
-  const raycaster = new THREE.Raycaster()
-
   const syncGlow = (): void => {
     const dirty = runtime.flushGlow()
     for (const record of dirty) {
@@ -205,74 +196,6 @@ export function mountGameWorld(
 
   setTrees(initialTrees)
 
-  const preparePointRay = (ndcX: number, ndcY: number): void => {
-    camera.updateMatrixWorld()
-    treeObjects.updateMatrixWorld(true)
-    raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
-  }
-
-  const assetCandidates = (trees: readonly RenderTree[]) => (
-    trees.flatMap((tree) => {
-      if (dynamicTrees.objects(tree.id).length > 0) return []
-      const asset = assetsByJson.get(tree.diagramJson)
-      return asset === undefined ? [] : [{ treeId: tree.id, placement: tree.placement, asset }]
-    })
-  )
-
-  const closest = (
-    dynamic: PointedTreePart | null,
-    staticPart: PointedTreePart | null,
-  ): PointedTreePart | null => {
-    if (dynamic === null) return staticPart
-    if (staticPart === null) return dynamic
-    return dynamic.distance <= staticPart.distance ? dynamic : staticPart
-  }
-
-  const pointAtAny = (
-    ndcX: number,
-    ndcY: number,
-    orbitTarget: string | null,
-  ): PointedTreePart | null => {
-    preparePointRay(ndcX, ndcY)
-    const dynamic = pointAtVisibleParts(
-      raycaster,
-      dynamicTrees.objects(),
-      INTERACTION_REACH,
-      orbitTarget,
-    )
-    const staticPart = pointAtTreeAssets(
-      raycaster.ray,
-      assetCandidates(runtime.interactionTrees(raycaster.ray, INTERACTION_REACH)),
-      INTERACTION_REACH,
-      orbitTarget,
-    )
-    return closest(dynamic, staticPart)
-  }
-
-  const pointAtBranch = (
-    ndcX: number,
-    ndcY: number,
-    orbitTarget: string | null,
-  ): PointedTreePart | null => {
-    preparePointRay(ndcX, ndcY)
-    const acceptsBranch: EntityKeyFilter = (entityKey) => entityKey.startsWith('b:')
-    const dynamic = pointAtVisibleParts(
-      raycaster,
-      dynamicTrees.objects(),
-      INTERACTION_REACH,
-      orbitTarget,
-      acceptsBranch,
-    )
-    const staticBranch = pointAtTreeAssets(
-      raycaster.ray,
-      assetCandidates(runtime.interactionTrees(raycaster.ray, INTERACTION_REACH)),
-      INTERACTION_REACH,
-      orbitTarget,
-      acceptsBranch,
-    )
-    return closest(dynamic, staticBranch)
-  }
-
   return {
     canvas: renderer.domElement,
     setTrees,
@@ -286,12 +209,6 @@ export function mountGameWorld(
     },
     setRenderMode(mode) {
       runtime.setMode(mode)
-    },
-    pointAt(ndcX, ndcY, orbitTarget) {
-      return pointAtAny(ndcX, ndcY, orbitTarget)
-    },
-    pointAtBranch(ndcX, ndcY, orbitTarget) {
-      return pointAtBranch(ndcX, ndcY, orbitTarget)
     },
     beginTreeTween(treeId, before, after) {
       const current = renderTreesById.get(treeId)
