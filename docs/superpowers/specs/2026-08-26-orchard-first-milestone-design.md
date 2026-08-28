@@ -201,8 +201,13 @@ valid Create submission or Load button activation requests Pointer Lock
 synchronously before asynchronous save I/O. The decoded world mounts only while
 the world host owns Pointer Lock, so free flight begins with working relative
 mouse-look. Save discovery, invalid Create submission, creation, and loading do
-not otherwise depend on Pointer Lock. A rejected or lost Pointer Lock request,
-or a failed Create or Load, retains the menu and its ordinary cursor.
+not otherwise depend on Pointer Lock. If the request is rejected, Pointer Lock
+is lost while Create or Load is still opening the world, or opening otherwise
+fails, the menu remains visible with its ordinary cursor and a concrete opening
+error. Unexpected Pointer Lock loss after the world mounts fails the mounted
+world closed: camera and input stop, the camera and orbit datasets, control hints,
+reticle, and pointing presentation clear, and the world reports `Pointer Lock was
+lost; free look stopped.`
 
 ### Free flight
 

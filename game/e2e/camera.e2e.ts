@@ -34,6 +34,17 @@ describe('native camera and reach behavior', () => {
     const seedlingSlot = await createSlot('Camera Orchard')
     await expect(game()).toHaveAttribute('data-camera-mode', 'free')
 
+    const seedlingBeforeFreeTool = storedTreeDiagram(seedlingSlot, 'tree-0000')
+    const freeToolPose = await settledDisplayedPose()
+    await rightClickWorld()
+    await waitForVisibleTreeTween()
+    const seedlingAfterFreeTool = storedTreeDiagram(seedlingSlot, 'tree-0000')
+    expectDoubleCut(seedlingBeforeFreeTool, seedlingAfterFreeTool, seedlingBeforeFreeTool.root)
+    await expect(game()).toHaveAttribute('data-camera-mode', 'free')
+    await expect(game()).toHaveAttribute('data-orbit-target', '')
+    expectPoseClose(await displayedPose(), freeToolPose)
+    writeFileSync(receiptPath, JSON.stringify({ seedlingSlot, seedlingFreeFlightAfter: seedlingAfterFreeTool }))
+
     const beforeFreeLook = await displayedPose()
     await canvas().moveTo({ xOffset: 60, yOffset: 35 })
     await browser.waitUntil(async () =>
@@ -54,16 +65,16 @@ describe('native camera and reach behavior', () => {
     const orbitBranch = orbitPointed.split(' · ')[1]
     if (orbitBranch === undefined) throw new Error(`orbit pointer did not identify a branch: ${orbitPointed}`)
 
-    const seedlingBefore = storedTreeDiagram(seedlingSlot, 'tree-0000')
+    const seedlingBeforeOrbitTool = storedTreeDiagram(seedlingSlot, 'tree-0000')
     const orbitToolPose = await displayedPose()
     await rightClickWorld(45, 20)
     await waitForVisibleTreeTween()
     const seedlingAfter = storedTreeDiagram(seedlingSlot, 'tree-0000')
-    expectDoubleCut(seedlingBefore, seedlingAfter, orbitBranch.slice(2))
+    expectDoubleCut(seedlingBeforeOrbitTool, seedlingAfter, orbitBranch.slice(2))
     await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
     await expect(game()).toHaveAttribute('data-orbit-target', 'tree-0000')
     expectPoseClose(await displayedPose(), orbitToolPose)
-    writeFileSync(receiptPath, JSON.stringify({ seedlingSlot, seedlingAfter }))
+    writeFileSync(receiptPath, JSON.stringify({ seedlingSlot, seedlingFreeFlightAfter: seedlingAfterFreeTool, seedlingAfter }))
 
     const beforeA = await displayedPose()
     await hold('a')

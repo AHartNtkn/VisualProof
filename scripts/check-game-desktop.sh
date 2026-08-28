@@ -60,6 +60,8 @@ case "$mode" in
   e2e)
     npm run build:game:e2e
     new_data_root
+    run_scenario pointer-lock-loss pointer-lock-loss "$current_data_root"
+    new_data_root
     run_scenario camera camera "$current_data_root"
     for phase in seedling-read large-write large-read; do
       run_scenario double-cut "$phase" "$current_data_root"

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { expect } from '@wdio/globals'
+import { browser, expect } from '@wdio/globals'
 import { describe, it } from 'mocha'
 import {
   canvas,
@@ -17,6 +17,7 @@ import {
 
 type Receipt = {
   readonly seedlingSlot?: string
+  readonly seedlingFreeFlightAfter?: StoredDiagram
   readonly seedlingAfter?: StoredDiagram
   readonly largeAfter?: StoredDiagram
 }
@@ -40,9 +41,20 @@ describe('double-cut tool use', () => {
   it('reloads the seedling move and persists a nested large-tree move from orbit', async () => {
     const saved = receipt()
     if (phase === 'seedling-read') {
-      if (saved.seedlingSlot === undefined || saved.seedlingAfter === undefined) throw new Error('seedling receipt is incomplete')
+      if (
+        saved.seedlingSlot === undefined
+        || saved.seedlingFreeFlightAfter === undefined
+        || saved.seedlingAfter === undefined
+      ) throw new Error('seedling receipt is incomplete')
       await loadSlot(saved.seedlingSlot)
-      expect(storedTreeDiagram(saved.seedlingSlot, 'tree-0000')).toEqual(saved.seedlingAfter)
+      const beforeLoadedLook = await displayedPose()
+      await canvas().moveTo({ xOffset: -60, yOffset: 35 })
+      await browser.waitUntil(async () =>
+        JSON.stringify(await displayedPose()) !== JSON.stringify(beforeLoadedLook),
+      )
+      const reloaded = storedTreeDiagram(saved.seedlingSlot, 'tree-0000')
+      expect(reloaded).toEqual(saved.seedlingAfter)
+      expect(reloaded.regions).toMatchObject(saved.seedlingFreeFlightAfter.regions)
       return
     }
 

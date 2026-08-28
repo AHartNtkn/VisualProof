@@ -256,6 +256,7 @@ function attachWorldInput(): void {
       activeRenderer === null
       || camera === null
       || camera.mode !== 'free'
+      || document.pointerLockElement !== worldHost
       || session === null
     ) return
     const pointedPart = activeRenderer.pointAt(0, 0, null)
@@ -272,6 +273,7 @@ function attachWorldInput(): void {
     event.preventDefault()
     const activeRenderer = renderer
     if (activeRenderer === null || camera === null) return
+    if (camera.mode === 'free' && document.pointerLockElement !== worldHost) return
     const [x, y] = camera.mode === 'free' ? [0, 0] : pointerNdc(event, activeRenderer.canvas)
     const orbitTarget = camera.mode === 'orbit' ? camera.orbitTarget : null
     applyDoubleCut(activeRenderer.pointAtBranch(x, y, orbitTarget))
@@ -380,6 +382,7 @@ window.addEventListener('keydown', (event) => {
       camera = exitOrbit(orbitCamera)
       mirrorPoint(null)
       mirrorCamera()
+      if ((root.dataset['errors'] ?? '').startsWith('Could not resume free look:')) clearError()
     }).catch((error: unknown) => setError(`Could not resume free look: ${message(error)}`))
     return
   }
