@@ -106,6 +106,23 @@ describe('world input sampling', () => {
     })
   })
 
+  it('maps the right Control and Shift keys', () => {
+    const { windowTarget, input } = createHarness()
+
+    for (const code of ['Space', 'ControlRight', 'ShiftRight']) {
+      windowTarget.dispatchEvent(event('keydown', { code }))
+    }
+    expect(input.sample()).toEqual({
+      forward: 0, strafe: 0, vertical: 0, sprint: true, lookX: 0, lookY: 0,
+    })
+
+    windowTarget.dispatchEvent(event('keyup', { code: 'ControlRight' }))
+    windowTarget.dispatchEvent(event('keyup', { code: 'ShiftRight' }))
+    expect(input.sample()).toEqual({
+      forward: 0, strafe: 0, vertical: 1, sprint: false, lookX: 0, lookY: 0,
+    })
+  })
+
   it('prevents the world context menu without a semantic action', () => {
     const { target, primary, escapes } = createHarness()
     const contextMenu = new Event('contextmenu', { cancelable: true })
@@ -148,6 +165,7 @@ describe('world input interruption and lifecycle', () => {
   it('detaches every input effect when disposed', () => {
     const harness = createHarness()
     harness.documentTarget.pointerLockElement = harness.target as unknown as Element
+    harness.input.dispose()
     harness.input.dispose()
 
     harness.windowTarget.dispatchEvent(event('keydown', { code: 'KeyW' }))
