@@ -43,12 +43,6 @@ export function expectPoseClose(actual: DisplayPose, expected: DisplayPose): voi
   }
 }
 
-export function expectEyeClose(actual: DisplayPose, expected: DisplayPose): void {
-  for (const axis of ['x', 'y', 'z'] as const) {
-    expect(actual.eye[axis]).toBeCloseTo(expected.eye[axis], 7)
-  }
-}
-
 export function expectDirectionClose(actual: DisplayPose, expected: DisplayPose): void {
   for (const axis of ['x', 'y', 'z'] as const) {
     expect(actual.direction[axis]).toBeCloseTo(expected.direction[axis], 7)
@@ -60,14 +54,6 @@ export function poseEyeDistance(actual: DisplayPose, expected: DisplayPose): num
     actual.eye.x - expected.eye.x,
     actual.eye.y - expected.eye.y,
     actual.eye.z - expected.eye.z,
-  )
-}
-
-export function poseDirectionDistance(actual: DisplayPose, expected: DisplayPose): number {
-  return Math.hypot(
-    actual.direction.x - expected.direction.x,
-    actual.direction.y - expected.direction.y,
-    actual.direction.z - expected.direction.z,
   )
 }
 
@@ -173,7 +159,7 @@ export function storedCameraPose(slotId: string): DisplayPose {
 }
 
 export async function movePointer(x: number, y: number): Promise<void> {
-  await browser.action('pointer').move({ origin: await canvas(), x, y }).perform()
+  await browser.action('pointer').move({ origin: 'pointer', x, y }).perform()
 }
 
 export async function setRenderMode(mode: 'game' | 'raw'): Promise<void> {

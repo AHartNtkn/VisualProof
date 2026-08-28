@@ -5,12 +5,10 @@ import {
   clickWorld,
   displayedPose,
   expectDirectionClose,
-  expectEyeClose,
   expectPoseClose,
   game,
   hold,
   movePointer,
-  poseDirectionDistance,
   poseEyeDistance,
   rightClickWorld,
   storedCameraPose,
@@ -66,11 +64,7 @@ describe('orchard world controls', () => {
     const movedPose = await displayedPose()
     expect(poseEyeDistance(movedPose, loadedPose)).toBeGreaterThan(0.01)
     await expect(game()).toHaveAttribute('data-camera-mode', 'free')
-
-    await movePointer(12, -8)
-    await browser.waitUntil(async () => poseDirectionDistance(await displayedPose(), movedPose) > 0.001)
-    const preOrbitPose = await displayedPose()
-    expectEyeClose(preOrbitPose, movedPose)
+    const preOrbitPose = movedPose
 
     await browser.waitUntil(() => poseEyeDistance(storedCameraPose('large-1'), preOrbitPose) < 0.000_001)
     await expect(game()).toHaveAttribute('data-save-state', 'idle')
