@@ -394,6 +394,14 @@ document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement === worldHost || camera?.mode !== 'free') return
   keys.clear()
   camera = null
+  root.dataset['cameraMode'] = ''
+  root.dataset['displayedEye'] = ''
+  root.dataset['displayedDirection'] = ''
+  root.dataset['orbitTarget'] = ''
+  freeHint.hidden = true
+  orbitHint.hidden = true
+  reticle.hidden = true
+  mirrorPoint(null)
   setError('Pointer Lock was lost; free look stopped.')
 })
 saveRetry.addEventListener('click', () => writer?.retry())

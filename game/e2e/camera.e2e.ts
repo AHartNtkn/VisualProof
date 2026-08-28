@@ -23,7 +23,7 @@ import {
 const receiptPath = join(process.env['GAME_E2E_DATA_ROOT'] ?? '', 'double-cut.json')
 
 describe('native camera and reach behavior', () => {
-  it('flies under native capture, orbits a nearby tree, and rejects distant interaction', async () => {
+  it('uses pointer-controlled flight, orbits a nearby tree, and rejects distant interaction', async () => {
     await expect(game()).toHaveAttribute('data-camera-mode', 'menu')
     await expect($('.slot.invalid')).toBeDisplayed()
     await expect($('.slot.invalid small')).not.toHaveText('')
