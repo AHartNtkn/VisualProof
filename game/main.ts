@@ -1,8 +1,6 @@
 import './style.css'
 if (import.meta.env.VITE_WDIO === 'true') void import('@wdio/tauri-plugin')
 
-import { invoke } from '@tauri-apps/api/core'
-import { getCurrentWindow, LogicalPosition } from '@tauri-apps/api/window'
 import { DiagramBuilder, diagramToJson } from '../src/kernel/diagram'
 import {
   displayCameraPose,
@@ -15,7 +13,6 @@ import {
   type CameraState,
   type TreeWorldBounds,
 } from '../src/game/camera'
-import { DesktopMouse } from '../src/game/desktop-mouse'
 import type { GameTree, GameWorld } from '../src/game/model'
 import { SettledFrameTelemetry, frameTiming, percentile } from '../src/game/render/frame'
 import { mountGameWorld, type GameWorldRenderer } from '../src/game/render/world'
@@ -47,21 +44,17 @@ const blankDiagram = new DiagramBuilder().build()
 const blankDiagramJson = JSON.stringify(diagramToJson(blankDiagram))
 const initialCameraRecord: CameraRecord = { x: 0, y: 1.7, z: 8, yaw: 0, pitch: -0.18 }
 const initialTree: TreeUpdate = { treeId: 'tree-0000', diagramJson: blankDiagramJson, x: 0, z: 0, yaw: 0 }
-const nativeWindow = getCurrentWindow()
 const keys = new Set<string>()
 const slotControlReleases: Array<() => void> = []
-const windowEventReleases: Array<() => void> = []
 const telemetry = new SettledFrameTelemetry(60)
 let maxRepresentationOperations = 0
 let session: GameSession | null = null
 let camera: CameraState | null = null
 let writer: SaveWriter | null = null
 let renderer: GameWorldRenderer | null = null
-let desktopMouse: DesktopMouse | null = null
 let animationFrame = 0
 let previousFrame = performance.now()
 let disposed = false
-let exitingOrbit = false
 
 if (import.meta.env.VITE_WDIO === 'true') {
   Object.defineProperty(window, '__ORCHARD_WDIO__', {
@@ -122,7 +115,7 @@ function renderSlots(slots: readonly SlotListEntry[]): void {
       load.dataset['loadSlot'] = slot.slotId
       load.addEventListener('click', () => {
         clearError()
-        void startLifecycle.start(() => saveClient.load(slot.slotId))
+        startFromActivation(() => saveClient.load(slot.slotId))
       })
       slotControlReleases.push(startLifecycle.registerControl(load))
       item.appendChild(load)
@@ -137,6 +130,14 @@ function pointerNdc(event: MouseEvent, canvas: HTMLCanvasElement): readonly [num
     ((event.clientX - bounds.left) / Math.max(1, bounds.width)) * 2 - 1,
     1 - ((event.clientY - bounds.top) / Math.max(1, bounds.height)) * 2,
   ]
+}
+
+async function enterFreeLook(): Promise<void> {
+  await worldHost.requestPointerLock()
+}
+
+function leaveFreeLook(): void {
+  if (document.pointerLockElement === worldHost) document.exitPointerLock()
 }
 
 function worldBounds(tree: GameTree): TreeWorldBounds {
@@ -248,81 +249,58 @@ function applyDoubleCut(pointed: PointedTreePart | null): void {
   }
 }
 
-function attachWorldInput(activeRenderer: GameWorldRenderer): void {
-  let orbitEntryInFlight = false
-  activeRenderer.canvas.addEventListener('click', async () => {
+function attachWorldInput(): void {
+  worldHost.addEventListener('click', () => {
+    const activeRenderer = renderer
     if (
-      orbitEntryInFlight
-      || renderer !== activeRenderer
+      activeRenderer === null
       || camera === null
       || camera.mode !== 'free'
       || session === null
-      || desktopMouse === null
     ) return
     const pointedPart = activeRenderer.pointAt(0, 0, null)
     if (pointedPart === null) return
     const tree = session.trees.get(pointedPart.treeId)
     if (tree === undefined) return
-    orbitEntryInFlight = true
-    try {
-      await desktopMouse.release()
-      if (renderer !== activeRenderer || camera === null || camera.mode !== 'free') return
-      camera = enterOrbit(camera, tree.id, worldBounds(tree))
-      mirrorCamera()
-      mirrorPoint(pointedPart)
-    } catch (error) {
-      setError(`Could not release mouse: ${message(error)}`)
-    } finally {
-      orbitEntryInFlight = false
-    }
+    leaveFreeLook()
+    camera = enterOrbit(camera, tree.id, worldBounds(tree))
+    mirrorCamera()
+    mirrorPoint(pointedPart)
   })
-  activeRenderer.canvas.addEventListener('mousedown', (event) => {
+  worldHost.addEventListener('mousedown', (event) => {
     if (event.button !== 2) return
     event.preventDefault()
-    if (renderer !== activeRenderer || camera === null) return
+    const activeRenderer = renderer
+    if (activeRenderer === null || camera === null) return
     const [x, y] = camera.mode === 'free' ? [0, 0] : pointerNdc(event, activeRenderer.canvas)
     const orbitTarget = camera.mode === 'orbit' ? camera.orbitTarget : null
     applyDoubleCut(activeRenderer.pointAtBranch(x, y, orbitTarget))
   })
-  activeRenderer.canvas.addEventListener('contextmenu', (event) => event.preventDefault())
-  activeRenderer.canvas.addEventListener('mousemove', (event) => {
-    if (renderer !== activeRenderer || camera?.mode !== 'orbit') return
-    const [x, y] = pointerNdc(event, activeRenderer.canvas)
-    const pointed = activeRenderer.pointAt(x, y, camera.orbitTarget)
-    mirrorPoint(pointed)
+  worldHost.addEventListener('contextmenu', (event) => event.preventDefault())
+  worldHost.addEventListener('mousemove', (event) => {
+    if (renderer === null || camera === null) return
+    if (camera.mode === 'free') {
+      if (document.pointerLockElement !== worldHost) return
+      camera = lookCamera(camera, { x: event.movementX, y: event.movementY })
+      return
+    }
+    const [x, y] = pointerNdc(event, renderer.canvas)
+    mirrorPoint(renderer.pointAt(x, y, camera.orbitTarget))
   })
 }
 
 async function startWorld(world: GameWorld): Promise<void> {
+  if (document.pointerLockElement !== worldHost) {
+    throw new Error('Pointer Lock was lost while loading the orchard.')
+  }
   const nextRenderer = mountGameWorld(worldHost, [...world.trees.values()])
   const nextSession = gameSession(world.trees)
   const nextCamera: CameraState = { mode: 'free', pose: world.camera }
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
-  const nextMouse = new DesktopMouse(nextRenderer.canvas, {
-    setCaptured: async (captured) => {
-      await invoke('set_game_mouse_capture', { captured })
-    },
-    setCursorVisible: (visible) => nativeWindow.setCursorVisible(visible),
-    setCursorPosition: ({ x, y }) => nativeWindow.setCursorPosition(new LogicalPosition(x, y)),
-  }, (delta) => {
-    if (camera?.mode === 'free') camera = lookCamera(camera, delta)
-  })
   let releaseWriterStatus = (): void => {}
-  let nextWindowEventReleases: Array<() => void> = []
   try {
     nextRenderer.resize(worldHost.clientWidth, worldHost.clientHeight)
     nextRenderer.setCamera(displayCameraPose(nextCamera))
-    attachWorldInput(nextRenderer)
-    await nextMouse.capture()
-    const refreshMouseCapture = (): void => {
-      void nextMouse.refreshCapture().catch((error: unknown) => {
-        setError(`Could not refresh mouse confinement: ${message(error)}`)
-      })
-    }
-    nextWindowEventReleases = await Promise.all([
-      nativeWindow.onResized(refreshMouseCapture),
-      nativeWindow.onMoved(refreshMouseCapture),
-    ])
     releaseWriterStatus = nextWriter.subscribe((status) => {
       saveStatus.textContent = status.state === 'idle'
         ? 'Saved'
@@ -336,9 +314,6 @@ async function startWorld(world: GameWorld): Promise<void> {
     session = nextSession
     camera = nextCamera
     writer = nextWriter
-    desktopMouse = nextMouse
-    windowEventReleases.push(...nextWindowEventReleases)
-    nextWindowEventReleases = []
     start.hidden = true
     hud.hidden = false
     worldName.textContent = world.slot.name
@@ -352,8 +327,6 @@ async function startWorld(world: GameWorld): Promise<void> {
     animationFrame = requestAnimationFrame(animate)
   } catch (error) {
     releaseWriterStatus()
-    for (const release of nextWindowEventReleases) release()
-    await nextMouse.release().catch(() => {})
     await nextWriter.dispose().catch(() => {})
     nextRenderer.dispose()
     start.hidden = false
@@ -365,6 +338,7 @@ async function startWorld(world: GameWorld): Promise<void> {
 }
 
 function showStartFailure(failure: StartFailure): void {
+  leaveFreeLook()
   const concrete = `Could not open orchard: ${failure.message}`
   menuError.textContent = concrete
   root.dataset['errors'] = concrete
@@ -373,6 +347,14 @@ function showStartFailure(failure: StartFailure): void {
 const startLifecycle = new StartLifecycle({ open: startWorld, fail: showStartFailure })
 startLifecycle.registerControl(nameInput)
 for (const button of createForm.querySelectorAll<HTMLButtonElement>('button')) startLifecycle.registerControl(button)
+attachWorldInput()
+
+function startFromActivation(operation: () => Promise<GameWorld>): void {
+  void startLifecycle.start(async () => {
+    await enterFreeLook()
+    return operation()
+  })
+}
 
 createForm.addEventListener('submit', (event) => {
   event.preventDefault()
@@ -383,21 +365,22 @@ createForm.addEventListener('submit', (event) => {
     return
   }
   clearError()
-  void startLifecycle.start(() => saveClient.create(displayName, initialCameraRecord, [initialTree]).then((created) => saveClient.load(created.slotId)))
+  startFromActivation(() => saveClient.create(displayName, initialCameraRecord, [initialTree]).then((created) => saveClient.load(created.slotId)))
 })
 
 window.addEventListener('keydown', (event) => {
+  if (event.repeat) return
   if (camera === null) return
-  if (event.code === 'Escape' && camera.mode === 'orbit' && !exitingOrbit) {
+  if (event.code === 'Escape' && camera.mode === 'orbit' && renderer !== null) {
     event.preventDefault()
-    exitingOrbit = true
-    void desktopMouse?.capture().then(() => {
-      if (camera?.mode !== 'orbit') return
-      camera = exitOrbit(camera)
+    const orbitCamera = camera
+    const activeRenderer = renderer
+    void enterFreeLook().then(() => {
+      if (renderer !== activeRenderer || camera !== orbitCamera) return
+      camera = exitOrbit(orbitCamera)
       mirrorPoint(null)
       mirrorCamera()
-    }).catch((error: unknown) => setError(`Could not capture mouse: ${message(error)}`))
-      .finally(() => { exitingOrbit = false })
+    }).catch((error: unknown) => setError(`Could not resume free look: ${message(error)}`))
     return
   }
   if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight'].includes(event.code)) {
@@ -418,9 +401,7 @@ window.addEventListener('pagehide', () => {
   startLifecycle.dispose()
   cancelAnimationFrame(animationFrame)
   resizeObserver.disconnect()
-  for (const release of windowEventReleases.splice(0)) release()
   keys.clear()
-  void desktopMouse?.release().catch(() => {})
   void writer?.dispose().catch((error: unknown) => setError(`Save shutdown failed: ${message(error)}`))
   renderer?.dispose()
   renderer = null
