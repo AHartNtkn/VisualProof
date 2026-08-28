@@ -7,6 +7,12 @@ export type CameraPose = {
   readonly pitch: number
 }
 
+export type TreeTarget = {
+  readonly treeId: string
+  readonly center: { readonly x: number; readonly y: number; readonly z: number }
+  readonly radius: number
+}
+
 export type GameTree = {
   readonly id: string
   readonly diagram: Diagram
