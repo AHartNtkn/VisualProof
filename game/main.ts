@@ -250,7 +250,8 @@ function applyDoubleCut(pointed: PointedTreePart | null): void {
 }
 
 function attachWorldInput(): void {
-  worldHost.addEventListener('click', () => {
+  worldHost.addEventListener('click', (event) => {
+    if (event.button !== 0) return
     const activeRenderer = renderer
     if (
       activeRenderer === null

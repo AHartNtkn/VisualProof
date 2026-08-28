@@ -34,6 +34,13 @@ describe('native camera and reach behavior', () => {
     const seedlingSlot = await createSlot('Camera Orchard')
     await expect(game()).toHaveAttribute('data-camera-mode', 'free')
 
+    await browser.execute(() => {
+      const world = document.querySelector<HTMLElement>('[data-world]')
+      if (world === null) throw new Error('world host is missing')
+      world.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 2 }))
+    })
+    await expect(game()).toHaveAttribute('data-camera-mode', 'free')
+
     const seedlingBeforeFreeTool = storedTreeDiagram(seedlingSlot, 'tree-0000')
     const freeToolPose = await settledDisplayedPose()
     await rightClickWorld()
