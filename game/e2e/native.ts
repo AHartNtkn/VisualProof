@@ -173,7 +173,7 @@ export function storedCameraPose(slotId: string): DisplayPose {
 }
 
 export async function movePointer(x: number, y: number): Promise<void> {
-  await browser.action('pointer').move({ origin: 'pointer', x, y }).perform()
+  await browser.action('pointer').move({ origin: await canvas(), x, y }).perform()
 }
 
 export async function setRenderMode(mode: 'game' | 'raw'): Promise<void> {

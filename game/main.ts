@@ -210,7 +210,7 @@ async function startWorld(world: GameWorld): Promise<void> {
       if (status.state === 'error') setError(saveStatus.textContent)
     })
     nextInput = attachWorldInput(worldHost, {
-      primary(clientX, clientY) {
+      primary() {
         const activeCamera = camera
         const activeInput = input
         const activeRenderer = renderer
@@ -220,11 +220,7 @@ async function startWorld(world: GameWorld): Promise<void> {
           void activeInput.engage().then(mirrorControls, mirrorControls)
           return
         }
-        const bounds = activeRenderer.canvas.getBoundingClientRect()
-        const target = activeRenderer.pickTree(
-          ((clientX - bounds.left) / bounds.width) * 2 - 1,
-          1 - ((clientY - bounds.top) / bounds.height) * 2,
-        )
+        const target = activeRenderer.pickTree(0, 0)
         if (target === null) return
         camera = enterOrbit(activeCamera, target)
         activeInput.release()

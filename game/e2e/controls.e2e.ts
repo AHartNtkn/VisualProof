@@ -53,6 +53,15 @@ describe('orchard world controls', () => {
     await expect($('[data-reticle]')).toBeDisplayed()
     await expect($('[data-engage]')).not.toBeDisplayed()
 
+    await clickWorld(500, 300)
+    await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
+    await expect(game()).toHaveAttribute('data-orbit-target', 'tree-0000')
+    await browser.keys('Escape')
+    await expect(game()).toHaveAttribute('data-camera-mode', 'free')
+    await expectPoseClose(await displayedPose(), loadedPose)
+    await clickWorld()
+    await expect(game()).toHaveAttribute('data-input-engaged', 'true')
+
     await hold('w')
     const movedPose = await displayedPose()
     expect(poseEyeDistance(movedPose, loadedPose)).toBeGreaterThan(0.01)
