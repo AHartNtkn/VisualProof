@@ -36,6 +36,7 @@ const worldName = document.querySelector<HTMLElement>('[data-world-name]')!
 const saveStatus = document.querySelector<HTMLElement>('[data-save-status]')!
 const saveRetry = document.querySelector<HTMLButtonElement>('[data-save-retry]')!
 const freeHint = document.querySelector<HTMLElement>('[data-free-hint]')!
+const freeResume = document.querySelector<HTMLElement>('[data-free-resume]')!
 const orbitHint = document.querySelector<HTMLElement>('[data-orbit-hint]')!
 const pointedLabel = document.querySelector<HTMLElement>('[data-pointed]')!
 const feedback = document.querySelector<HTMLElement>('[data-feedback]')!
@@ -136,6 +137,19 @@ async function enterFreeLook(): Promise<void> {
   await worldHost.requestPointerLock()
 }
 
+function freeControlsActive(): boolean {
+  return camera?.mode === 'free' && document.pointerLockElement === worldHost
+}
+
+function requestFreeControls(): void {
+  void enterFreeLook().catch(() => {
+    if (camera?.mode !== 'free') return
+    keys.clear()
+    mirrorPoint(null)
+    mirrorCamera()
+  })
+}
+
 function leaveFreeLook(): void {
   if (document.pointerLockElement === worldHost) document.exitPointerLock()
 }
@@ -161,9 +175,11 @@ function mirrorCamera(): void {
   root.dataset['displayedEye'] = JSON.stringify(display.eye)
   root.dataset['displayedDirection'] = JSON.stringify(display.forward)
   root.dataset['orbitTarget'] = camera.mode === 'orbit' ? camera.orbitTarget : ''
-  freeHint.hidden = camera.mode !== 'free'
+  const freeActive = freeControlsActive()
+  freeHint.hidden = !freeActive
+  freeResume.hidden = camera.mode !== 'free' || freeActive
   orbitHint.hidden = camera.mode !== 'orbit'
-  reticle.hidden = camera.mode !== 'free'
+  reticle.hidden = !freeActive
 }
 
 function mirrorPoint(pointed: PointedTreePart | null): void {
@@ -179,6 +195,9 @@ function resize(): void {
 }
 
 function input(): CameraInput {
+  if (camera?.mode === 'free' && !freeControlsActive()) {
+    return { w: false, a: false, s: false, d: false, space: false, ctrl: false, shift: false }
+  }
   return {
     w: keys.has('KeyW'),
     a: keys.has('KeyA'),
@@ -200,7 +219,10 @@ function animate(now: number): void {
   const rendered = activeRenderer.render(now)
   maxRepresentationOperations = Math.max(maxRepresentationOperations, rendered.representationOperations)
   writer.camera(freePoseForPersistence(camera))
-  if (camera.mode === 'free') mirrorPoint(activeRenderer.pointAt(0, 0, null))
+  if (camera.mode === 'free') {
+    if (freeControlsActive()) mirrorPoint(activeRenderer.pointAt(0, 0, null))
+    else mirrorPoint(null)
+  }
   const settled = telemetry.record({ frameMs: timing.sampleMs, pending: rendered.pending, buildMs: rendered.buildMs, operations: rendered.representationOperations })
   root.dataset['representedCount'] = String(rendered.representedEntities)
   root.dataset['logicalCount'] = String(rendered.logical)
@@ -257,9 +279,12 @@ function attachWorldInput(): void {
       activeRenderer === null
       || camera === null
       || camera.mode !== 'free'
-      || document.pointerLockElement !== worldHost
-      || session === null
     ) return
+    if (!freeControlsActive()) {
+      requestFreeControls()
+      return
+    }
+    if (session === null) return
     const pointedPart = activeRenderer.pointAt(0, 0, null)
     if (pointedPart === null) return
     const tree = session.trees.get(pointedPart.treeId)
@@ -293,9 +318,6 @@ function attachWorldInput(): void {
 }
 
 async function startWorld(world: GameWorld): Promise<void> {
-  if (document.pointerLockElement !== worldHost) {
-    throw new Error('Pointer Lock was lost while loading the orchard.')
-  }
   const nextRenderer = mountGameWorld(worldHost, [...world.trees.values()])
   const nextSession = gameSession(world.trees)
   const nextCamera: CameraState = { mode: 'free', pose: world.camera }
@@ -353,10 +375,8 @@ for (const button of createForm.querySelectorAll<HTMLButtonElement>('button')) s
 attachWorldInput()
 
 function startFromActivation(operation: () => Promise<GameWorld>): void {
-  void startLifecycle.start(async () => {
-    await enterFreeLook()
-    return operation()
-  })
+  requestFreeControls()
+  void startLifecycle.start(operation)
 }
 
 createForm.addEventListener('submit', (event) => {
@@ -387,6 +407,7 @@ window.addEventListener('keydown', (event) => {
     }).catch((error: unknown) => setError(`Could not resume free look: ${message(error)}`))
     return
   }
+  if (camera.mode === 'free' && !freeControlsActive()) return
   if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight'].includes(event.code)) {
     event.preventDefault()
     keys.add(event.code)
@@ -395,18 +416,14 @@ window.addEventListener('keydown', (event) => {
 window.addEventListener('keyup', (event) => keys.delete(event.code))
 window.addEventListener('blur', () => keys.clear())
 document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement === worldHost || camera?.mode !== 'free') return
+  if (camera?.mode !== 'free') return
+  if (freeControlsActive()) {
+    mirrorCamera()
+    return
+  }
   keys.clear()
-  camera = null
-  root.dataset['cameraMode'] = ''
-  root.dataset['displayedEye'] = ''
-  root.dataset['displayedDirection'] = ''
-  root.dataset['orbitTarget'] = ''
-  freeHint.hidden = true
-  orbitHint.hidden = true
-  reticle.hidden = true
   mirrorPoint(null)
-  setError('Pointer Lock was lost; free look stopped.')
+  mirrorCamera()
 })
 saveRetry.addEventListener('click', () => writer?.retry())
 

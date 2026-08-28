@@ -81,6 +81,7 @@ export async function createSlot(name: string): Promise<string> {
     if (error.length > 0) throw new Error(`creating the native save failed: ${error}`)
     return false
   }, { timeout: 30_000, interval: 100 })
+  await resumeFreeControls()
   return attribute('loaded-slot')
 }
 
@@ -90,6 +91,15 @@ export async function loadSlot(slotId: string): Promise<void> {
   await load.click()
   await expect(game()).toHaveAttribute('data-loaded-slot', slotId)
   await expect(game()).toHaveAttribute('data-ready', 'true')
+  await resumeFreeControls()
+}
+
+export async function resumeFreeControls(): Promise<void> {
+  const resume = $('[data-free-resume]')
+  if (!await resume.isDisplayed()) return
+  await canvas().click()
+  await expect(resume).not.toBeDisplayed()
+  await expect($('[data-reticle]')).toBeDisplayed()
 }
 
 export async function rightClickWorld(x = 0, y = 0): Promise<void> {

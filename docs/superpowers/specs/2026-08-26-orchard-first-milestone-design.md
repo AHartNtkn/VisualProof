@@ -197,26 +197,24 @@ trees may hold that role concurrently.
 ## Camera and Input
 
 The start menu has an ordinary cursor and does not mount a playable world. A
-valid Create submission or Load button activation requests Pointer Lock
-synchronously before asynchronous save I/O. The decoded world mounts only while
-the world host owns Pointer Lock, so free flight begins with working relative
-mouse-look. Save discovery, invalid Create submission, creation, and loading do
-not otherwise depend on Pointer Lock. If the request is rejected, Pointer Lock
-is lost while Create or Load is still opening the world, or opening otherwise
-fails, the menu remains visible with its ordinary cursor and a concrete opening
-error. Unexpected Pointer Lock loss after the world mounts fails the mounted
-world closed: camera and input stop, the camera and orbit datasets, control hints,
-reticle, and pointing presentation clear, and the world reports `Pointer Lock was
-lost; free look stopped.`
+valid Create submission or Load button activation may request relative mouse
+input synchronously, but save I/O and world opening neither await nor depend on
+that request. A decoded world always mounts with its loaded free-flight camera,
+renderer, session, and writer. When free controls are inactive, the world keeps
+rendering and saving while mouse-look, movement, tool use, and orbit entry are
+inert; it presents the ordinary cue `Click the orchard to resume controls.` A
+primary world click retries acquisition without also entering orbit. Losing
+relative input clears held keys and pointing only: it preserves the camera pose,
+world readiness, renderer, session, writer, and animation loop. A successful
+retry restores free controls without changing the pose.
 
 ### Free flight
 
-- `MouseEvent.movementX` and `MouseEvent.movementY` change yaw and pitch only
-  while the world host owns Pointer Lock.
-- `W` and `S` move forward and backward.
-- `A` and `D` strafe left and right.
-- `Space` and `Ctrl` move up and down.
-- `Shift` increases movement speed.
+- Free controls are active exactly when the camera is in free flight and the
+  world host owns relative mouse input. Only then do `MouseEvent.movementX` and
+  `MouseEvent.movementY` change yaw and pitch, `W`/`S` move forward and
+  backward, `A`/`D` strafe, `Space`/`Ctrl` move vertically, and `Shift`
+  increases movement speed.
 - A left-click points through the center reticle. A tree under the reticle
   within `100` units becomes the orbit target, orbit mode begins, and pointer
   lock is released so the ordinary cursor becomes visible.
@@ -286,7 +284,8 @@ The start menu contains:
 
 The world presents only milestone-essential feedback:
 
-- center reticle in free flight;
+- center reticle and free-flight hint while free controls are active, otherwise
+  the concise resume cue;
 - pointer hover in orbit;
 - concise control hints appropriate to the camera mode;
 - invalid double-cut target feedback;

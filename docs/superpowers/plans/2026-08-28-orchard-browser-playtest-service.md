@@ -17,7 +17,9 @@
 - The service binds only to `127.0.0.1`, accepts only the configured Vite origin, and requires a per-launch token.
 - The service exposes no explicit save destination and no deletion operation.
 - Browser playtesting uses ordinary SQLite saves in a git-ignored playtest directory.
-- Pointer Lock and player controls remain unchanged.
+- Browser playtesting does not add alternate controls: relative input activates
+  free-flight controls, while world opening, rendering, and persistence remain
+  independent of its availability.
 
 ---
 
@@ -261,8 +263,9 @@ Run `npm run playtest:game`, reload the existing local browser tab, and directly
 
 For every defect, trace its root cause, add a focused failing behavioral test,
 run RED, implement the smallest complete repair, run GREEN, commit, reload, and
-repeat the exact direct interaction. Do not change Pointer Lock or introduce an
-alternate camera/input path to accommodate the browser-control surface.
+repeat the exact direct interaction. Do not introduce an alternate camera/input
+path to accommodate the browser-control surface; unavailable relative input keeps
+the opened world available with its ordinary resume cue.
 
 - [ ] **Step 3: Run final automated validation**
 
@@ -279,4 +282,3 @@ git diff --check
 - [ ] **Step 4: Commit any playtest-owned repairs**
 
 Commit each coherent tested repair separately. Finish with a clean worktree.
-

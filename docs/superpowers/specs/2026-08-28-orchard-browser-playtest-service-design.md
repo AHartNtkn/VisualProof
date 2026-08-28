@@ -18,8 +18,10 @@ persistence authority.
 - The browser service binds only to `127.0.0.1`, requires a per-launch token,
   permits only the configured Vite origin, and exposes no explicit filesystem
   destination or deletion operation.
-- Player input and camera behavior do not change to accommodate a browser-control
-  limitation. Pointer Lock remains required for free flight.
+- Player input and camera behavior do not gain an alternate path to accommodate
+  a browser-control limitation. Relative input activates free-flight controls,
+  but world opening, rendering, and persistence remain available when it is
+  unavailable; the ordinary in-world resume cue explains how to retry it.
 
 ## Architecture
 
@@ -89,6 +91,5 @@ After automated validation, direct browser playtesting must create a slot,
 load the world, use the tool, inspect camera mode and pose, enter and leave
 orbit, reload the page, and load the persisted slot. Each observed defect is
 repaired and the same interaction is repeated. If the available browser cannot
-provide Pointer Lock, that exact external limitation is reported; the game does
-not gain alternate controls.
-
+provide relative input, the world remains available with its resume cue; the game
+does not gain alternate controls.
