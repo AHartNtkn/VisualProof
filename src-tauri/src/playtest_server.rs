@@ -45,20 +45,27 @@ pub fn router(store: SaveStore, config: PlaytestServerConfig) -> Router {
             post(update_camera),
         )
         .with_state(state.clone())
-        .layer(middleware::from_fn_with_state(state, authenticate))
         .layer(cors)
+        .layer(middleware::from_fn_with_state(state, authenticate))
 }
 
 async fn authenticate(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    if request.headers().get(header::ORIGIN) != Some(&state.config.allowed_origin) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if request.method() == Method::OPTIONS
+        && request
+            .headers()
+            .contains_key(header::ACCESS_CONTROL_REQUEST_METHOD)
+    {
+        return next.run(request).await;
+    }
     let supplied_token = request
         .headers()
         .get(TOKEN_HEADER)
         .and_then(|value| value.to_str().ok());
     if supplied_token != Some(state.config.token.as_str()) {
         return StatusCode::UNAUTHORIZED.into_response();
-    }
-    if request.headers().get(header::ORIGIN) != Some(&state.config.allowed_origin) {
-        return StatusCode::FORBIDDEN.into_response();
     }
     next.run(request).await
 }
@@ -311,6 +318,26 @@ mod tests {
                 .headers()
                 .get(header::ACCESS_CONTROL_ALLOW_ORIGIN),
             Some(&HeaderValue::from_static(ORIGIN))
+        );
+
+        let wrong_origin_preflight = Request::builder()
+            .method("OPTIONS")
+            .uri("/__orchard_playtest/save/create")
+            .header(header::ORIGIN, "http://127.0.0.1:31337")
+            .header(header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
+            .header(
+                header::ACCESS_CONTROL_REQUEST_HEADERS,
+                "content-type, x-orchard-playtest-token",
+            )
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            app.clone()
+                .oneshot(wrong_origin_preflight)
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::FORBIDDEN
         );
 
         for request in [
