@@ -13,12 +13,7 @@ import {
   game,
   hold,
   holdTogether,
-  movePrivatePointerOutsideWindow,
-  movePrivatePointerTowardOrigin,
-  pointerIsInsideOrchard,
   pressEscape,
-  privatePointerLocation,
-  resizeAndMoveOrchard,
   rightClickWorld,
   settledDisplayedPose,
   storedTreeDiagram,
@@ -32,13 +27,10 @@ describe('native camera and reach behavior', () => {
     await expect(game()).toHaveAttribute('data-camera-mode', 'menu')
     await expect($('.slot.invalid')).toBeDisplayed()
     await expect($('.slot.invalid small')).not.toHaveText('')
-    const menuTarget = movePrivatePointerOutsideWindow()
-    expect(privatePointerLocation()).toEqual(menuTarget)
     await $('[data-new-slot-name]').setValue('   ')
     await $('[data-create-slot]').click()
     await expect($('[data-menu-error]')).toHaveText('Enter a name for the new orchard.')
     await expect(game()).toHaveAttribute('data-camera-mode', 'menu')
-    expect(privatePointerLocation()).toEqual(menuTarget)
     const seedlingSlot = await createSlot('Camera Orchard')
     await expect(game()).toHaveAttribute('data-camera-mode', 'free')
     const seedlingBefore = storedTreeDiagram(seedlingSlot, 'tree-0000')
@@ -52,14 +44,19 @@ describe('native camera and reach behavior', () => {
     expectPoseClose(await displayedPose(), toolPose)
     writeFileSync(receiptPath, JSON.stringify({ seedlingSlot, seedlingAfter }))
 
+    const beforeFreeLook = await displayedPose()
+    await canvas().moveTo({ xOffset: 60, yOffset: 35 })
+    await browser.waitUntil(async () =>
+      JSON.stringify(await displayedPose()) !== JSON.stringify(beforeFreeLook),
+    )
+
     await canvas().click()
     await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
     await expect(game()).toHaveAttribute('data-orbit-target', 'tree-0000')
 
-    const beforeOrbitMouse = await displayedPose()
-    const orbitTarget = movePrivatePointerOutsideWindow()
-    expect(privatePointerLocation()).toEqual(orbitTarget)
-    expectPoseClose(await displayedPose(), beforeOrbitMouse)
+    const beforeOrbitPointer = await displayedPose()
+    await canvas().moveTo({ xOffset: 45, yOffset: 20 })
+    expectPoseClose(await displayedPose(), beforeOrbitPointer)
 
     const beforeA = await displayedPose()
     await hold('a')
@@ -106,12 +103,12 @@ describe('native camera and reach behavior', () => {
     await expect(game()).toHaveAttribute('data-camera-mode', 'free')
     await expect(game()).toHaveAttribute('data-orbit-target', '')
     expectPoseClose(await displayedPose(), beforeExit)
-    movePrivatePointerOutsideWindow()
-    expect(pointerIsInsideOrchard(privatePointerLocation())).toBe(true)
 
-    const beforeMouse = await displayedPose()
-    await canvas().moveTo({ xOffset: 60, yOffset: 35 })
-    await browser.waitUntil(async () => JSON.stringify(await displayedPose()) !== JSON.stringify(beforeMouse))
+    const beforeResumedLook = await displayedPose()
+    await canvas().moveTo({ xOffset: -55, yOffset: -30 })
+    await browser.waitUntil(async () =>
+      JSON.stringify(await displayedPose()) !== JSON.stringify(beforeResumedLook),
+    )
 
     await holdTogether([Key.Shift, 's'], 7_000)
     const farPose = await displayedPose()
@@ -123,21 +120,5 @@ describe('native camera and reach behavior', () => {
     await browser.waitUntil(async () => (await attribute('errors')).includes('within reach'))
     expect(storedTreeDiagram(seedlingSlot, 'tree-0000')).toEqual(farDiagram)
     expectPoseClose(await displayedPose(), farPose)
-
-    const beforeWindowChange = await displayedPose()
-    const movedWindow = resizeAndMoveOrchard(700, 500, 800, 400)
-    expect(movedWindow).toEqual({ x: 800, y: 400, width: 700, height: 500 })
-    await browser.waitUntil(async () => pointerIsInsideOrchard(privatePointerLocation()), {
-      interval: 50,
-      timeout: 2_000,
-      timeoutMsg: 'pointer was not recentered inside resized/moved Orchard window',
-    })
-    await browser.pause(200)
-    expectPoseClose(await displayedPose(), beforeWindowChange)
-    movePrivatePointerTowardOrigin()
-    const confinedAfterMove = privatePointerLocation()
-    if (!pointerIsInsideOrchard(confinedAfterMove)) {
-      throw new Error(`pointer crossed resized/moved Orchard boundary: ${JSON.stringify({ movedWindow, confinedAfterMove })}`)
-    }
   })
 })

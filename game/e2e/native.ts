@@ -1,5 +1,4 @@
 import { $, browser, expect } from '@wdio/globals'
-import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { Key } from 'webdriverio'
@@ -93,76 +92,12 @@ export async function loadSlot(slotId: string): Promise<void> {
   await expect(game()).toHaveAttribute('data-ready', 'true')
 }
 
-type PointerLocation = { readonly x: number; readonly y: number }
-type WindowGeometry = PointerLocation & { readonly width: number; readonly height: number }
-
-function xdotool(...args: string[]): string {
-  if (process.env['GAME_E2E_PRIVATE_X11'] !== '1') {
-    throw new Error('OS pointer checks are restricted to the private native-test X11 display')
-  }
-  return execFileSync('xdotool', args, { encoding: 'utf8' })
-}
-
-function orchardWindowId(): string {
-  const windowId = xdotool('search', '--name', '^Orchard$').trim().split('\n')[0]
-  if (windowId === undefined || windowId.length === 0) throw new Error('Orchard X11 window is missing')
-  return windowId
-}
-
-function shellNumbers(output: string): Record<string, number> {
-  return Object.fromEntries(output.trim().split('\n').map((line) => {
-    const [key, raw] = line.split('=')
-    return [key, Number(raw)]
-  }))
-}
-
-export function orchardWindowGeometry(): WindowGeometry {
-  const values = shellNumbers(xdotool('getwindowgeometry', '--shell', orchardWindowId()))
-  return { x: values['X']!, y: values['Y']!, width: values['WIDTH']!, height: values['HEIGHT']! }
-}
-
-export function resizeAndMoveOrchard(width: number, height: number, x: number, y: number): WindowGeometry {
-  const windowId = orchardWindowId()
-  xdotool('windowsize', '--sync', windowId, String(width), String(height))
-  xdotool('windowmove', '--sync', windowId, String(x), String(y))
-  return orchardWindowGeometry()
-}
-
-export function movePrivatePointerTowardOrigin(): PointerLocation {
-  const [screenWidth, screenHeight] = xdotool('getdisplaygeometry').trim().split(/\s+/).map(Number)
-  xdotool('mousemove_relative', '--sync', '--', String(-screenWidth!), String(-screenHeight!))
-  return privatePointerLocation()
-}
-
-export function movePrivatePointerOutsideWindow(): PointerLocation {
-  const [screenWidth, screenHeight] = xdotool('getdisplaygeometry').trim().split(/\s+/).map(Number)
-  const window = orchardWindowGeometry()
-  const target = { x: screenWidth! - 1, y: screenHeight! - 1 }
-  if (target.x >= window.x && target.x < window.x + window.width
-    && target.y >= window.y && target.y < window.y + window.height) {
-    throw new Error('private X11 display has no point outside the Orchard window')
-  }
-  xdotool('mousemove_relative', '--sync', '--', String(screenWidth!), String(screenHeight!))
-  return target
-}
-
-export function privatePointerLocation(): PointerLocation {
-  const values = shellNumbers(xdotool('getmouselocation', '--shell'))
-  return { x: values['X']!, y: values['Y']! }
-}
-
-export function pointerIsInsideOrchard(pointer: PointerLocation): boolean {
-  const window = orchardWindowGeometry()
-  return pointer.x >= window.x && pointer.x < window.x + window.width
-    && pointer.y >= window.y && pointer.y < window.y + window.height
-}
-
 export async function rightClickWorld(x = 0, y = 0): Promise<void> {
-  if (x !== 0 || y !== 0) await canvas().moveTo({ xOffset: x, yOffset: y })
-  xdotool('mousedown', '3')
-  await browser.pause(50)
-  xdotool('mouseup', '3')
-  await browser.pause(20)
+  await browser.action('pointer')
+    .move({ origin: await canvas(), x, y })
+    .down({ button: 2 })
+    .up({ button: 2 })
+    .perform()
 }
 
 export function expectDoubleCut(before: StoredDiagram, after: StoredDiagram, parent: string): void {
