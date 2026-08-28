@@ -139,6 +139,31 @@ vi.mock('../../../src/game/render/glow-render', () => ({
   },
 }))
 
+vi.mock('../../../src/game/render/assets', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/game/render/assets')>()
+
+  class TestTreeRenderAssetCache extends actual.TreeRenderAssetCache {
+    public override get(diagramJson: string, diagram: import('../../../src/kernel/diagram').Diagram) {
+      const asset = super.get(diagramJson, diagram)
+      if (!diagramJson.startsWith('target:')) return asset
+
+      const center = { x: 3, y: 2, z: 4 }
+      const radius = 5
+      return {
+        ...asset,
+        bounds: { center, radius },
+        lods: {
+          ...asset.lods,
+          full: { ...asset.lods.full, center, radius },
+          reduced: { ...asset.lods.reduced, center, radius },
+        },
+      }
+    }
+  }
+
+  return { ...actual, TreeRenderAssetCache: TestTreeRenderAssetCache }
+})
+
 import type { GameTree } from '../../../src/game/model'
 import { mountGameWorld } from '../../../src/game/render/world'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
@@ -185,6 +210,15 @@ function blankTree(id = 'tree-a', x = 0, z = -20): GameTree {
     diagram,
     diagramJson: JSON.stringify(diagramToJson(diagram)),
     placement: { x, z, yaw: 0 },
+  }
+}
+
+function targetTree(id: string, x: number, z: number, yaw: number): GameTree {
+  const tree = blankTree(id, x, z)
+  return {
+    ...tree,
+    diagramJson: `target:${id}`,
+    placement: { x, z, yaw },
   }
 }
 
@@ -268,6 +302,49 @@ describe('production game world', () => {
       resident: 1,
       representedEntities: scene3(replacementDiagram).entities.length,
     })
+    world.dispose()
+  })
+
+  it('returns the nearest logical tree target before its first render', () => {
+    const world = mountGameWorld(container(), [
+      targetTree('far', 10, -60, Math.PI / 2),
+      targetTree('near', 10, -20, Math.PI / 2),
+    ])
+    world.setCamera({ eye: { x: 14, y: 2, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
+
+    expect(world.pickTree(0, 0)).toEqual({
+      treeId: 'near',
+      center: { x: 14, y: 2, z: -23 },
+      radius: 5,
+    })
+
+    world.dispose()
+  })
+
+  it('returns null when the ray misses every logical tree', () => {
+    const world = mountGameWorld(container(), [targetTree('only', 10, -20, Math.PI / 2)])
+    world.setCamera({ eye: { x: 14, y: 2, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
+
+    expect(world.pickTree(0.8, 0)).toBeNull()
+
+    world.dispose()
+  })
+
+  it('keeps the logical target stable across render modes and LOD changes', () => {
+    const world = mountGameWorld(container(), [targetTree('tree', 10, -20, Math.PI / 2)])
+    const center = { treeId: 'tree', center: { x: 14, y: 2, z: -23 }, radius: 5 }
+    world.resize(640, 360)
+    world.setCamera({ eye: { x: 14, y: 2, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
+
+    expect(world.pickTree(0, 0)).toEqual(center)
+    world.setRenderMode('raw')
+    expect(world.pickTree(0, 0)).toEqual(center)
+    world.setRenderMode('game')
+    world.render(0)
+    world.setCamera({ eye: { x: 14, y: 2, z: 200 }, forward: { x: 0, y: 0, z: -1 } })
+    world.render(16)
+    expect(world.pickTree(0, 0)).toEqual(center)
+
     world.dispose()
   })
 

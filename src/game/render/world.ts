@@ -7,7 +7,7 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import type { Diagram } from '../../kernel/diagram'
 import { diagramToJson } from '../../kernel/diagram'
-import type { GameTree } from '../model'
+import type { GameTree, TreeTarget } from '../model'
 import { DARK } from '../../view/paint'
 import { TreeRenderAssetCache } from './assets'
 import { mountGlowRenderer } from './glow-render'
@@ -42,6 +42,7 @@ export type GameWorldRenderer = {
   readonly canvas: HTMLCanvasElement
   setTrees(trees: readonly GameTree[]): void
   setCamera(pose: DisplayCameraPose): void
+  pickTree(ndcX: number, ndcY: number): TreeTarget | null
   setRenderMode(mode: RenderMode): void
   beginTreeTween(treeId: string, before: Diagram, after: Diagram): void
   resize(width: number, height: number): void
@@ -127,6 +128,9 @@ export function mountGameWorld(
     },
   )
   const renderTreesById = new Map<string, RenderTree>()
+  const logicalTreeTargets = new Map<string, { readonly target: TreeTarget; readonly sphere: THREE.Sphere }>()
+  const treeRaycaster = new THREE.Raycaster()
+  const treeHitPoint = new THREE.Vector3()
 
   const renderTrees = (trees: readonly GameTree[]): RenderTree[] => trees.map((tree, index) => {
     assetsByJson.set(tree.diagramJson, assetCache.get(tree.diagramJson, tree.diagram))
@@ -142,6 +146,24 @@ export function mountGameWorld(
     const rendered = renderTrees(trees)
     renderTreesById.clear()
     for (const tree of rendered) renderTreesById.set(tree.id, tree)
+    logicalTreeTargets.clear()
+    for (const tree of rendered) {
+      const asset = assetsByJson.get(tree.diagramJson)
+      if (asset === undefined) throw new Error('tree render asset was not registered')
+      const local = asset.bounds.center
+      const cosine = Math.cos(tree.placement.yaw)
+      const sine = Math.sin(tree.placement.yaw)
+      const center = {
+        x: tree.placement.x + local.x * cosine + local.z * sine,
+        y: local.y,
+        z: tree.placement.z - local.x * sine + local.z * cosine,
+      }
+      const target = { treeId: tree.id, center, radius: asset.bounds.radius }
+      logicalTreeTargets.set(tree.id, {
+        target,
+        sphere: new THREE.Sphere(new THREE.Vector3(center.x, center.y, center.z), target.radius),
+      })
+    }
     runtime.setTrees(rendered)
   }
 
@@ -206,6 +228,20 @@ export function mountGameWorld(
         pose.eye.y + pose.forward.y,
         pose.eye.z + pose.forward.z,
       )
+    },
+    pickTree(ndcX, ndcY) {
+      treeRaycaster.setFromCamera({ x: ndcX, y: ndcY } as THREE.Vector2, camera)
+      let nearest: TreeTarget | null = null
+      let nearestDistanceSquared = Number.POSITIVE_INFINITY
+      for (const { target, sphere } of logicalTreeTargets.values()) {
+        if (treeRaycaster.ray.intersectSphere(sphere, treeHitPoint) === null) continue
+        const distanceSquared = treeRaycaster.ray.origin.distanceToSquared(treeHitPoint)
+        if (distanceSquared < nearestDistanceSquared) {
+          nearest = target
+          nearestDistanceSquared = distanceSquared
+        }
+      }
+      return nearest
     },
     setRenderMode(mode) {
       runtime.setMode(mode)
