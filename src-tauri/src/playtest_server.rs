@@ -1,0 +1,353 @@
+use crate::save_store::{CameraRecord, CreateSlotInput, SaveStore, SaveStoreError, TreeUpdate};
+use axum::{
+    extract::{Request, State},
+    http::{header, HeaderValue, Method, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    routing::{get, post},
+    Json, Router,
+};
+use serde::Deserialize;
+use tower_http::cors::CorsLayer;
+
+const TOKEN_HEADER: &str = "x-orchard-playtest-token";
+
+#[derive(Clone)]
+pub struct PlaytestServerConfig {
+    pub token: String,
+    pub allowed_origin: HeaderValue,
+}
+
+#[derive(Clone)]
+struct AppState {
+    store: SaveStore,
+    config: PlaytestServerConfig,
+}
+
+pub fn router(store: SaveStore, config: PlaytestServerConfig) -> Router {
+    let state = AppState { store, config };
+    let cors = CorsLayer::new()
+        .allow_origin(state.config.allowed_origin.clone())
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::HeaderName::from_static(TOKEN_HEADER),
+        ]);
+
+    Router::new()
+        .route("/__orchard_playtest/health", get(health))
+        .route("/__orchard_playtest/save/list", post(list))
+        .route("/__orchard_playtest/save/create", post(create))
+        .route("/__orchard_playtest/save/load", post(load))
+        .route("/__orchard_playtest/save/update-tree", post(update_tree))
+        .route(
+            "/__orchard_playtest/save/update-camera",
+            post(update_camera),
+        )
+        .with_state(state.clone())
+        .layer(middleware::from_fn_with_state(state, authenticate))
+        .layer(cors)
+}
+
+async fn authenticate(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    let supplied_token = request
+        .headers()
+        .get(TOKEN_HEADER)
+        .and_then(|value| value.to_str().ok());
+    if supplied_token != Some(state.config.token.as_str()) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    if request.headers().get(header::ORIGIN) != Some(&state.config.allowed_origin) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    next.run(request).await
+}
+
+async fn health() -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+async fn list(
+    State(state): State<AppState>,
+    Json(_): Json<serde_json::Value>,
+) -> Result<Json<Vec<crate::save_store::SlotListEntry>>, StoreError> {
+    state.store.list().map(Json).map_err(StoreError)
+}
+
+async fn create(
+    State(state): State<AppState>,
+    Json(input): Json<CreateSlotInput>,
+) -> Result<Json<crate::save_store::SlotListEntry>, StoreError> {
+    state.store.create(input).map(Json).map_err(StoreError)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SlotRequest {
+    slot_id: String,
+}
+
+async fn load(
+    State(state): State<AppState>,
+    Json(input): Json<SlotRequest>,
+) -> Result<Json<crate::save_store::LoadedSlot>, StoreError> {
+    state
+        .store
+        .load(&input.slot_id)
+        .map(Json)
+        .map_err(StoreError)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateTreeRequest {
+    slot_id: String,
+    update: TreeUpdate,
+}
+
+async fn update_tree(
+    State(state): State<AppState>,
+    Json(input): Json<UpdateTreeRequest>,
+) -> Result<Json<i64>, StoreError> {
+    state
+        .store
+        .update_tree(&input.slot_id, input.update)
+        .map(Json)
+        .map_err(StoreError)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateCameraRequest {
+    slot_id: String,
+    camera: CameraRecord,
+}
+
+async fn update_camera(
+    State(state): State<AppState>,
+    Json(input): Json<UpdateCameraRequest>,
+) -> Result<Json<()>, StoreError> {
+    state
+        .store
+        .update_camera(&input.slot_id, input.camera)
+        .map(Json)
+        .map_err(StoreError)
+}
+
+struct StoreError(SaveStoreError);
+
+impl IntoResponse for StoreError {
+    fn into_response(self) -> Response {
+        (StatusCode::BAD_REQUEST, self.0.to_string()).into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{router, PlaytestServerConfig};
+    use crate::save_store::{CameraRecord, SaveStore};
+    use axum::{
+        body::{to_bytes, Body},
+        http::{header, HeaderValue, Request, StatusCode},
+    };
+    use serde_json::{json, Value};
+    use tower::ServiceExt;
+
+    const TOKEN: &str = "orchard-playtest-token";
+    const ORIGIN: &str = "http://127.0.0.1:1420";
+
+    fn config() -> PlaytestServerConfig {
+        PlaytestServerConfig {
+            token: TOKEN.into(),
+            allowed_origin: HeaderValue::from_static(ORIGIN),
+        }
+    }
+
+    fn request(path: &str, body: Value) -> Request<Body> {
+        Request::builder()
+            .method("POST")
+            .uri(path)
+            .header(header::ORIGIN, ORIGIN)
+            .header("x-orchard-playtest-token", TOKEN)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    }
+
+    async fn response_json(response: axum::response::Response) -> Value {
+        let (parts, body) = response.into_parts();
+        assert_eq!(parts.status, StatusCode::OK);
+        serde_json::from_slice(&to_bytes(body, usize::MAX).await.unwrap()).unwrap()
+    }
+
+    // This catches a server that returns success without calling the real SaveStore.
+    #[tokio::test]
+    async fn authenticated_routes_create_list_load_and_update_an_ordinary_slot() {
+        let temporary = tempfile::tempdir().unwrap();
+        let store = SaveStore::new(temporary.path().to_path_buf());
+        let app = router(store.clone(), config());
+        let created = response_json(
+            app.clone()
+                .oneshot(request(
+                    "/__orchard_playtest/save/create",
+                    json!({
+                        "displayName": "Browser Orchard",
+                        "camera": {"x": 1.0, "y": 2.0, "z": 3.0, "yaw": 0.25, "pitch": -0.5},
+                        "trees": [{
+                            "treeId": "tree-1",
+                            "diagramJson": "{\"regions\":[],\"nodes\":[],\"wires\":[]}",
+                            "x": 4.0,
+                            "z": 5.0,
+                            "yaw": 0.75
+                        }]
+                    }),
+                ))
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(created["displayName"], "Browser Orchard");
+        assert_eq!(created["error"], Value::Null);
+        let slot_id = created["slotId"].as_str().unwrap().to_owned();
+
+        let listed = response_json(
+            app.clone()
+                .oneshot(request("/__orchard_playtest/save/list", json!({})))
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(listed, json!([created.clone()]));
+
+        let loaded = response_json(
+            app.clone()
+                .oneshot(request(
+                    "/__orchard_playtest/save/load",
+                    json!({"slotId": slot_id}),
+                ))
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(loaded["displayName"], "Browser Orchard");
+        assert_eq!(loaded["camera"]["x"], 1.0);
+        assert_eq!(loaded["trees"][0]["treeId"], "tree-1");
+
+        let updated_tree = response_json(
+            app.clone()
+                .oneshot(request(
+                    "/__orchard_playtest/save/update-tree",
+                    json!({
+                        "slotId": slot_id,
+                        "update": {
+                            "treeId": "tree-1",
+                            "diagramJson": "{\"regions\":[{\"id\":\"cut\"}],\"nodes\":[],\"wires\":[]}",
+                            "x": 6.0,
+                            "z": 7.0,
+                            "yaw": 1.25
+                        }
+                    }),
+                ))
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert!(updated_tree.as_i64().unwrap() > 0);
+
+        let updated_camera = CameraRecord {
+            x: 8.0,
+            y: 9.0,
+            z: 10.0,
+            yaw: -0.25,
+            pitch: 0.5,
+        };
+        assert_eq!(
+            response_json(
+                app.oneshot(request(
+                    "/__orchard_playtest/save/update-camera",
+                    json!({"slotId": slot_id, "camera": updated_camera}),
+                ))
+                .await
+                .unwrap(),
+            )
+            .await,
+            Value::Null
+        );
+
+        let persisted = SaveStore::new(temporary.path().to_path_buf())
+            .load(&slot_id)
+            .unwrap();
+        assert_eq!(persisted.camera, updated_camera);
+        assert_eq!(persisted.trees[0].x, 6.0);
+        assert_eq!(persisted.trees[0].z, 7.0);
+        assert_eq!(persisted.trees[0].yaw, 1.25);
+        assert!(persisted.diagrams.iter().any(|diagram| {
+            diagram.diagram_json == "{\"regions\":[{\"id\":\"cut\"}],\"nodes\":[],\"wires\":[]}"
+        }));
+    }
+
+    // This catches accidentally dispatching an unauthorized request to SaveStore.
+    #[tokio::test]
+    async fn requests_without_the_exact_token_or_origin_never_touch_the_store() {
+        let temporary = tempfile::tempdir().unwrap();
+        let store = SaveStore::new(temporary.path().to_path_buf());
+        let app = router(store.clone(), config());
+
+        let allowed_preflight = Request::builder()
+            .method("OPTIONS")
+            .uri("/__orchard_playtest/save/create")
+            .header(header::ORIGIN, ORIGIN)
+            .header(header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
+            .header(
+                header::ACCESS_CONTROL_REQUEST_HEADERS,
+                "content-type, x-orchard-playtest-token",
+            )
+            .body(Body::empty())
+            .unwrap();
+        let allowed_preflight_response = app.clone().oneshot(allowed_preflight).await.unwrap();
+        assert_eq!(allowed_preflight_response.status(), StatusCode::OK);
+        assert_eq!(
+            allowed_preflight_response
+                .headers()
+                .get(header::ACCESS_CONTROL_ALLOW_ORIGIN),
+            Some(&HeaderValue::from_static(ORIGIN))
+        );
+
+        for request in [
+            Request::builder()
+                .method("POST")
+                .uri("/__orchard_playtest/save/create")
+                .header(header::ORIGIN, ORIGIN)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+            Request::builder()
+                .method("POST")
+                .uri("/__orchard_playtest/save/create")
+                .header(header::ORIGIN, ORIGIN)
+                .header("x-orchard-playtest-token", "wrong-token")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        ] {
+            assert_eq!(
+                app.clone().oneshot(request).await.unwrap().status(),
+                StatusCode::UNAUTHORIZED
+            );
+        }
+
+        let wrong_origin = Request::builder()
+            .method("POST")
+            .uri("/__orchard_playtest/save/create")
+            .header(header::ORIGIN, "http://127.0.0.1:31337")
+            .header("x-orchard-playtest-token", TOKEN)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from("{}"))
+            .unwrap();
+        assert_eq!(
+            app.oneshot(wrong_origin).await.unwrap().status(),
+            StatusCode::FORBIDDEN
+        );
+        assert!(store.list().unwrap().is_empty());
+    }
+}

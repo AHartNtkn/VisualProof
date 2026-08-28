@@ -1,4 +1,6 @@
 mod commands;
+#[cfg(feature = "playtest-server")]
+pub mod playtest_server;
 pub mod save_store;
 
 pub fn run() {

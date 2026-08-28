@@ -2374,6 +2374,7 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 name = "orchard-game"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "rusqlite",
  "serde",
  "serde_json",
@@ -2383,6 +2384,9 @@ dependencies = [
  "tauri-plugin-wdio-webdriver",
  "tempfile",
  "thiserror 2.0.20",
+ "tokio",
+ "tower",
+ "tower-http",
  "uuid",
 ]
 

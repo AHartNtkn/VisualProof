@@ -15,6 +15,11 @@ name = "emit_game_saves"
 path = "src/bin/emit_game_saves.rs"
 required-features = ["save-emitter"]
 
+[[bin]]
+name = "orchard_playtest_server"
+path = "src/bin/orchard_playtest_server.rs"
+required-features = ["playtest-server"]
+
 [lib]
 name = "orchard_game"
 crate-type = ["staticlib", "cdylib", "rlib"]
@@ -23,6 +28,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 default = []
 save-emitter = []
 wdio-tests = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
+playtest-server = ["dep:axum", "dep:tokio", "dep:tower-http"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -35,7 +41,11 @@ tauri = { version = "2", features = [] }
 tauri-plugin-wdio = { version = "1", optional = true }
 tauri-plugin-wdio-webdriver = { version = "1", optional = true }
 thiserror = "2"
+axum = { version = "0.8", optional = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"], optional = true }
+tower-http = { version = "0.6", features = ["cors"], optional = true }
 uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 tempfile = "3"
+tower = "0.5"
