@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "demo": "vite demo",
     "game": "vite game --host 127.0.0.1 --port 1420 --strictPort",
+    "playtest:game": "./scripts/playtest-game.sh",
     "build:game": "vite build game --outDir dist",
     "build:game:web:e2e": "VITE_WDIO=true vite build game --outDir dist",
     "build:game:e2e": "tauri build --debug --no-bundle --features wdio-tests --config src-tauri/tauri.e2e.conf.json",

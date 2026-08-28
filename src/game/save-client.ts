@@ -37,6 +37,12 @@ export type SaveClient = {
   readonly updateCamera: (slotId: string, camera: CameraRecord) => Promise<void>
 }
 
+export type SaveOperation = 'list' | 'create' | 'load' | 'update-tree' | 'update-camera'
+
+export type SaveTransport = {
+  request(operation: SaveOperation, input: Record<string, unknown>): Promise<unknown>
+}
+
 function record(value: unknown, what: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`${what} must be an object`)
@@ -83,12 +89,76 @@ export function decodeCreatedSlot(value: unknown): SlotListEntry {
   return decodeSlotEntry(value, 'created slot')
 }
 
-export const saveClient: SaveClient = {
-  list: () => invoke('list_slots').then(decodeSlotList),
-  create: (displayName, camera, trees) => invoke('create_slot', {
-    input: { displayName, camera, trees },
-  }).then(decodeCreatedSlot),
-  load: (slotId) => invoke('load_slot', { slotId }).then(decodeLoadedSlot),
-  updateTree: (slotId, update) => invoke('update_tree', { slotId, update }),
-  updateCamera: (slotId, camera) => invoke('update_camera', { slotId, camera }),
+export function createSaveClient(transport: SaveTransport): SaveClient {
+  return {
+    list: () => transport.request('list', {}).then(decodeSlotList),
+    create: (displayName, camera, trees) => transport.request('create', {
+      displayName, camera, trees,
+    }).then(decodeCreatedSlot),
+    load: (slotId) => transport.request('load', { slotId }).then(decodeLoadedSlot),
+    updateTree: (slotId, update) => transport.request('update-tree', { slotId, update })
+      .then((value) => value as number),
+    updateCamera: (slotId, camera) => transport.request('update-camera', { slotId, camera })
+      .then(() => undefined),
+  }
 }
+
+export const tauriSaveTransport: SaveTransport = {
+  request(operation, input) {
+    switch (operation) {
+      case 'list': return invoke('list_slots')
+      case 'create': return invoke('create_slot', { input })
+      case 'load': return invoke('load_slot', input)
+      case 'update-tree': return invoke('update_tree', input)
+      case 'update-camera': return invoke('update_camera', input)
+    }
+  },
+}
+
+const playtestPaths: Record<SaveOperation, string> = {
+  list: '/__orchard_playtest/save/list',
+  create: '/__orchard_playtest/save/create',
+  load: '/__orchard_playtest/save/load',
+  'update-tree': '/__orchard_playtest/save/update-tree',
+  'update-camera': '/__orchard_playtest/save/update-camera',
+}
+
+export function httpSaveTransport(config: {
+  baseUrl: string
+  token: string
+  fetch: typeof globalThis.fetch
+}): SaveTransport {
+  const baseUrl = config.baseUrl.replace(/\/$/, '')
+  return {
+    async request(operation, input): Promise<unknown> {
+      const response = await config.fetch(`${baseUrl}${playtestPaths[operation]}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-orchard-playtest-token': config.token,
+        },
+        body: JSON.stringify(input),
+      })
+      if (!response.ok) throw new Error(await response.text())
+      return response.json()
+    },
+  }
+}
+
+function selectedSaveTransport(): SaveTransport {
+  const transportName = import.meta.env.VITE_ORCHARD_SAVE_TRANSPORT ?? 'tauri'
+  switch (transportName) {
+    case 'tauri': return tauriSaveTransport
+    case 'playtest-http': {
+      const baseUrl = import.meta.env.VITE_ORCHARD_PLAYTEST_URL
+      const token = import.meta.env.VITE_ORCHARD_PLAYTEST_TOKEN
+      if (baseUrl === undefined || token === undefined) {
+        throw new Error('playtest HTTP save transport requires VITE_ORCHARD_PLAYTEST_URL and VITE_ORCHARD_PLAYTEST_TOKEN')
+      }
+      return httpSaveTransport({ baseUrl, token, fetch: globalThis.fetch })
+    }
+    default: throw new Error(`unsupported Orchard save transport '${transportName}'`)
+  }
+}
+
+export const saveClient = createSaveClient(selectedSaveTransport())

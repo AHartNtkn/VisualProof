@@ -5,6 +5,7 @@ Old/
 lake-manifest.json
 node_modules/
 dist/
+src-tauri/target/browser-playtest-saves/
 demo/dist
 app/dist
 test-results/
