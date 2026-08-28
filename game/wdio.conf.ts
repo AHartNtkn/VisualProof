@@ -20,14 +20,14 @@ type NativeScenario = {
 }
 
 const scenarios: Readonly<Record<string, NativeScenario>> = {
-  'passive-world': { name: 'passive-world', spec: './e2e/passive-world.e2e.ts', port: 4545, save: 'large-1.sqlite3', invalidSave: true },
+  controls: { name: 'controls', spec: './e2e/controls.e2e.ts', port: 4545, save: 'large-1.sqlite3', invalidSave: true },
   ...Object.fromEntries([10, 50, 100, 250, 500, 1000, 2000].map((count, index) => [
     `stress-${count}`,
     { name: `stress-${count}`, spec: './e2e/stress.e2e.ts', port: 4600 + index, save: `stress-${count}.sqlite3` },
   ])),
 }
 
-const requestedScenario = process.env['GAME_E2E_SCENARIO'] ?? 'passive-world'
+const requestedScenario = process.env['GAME_E2E_SCENARIO'] ?? 'controls'
 const scenario = scenarios[requestedScenario]
 if (scenario === undefined) throw new Error(`unknown native game scenario '${requestedScenario}'`)
 

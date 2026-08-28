@@ -42,6 +42,36 @@ input {
   background: radial-gradient(circle at 50% 58%, #11170f 0, #020302 38%, #000 72%);
 }
 
+.game[data-camera-mode="free"][data-input-engaged="true"] .world {
+  cursor: none;
+}
+
+.reticle,
+.engage {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.reticle {
+  width: 8px;
+  height: 8px;
+  border: 1px solid rgb(248 243 228 / 88%);
+  border-radius: 50%;
+  box-shadow: 0 0 5px rgb(0 0 0 / 90%);
+}
+
+.engage {
+  padding: 8px 11px;
+  border-radius: 8px;
+  color: #f8f3e4;
+  background: rgb(6 12 8 / 72%);
+  font-size: 13px;
+}
+
 .start {
   position: absolute;
   z-index: 5;

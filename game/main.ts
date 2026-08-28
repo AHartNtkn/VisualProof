@@ -2,13 +2,23 @@ import './style.css'
 if (import.meta.env.VITE_WDIO === 'true') void import('@wdio/tauri-plugin')
 
 import { DiagramBuilder, diagramToJson } from '../src/kernel/diagram'
-import type { CameraPose, GameWorld } from '../src/game/model'
+import {
+  advanceCamera,
+  cameraPoseForSave,
+  displayCameraPose,
+  enterOrbit,
+  exitOrbit,
+  initialCameraState,
+  type CameraMotion,
+  type CameraState,
+} from '../src/game/camera'
+import type { GameWorld } from '../src/game/model'
 import { SettledFrameTelemetry, frameTiming, percentile } from '../src/game/render/frame'
 import { mountGameWorld, type GameWorldRenderer } from '../src/game/render/world'
-import type { DisplayCameraPose } from '../src/game/render/types'
 import { saveClient, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
 import { SaveWriter } from '../src/game/save-writer'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
+import { attachWorldInput, type WorldInput } from './input'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
 const worldHost = document.querySelector<HTMLElement>('[data-world]')!
@@ -23,15 +33,21 @@ const worldName = document.querySelector<HTMLElement>('[data-world-name]')!
 const saveStatus = document.querySelector<HTMLElement>('[data-save-status]')!
 const saveRetry = document.querySelector<HTMLButtonElement>('[data-save-retry]')!
 const feedback = document.querySelector<HTMLElement>('[data-feedback]')!
+const reticle = document.querySelector<HTMLElement>('[data-reticle]')!
+const engage = document.querySelector<HTMLElement>('[data-engage]')!
 
 const blankDiagram = new DiagramBuilder().build()
 const blankDiagramJson = JSON.stringify(diagramToJson(blankDiagram))
 const initialCameraRecord: CameraRecord = { x: 0, y: 1.7, z: 8, yaw: 0, pitch: -0.18 }
 const initialTree: TreeUpdate = { treeId: 'tree-0000', diagramJson: blankDiagramJson, x: 0, z: 0, yaw: 0 }
+const NEUTRAL_MOTION: CameraMotion = {
+  forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
+}
 const slotControlReleases: Array<() => void> = []
 const telemetry = new SettledFrameTelemetry(60)
 let maxRepresentationOperations = 0
-let camera: CameraPose | null = null
+let camera: CameraState | null = null
+let input: WorldInput | null = null
 let writer: SaveWriter | null = null
 let renderer: GameWorldRenderer | null = null
 let animationFrame = 0
@@ -106,24 +122,17 @@ function renderSlots(slots: readonly SlotListEntry[]): void {
   }
 }
 
-function displayCameraPose(pose: CameraPose): DisplayCameraPose {
-  const horizontal = Math.cos(pose.pitch)
-  return {
-    eye: pose.position,
-    forward: {
-      x: -Math.sin(pose.yaw) * horizontal,
-      y: Math.sin(pose.pitch),
-      z: -Math.cos(pose.yaw) * horizontal,
-    },
-  }
-}
-
-function mirrorCamera(): void {
+function mirrorControls(): void {
   if (camera === null) return
   const display = displayCameraPose(camera)
-  root.dataset['cameraMode'] = 'fixed'
+  const inputEngaged = input?.engaged() ?? false
+  root.dataset['cameraMode'] = camera.mode
+  root.dataset['inputEngaged'] = String(inputEngaged)
+  root.dataset['orbitTarget'] = camera.mode === 'orbit' ? camera.target.treeId : ''
   root.dataset['displayedEye'] = JSON.stringify(display.eye)
   root.dataset['displayedDirection'] = JSON.stringify(display.forward)
+  reticle.hidden = camera.mode !== 'free' || !inputEngaged
+  engage.hidden = camera.mode !== 'free' || inputEngaged
 }
 
 function resize(): void {
@@ -132,13 +141,28 @@ function resize(): void {
 
 function animate(now: number): void {
   const activeRenderer = renderer
-  if (disposed || camera === null || writer === null || activeRenderer === null) return
+  const activeInput = input
+  const activeWriter = writer
+  const currentCamera = camera
+  if (
+    disposed
+    || currentCamera === null
+    || activeInput === null
+    || activeWriter === null
+    || activeRenderer === null
+  ) return
   const timing = frameTiming(now, previousFrame)
   previousFrame = now
-  activeRenderer.setCamera(displayCameraPose(camera))
+  const sampledMotion = activeInput.sample()
+  const motion = currentCamera.mode === 'free' && !activeInput.engaged()
+    ? NEUTRAL_MOTION
+    : sampledMotion
+  const nextCamera = advanceCamera(currentCamera, motion, timing.movementSeconds)
+  camera = nextCamera
+  activeRenderer.setCamera(displayCameraPose(nextCamera))
   const rendered = activeRenderer.render(now)
   maxRepresentationOperations = Math.max(maxRepresentationOperations, rendered.representationOperations)
-  writer.camera(camera)
+  activeWriter.camera(cameraPoseForSave(nextCamera))
   const settled = telemetry.record({ frameMs: timing.sampleMs, pending: rendered.pending, buildMs: rendered.buildMs, operations: rendered.representationOperations })
   root.dataset['representedCount'] = String(rendered.representedEntities)
   root.dataset['logicalCount'] = String(rendered.logical)
@@ -163,14 +187,15 @@ function animate(now: number): void {
   root.dataset['transitionGeneration'] = String(settled.transitionGeneration)
   root.dataset['settledGeneration'] = String(settled.settledGeneration)
   if (rendered.error !== null) setError(`Renderer: ${rendered.error}`)
-  mirrorCamera()
+  mirrorControls()
   animationFrame = requestAnimationFrame(animate)
 }
 
 async function startWorld(world: GameWorld): Promise<void> {
   const nextRenderer = mountGameWorld(worldHost, [...world.trees.values()])
-  const nextCamera = world.camera
+  const nextCamera = initialCameraState(world.camera)
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
+  let nextInput: WorldInput | null = null
   let releaseWriterStatus = (): void => {}
   try {
     nextRenderer.resize(worldHost.clientWidth, worldHost.clientHeight)
@@ -184,8 +209,36 @@ async function startWorld(world: GameWorld): Promise<void> {
       root.dataset['saveState'] = status.state
       if (status.state === 'error') setError(saveStatus.textContent)
     })
+    nextInput = attachWorldInput(worldHost, {
+      primary(clientX, clientY) {
+        const activeCamera = camera
+        const activeInput = input
+        const activeRenderer = renderer
+        if (activeCamera === null || activeInput === null || activeRenderer === null) return
+        if (activeCamera.mode === 'orbit') return
+        if (!activeInput.engaged()) {
+          void activeInput.engage().then(mirrorControls, mirrorControls)
+          return
+        }
+        const bounds = activeRenderer.canvas.getBoundingClientRect()
+        const target = activeRenderer.pickTree(
+          ((clientX - bounds.left) / bounds.width) * 2 - 1,
+          1 - ((clientY - bounds.top) / bounds.height) * 2,
+        )
+        if (target === null) return
+        camera = enterOrbit(activeCamera, target)
+        activeInput.release()
+        mirrorControls()
+      },
+      escape() {
+        if (camera?.mode !== 'orbit') return
+        camera = exitOrbit(camera)
+        mirrorControls()
+      },
+    })
     renderer = nextRenderer
     camera = nextCamera
+    input = nextInput
     writer = nextWriter
     start.hidden = true
     hud.hidden = false
@@ -195,10 +248,11 @@ async function startWorld(world: GameWorld): Promise<void> {
     maxRepresentationOperations = 0
     root.dataset['renderMode'] = 'game'
     telemetry.beginTransition()
-    mirrorCamera()
+    mirrorControls()
     previousFrame = performance.now()
     animationFrame = requestAnimationFrame(animate)
   } catch (error) {
+    nextInput?.dispose()
     releaseWriterStatus()
     await nextWriter.dispose().catch(() => {})
     nextRenderer.dispose()
@@ -246,6 +300,8 @@ window.addEventListener('pagehide', () => {
   startLifecycle.dispose()
   cancelAnimationFrame(animationFrame)
   resizeObserver.disconnect()
+  input?.dispose()
+  input = null
   void writer?.dispose().catch((error: unknown) => setError(`Save shutdown failed: ${message(error)}`))
   renderer?.dispose()
   renderer = null

@@ -26,10 +26,26 @@ Accept orders from a catalog; grow the ordered tree; deliver it by iterating a c
 
 ## Interaction
 
-The current orchard world is a passive viewer. Loading an orchard presents its
-saved camera continuously. The world surface has no movement, camera, selection,
-editing, keyboard, or mouse behavior. The start menu remains responsible for
-creating and loading orchards, and the HUD reports persistence state.
+Loading an orchard restores its saved free-flight pose and waits for a world
+click before accepting movement. That click engages cursorless relative input;
+while engaged, mouse motion changes yaw and pitch, `W`/`S` move forward and
+back, `A`/`D` strafe, `Space`/`Control` move vertically, and `Shift` sprints. A
+small center reticle is the aim point. When free flight is disengaged, the world
+shows only “Click to play.”
+
+A primary click while engaged orbits the tree under the reticle. Orbit restores
+the ordinary pointer, ignores mouse motion, uses `A`/`D` to rotate, `W`/`S` to
+change distance, and `Space`/`Control` to change height. `Escape` restores the
+exact pre-orbit free pose and leaves free flight disengaged. Secondary click has
+no camera or tree effect.
+
+The pure camera state is the sole free/orbit and persisted-pose authority. The
+renderer owns tree targeting and display only, the input adapter owns browser
+listeners and transient motion only, and the composition root samples input
+once per frame. Saves always receive the stored free-flight pose, including
+while orbiting. Pointer Lock is only the relative-input transport: rejection or
+loss leaves the loaded world and camera state unchanged, clears transient input,
+and exposes no fallback control path.
 
 ## Progression and economy
 

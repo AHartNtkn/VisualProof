@@ -4,9 +4,10 @@
 
 ## Goal
 
-Deliver the first Orchard world viewer in a real Tauri desktop shell: create or
-load a named save, render its generic tree scene from the saved camera, and
-keep the world and save status live.
+Deliver the first navigable Orchard world in a real Tauri desktop shell: create
+or load a named save, render its generic tree scene from the saved free-flight
+camera, move through the orchard, orbit a targeted tree, and keep the world and
+save status live.
 
 The default new save contains one blank seedling. Generated validation saves
 contain the same large `zeroIsNat` step-20 trees used by the current renderer
@@ -45,7 +46,8 @@ Production modules under `src/game/` own:
 
 - generic saved-tree and camera types;
 - the frontend save client;
-- fixed saved-camera presentation;
+- pure free-flight and orbit camera state;
+- browser input sampling;
 - the Three.js world renderer;
 - dynamic tree geometry and picking;
 - migrated spatial indexing, LOD, glow, residency, and stress telemetry.
@@ -154,9 +156,35 @@ saves therefore derive the large tree once per loaded save even when 2,000
 tree rows refer to it. Render assets are never an authority in the save.
 
 The renderer presents every tree from the loaded save and continuously updates
-representation residency and performance telemetry. The loaded camera pose is
-fixed for the lifetime of the opened world. The world surface has no keyboard,
-mouse, orbit, selection, or tool behavior.
+representation residency and performance telemetry. It receives only a derived
+display pose and owns no free/orbit mode. Its logical-tree query casts through
+the current render camera and returns the nearest target independently of render
+LOD and residency.
+
+## Camera and Input
+
+Loading initializes one tagged camera state from the saved free-flight pose.
+Free flight begins disengaged with a centered “Click to play” prompt. A world
+click requests Pointer Lock and consumes that click without moving the camera.
+While engaged, a center reticle replaces the pointer; mouse motion changes yaw
+and pitch, `W`/`S` move horizontally forward and back, `A`/`D` strafe,
+`Space`/`Control` move vertically, and `Shift` triples free-flight speed.
+
+An engaged primary click targets the center of the view and enters orbit on a
+tree hit. Orbit stores the exact initiating free pose, releases Pointer Lock,
+shows the ordinary pointer, ignores mouse motion, and maps `A`/`D`, `W`/`S`, and
+`Space`/`Control` to rotation, distance, and height. `Escape` restores the exact
+stored free pose and leaves input disengaged. Secondary click has no camera or
+tree effect.
+
+The camera module is the only camera-mode, pose, and save-pose authority. The
+renderer owns targeting and presentation only. The input adapter owns browser
+listeners, held keys, accumulated relative deltas, and Pointer Lock delegation
+only. The composition root owns one instance of each, samples input once per
+frame, advances the pure camera state, renders its display pose, and persists
+its free pose even while orbiting. Pointer Lock is not camera state or persisted
+state. Rejection or loss preserves the loaded world and camera, clears transient
+input, and provides no fallback gesture or control mode.
 
 ## Start Menu and Feedback
 
@@ -202,9 +230,11 @@ diagram serialization, large-tree source, or placement algorithm.
 
 ### TypeScript unit and integration tests
 
-- fixed-camera rendering and persistence;
-- no visible in-world input affordances;
-- keyboard and mouse input leave the displayed camera and saved trees unchanged;
+- literal free-flight and orbit camera motion, exact orbit exit, and free-pose
+  persistence;
+- browser input mapping, relative-delta consumption, interruption clearing, and
+  listener disposal;
+- logical tree targeting independent of renderer residency and LOD;
 - equivalent render results for shared diagrams and one-tree invalidation;
 - stable renderer behavior across the supported orchard sizes.
 
@@ -228,8 +258,9 @@ The native application is built and driven on an isolated desktop display
 through the start menu. Tests:
 
 - reject blank orchard names and report unreadable saves;
-- load the one-large-tree save, verify the fixed camera, and confirm keyboard
-  and mouse input do not change camera or tree state;
+- load the one-large-tree save, engage free flight, move and look, enter and
+  control orbit, ignore secondary click, restore the exact free pose with
+  `Escape`, and persist the later free pose without changing the tree;
 - load each stress-count save through the normal menu and wait for
   representation residency and settled frame sampling; compare Game and Raw
   telemetry only at the representative 10- and 2,000-tree endpoints;
@@ -248,8 +279,10 @@ window smoke check.
 
 `docs/orchard-game-design.md` records these durable rules:
 
-- the loaded world uses the camera stored in its save;
-- the world surface has no keyboard, mouse, selection, or tool behavior;
+- the loaded world restores the free-flight camera stored in its save;
+- free flight, centered targeting, tree orbit, interruption, and affordance
+  behavior;
+- camera, input, renderer, composition, and persistence authority boundaries;
 - saves use one exact current format with no versions or migrations;
 - runtime worlds come only from ordinary saves, including stress workloads;
 - `game/` is the sole 3D world frontend and stress tests exercise its

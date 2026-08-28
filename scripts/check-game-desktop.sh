@@ -60,7 +60,7 @@ case "$mode" in
   e2e)
     npm run build:game:e2e
     new_data_root
-    run_scenario passive-world passive-world "$current_data_root"
+    run_scenario controls controls "$current_data_root"
     ;;
   stress)
     npm run build:game:e2e

@@ -43,6 +43,34 @@ export function expectPoseClose(actual: DisplayPose, expected: DisplayPose): voi
   }
 }
 
+export function expectEyeClose(actual: DisplayPose, expected: DisplayPose): void {
+  for (const axis of ['x', 'y', 'z'] as const) {
+    expect(actual.eye[axis]).toBeCloseTo(expected.eye[axis], 7)
+  }
+}
+
+export function expectDirectionClose(actual: DisplayPose, expected: DisplayPose): void {
+  for (const axis of ['x', 'y', 'z'] as const) {
+    expect(actual.direction[axis]).toBeCloseTo(expected.direction[axis], 7)
+  }
+}
+
+export function poseEyeDistance(actual: DisplayPose, expected: DisplayPose): number {
+  return Math.hypot(
+    actual.eye.x - expected.eye.x,
+    actual.eye.y - expected.eye.y,
+    actual.eye.z - expected.eye.z,
+  )
+}
+
+export function poseDirectionDistance(actual: DisplayPose, expected: DisplayPose): number {
+  return Math.hypot(
+    actual.direction.x - expected.direction.x,
+    actual.direction.y - expected.direction.y,
+    actual.direction.z - expected.direction.z,
+  )
+}
+
 export async function hold(key: string, milliseconds = 180): Promise<void> {
   await browser.action('key').down(key).pause(milliseconds).up(key).perform()
 }
@@ -75,6 +103,14 @@ export async function rightClickWorld(x = 0, y = 0): Promise<void> {
     .perform()
 }
 
+export async function clickWorld(x = 0, y = 0): Promise<void> {
+  await browser.action('pointer')
+    .move({ origin: await canvas(), x, y })
+    .down({ button: 0 })
+    .up({ button: 0 })
+    .perform()
+}
+
 export function storedTreeDiagram(slotId: string, treeId: string): StoredDiagram {
   const dataRoot = process.env['GAME_E2E_DATA_ROOT']
   if (dataRoot === undefined) throw new Error('GAME_E2E_DATA_ROOT is required for save inspection')
@@ -94,6 +130,50 @@ export function storedTreeDiagram(slotId: string, treeId: string): StoredDiagram
   } finally {
     database.close()
   }
+}
+
+export function storedCameraPose(slotId: string): DisplayPose {
+  const dataRoot = process.env['GAME_E2E_DATA_ROOT']
+  if (dataRoot === undefined) throw new Error('GAME_E2E_DATA_ROOT is required for save inspection')
+  const database = new DatabaseSync(
+    join(dataRoot, 'com.visualproofassistant.orchard', 'saves', `${slotId}.sqlite3`),
+    { readOnly: true },
+  )
+  try {
+    const row = database.prepare(`
+      SELECT x, y, z, yaw, pitch
+      FROM camera
+      WHERE singleton = 1
+    `).get() as {
+      readonly x?: unknown
+      readonly y?: unknown
+      readonly z?: unknown
+      readonly yaw?: unknown
+      readonly pitch?: unknown
+    } | undefined
+    if (
+      typeof row?.x !== 'number'
+      || typeof row.y !== 'number'
+      || typeof row.z !== 'number'
+      || typeof row.yaw !== 'number'
+      || typeof row.pitch !== 'number'
+    ) throw new Error(`camera is missing from save '${slotId}'`)
+    const horizontal = Math.cos(row.pitch)
+    return {
+      eye: { x: row.x, y: row.y, z: row.z },
+      direction: {
+        x: -Math.sin(row.yaw) * horizontal,
+        y: Math.sin(row.pitch),
+        z: -Math.cos(row.yaw) * horizontal,
+      },
+    }
+  } finally {
+    database.close()
+  }
+}
+
+export async function movePointer(x: number, y: number): Promise<void> {
+  await browser.action('pointer').move({ origin: 'pointer', x, y }).perform()
 }
 
 export async function setRenderMode(mode: 'game' | 'raw'): Promise<void> {
