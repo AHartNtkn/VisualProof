@@ -24,7 +24,7 @@
 - Each named slot is one SQLite database. The current database shape has no format version, version check, migration, legacy reader, compatibility branch, or fallback parser.
 - Runtime worlds are built only by loading ordinary saves. The standard stress counts are `10, 50, 100, 250, 500, 1000, 2000`, one save per count.
 - Render data is derived state. Generated save databases are regenerated with the production TypeScript-plus-Rust toolchain whenever their authoritative inputs change.
-- The start menu never mounts a playable world or attempts mouse capture. Successful loading mounts the world and activates native desktop mouse capture for free flight; orbit releases capture and Escape restores it. Browser Pointer Lock is not part of the game.
+- The start menu has an ordinary cursor and no world-input lifecycle. Valid Create and Load activation requests Pointer Lock directly on the persistent world host in `game/main.ts` before asynchronous save I/O. A decoded world mounts only while that host owns Pointer Lock; free flight uses `movementX`/`movementY`, orbit releases Pointer Lock, and Escape reacquires it before restoring the equivalent free-flight pose.
 - Tool/session code owns no camera state and receives no camera object. Camera invariance is proven at the integrated input boundary.
 - The renderer owns the `100`-unit reach constant; callers cannot select another reach. Tests prove the boundary with production-built geometry instead of validating an argument value.
 - Tests prove observable game, persistence, and renderer behavior. Object or promise identity, private metadata, internal call choreography, SQL source text, and renderer construction details are not contracts.
@@ -37,15 +37,13 @@
 | File | Responsibility |
 |---|---|
 | `game/index.html` | Tauri/Vite document and accessible application root. |
-| `game/main.ts` | Start-menu/world lifecycle, DOM feedback, desktop input wiring, and frame loop. |
+| `game/main.ts` | Start-menu/world lifecycle, DOM feedback, direct Pointer Lock input wiring, and frame loop. |
 | `game/style.css` | Minimal start-menu, world HUD, reticle, and error presentation. |
 | `game/icon.svg` | Authoritative application icon source. |
 | `src/game/model.ts` | Generic loaded-slot, tree, placement, and camera wire/runtime types plus strict frontend decoding. |
 | `src/game/save-client.ts` | Typed `invoke` boundary for list/create/load/update operations. |
 | `src/game/save-writer.ts` | Ordered per-slot tree writes and debounced camera writes. |
 | `src/game/camera.ts` | Pure free-flight/orbit state transitions and keyboard motion. |
-| `src/game/desktop-mouse.ts` | Frontend boundary for native capture, cursor centering, and relative-motion interpretation. |
-| `src-tauri/src/mouse_capture.rs` | Native desktop pointer confinement and visibility for the game window. |
 | `src/game/session.ts` | Kernel-backed generic tree state and the milestone double-cut operation. |
 | `src/game/render/assets.ts` | Diagram-to-render-asset derivation and exact-JSON asset sharing. |
 | `src/game/render/world.ts` | One Three.js world, camera, terrain, LOD runtime, picking, telemetry, and lifecycle. |
@@ -802,13 +800,11 @@ git commit -m "feat: apply and animate Orchard double cuts"
 
 ---
 
-### Task 7: Start menu, desktop controls, and incremental persistence
+### Task 7: Start menu, Pointer Lock controls, and incremental persistence
 
 **Files:**
 - Create: `src/game/save-writer.ts`
-- Create: `src/game/desktop-mouse.ts`
 - Create: `tests/game/save-writer.test.ts`
-- Create: `tests/game/desktop-mouse.test.ts`
 - Modify: `game/index.html`
 - Modify: `game/main.ts`
 - Modify: `game/style.css`
@@ -818,7 +814,7 @@ git commit -m "feat: apply and animate Orchard double cuts"
 **Interfaces:**
 - Produces a start menu that lists slots and creates/loads through `SaveClient`.
 - Produces `SaveWriter` with per-tree latest-state coalescing and camera debounce.
-- Connects free-flight and orbit controls, native desktop mouse capture, picking, the temporary right-click binding, feedback, tweening, and telemetry without another world startup path.
+- Connects free-flight and orbit controls through direct Pointer Lock in `game/main.ts`, picking, the temporary right-click binding, feedback, tweening, and telemetry without another world startup path.
 
 - [ ] **Step 1: Write failing save-writer tests**
 
@@ -878,9 +874,10 @@ One async drain loop owns writes for the slot. A failed call retains the newest 
 On application boot, render only the start menu and call `saveClient.list()`.
 Render valid Load buttons and inline invalid-slot errors. On Create, build the
 blank kernel diagram, call `create`, then call `load` on the returned slot ID.
-On Load, call only `load`. Mount the renderer and activate desktop mouse capture
-only after strict decoding succeeds. If loading, renderer construction, or
-capture fails, dispose any partially opened world, restore a free cursor, and
+On valid Create or Load activation, request Pointer Lock on the persistent world
+host before asynchronous save I/O. Mount the renderer only after strict decoding
+succeeds while that host owns Pointer Lock. If Pointer Lock, loading, or renderer
+construction fails, dispose any partially opened world, leave Pointer Lock, and
 show the concrete error on the menu.
 
 The new-slot request contains one blank diagram at `{ x: 0, z: 0, yaw: 0 }` with tree ID `tree-0000` and camera `{ x: 0, y: 1.7, z: 8, yaw: 0, pitch: -0.18 }`, putting the seedling under the center reticle and comfortably inside the fixed reach. No tree or world is handed directly to the renderer before a successful `load` response.
@@ -890,13 +887,13 @@ The new-slot request contains one blank diagram at `{ x: 0, z: 0, yaw: 0 }` with
 The animation loop calls `stepCamera`, `renderer.setCamera`, `renderer.render(now)`, and the debounced camera writer. The writer receives `freePoseForPersistence(camera)`: the unchanged free pose in free flight, or the displayed orbit eye and direction converted to an equivalent free pose without changing camera mode. Pointer behavior:
 
 ```ts
-canvas.addEventListener('click', () => {
-  if (camera.mode !== 'free' || !desktopMouse.captured) return
+worldHost.addEventListener('click', () => {
+  if (camera.mode !== 'free' || document.pointerLockElement !== worldHost) return
   const pointedPart = renderer.pointAt(0, 0, null)
   if (pointedPart !== null) enterOrbitFor(pointedPart.treeId)
 })
 
-canvas.addEventListener('contextmenu', (event) => {
+worldHost.addEventListener('contextmenu', (event) => {
   event.preventDefault()
   const [x, y] = camera.mode === 'free' ? [0, 0] : pointerNdc(event, canvas)
   const orbitTarget = camera.mode === 'orbit' ? camera.orbitTarget : null
@@ -904,7 +901,7 @@ canvas.addEventListener('contextmenu', (event) => {
 })
 ```
 
-`useDoubleCut` applies the session operation, begins only that tree's tween, and enqueues only that tree's database update. It has no camera argument or camera access. Entering orbit releases desktop mouse capture; Escape in orbit converts to free flight and restores it.
+`useDoubleCut` applies the session operation, begins only that tree's tween, and enqueues only that tree's database update. It has no camera argument or camera access. Entering orbit releases Pointer Lock; Escape requests it again before converting orbit to free flight.
 
 - [ ] **Step 6: Add milestone UI and observable runtime evidence**
 
@@ -922,42 +919,32 @@ git commit -m "feat: integrate Orchard desktop game loop"
 
 ---
 
-### Task 8: Correct desktop input ownership and interaction boundaries
+### Task 8: Define Pointer Lock input ownership and interaction boundaries
 
 **Files:**
-- Create: `src/game/desktop-mouse.ts`
-- Create: `tests/game/desktop-mouse.test.ts`
 - Modify: `game/index.html`
 - Modify: `game/main.ts`
 - Modify: `game/style.css`
 - Modify: `src/game/start-lifecycle.ts`
 - Modify: `src/game/session.ts`
 - Modify: `src/game/render/world.ts`
-- Create: `src-tauri/src/mouse_capture.rs`
-- Modify: `src-tauri/src/commands.rs`
-- Modify: `src-tauri/src/lib.rs`
-- Modify: `src-tauri/src/main.rs`
-- Modify: `src-tauri/Cargo.toml`
-- Modify: `src-tauri/capabilities/default.json`
 - Modify: `tests/game/start-lifecycle.test.ts`
 - Modify: `tests/game/session.test.ts`
 - Modify: `tests/game/render/world.test.ts`
 
 **Interfaces:**
-- The menu owns no renderer and makes no capture request.
-- `DesktopMouse` uses a narrow native Tauri command for real game-window pointer confinement and visibility plus native cursor positioning for relative movement, without browser Pointer Lock or browser activation gates. On the current Linux target the shell runs through X11. Acceptance requires observed confinement inside the game window while ordinary mouse buttons still reach the world; a particular X11 API or internal call pattern is not part of the contract.
+- The menu owns no renderer or world input lifecycle.
+- `game/main.ts` directly requests Pointer Lock on the persistent world host from valid Create and Load activation, receives free-flight movement through `movementX` and `movementY` only while that host owns Pointer Lock, releases it on orbit entry, and reacquires it before Escape leaves orbit.
 - `GameSession` owns only trees and the kernel move.
 - `GameWorldRenderer.pointAt(ndcX, ndcY, orbitTarget)` owns the fixed interaction reach.
 
 - [ ] **Step 1: Write behavioral RED tests**
 
-Prove that loading is attempted with a free cursor, a world opens only after a successful decoded load, opening failure returns to the menu, and a late load cannot open after disposal. Prove native relative motion from cursor displacement around the viewport center, capture/release idempotence, and no camera motion from mouse movement in orbit. Prove with production-built geometry that a branch just inside `100` units is pointable and the same branch just outside is not, without a reach argument. Prove a real double-cut changes only its tree and persists that tree without placing a camera on the session interface.
+Prove that valid Create and Load activation requests Pointer Lock before asynchronous save I/O, a world opens only after a successful decoded load while the world host owns Pointer Lock, opening failure returns to the menu, and a late load cannot open after disposal. Prove `movementX`/`movementY` changes free-flight view only while the host owns Pointer Lock, orbit mouse movement does not change camera pose, and Escape preserves the displayed pose before resumed free look. Prove with production-built geometry that a branch just inside `100` units is pointable and the same branch just outside is not, without a reach argument. Prove a real double-cut changes only its tree and persists that tree without placing a camera on the session interface.
 
-- [ ] **Step 2: Replace the browser lifecycle with the native desktop boundary**
+- [ ] **Step 2: Implement the direct browser Pointer Lock boundary**
 
-Remove Pointer Lock requests, activation queues, stale-grant handling, pointer-lock listeners, and the resume overlay. Do not mount `GameWorldRenderer` before a successful load. On world entry, mount the renderer and activate `DesktopMouse`; on orbit entry release it and show the cursor; on Escape leave orbit at the equivalent displayed pose and reactivate it. On failed world opening and teardown, restore a visible free cursor and dispose partial resources.
-
-Implement relative free-flight motion by measuring cursor displacement from the window/canvas center and recentering through the Tauri window API. Ignore the recentered event. On Linux, initialize GTK on the X11 backend before Tauri starts and confine the pointer to the actual game window with a checked native X11 mechanism that preserves ordinary mouse-button delivery; release confinement on orbit, failure, and teardown. Hiding or recentering without successful confinement is not capture. Grant only the needed command/window permissions and keep platform code in the native boundary.
+Attach stable mouse, click, context-menu, and Pointer Lock handlers to the persistent world host in `game/main.ts`. Do not mount `GameWorldRenderer` before a successful decoded load while that host owns Pointer Lock. On world entry, use `MouseEvent.movementX` and `MouseEvent.movementY` for free-flight look only while locked; on orbit entry call `document.exitPointerLock()` and use ordinary canvas coordinates for pointing; on Escape reacquire Pointer Lock before publishing the equivalent free-flight pose. On failed world opening and teardown, exit Pointer Lock and dispose partial resources.
 
 - [ ] **Step 3: Enforce permanent tool/camera separation structurally**
 
@@ -1052,18 +1039,18 @@ Run all renderer tests, the complete game test suite, typecheck, production Vite
 - Delete: tracked `orchard/` frontend, its browser E2E/config/save, `scripts/emit-orchard-world.ts`, and superseded orchard tests and scripts after replacement evidence passes
 
 **Interfaces:**
-- `npm run e2e:game` drives the actual feature-gated Tauri binary on a private X11 display.
+- `npm run e2e:game` drives the actual feature-gated Tauri binary on a private X11 display for test isolation.
 - `npm run stress:game` loads one ordinary generated save per count through the start menu.
 - The feature-gated test capability is outside the ordinary production capability scan and grants no host-window focus or pointer-control helper.
 - Final repository has one world frontend and one renderer/world authority.
 
 - [ ] **Step 1: Establish isolated native RED coverage**
 
-Run WebDriver beneath `xvfb-run` with `WAYLAND_DISPLAY` removed and `GDK_BACKEND=x11`; never focus or move the host cursor. The menu test creates a named seedling save, relaunches to a fresh app session, waits for its Load button, and loads the same slot. The camera test proves: menu cursor is free; loaded world begins in captured free flight; mouse motion changes free-flight view; a nearby center-click enters orbit and releases capture; mouse motion alone does not rotate orbit; `A/D`, `W/S`, and `Ctrl/Space` move the orbit camera; Escape returns to free flight and restores capture.
+Run WebDriver beneath `xvfb-run` with `WAYLAND_DISPLAY` removed and `GDK_BACKEND=x11`; the private display isolates the test environment. The menu test creates a named seedling save, relaunches to a fresh app session, waits for its Load button, and loads the same slot. The camera test proves: the menu has an ordinary cursor; Create and Load open into Pointer Lock free flight; relative mouse movement changes free-flight view; a nearby center-click enters orbit and restores the ordinary cursor; mouse motion alone does not rotate orbit; `A/D`, `W/S`, and `Ctrl/Space` move the orbit camera; Escape preserves the displayed pose and resumes Pointer Lock free flight.
 
 - [ ] **Step 2: Prove the real move, tween, and persistence**
 
-Exercise the seedling double-cut from free flight and a known nested large-tree branch at its fixture's predictable interaction point through an OS-delivered right-click. Observe the short visible transition and prove camera mode, displayed pose, and orbit target are unchanged. Relaunch and load through the menu, then verify the durable diagram has exactly two new correctly parented cuts.
+Exercise the seedling double-cut from free flight and a known nested large-tree branch at its fixture's predictable interaction point through a WebDriver right-click on the canvas. Observe the short visible transition and prove camera mode, displayed pose, and orbit target are unchanged. Relaunch and load through the menu, then verify the durable diagram has exactly two new correctly parented cuts.
 
 - [ ] **Step 3: Prove save-driven stress behavior**
 

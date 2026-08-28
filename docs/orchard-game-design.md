@@ -27,7 +27,9 @@ Accept orders from a catalog; grow the ordered tree; deliver it by iterating a c
 ## Interaction
 
 - **Movement** is creative-mode flight (Minecraft creative / Halo Forge monitor), not full six-axis. The stress-test demo's flat walking is throwaway.
-- **Desktop mouse ownership.** Menus leave the cursor free and never attempt capture. Entering a loaded world starts in free motion with native desktop mouse capture; entering orbit releases it, and leaving orbit restores it. Browser input-activation rules are not game-state rules.
+- **Mouse interaction.** Free flight uses cursorless relative mouse-look through
+  Pointer Lock and targets through the center reticle. Orbit restores the ordinary
+  cursor for pointing and never maps mouse motion to camera rotation.
 - **Orbit view.** Focusing a tree opens an orbit view like the proof assistant's existing 3D view. It is a convenience only. Hard law: **every edit must be performable from any perspective** — there is no dedicated proof mode, because iterating trees into each other requires acting across the world view.
 - **Orbit target.** The tree currently being orbited is the orbit target; an orbit target exists only in orbit mode. Free motion has none. While orbiting, only parts of the orbit target receive world interaction, so a background tree cannot intercept or receive an action.
 - **The cutting** is the one universal verb for iteration everywhere: within a tree (deeper copies), between trees (citation), and into pots (delivery). Physically: clip a copy, carry it, insert it at a legal spot. The kernel validates every insertion.

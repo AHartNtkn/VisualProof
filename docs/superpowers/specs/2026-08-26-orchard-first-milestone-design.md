@@ -196,33 +196,35 @@ trees may hold that role concurrently.
 
 ## Camera and Input
 
-The start menu leaves the mouse free and does not mount a playable world. After
-Create or Load succeeds and the decoded world is mounted, a desktop-window
-mouse controller captures and hides the cursor for free flight. Save discovery,
-creation, and loading never depend on mouse capture. A failed create or load
-retains the menu and its free cursor.
+The start menu has an ordinary cursor and does not mount a playable world. A
+valid Create submission or Load button activation requests Pointer Lock
+synchronously before asynchronous save I/O. The decoded world mounts only while
+the world host owns Pointer Lock, so free flight begins with working relative
+mouse-look. Save discovery, invalid Create submission, creation, and loading do
+not otherwise depend on Pointer Lock. A rejected or lost Pointer Lock request,
+or a failed Create or Load, retains the menu and its ordinary cursor.
 
 ### Free flight
 
-- Native relative mouse movement changes yaw and pitch while desktop capture is
-  active.
+- `MouseEvent.movementX` and `MouseEvent.movementY` change yaw and pitch only
+  while the world host owns Pointer Lock.
 - `W` and `S` move forward and backward.
 - `A` and `D` strafe left and right.
 - `Space` and `Ctrl` move up and down.
 - `Shift` increases movement speed.
 - A left-click points through the center reticle. A tree under the reticle
   within `100` units becomes the orbit target, orbit mode begins, and pointer
-  capture is released and the cursor becomes visible.
+  lock is released so the ordinary cursor becomes visible.
 - A left-click without a tree under the reticle in reach changes nothing.
 
 ### Orbit
 
-- The mouse remains free and does not move the camera.
+- The ordinary cursor points at the orbit target and does not move the camera.
 - `A` and `D` change horizontal orbit angle.
 - `W` and `S` decrease and increase orbit radius.
 - `Space` and `Ctrl` move the camera vertically around the orbit target.
-- Escape converts the displayed orbit eye and direction into a free-flight
-  pose, ends orbit, and restores desktop mouse capture.
+- Escape requests Pointer Lock. After it succeeds, it converts the displayed
+  orbit eye and direction into a free-flight pose and ends orbit.
 - World-tree raycasts contain only objects belonging to the orbit target.
 
 Camera persistence stores a free-flight pose. While orbiting, the displayed
