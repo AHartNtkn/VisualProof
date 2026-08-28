@@ -232,4 +232,22 @@ describe('game tree runtime', () => {
 
     expect(runtime.snapshot().pointLights).toBe(1)
   })
+
+  it('selects interaction candidates from the reachable ray corridor before rendering', () => {
+    const runtime = new GameTreeRuntime(resolve({ a: asset() }), new THREE.Group(), buildObject)
+    runtime.setTrees([
+      tree('near', 0, -20),
+      tree('bounds-touching', 5, -40),
+      tree('off-ray', 6, -40),
+      tree('past-reach', 0, -106),
+      tree('behind', 0, 6),
+    ])
+
+    const candidates = runtime.interactionTrees(
+      new THREE.Ray(new THREE.Vector3(0, 1.7, 0), new THREE.Vector3(0, 0, -1)),
+      100,
+    )
+
+    expect(candidates.map(({ id }) => id).sort()).toEqual(['bounds-touching', 'near'])
+  })
 })

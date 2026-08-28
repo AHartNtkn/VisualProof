@@ -242,6 +242,7 @@ Expose:
 ```ts
 export type WorldInputActions = {
   readonly primary: (clientX: number, clientY: number) => void
+  readonly secondary: (clientX: number, clientY: number) => void
   readonly escape: () => void
 }
 
@@ -267,8 +268,9 @@ Map `KeyW/KeyS`, `KeyD/KeyA`, `Space/ControlLeft|ControlRight`, and
 does not clear held keys.
 
 `engage()` delegates to `target.requestPointerLock()`. `release()` calls
-`document.exitPointerLock()` only when this target is engaged. Prevent the
-world's `contextmenu` event without giving it a semantic action.
+`document.exitPointerLock()` only when this target is engaged. Deliver
+secondary press coordinates to the composition root and prevent the world's
+`contextmenu` event.
 
 - [ ] **Step 4: Run focused tests and verify GREEN**
 
@@ -420,7 +422,8 @@ After loading `large-1`, assert these observable transitions:
    and does not change the stored tree.
 6. Mouse motion in orbit leaves the displayed pose unchanged.
 7. Holding `A` changes the orbit eye but not the saved camera row.
-8. Secondary click leaves camera and tree state unchanged.
+8. Secondary click applies a persisted double cut to the orbit target tree
+   without changing the camera mode or pose.
 9. Escape returns to the exact pre-orbit free pose and leaves input disengaged.
 10. Re-engage, move, wait for `data-save-state="idle"`, and verify the database
     camera row equals the displayed free pose.

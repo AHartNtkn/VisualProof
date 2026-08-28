@@ -17,6 +17,7 @@ import { SettledFrameTelemetry, frameTiming, percentile } from '../src/game/rend
 import { mountGameWorld, type GameWorldRenderer } from '../src/game/render/world'
 import { saveClient, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
 import { SaveWriter } from '../src/game/save-writer'
+import { gameSession, useDoubleCut, type GameSession } from '../src/game/session'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
 import { attachWorldInput, type WorldInput } from './input'
 
@@ -48,6 +49,7 @@ const telemetry = new SettledFrameTelemetry(60)
 let maxRepresentationOperations = 0
 let camera: CameraState | null = null
 let input: WorldInput | null = null
+let session: GameSession | null = null
 let writer: SaveWriter | null = null
 let renderer: GameWorldRenderer | null = null
 let animationFrame = 0
@@ -122,6 +124,14 @@ function renderSlots(slots: readonly SlotListEntry[]): void {
   }
 }
 
+function pointerNdc(clientX: number, clientY: number, canvas: HTMLCanvasElement): readonly [number, number] {
+  const bounds = canvas.getBoundingClientRect()
+  return [
+    ((clientX - bounds.left) / Math.max(1, bounds.width)) * 2 - 1,
+    1 - ((clientY - bounds.top) / Math.max(1, bounds.height)) * 2,
+  ]
+}
+
 function mirrorControls(): void {
   if (camera === null) return
   const display = displayCameraPose(camera)
@@ -191,9 +201,48 @@ function animate(now: number): void {
   animationFrame = requestAnimationFrame(animate)
 }
 
+function applyDoubleCut(clientX: number, clientY: number): void {
+  const activeCamera = camera
+  const activeInput = input
+  const activeSession = session
+  const activeWriter = writer
+  const activeRenderer = renderer
+  if (
+    activeCamera === null
+    || activeInput === null
+    || activeSession === null
+    || activeWriter === null
+    || activeRenderer === null
+  ) return
+  if (activeCamera.mode === 'free' && !activeInput.engaged()) return
+  const [ndcX, ndcY] = activeCamera.mode === 'free'
+    ? [0, 0]
+    : pointerNdc(clientX, clientY, activeRenderer.canvas)
+  const pointed = activeRenderer.pointAtBranch(
+    ndcX,
+    ndcY,
+    activeCamera.mode === 'orbit' ? activeCamera.target.treeId : null,
+  )
+  if (pointed === null) {
+    setError('Double cut requires an ordinary branch within reach.')
+    return
+  }
+  try {
+    const mutation = useDoubleCut(activeSession, pointed, {
+      beginTreeTween: (treeId, before, after) => activeRenderer.beginTreeTween(treeId, before, after),
+      persistTree: (update) => activeWriter.tree(update),
+    })
+    setError('')
+    feedback.textContent = `Double cut applied to ${mutation.treeId}.`
+  } catch (error) {
+    setError(`Double cut failed: ${message(error)}`)
+  }
+}
+
 async function startWorld(world: GameWorld): Promise<void> {
   const nextRenderer = mountGameWorld(worldHost, [...world.trees.values()])
   const nextCamera = initialCameraState(world.camera)
+  const nextSession = gameSession(world.trees)
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
   let nextInput: WorldInput | null = null
   let releaseWriterStatus = (): void => {}
@@ -226,6 +275,9 @@ async function startWorld(world: GameWorld): Promise<void> {
         activeInput.release()
         mirrorControls()
       },
+      secondary(clientX, clientY) {
+        applyDoubleCut(clientX, clientY)
+      },
       escape() {
         if (camera?.mode !== 'orbit') return
         camera = exitOrbit(camera)
@@ -235,6 +287,7 @@ async function startWorld(world: GameWorld): Promise<void> {
     renderer = nextRenderer
     camera = nextCamera
     input = nextInput
+    session = nextSession
     writer = nextWriter
     start.hidden = true
     hud.hidden = false
@@ -298,6 +351,7 @@ window.addEventListener('pagehide', () => {
   resizeObserver.disconnect()
   input?.dispose()
   input = null
+  session = null
   void writer?.dispose().catch((error: unknown) => setError(`Save shutdown failed: ${message(error)}`))
   renderer?.dispose()
   renderer = null

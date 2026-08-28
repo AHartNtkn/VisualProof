@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { attachWorldInput } from '../../game/input'
+import { attachWorldInput, type WorldInputActions } from '../../game/input'
 
 class TestWorldTarget extends EventTarget {
   requestPointerLockCalls = 0
@@ -31,6 +31,7 @@ function createHarness(): {
   readonly windowTarget: EventTarget
   readonly documentTarget: TestDocumentTarget
   readonly primary: Array<readonly [number, number]>
+  readonly secondary: Array<readonly [number, number]>
   readonly escapes: { count: number }
   readonly input: ReturnType<typeof attachWorldInput>
 } {
@@ -38,16 +39,21 @@ function createHarness(): {
   const windowTarget = new EventTarget()
   const documentTarget = new TestDocumentTarget()
   const primary: Array<readonly [number, number]> = []
+  const secondary: Array<readonly [number, number]> = []
   const escapes = { count: 0 }
-  const input = attachWorldInput(target as unknown as HTMLElement, {
+  const actions: WorldInputActions & {
+    readonly secondary: (clientX: number, clientY: number) => void
+  } = {
     primary: (clientX, clientY) => primary.push([clientX, clientY]),
+    secondary: (clientX, clientY) => secondary.push([clientX, clientY]),
     escape: () => { escapes.count += 1 },
-  }, {
+  }
+  const input = attachWorldInput(target as unknown as HTMLElement, actions, {
     window: windowTarget as Window,
     document: documentTarget as unknown as Document,
   })
 
-  return { target, windowTarget, documentTarget, primary, escapes, input }
+  return { target, windowTarget, documentTarget, primary, secondary, escapes, input }
 }
 
 describe('world input sampling', () => {
@@ -123,13 +129,15 @@ describe('world input sampling', () => {
     })
   })
 
-  it('prevents the world context menu without a semantic action', () => {
-    const { target, primary, escapes } = createHarness()
+  it('delivers secondary coordinates while preventing the world context menu', () => {
+    const { target, primary, secondary, escapes } = createHarness()
+    target.dispatchEvent(event('mousedown', { button: 2, clientX: 70, clientY: 80 }))
     const contextMenu = new Event('contextmenu', { cancelable: true })
 
     expect(target.dispatchEvent(contextMenu)).toBe(false)
     expect(contextMenu.defaultPrevented).toBe(true)
     expect(primary).toEqual([])
+    expect(secondary).toEqual([[70, 80]])
     expect(escapes.count).toBe(0)
   })
 })

@@ -52,8 +52,10 @@ for keeping the world open.
 - In disengaged free flight, movement and mouse motion are ignored.
 - Orbit keyboard controls remain available because orbit uses the ordinary
   pointer and does not require cursorless input.
-- A secondary click has no camera effect. Proof-tool behavior is outside this
-  controls implementation.
+- A secondary press has no camera effect. In engaged free flight it applies a
+  double cut to the ordinary branch under the center reticle. In orbit it
+  applies the same tool at the pointer and restricts targeting to the orbit
+  target tree. Disengaged free flight does not apply a tool.
 
 ## Camera Authority
 
@@ -99,9 +101,8 @@ These are direct constants, not settings infrastructure.
 - tracks held movement keys;
 - accumulates relative mouse deltas;
 - converts held keys to a semantic per-frame motion record;
-- delivers primary and Escape callbacks synchronously;
-- suppresses the browser context menu on the world without assigning a
-  camera meaning to secondary click;
+- delivers primary, secondary, and Escape callbacks synchronously;
+- suppresses the browser context menu on the world;
 - exposes whether the world currently has cursorless relative input;
 - requests or releases that browser mechanism when the composition root asks;
 - clears transient state on loss of engagement, blur, or hidden visibility;
@@ -151,6 +152,12 @@ Escape exits orbit. In free mode it has no camera action; the browser's loss
 of relative input clears held input through the ordinary engagement-change
 path.
 
+Secondary-down handling is synchronous and never changes camera state. The
+composition root uses the engaged free-flight center ray or the orbit pointer
+ray to query a branch. A hit mutates the game session, starts the renderer's
+tree tween, and queues the existing tree save. A miss and tool error use the
+existing feedback messages.
+
 ## Presentation
 
 The loaded world has only two control affordances:
@@ -181,12 +188,13 @@ consumption, interruption clearing, synchronous action delivery, browser
 engagement delegation, and complete listener cleanup. They assert sampled
 behavior rather than source structure.
 
-Renderer tests prove nearest logical tree targeting through the current camera
-and targeting independence from render residency and LOD.
+Renderer tests prove nearest logical tree targeting through the current camera,
+branch targeting across render residency and LOD, and restriction to the orbit
+target.
 
 The native game scenario proves loading, free movement, orbit entry and exit,
-camera persistence, interruption stability, and secondary-click camera
-independence.
+camera persistence, interruption stability, and a secondary double cut that
+persists while leaving orbit camera mode and pose unchanged.
 
 Completion also requires direct in-app browser exercise with actual mouse and
 keyboard controls. The full flow is inspected after each transition for camera
@@ -195,7 +203,6 @@ tree changes.
 
 ## Explicit Non-Goals
 
-- proof tools or tree mutation;
 - rebinding, settings, gamepad, touch, accessibility alternatives, or an
   action-map framework;
 - collision, gravity, terrain following, acceleration, animation, or sound;

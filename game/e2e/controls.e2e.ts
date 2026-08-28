@@ -5,6 +5,7 @@ import {
   clickWorld,
   displayedPose,
   expectDirectionClose,
+  expectDoubleCut,
   expectPoseClose,
   game,
   hold,
@@ -13,6 +14,7 @@ import {
   rightClickWorld,
   storedCameraPose,
   storedTreeDiagram,
+  waitForVisibleTreeTween,
 } from './native'
 
 describe('orchard world controls', () => {
@@ -68,7 +70,7 @@ describe('orchard world controls', () => {
 
     await browser.waitUntil(() => poseEyeDistance(storedCameraPose('large-1'), preOrbitPose) < 0.000_001)
     await expect(game()).toHaveAttribute('data-save-state', 'idle')
-    const storedDiagram = storedTreeDiagram('large-1', 'tree-0000')
+    const diagramBeforeDoubleCut = storedTreeDiagram('large-1', 'tree-0000')
     await clickWorld()
     await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
     await expect(game()).toHaveAttribute('data-orbit-target', 'tree-0000')
@@ -76,7 +78,7 @@ describe('orchard world controls', () => {
     await expect($('[data-reticle]')).not.toBeDisplayed()
     await expect($('[data-engage]')).not.toBeDisplayed()
     expect((await canvas().getCSSProperty('cursor')).value).toBe('auto')
-    expect(storedTreeDiagram('large-1', 'tree-0000')).toEqual(storedDiagram)
+    expect(storedTreeDiagram('large-1', 'tree-0000')).toEqual(diagramBeforeDoubleCut)
 
     const orbitPose = await displayedPose()
     await movePointer(40, 25)
@@ -90,9 +92,13 @@ describe('orchard world controls', () => {
     expectPoseClose(storedCameraPose('large-1'), savedFreePose)
 
     await rightClickWorld()
-    await browser.pause(100)
+    await expect($('[data-feedback]')).toHaveText('Double cut applied to tree-0000.')
+    await waitForVisibleTreeTween()
+    const diagramAfterDoubleCut = storedTreeDiagram('large-1', 'tree-0000')
+    expectDoubleCut(diagramBeforeDoubleCut, diagramAfterDoubleCut, 'dc_5')
+    await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
+    await expect(game()).toHaveAttribute('data-orbit-target', 'tree-0000')
     await expectPoseClose(await displayedPose(), movedOrbitPose)
-    expect(storedTreeDiagram('large-1', 'tree-0000')).toEqual(storedDiagram)
 
     await browser.keys('Escape')
     await expect(game()).toHaveAttribute('data-camera-mode', 'free')
@@ -108,6 +114,6 @@ describe('orchard world controls', () => {
     await browser.waitUntil(() => poseEyeDistance(storedCameraPose('large-1'), finalPose) < 0.000_001)
     await expect(game()).toHaveAttribute('data-save-state', 'idle')
     await expectPoseClose(storedCameraPose('large-1'), finalPose)
-    expect(storedTreeDiagram('large-1', 'tree-0000')).toEqual(storedDiagram)
+    expect(storedTreeDiagram('large-1', 'tree-0000')).toEqual(diagramAfterDoubleCut)
   })
 })

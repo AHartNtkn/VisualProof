@@ -8,6 +8,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import type { Diagram } from '../../kernel/diagram'
 import { diagramToJson } from '../../kernel/diagram'
 import type { GameTree, TreeTarget } from '../model'
+import type { PointedTreePart } from '../session'
 import { DARK } from '../../view/paint'
 import { TreeRenderAssetCache } from './assets'
 import { mountGlowRenderer } from './glow-render'
@@ -27,6 +28,9 @@ import {
   makeDynamicTreeObject,
   makeMarkerObject,
   makeRawTreeObject,
+  pointAtTreeAssets,
+  pointAtVisibleParts,
+  type EntityKeyFilter,
   type TreeMaterialSource,
 } from './tree-objects'
 import type { DisplayCameraPose, TreeRenderAsset } from './types'
@@ -37,12 +41,14 @@ const TERRAIN_COLOR = '#010101'
 const SKY_COLOR = '#000000'
 const FOG_NEAR = 170
 const FOG_FAR = 780
+const INTERACTION_REACH = 100
 
 export type GameWorldRenderer = {
   readonly canvas: HTMLCanvasElement
   setTrees(trees: readonly GameTree[]): void
   setCamera(pose: DisplayCameraPose): void
   pickTree(ndcX: number, ndcY: number): TreeTarget | null
+  pointAtBranch(ndcX: number, ndcY: number, orbitTarget: string | null): PointedTreePart | null
   setRenderMode(mode: RenderMode): void
   beginTreeTween(treeId: string, before: Diagram, after: Diagram): void
   resize(width: number, height: number): void
@@ -218,6 +224,49 @@ export function mountGameWorld(
 
   setTrees(initialTrees)
 
+  const assetCandidates = (): readonly {
+    readonly treeId: string
+    readonly placement: RenderTree['placement']
+    readonly asset: TreeRenderAsset
+  }[] => runtime.interactionTrees(treeRaycaster.ray, INTERACTION_REACH).flatMap((tree) => {
+    if (dynamicTrees.objects(tree.id).length > 0) return []
+    const asset = assetsByJson.get(tree.diagramJson)
+    return asset === undefined ? [] : [{ treeId: tree.id, placement: tree.placement, asset }]
+  })
+
+  const closest = (
+    dynamic: PointedTreePart | null,
+    staticPart: PointedTreePart | null,
+  ): PointedTreePart | null => {
+    if (dynamic === null) return staticPart
+    if (staticPart === null) return dynamic
+    return dynamic.distance <= staticPart.distance ? dynamic : staticPart
+  }
+
+  const pointAtBranch = (
+    ndcX: number,
+    ndcY: number,
+    orbitTarget: string | null,
+  ): PointedTreePart | null => {
+    treeRaycaster.setFromCamera({ x: ndcX, y: ndcY } as THREE.Vector2, camera)
+    const acceptsBranch: EntityKeyFilter = (entityKey) => entityKey.startsWith('b:')
+    const dynamic = pointAtVisibleParts(
+      treeRaycaster,
+      dynamicTrees.objects(),
+      INTERACTION_REACH,
+      orbitTarget,
+      acceptsBranch,
+    )
+    const staticBranch = pointAtTreeAssets(
+      treeRaycaster.ray,
+      assetCandidates(),
+      INTERACTION_REACH,
+      orbitTarget,
+      acceptsBranch,
+    )
+    return closest(dynamic, staticBranch)
+  }
+
   return {
     canvas: renderer.domElement,
     setTrees,
@@ -243,6 +292,7 @@ export function mountGameWorld(
       }
       return nearest
     },
+    pointAtBranch,
     setRenderMode(mode) {
       runtime.setMode(mode)
     },

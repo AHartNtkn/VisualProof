@@ -89,6 +89,33 @@ export async function rightClickWorld(x = 0, y = 0): Promise<void> {
     .perform()
 }
 
+export function expectDoubleCut(before: StoredDiagram, after: StoredDiagram, parent: string): void {
+  const added = Object.keys(after.regions).filter((id) => before.regions[id] === undefined)
+  expect(added).toHaveLength(2)
+  const outer = added.find((id) => after.regions[id]?.kind === 'cut' && after.regions[id].parent === parent)
+  expect(outer).toBeDefined()
+  const inner = added.find((id) => after.regions[id]?.kind === 'cut' && after.regions[id].parent === outer)
+  expect(inner).toBeDefined()
+}
+
+export async function waitForVisibleTreeTween(): Promise<void> {
+  const worldCanvas = await canvas()
+  const elementId = await worldCanvas.elementId
+  const during = await browser.takeElementScreenshot(elementId)
+  let previous = ''
+  let settled = ''
+  let stableSamples = 0
+  await browser.waitUntil(async () => {
+    const current = await browser.takeElementScreenshot(elementId)
+    stableSamples = current === previous ? stableSamples + 1 : 0
+    previous = current
+    settled = current
+    return stableSamples >= 2
+  }, { interval: 75, timeout: 2_000, timeoutMsg: 'tree tween did not visibly settle' })
+  expect(settled).not.toEqual(during)
+  await expect(game()).toHaveAttribute('data-save-state', 'idle')
+}
+
 export async function clickWorld(x = 0, y = 0): Promise<void> {
   await browser.action('pointer')
     .move({ origin: await canvas(), x, y })

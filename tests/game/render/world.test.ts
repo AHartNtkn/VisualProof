@@ -228,6 +228,20 @@ function container(): HTMLElement {
   } as unknown as HTMLElement
 }
 
+function pointCameraAtBranch(world: ReturnType<typeof mountGameWorld>, tree: GameTree): void {
+  const branch = scene3(tree.diagram).entities[0]!
+  if (!('pts' in branch)) throw new Error('expected a branch')
+  const point = branch.pts[0]!
+  world.setCamera({
+    eye: {
+      x: tree.placement.x + point.x,
+      y: point.y,
+      z: tree.placement.z + point.z + 20,
+    },
+    forward: { x: 0, y: 0, z: -1 },
+  })
+}
+
 describe('production game world', () => {
   it('mounts a generic tree, resizes its canvas, renders without representation failures, and tears down', () => {
     const world = mountGameWorld(container(), [blankTree()])
@@ -345,6 +359,19 @@ describe('production game world', () => {
     world.render(16)
     expect(world.pickTree(0, 0)).toEqual(center)
 
+    world.dispose()
+  })
+
+  it('points a reachable branch only on the orbit target tree', () => {
+    const background = blankTree('background')
+    const orbit = blankTree('orbit')
+    const world = mountGameWorld(container(), [background, orbit])
+    pointCameraAtBranch(world, orbit)
+
+    expect(world.pointAtBranch(0, 0, 'orbit')).toMatchObject({
+      treeId: 'orbit',
+      entityKey: 'b:r0',
+    })
     world.dispose()
   })
 

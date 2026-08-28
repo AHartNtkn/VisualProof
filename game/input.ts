@@ -2,6 +2,7 @@ import type { CameraMotion } from '../src/game/camera'
 
 export type WorldInputActions = {
   readonly primary: (clientX: number, clientY: number) => void
+  readonly secondary: (clientX: number, clientY: number) => void
   readonly escape: () => void
 }
 
@@ -48,6 +49,7 @@ export function attachWorldInput(
   }) as EventListener
   const primary = ((event: MouseEvent): void => {
     if (event.button === 0) actions.primary(event.clientX, event.clientY)
+    if (event.button === 2) actions.secondary(event.clientX, event.clientY)
   }) as EventListener
   const contextMenu = ((event: Event): void => { event.preventDefault() }) as EventListener
   const pointerLockChange = (): void => {
