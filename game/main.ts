@@ -262,8 +262,8 @@ function attachWorldInput(): void {
     if (pointedPart === null) return
     const tree = session.trees.get(pointedPart.treeId)
     if (tree === undefined) return
-    leaveFreeLook()
     camera = enterOrbit(camera, tree.id, worldBounds(tree))
+    leaveFreeLook()
     mirrorCamera()
     mirrorPoint(pointedPart)
   })
@@ -390,6 +390,12 @@ window.addEventListener('keydown', (event) => {
 })
 window.addEventListener('keyup', (event) => keys.delete(event.code))
 window.addEventListener('blur', () => keys.clear())
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement === worldHost || camera?.mode !== 'free') return
+  keys.clear()
+  camera = null
+  setError('Pointer Lock was lost; free look stopped.')
+})
 saveRetry.addEventListener('click', () => writer?.retry())
 
 const resizeObserver = new ResizeObserver(resize)
