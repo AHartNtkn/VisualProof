@@ -131,34 +131,49 @@ export function httpSaveTransport(config: {
   const baseUrl = config.baseUrl.replace(/\/$/, '')
   return {
     async request(operation, input): Promise<unknown> {
-      const response = await config.fetch.call(globalThis, `${baseUrl}${playtestPaths[operation]}`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-orchard-playtest-token': config.token,
-        },
-        body: JSON.stringify(input),
-      })
+      let response: Response
+      try {
+        response = await config.fetch.call(globalThis, `${baseUrl}${playtestPaths[operation]}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-orchard-playtest-token': config.token,
+          },
+          body: JSON.stringify(input),
+        })
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error)
+        throw new Error(`browser playtest save service unavailable: ${detail}`)
+      }
       if (!response.ok) throw new Error(await response.text())
       return response.json()
     },
   }
 }
 
-function selectedSaveTransport(): SaveTransport {
-  const transportName = import.meta.env.VITE_ORCHARD_SAVE_TRANSPORT ?? 'tauri'
-  switch (transportName) {
+export function selectSaveTransport(config: {
+  transportName: string
+  baseUrl?: string
+  token?: string
+  fetch: typeof globalThis.fetch
+}): SaveTransport {
+  switch (config.transportName) {
     case 'tauri': return tauriSaveTransport
     case 'playtest-http': {
-      const baseUrl = import.meta.env.VITE_ORCHARD_PLAYTEST_URL
-      const token = import.meta.env.VITE_ORCHARD_PLAYTEST_TOKEN
-      if (baseUrl === undefined || token === undefined) {
+      const { baseUrl, token } = config
+      if (baseUrl === undefined || baseUrl.trim().length === 0
+        || token === undefined || token.trim().length === 0) {
         throw new Error('playtest HTTP save transport requires VITE_ORCHARD_PLAYTEST_URL and VITE_ORCHARD_PLAYTEST_TOKEN')
       }
-      return httpSaveTransport({ baseUrl, token, fetch: globalThis.fetch })
+      return httpSaveTransport({ baseUrl, token, fetch: config.fetch })
     }
-    default: throw new Error(`unsupported Orchard save transport '${transportName}'`)
+    default: throw new Error(`unsupported Orchard save transport '${config.transportName}'`)
   }
 }
 
-export const saveClient = createSaveClient(selectedSaveTransport())
+export const saveClient = createSaveClient(selectSaveTransport({
+  transportName: import.meta.env.VITE_ORCHARD_SAVE_TRANSPORT ?? 'tauri',
+  baseUrl: import.meta.env.VITE_ORCHARD_PLAYTEST_URL,
+  token: import.meta.env.VITE_ORCHARD_PLAYTEST_TOKEN,
+  fetch: globalThis.fetch,
+}))

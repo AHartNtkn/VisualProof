@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createSaveClient,
   httpSaveTransport,
+  selectSaveTransport,
   type CameraRecord,
   type SaveOperation,
   type SaveTransport,
@@ -87,6 +88,42 @@ describe('save client transports', () => {
 
     await expect(client.list()).rejects.toThrow('save failed')
     expect(requests).toHaveLength(1)
+  })
+
+  // This fails if a network failure leaks a browser-specific fetch error or triggers another request.
+  it('HTTP transport reports an unavailable playtest save service after one rejected fetch', async () => {
+    let requestCount = 0
+    const fetch: typeof globalThis.fetch = async () => {
+      requestCount += 1
+      throw new TypeError('Failed to fetch')
+    }
+    const client = createSaveClient(httpSaveTransport({
+      baseUrl: 'http://127.0.0.1:1421',
+      token: 'test-token',
+      fetch,
+    }))
+
+    await expect(client.list()).rejects.toThrow(
+      'browser playtest save service unavailable: Failed to fetch',
+    )
+    expect(requestCount).toBe(1)
+  })
+
+  // This fails if a defined-but-empty service setting is accepted as complete configuration.
+  it.each([
+    { baseUrl: '', token: 'test-token' },
+    { baseUrl: '   ', token: 'test-token' },
+    { baseUrl: 'http://127.0.0.1:1421', token: '' },
+    { baseUrl: 'http://127.0.0.1:1421', token: '\t  ' },
+  ])('rejects incomplete playtest HTTP configuration: %o', ({ baseUrl, token }) => {
+    expect(() => selectSaveTransport({
+      transportName: 'playtest-http',
+      baseUrl,
+      token,
+      fetch: globalThis.fetch,
+    })).toThrow(
+      'playtest HTTP save transport requires VITE_ORCHARD_PLAYTEST_URL and VITE_ORCHARD_PLAYTEST_TOKEN',
+    )
   })
 
   // This fails if a browser-native fetch is invoked with the transport config as its receiver.
