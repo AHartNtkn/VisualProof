@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { planTransition, resample, sceneAt } from '../../src/view3d/transition'
+import {
+  planTransition,
+  resample,
+  SCENE_TWEEN_MS,
+  SceneTweenTrack,
+  sceneAt,
+} from '../../src/view3d/transition'
 import type { Scene3 } from '../../src/view3d/scene'
 import { dist3, v3 } from '../../src/view3d/vec3'
 
@@ -8,11 +14,11 @@ const sc = (entities: Scene3['entities'], radius = 10): Scene3 => ({ entities, c
 describe('planTransition / sceneAt', () => {
   it('matches by key: shared keys move, others enter/exit', () => {
     const prev = sc([
-      { kind: 'branch', key: 'b:r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 5, 0)] },
+      { kind: 'branch', key: 'b:r0', region: 'r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 5, 0)] },
       { kind: 'pip', key: 'p:n1', node: 'n1', ownerWire: null, pos: v3(0, 2, 0) },
     ])
     const next = sc([
-      { kind: 'branch', key: 'b:r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 8, 0)] },
+      { kind: 'branch', key: 'b:r0', region: 'r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 8, 0)] },
       { kind: 'strand', key: 's:w0:0', wire: 'w0', pts: [v3(1, 0, 0), v3(1, 2, 0)] },
     ])
     const plan = planTransition(prev, next)
@@ -21,9 +27,9 @@ describe('planTransition / sceneAt', () => {
     expect(plan.enters.map((e) => e.key)).toEqual(['s:w0:0'])
   })
   it('t=0 reproduces prev geometry, t=1 next; enters/exits fade', () => {
-    const prev = sc([{ kind: 'branch', key: 'b:r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 5, 0)] }])
+    const prev = sc([{ kind: 'branch', key: 'b:r0', region: 'r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 5, 0)] }])
     const next = sc([
-      { kind: 'branch', key: 'b:r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 8, 0)] },
+      { kind: 'branch', key: 'b:r0', region: 'r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 8, 0)] },
       { kind: 'pip', key: 'p:n1', node: 'n1', ownerWire: null, pos: v3(0, 3, 0) },
     ])
     const plan = planTransition(prev, next)
@@ -45,7 +51,7 @@ describe('planTransition / sceneAt', () => {
   })
   it('throws loudly when a key changes entity shape between scenes', () => {
     const prev = sc([{ kind: 'pip', key: 'p:n1', node: 'n1', ownerWire: null, pos: v3(0, 1, 0) }])
-    const next = sc([{ kind: 'branch', key: 'p:n1', polarity: 0, pts: [v3(0, 0, 0), v3(0, 2, 0)] }])
+    const next = sc([{ kind: 'branch', key: 'p:n1', region: 'r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 2, 0)] }])
     const plan = planTransition(prev, next)
     expect(() => sceneAt(plan, 0.5)).toThrow('changed entity shape')
   })
@@ -56,14 +62,14 @@ describe('planTransition / sceneAt', () => {
     // original prev — otherwise the entity visibly jumps back to prev's
     // geometry before animating onward.
     const prev = sc([
-      { kind: 'branch', key: 'b:r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 5, 0)] },
+      { kind: 'branch', key: 'b:r0', region: 'r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 5, 0)] },
     ])
     const mid = sc([
-      { kind: 'branch', key: 'b:r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 8, 0)] },
+      { kind: 'branch', key: 'b:r0', region: 'r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 8, 0)] },
       { kind: 'pip', key: 'p:n1', node: 'n1', ownerWire: null, pos: v3(0, 3, 0) },
     ])
     const interrupted = sceneAt(planTransition(prev, mid), 0.5) // mid-tween snapshot
-    const next = sc([{ kind: 'branch', key: 'b:r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 2, 0)] }])
+    const next = sc([{ kind: 'branch', key: 'b:r0', region: 'r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 2, 0)] }])
     const resumed = planTransition(interrupted, next)
     const move = resumed.moves.find((m) => m.from.key === 'b:r0')!
     const interruptedBranch = interrupted.entities.find((e) => e.key === 'b:r0')!
@@ -77,6 +83,29 @@ describe('planTransition / sceneAt', () => {
     const interruptedBead = interrupted.entities.find((e) => e.key === 'p:n1')!
     const exitedBead = resumed.exits[0]! as { alpha?: number }
     expect(exitedBead.alpha).toBeCloseTo(interruptedBead.alpha!, 9)
+  })
+})
+
+describe('SceneTweenTrack', () => {
+  it('restarts from the displayed frame without popping and completes on the new target', () => {
+    const first = sc([
+      { kind: 'branch', key: 'b:r0', region: 'r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 2, 0)] },
+    ])
+    const second = sc([
+      { kind: 'branch', key: 'b:r0', region: 'r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 6, 0)] },
+    ])
+    const third = sc([
+      { kind: 'branch', key: 'b:r0', region: 'r0', polarity: 0, pts: [v3(0, 0, 0), v3(0, 10, 0)] },
+    ])
+
+    const track = new SceneTweenTrack(first, second, 0)
+    const displayed = track.sample(SCENE_TWEEN_MS / 2)
+    track.begin(displayed, third, SCENE_TWEEN_MS / 2)
+
+    expect(track.sample(SCENE_TWEEN_MS / 2)).toEqual(displayed)
+    expect(track.completed(SCENE_TWEEN_MS * 1.5)).toBe(true)
+    expect(track.sample(SCENE_TWEEN_MS * 1.5)).toEqual(third)
+    expect(track.target).toBe(third)
   })
 })
 

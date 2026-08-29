@@ -1,21 +1,13 @@
 import * as THREE from 'three'
 import type { scene3 } from '../../view3d/scene'
-import { planTransition, sceneAt, type TweenPlan } from '../../view3d/transition'
+import { SceneTweenTrack } from '../../view3d/transition'
 import type { GameTreeRuntimeApi, RenderTree } from './runtime'
 import { disposeTreeObject } from './tree-objects'
 
-export const TREE_TWEEN_MS = 350
-
 export type TreeRenderSnapshot = ReturnType<typeof scene3>
 
-type TweenTrack = {
-  readonly plan: TweenPlan
-  readonly target: TreeRenderSnapshot
-  readonly start: number
-}
-
 class TreeTweenTracks {
-  private readonly tracks = new Map<string, TweenTrack>()
+  private readonly tracks = new Map<string, SceneTweenTrack>()
 
   public begin(
     treeId: string,
@@ -24,14 +16,11 @@ class TreeTweenTracks {
     now: number,
   ): this {
     const current = this.tracks.get(treeId)
-    const displayed = current === undefined
-      ? before
-      : sceneAt(current.plan, this.progress(current, now))
-    this.tracks.set(treeId, {
-      plan: planTransition(displayed, after),
-      target: after,
-      start: now,
-    })
+    const displayed = current?.sample(now) ?? before
+    const track = current === undefined
+      ? new SceneTweenTrack(displayed, after, now)
+      : current.begin(displayed, after, now)
+    this.tracks.set(treeId, track)
     return this
   }
 
@@ -42,8 +31,7 @@ class TreeTweenTracks {
   public at(now: number): ReadonlyMap<string, TreeRenderSnapshot> {
     const frames = new Map<string, TreeRenderSnapshot>()
     for (const [treeId, track] of this.tracks) {
-      const progress = this.progress(track, now)
-      frames.set(treeId, progress === 1 ? track.target : sceneAt(track.plan, progress))
+      frames.set(treeId, track.sample(now))
     }
     return frames
   }
@@ -51,7 +39,7 @@ class TreeTweenTracks {
   public takeCompleted(now: number): ReadonlyMap<string, TreeRenderSnapshot> {
     const completed = new Map<string, TreeRenderSnapshot>()
     for (const [treeId, track] of this.tracks) {
-      if (this.progress(track, now) < 1) continue
+      if (!track.completed(now)) continue
       completed.set(treeId, track.target)
       this.tracks.delete(treeId)
     }
@@ -60,10 +48,6 @@ class TreeTweenTracks {
 
   public clear(): void {
     this.tracks.clear()
-  }
-
-  private progress(track: TweenTrack, now: number): number {
-    return Math.max(0, Math.min(1, (now - track.start) / TREE_TWEEN_MS))
   }
 }
 

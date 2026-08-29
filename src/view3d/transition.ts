@@ -10,6 +10,44 @@ export type TweenPlan = {
   toBounds: { center: Vec3; radius: number }
 }
 
+export const SCENE_TWEEN_MS = 350
+
+export class SceneTweenTrack {
+  private plan: TweenPlan
+  private startedAt: number
+  private targetScene: Scene3
+
+  public constructor(displayed: Scene3, target: Scene3, now: number) {
+    this.plan = planTransition(displayed, target)
+    this.targetScene = target
+    this.startedAt = now
+  }
+
+  public get target(): Scene3 {
+    return this.targetScene
+  }
+
+  public begin(displayed: Scene3, target: Scene3, now: number): this {
+    this.plan = planTransition(displayed, target)
+    this.targetScene = target
+    this.startedAt = now
+    return this
+  }
+
+  public sample(now: number): Scene3 {
+    if (this.completed(now)) return this.targetScene
+    return sceneAt(this.plan, this.progress(now))
+  }
+
+  public completed(now: number): boolean {
+    return this.progress(now) === 1
+  }
+
+  private progress(now: number): number {
+    return Math.max(0, Math.min(1, (now - this.startedAt) / SCENE_TWEEN_MS))
+  }
+}
+
 /** Arc-length-uniform resampling; endpoints exact. */
 export function resample(pts: Vec3[], m: number): Vec3[] {
   if (pts.length === 0) throw new Error('resample: empty polyline')

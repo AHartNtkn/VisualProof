@@ -3,7 +3,7 @@ import type { Theme } from '../view/paint'
 import { relationWireHues } from '../view/paint'
 import { diagramSpec, type DiagramSpec } from './spec'
 import { scene3, type Scene3 } from './scene'
-import { planTransition, sceneAt, type TweenPlan } from './transition'
+import { SCENE_TWEEN_MS, SceneTweenTrack } from './transition'
 import { escapesFraming, fitPose, orbited, panned, zoomed, type CamPose } from './camera'
 import { lerp3, type Vec3 } from './vec3'
 import { expandHover, focusPoint } from './pick'
@@ -12,7 +12,6 @@ import { mountRender, type RenderTheme } from './render'
 export type View3State = { diagram: Diagram; theme: Theme }
 export type View3 = { update(s: View3State): void; dispose(): void }
 
-export const TWEEN_MS = 350
 /** Glide time for click-to-focus retargeting. */
 export const FOCUS_MS = 250
 
@@ -33,7 +32,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
   let scene: Scene3 = scene3(diagram)
   const aspectOf = (): number => container.clientWidth / Math.max(1, container.clientHeight)
   let pose: CamPose = fitPose(scene.center, scene.radius, aspectOf())
-  let tween: { plan: TweenPlan; poseFrom: CamPose; poseTo: CamPose; start: number } | null = null
+  let tween: { track: SceneTweenTrack; poseFrom: CamPose; poseTo: CamPose; start: number } | null = null
   let hoverKey: string | null = null
   /** Click-to-focus: the orbit target glides to the clicked component
       (USER request 2026-08-16); orbit/zoom mechanics are unchanged. A
@@ -67,17 +66,17 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
       else schedule()
     }
     if (tween !== null) {
-      const t = Math.min(1, (now - tween.start) / TWEEN_MS)
+      const t = Math.min(1, (now - tween.start) / SCENE_TWEEN_MS)
       const e = t * t * (3 - 2 * t)
       pose = mixPose(tween.poseFrom, tween.poseTo, e)
-      if (t >= 1) {
+      if (tween.track.completed(now)) {
         // The clean target list, not sceneAt's interpolated frame — that
         // still carries alpha-0 exits, which would otherwise linger in the
         // scene (and stay pickable) forever after the tween ends.
-        renderer.setEntities(scene.entities)
+        renderer.setEntities(tween.track.target.entities)
         tween = null
       } else {
-        renderer.setEntities(sceneAt(tween.plan, t).entities)
+        renderer.setEntities(tween.track.sample(now).entities)
         schedule()
       }
     }
@@ -168,10 +167,12 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
         // the interpolated frame at its current t, not `scene` (the last
         // COMPLETED scene) — planning from `scene` would pop the display
         // back to that stale geometry for one frame before animating on.
-        const fromScene = tween === null
-          ? scene
-          : sceneAt(tween.plan, Math.min(1, (performance.now() - tween.start) / TWEEN_MS))
-        tween = { plan: planTransition(fromScene, nextScene), poseFrom: pose, poseTo, start: performance.now() }
+        const now = performance.now()
+        const fromScene = tween?.track.sample(now) ?? scene
+        const track = tween === null
+          ? new SceneTweenTrack(fromScene, nextScene, now)
+          : tween.track.begin(fromScene, nextScene, now)
+        tween = { track, poseFrom: pose, poseTo, start: now }
         glide = null // the transition's pose tween owns the camera now
         container.dataset['view3Focus'] = ''
         spec = nextSpec
