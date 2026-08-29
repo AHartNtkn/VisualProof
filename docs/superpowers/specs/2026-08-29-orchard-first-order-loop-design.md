@@ -29,8 +29,9 @@ The shared proof layer gains a small library abstraction. A library entry
 names a theorem diagram supplied by its host. Applying an entry checks only
 whether the requested citation is structurally valid, then uses the native
 theorem-rewrite machinery. It does not check or replay a proof of the library
-entry. Orchard library entries have no external boundary positions; every
-wire belonging to the standing tree remains part of that theorem diagram.
+entry. Orchard library entries are propositions rather than open relations, so
+they have no external boundary positions. Every wire belonging to the standing
+tree remains part of that theorem diagram.
 
 The iteration item selects one of two operations from the source and target:
 
@@ -110,9 +111,10 @@ cutting records the source tree identity, the source tree value used to create
 it, and the selected subtree or whole-tree library entry. If the source tree
 changes before placement, the cutting is stale and placement fails.
 
-An order session owns accepted and completed order state plus reputation. The
-authored catalog owns order IDs, display copy, goal diagrams, and rewards.
-Pending orders are catalog entries that are neither accepted nor completed.
+An order session owns one lifecycle state per order plus reputation. The state
+is a closed choice: pending, accepted with one pot placement, or completed.
+The authored catalog owns order IDs, display copy, goal diagrams, and rewards.
+The Pending and Completed tabs are projections of this one state map.
 
 The world renderer owns tree, terrain, and pot presentation and targeting. It
 does not decide tool semantics, order state, or diagram equality. A catalog
@@ -147,24 +149,29 @@ rolls gameplay back.
 The current save format is replaced with a schema that also stores:
 
 - reputation;
-- accepted order IDs and their pot positions and yaws;
-- completed order IDs.
+- one lifecycle state for every authored order, where only the accepted state
+  carries a pot position and yaw.
 
 Trees and their placements remain the saved proof authority. Equipped-item and
 held-cutting state is transient. Authored goals and catalog copy are content,
 not save data.
 
-The Rust `SaveStore` adds ordered operations for inserting a tree, accepting an
-order, abandoning an order, and completing an order. Completion changes the
-order state and increments reputation exactly once in one SQLite transaction.
-Tauri IPC and the browser playtest service expose the same operations through
-the same store methods.
+The order table has one row per order ID and one state column. Its constraints
+require pot placement for the accepted state and prohibit pot placement for
+pending or completed states. Accept changes pending to accepted. Abandon
+changes accepted to pending and clears the placement. Completion changes
+accepted to completed, clears the placement, and increments reputation exactly
+once in one SQLite transaction.
 
-Rust validates the stored structure, finite pot coordinates, nonnegative
-reputation, and disjoint accepted and completed states. The frontend validates
-persisted order IDs against the authored catalog before mounting the world. An
-unknown order ID or inconsistent order state keeps the slot on the start menu
-with a concrete load error; no partial world is mounted.
+The Rust `SaveStore` adds ordered operations for inserting a tree and performing
+those order transitions. Tauri IPC and the browser playtest service expose the
+same operations through the same store methods.
+
+Rust validates the stored structure, state-specific pot fields, finite pot
+coordinates, and nonnegative reputation. The frontend requires the persisted
+order-ID set to equal the authored catalog's ID set before mounting the world.
+An unknown or missing order ID keeps the slot on the start menu with a concrete
+load error; no partial world is mounted.
 
 The save format has one exact current shape. There are no versions, migrations,
 legacy readers, or fallback parsing. Generated saves and persistence fixtures
