@@ -6,7 +6,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import type { Diagram } from '../../kernel/diagram'
-import { diagramToJson } from '../../kernel/diagram'
+import { snapshotFromDiagram } from '../diagram-snapshot'
 import type { GameTree, TreeTarget } from '../model'
 import type { PointedTreePart } from '../session'
 import { DARK } from '../../view/paint'
@@ -140,10 +140,10 @@ export function mountGameWorld(
   const treeHitPoint = new THREE.Vector3()
 
   const renderTrees = (trees: readonly GameTree[]): RenderTree[] => trees.map((tree, index) => {
-    assetsByJson.set(tree.diagramJson, assetCache.get(tree.diagramJson, tree.diagram))
+    assetsByJson.set(tree.snapshot.json, assetCache.get(tree.snapshot))
     return {
       id: tree.id,
-      diagramJson: tree.diagramJson,
+      diagramJson: tree.snapshot.json,
       placement: { id: tree.id, index, ...tree.placement },
     }
   })
@@ -293,13 +293,13 @@ export function mountGameWorld(
     beginTreeTween(treeId, before, after) {
       const current = renderTreesById.get(treeId)
       if (current === undefined) throw new Error(`unknown rendered tree '${treeId}'`)
-      const beforeJson = JSON.stringify(diagramToJson(before))
-      const afterJson = JSON.stringify(diagramToJson(after))
-      const beforeAsset = assetCache.get(beforeJson, before)
-      const afterAsset = assetCache.get(afterJson, after)
-      assetsByJson.set(beforeJson, beforeAsset)
-      assetsByJson.set(afterJson, afterAsset)
-      const target = { ...current, diagramJson: afterJson }
+      const beforeSnapshot = snapshotFromDiagram(before)
+      const afterSnapshot = snapshotFromDiagram(after)
+      const beforeAsset = assetCache.get(beforeSnapshot)
+      const afterAsset = assetCache.get(afterSnapshot)
+      assetsByJson.set(beforeSnapshot.json, beforeAsset)
+      assetsByJson.set(afterSnapshot.json, afterAsset)
+      const target = { ...current, diagramJson: afterSnapshot.json }
       renderTreesById.set(treeId, target)
       dynamicTrees.begin(target, beforeAsset.lods.full, afterAsset.lods.full, clock())
     },

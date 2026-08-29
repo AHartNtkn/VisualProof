@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { diagramToJson } from '../../../src/kernel/diagram/json'
+import { snapshotFromDiagram } from '../../../src/game/diagram-snapshot'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { TreeRenderAssetCache } from '../../../src/game/render/assets'
 import {
@@ -91,7 +91,7 @@ function representativeAsset(): TreeRenderAsset {
     { node: reference, port: { kind: 'arg', index: 0 } },
   ])
   const diagram = builder.build()
-  return new TreeRenderAssetCache(DARK).get(JSON.stringify(diagramToJson(diagram)), diagram)
+  return new TreeRenderAssetCache(DARK).get(snapshotFromDiagram(diagram))
 }
 
 function kindColoredMaterials(): TreeMaterialSource {

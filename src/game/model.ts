@@ -1,5 +1,5 @@
-import type { Diagram } from '../kernel/diagram'
-import { diagramFromJson } from '../kernel/diagram'
+import type { DiagramSnapshot } from './diagram-snapshot'
+import { snapshotFromJson } from './diagram-snapshot'
 
 export type CameraPose = {
   readonly position: { readonly x: number; readonly y: number; readonly z: number }
@@ -15,8 +15,7 @@ export type TreeTarget = {
 
 export type GameTree = {
   readonly id: string
-  readonly diagram: Diagram
-  readonly diagramJson: string
+  readonly snapshot: DiagramSnapshot
   readonly placement: { readonly x: number; readonly z: number; readonly yaw: number }
 }
 
@@ -66,16 +65,12 @@ function array(value: unknown, what: string): readonly unknown[] {
   return value
 }
 
-function decodeDiagramJson(diagramJson: string): Diagram {
-  let parsed: unknown
+function decodeDiagramJson(diagramJson: string, what: string): DiagramSnapshot {
   try {
-    parsed = JSON.parse(diagramJson)
+    return snapshotFromJson(diagramJson)
   } catch (error) {
-    throw new Error(
-      `malformed diagram JSON: ${error instanceof Error ? error.message : String(error)}`,
-    )
+    throw new Error(`${what}: ${error instanceof Error ? error.message : String(error)}`)
   }
-  return diagramFromJson(parsed)
 }
 
 export function decodeLoadedSlot(value: unknown): GameWorld {
@@ -103,19 +98,19 @@ export function decodeLoadedSlot(value: unknown): GameWorld {
     pitch: finiteNumber(camera.pitch, 'camera.pitch'),
   }
 
-  const diagramsByKey = new Map<number, { readonly diagram: Diagram; readonly json: string }>()
-  const diagramsByJson = new Map<string, Diagram>()
+  const diagramsByKey = new Map<number, DiagramSnapshot>()
+  const diagramsByJson = new Map<string, DiagramSnapshot>()
   for (const [index, value] of array(loaded.diagrams, 'loaded slot.diagrams').entries()) {
     const wire = exactRecord(value, ['diagramKey', 'diagramJson'], `diagram ${index}`)
     const key = safeInteger(wire.diagramKey, `diagram ${index}.diagramKey`)
     if (diagramsByKey.has(key)) throw new Error(`duplicate diagram key ${key}`)
     const json = string(wire.diagramJson, `diagram ${index}.diagramJson`)
-    let diagram = diagramsByJson.get(json)
-    if (diagram === undefined) {
-      diagram = decodeDiagramJson(json)
-      diagramsByJson.set(json, diagram)
+    let snapshot = diagramsByJson.get(json)
+    if (snapshot === undefined) {
+      snapshot = decodeDiagramJson(json, `diagram ${index}`)
+      diagramsByJson.set(json, snapshot)
     }
-    diagramsByKey.set(key, { diagram, json })
+    diagramsByKey.set(key, snapshot)
   }
 
   const trees = new Map<string, GameTree>()
@@ -134,8 +129,7 @@ export function decodeLoadedSlot(value: unknown): GameWorld {
     }
     trees.set(id, {
       id,
-      diagram: storedDiagram.diagram,
-      diagramJson: storedDiagram.json,
+      snapshot: storedDiagram,
       placement: {
         x: finiteNumber(wire.x, `tree '${id}'.x`),
         z: finiteNumber(wire.z, `tree '${id}'.z`),

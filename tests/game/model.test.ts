@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { snapshotFromDiagram, snapshotFromJson } from '../../src/game/diagram-snapshot'
+import type { DiagramSnapshot } from '../../src/game/diagram-snapshot'
 import { decodeLoadedSlot } from '../../src/game/model'
 import { decodeCreatedSlot, decodeSlotList } from '../../src/game/save-client'
+import { diagramToJson } from '../../src/kernel/diagram'
 
 const diagramJson = JSON.stringify({
   root: 'r0',
@@ -26,12 +29,23 @@ function slotWire(overrides: Record<string, unknown> = {}) {
 }
 
 describe('loaded game slot decoding', () => {
+  it('constructs one canonical snapshot from either JSON or a diagram', () => {
+    const snapshot = snapshotFromJson(`${diagramJson}\n`)
+    // @ts-expect-error Diagram snapshots can only be constructed by their validating factories.
+    const invalidSnapshot: DiagramSnapshot = { ...snapshot, json: '{}' }
+
+    expect(Object.isFrozen(snapshot)).toBe(true)
+    expect(snapshot.json).toBe(JSON.stringify(diagramToJson(snapshot.diagram)))
+    expect(snapshotFromDiagram(snapshot.diagram)).toEqual(snapshot)
+    expect(invalidSnapshot.json).toBe('{}')
+  })
+
   it('decodes equivalent diagrams and gives every tree the generic model', () => {
     const loaded = decodeLoadedSlot(slotWire({ trees: [treeWire('a', 7), treeWire('b', 7)] }))
 
     expect(loaded.trees.size).toBe(2)
-    expect(loaded.trees.get('a')!.diagram).toEqual(loaded.trees.get('b')!.diagram)
-    expect(loaded.trees.get('a')!.diagramJson).toBe(diagramJson)
+    expect(loaded.trees.get('a')!.snapshot).toEqual(loaded.trees.get('b')!.snapshot)
+    expect(loaded.trees.get('a')!.snapshot.json).toBe(diagramJson)
     expect(loaded.trees.get('a')!.placement).toEqual({ x: 0, z: 0, yaw: 0 })
     expect(loaded).toMatchObject({
       slot: { id: 'large-1', name: 'Large Tree', updatedAtMs: 0 },
@@ -44,7 +58,7 @@ describe('loaded game slot decoding', () => {
       .toThrow("tree 'a' references missing diagram key 99")
     expect(() => decodeLoadedSlot(slotWire({
       diagrams: [{ diagramKey: 7, diagramJson: '{}' }],
-    }))).toThrow(/malformed diagram JSON/)
+    }))).toThrow(/diagram 0: malformed diagram JSON/)
   })
 
   it('rejects duplicate keys, duplicate tree ids, and non-finite coordinates', () => {

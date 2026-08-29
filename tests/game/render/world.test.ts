@@ -15,6 +15,7 @@ const host = vi.hoisted(() => {
     rendererAcceptedFrame: false,
     viewport,
     resources,
+    targetSnapshotJson: new Set<string>(),
     trackResource() {
       const resource = { released: false }
       resources.push(resource)
@@ -144,9 +145,9 @@ vi.mock('../../../src/game/render/assets', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../src/game/render/assets')>()
 
   class TestTreeRenderAssetCache extends actual.TreeRenderAssetCache {
-    public override get(diagramJson: string, diagram: import('../../../src/kernel/diagram').Diagram) {
-      const asset = super.get(diagramJson, diagram)
-      if (!diagramJson.startsWith('target:')) return asset
+    public override get(snapshot: import('../../../src/game/diagram-snapshot').DiagramSnapshot) {
+      const asset = super.get(snapshot)
+      if (!host.targetSnapshotJson.has(snapshot.json)) return asset
 
       const center = { x: 3, y: 2, z: 4 }
       const radius = 5
@@ -166,9 +167,9 @@ vi.mock('../../../src/game/render/assets', async (importOriginal) => {
 })
 
 import type { GameTree } from '../../../src/game/model'
+import { snapshotFromDiagram } from '../../../src/game/diagram-snapshot'
 import { mountGameWorld } from '../../../src/game/render/world'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { diagramToJson } from '../../../src/kernel/diagram/json'
 import { applyDoubleCutIntro } from '../../../src/kernel/rules/doublecut'
 import { scene3 } from '../../../src/view3d/scene'
 
@@ -181,6 +182,7 @@ beforeEach(() => {
   host.viewport.postprocess = [0, 0]
   host.viewport.scaledEffect = [0, 0]
   host.resources.length = 0
+  host.targetSnapshotJson.clear()
   vi.stubGlobal('window', { devicePixelRatio: 2 })
   vi.stubGlobal('document', {
     createElement: () => ({
@@ -208,17 +210,19 @@ function blankTree(id = 'tree-a', x = 0, z = -20): GameTree {
   const diagram = new DiagramBuilder().build()
   return {
     id,
-    diagram,
-    diagramJson: JSON.stringify(diagramToJson(diagram)),
+    snapshot: snapshotFromDiagram(diagram),
     placement: { x, z, yaw: 0 },
   }
 }
 
 function targetTree(id: string, x: number, z: number, yaw: number): GameTree {
-  const tree = blankTree(id, x, z)
+  const builder = new DiagramBuilder()
+  builder.cut(builder.root)
+  const snapshot = snapshotFromDiagram(builder.build())
+  host.targetSnapshotJson.add(snapshot.json)
   return {
-    ...tree,
-    diagramJson: `target:${id}`,
+    id,
+    snapshot,
     placement: { x, z, yaw },
   }
 }
@@ -230,7 +234,7 @@ function container(): HTMLElement {
 }
 
 function pointCameraAtBranch(world: ReturnType<typeof mountGameWorld>, tree: GameTree): void {
-  const branch = scene3(tree.diagram).entities[0]!
+  const branch = scene3(tree.snapshot.diagram).entities[0]!
   if (!('pts' in branch)) throw new Error('expected a branch')
   const point = branch.pts[0]!
   const group = new THREE.Object3D()
@@ -282,12 +286,12 @@ describe('production game world', () => {
   it('keeps removal authoritative while a tween is active', () => {
     const tree = blankTree()
     const world = mountGameWorld(container(), [tree], () => 0)
-    const after = applyDoubleCutIntro(tree.diagram, {
-      region: tree.diagram.root, regions: [], nodes: [], wires: [],
+    const after = applyDoubleCutIntro(tree.snapshot.diagram, {
+      region: tree.snapshot.diagram.root, regions: [], nodes: [], wires: [],
     })
     world.setRenderMode('raw')
     world.render(0)
-    world.beginTreeTween(tree.id, tree.diagram, after)
+    world.beginTreeTween(tree.id, tree.snapshot.diagram, after)
 
     world.setTrees([])
 
@@ -302,17 +306,16 @@ describe('production game world', () => {
     const replacementDiagram = replacementBuilder.build()
     const replacement: GameTree = {
       id: original.id,
-      diagram: replacementDiagram,
-      diagramJson: JSON.stringify(diagramToJson(replacementDiagram)),
+      snapshot: snapshotFromDiagram(replacementDiagram),
       placement: { x: 50, z: -60, yaw: 0 },
     }
-    const staleTarget = applyDoubleCutIntro(original.diagram, {
-      region: original.diagram.root, regions: [], nodes: [], wires: [],
+    const staleTarget = applyDoubleCutIntro(original.snapshot.diagram, {
+      region: original.snapshot.diagram.root, regions: [], nodes: [], wires: [],
     })
     const world = mountGameWorld(container(), [original], () => 0)
     world.setRenderMode('raw')
     world.render(0)
-    world.beginTreeTween(original.id, original.diagram, staleTarget)
+    world.beginTreeTween(original.id, original.snapshot.diagram, staleTarget)
 
     world.setTrees([replacement])
     const rendered = world.render(350)
@@ -411,7 +414,7 @@ describe('production game world', () => {
 
     expect(world.pointAtBranch(0, 0, rotated.id)).toMatchObject({
       treeId: rotated.id,
-      entity: { kind: 'branch', region: rotated.diagram.root },
+      entity: { kind: 'branch', region: rotated.snapshot.diagram.root },
     })
     world.dispose()
   })

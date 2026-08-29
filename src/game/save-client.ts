@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { decodeLoadedSlot } from './model'
 import type { GameWorld } from './model'
+import type { GameTree } from './model'
 
 export type CameraRecord = {
   readonly x: number
@@ -16,6 +17,16 @@ export type TreeUpdate = {
   readonly x: number
   readonly z: number
   readonly yaw: number
+}
+
+export function treeUpdateFromGameTree(tree: GameTree): TreeUpdate {
+  return {
+    treeId: tree.id,
+    diagramJson: tree.snapshot.json,
+    x: tree.placement.x,
+    z: tree.placement.z,
+    yaw: tree.placement.yaw,
+  }
 }
 
 export type SlotListEntry = {

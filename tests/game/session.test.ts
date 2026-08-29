@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { GameTree, GameWorld } from '../../src/game/model'
-import { gameSession } from '../../src/game/session'
+import { gameSession, useDoubleCut } from '../../src/game/session'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
-import { diagramToJson } from '../../src/kernel/diagram/json'
+import { snapshotFromDiagram } from '../../src/game/diagram-snapshot'
+import { treeUpdateFromGameTree, type TreeUpdate } from '../../src/game/save-client'
 
 const blankDiagram = new DiagramBuilder().build()
 
@@ -16,8 +17,7 @@ const largeDiagram = largeBuilder.build()
 function tree(id: string, diagram: Diagram): GameTree {
   return {
     id,
-    diagram,
-    diagramJson: JSON.stringify(diagramToJson(diagram)),
+    snapshot: snapshotFromDiagram(diagram),
     placement: { x: 0, z: -20, yaw: 0 },
   }
 }
@@ -41,12 +41,41 @@ function treeValues(trees: ReadonlyMap<string, GameTree>): readonly {
 }[] {
   return [...trees.values()].map((entry) => ({
     id: entry.id,
-    diagramJson: entry.diagramJson,
+    diagramJson: entry.snapshot.json,
     placement: entry.placement,
   }))
 }
 
 describe('game tool session', () => {
+  it('persists the mutated snapshot and unchanged placement as one tree update', () => {
+    const session = gameSession(worldWithTree('large', largeDiagram).trees)
+    const persisted: TreeUpdate[] = []
+
+    const mutation = useDoubleCut(session, {
+      treeId: 'large',
+      entity: {
+        kind: 'branch', key: 'branch', region: nestedRegion,
+        polarity: 0, pts: [],
+      },
+      distance: 12,
+    }, {
+      beginTreeTween() {},
+      persistTree(update) { persisted.push(update) },
+    })
+
+    const liveTree = session.trees.get('large')!
+    expect(persisted).toEqual([treeUpdateFromGameTree(liveTree)])
+    expect(persisted[0]!.diagramJson).toBe(liveTree.snapshot.json)
+    expect(persisted[0]).toEqual({
+      treeId: 'large',
+      diagramJson: liveTree.snapshot.json,
+      x: 0,
+      z: -20,
+      yaw: 0,
+    })
+    expect(mutation.afterJson).toBe(liveTree.snapshot.json)
+  })
+
   it('spawns a real empty double cut on the pointed branch of any generic tree', () => {
     const session = gameSession(worldWithTree('large', largeDiagram).trees)
     const mutation = session.applyDoubleCut({
@@ -70,7 +99,7 @@ describe('game tool session', () => {
       return region.kind === 'cut' && region.parent === outer
     })!
     expect(mutation.after.regions[inner]).toEqual({ kind: 'cut', parent: outer })
-    expect(mutation.afterJson).toBe(JSON.stringify(diagramToJson(mutation.after)))
+    expect(mutation.afterJson).toBe(snapshotFromDiagram(mutation.after).json)
     expect(treeValues(session.trees)).toEqual([{
       id: 'large',
       diagramJson: mutation.afterJson,

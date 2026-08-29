@@ -1,8 +1,9 @@
 import type { Diagram } from '../kernel/diagram'
-import { diagramToJson } from '../kernel/diagram'
 import { applyDoubleCutIntro } from '../kernel/rules/doublecut'
+import { snapshotFromDiagram } from './diagram-snapshot'
 import type { GameTree } from './model'
 import type { TreeUpdate } from './save-client'
+import { treeUpdateFromGameTree } from './save-client'
 import type { Entity } from '../view3d/scene'
 
 export type PointedTreePart = {
@@ -33,17 +34,23 @@ export class GameSession {
     const tree = this.trees.get(pointedPart.treeId)
     if (tree === undefined) throw new ToolError(`unknown tree '${pointedPart.treeId}'`)
     if (pointedPart.entity.kind !== 'branch') throw new ToolError('double cut requires a branch')
-    const after = applyDoubleCutIntro(tree.diagram, {
+    const after = applyDoubleCutIntro(tree.snapshot.diagram, {
       region: pointedPart.entity.region,
       regions: [],
       nodes: [],
       wires: [],
     })
-    const afterJson = JSON.stringify(diagramToJson(after))
+    const afterSnapshot = snapshotFromDiagram(after)
     const trees = new Map(this.trees)
-    trees.set(tree.id, { ...tree, diagram: after, diagramJson: afterJson })
+    trees.set(tree.id, { ...tree, snapshot: afterSnapshot })
     this.trees = trees
-    return { treeId: tree.id, before: tree.diagram, beforeJson: tree.diagramJson, after, afterJson }
+    return {
+      treeId: tree.id,
+      before: tree.snapshot.diagram,
+      beforeJson: tree.snapshot.json,
+      after: afterSnapshot.diagram,
+      afterJson: afterSnapshot.json,
+    }
   }
 }
 
@@ -63,12 +70,6 @@ export function useDoubleCut(
   const tree = session.trees.get(mutation.treeId)
   if (tree === undefined) throw new Error(`mutated tree '${mutation.treeId}' is missing`)
   effects.beginTreeTween(tree.id, mutation.before, mutation.after)
-  effects.persistTree({
-    treeId: tree.id,
-    diagramJson: mutation.afterJson,
-    x: tree.placement.x,
-    z: tree.placement.z,
-    yaw: tree.placement.yaw,
-  })
+  effects.persistTree(treeUpdateFromGameTree(tree))
   return mutation
 }
