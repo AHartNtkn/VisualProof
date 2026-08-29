@@ -39,22 +39,64 @@ describe('expandHover', () => {
   })
   it('a branch expands to its whole subtree of branches', () => {
     const { spec, scene, c1, c2 } = fixture()
-    const got = expandHover(`b:${c1}`, spec, scene.entities)
-    expect(got.has(`b:${c1}`)).toBe(true)
-    expect(got.has(`b:${c2}`)).toBe(true)
-    expect(got.has('b:r0')).toBe(false)
+    const c1Branch = scene.entities.find((e) => e.kind === 'branch' && e.region === c1)!
+    const c2Branch = scene.entities.find((e) => e.kind === 'branch' && e.region === c2)!
+    const rootBranch = scene.entities.find((e) => e.kind === 'branch' && e.region === 'r0')!
+    const got = expandHover(c1Branch.key, spec, scene.entities)
+    expect(got.has(c1Branch.key)).toBe(true)
+    expect(got.has(c2Branch.key)).toBe(true)
+    expect(got.has(rootBranch.key)).toBe(false)
   })
   it('a ring expands to ring + its label + incident wire anchors (spec: hovering a node highlights its ring plus incident wire anchors)', () => {
     const { spec, scene, R, wPR, wST } = fixture()
-    const got = expandHover(`r:${R}`, spec, scene.entities)
-    expect(got.has(`r:${R}`)).toBe(true)
-    expect(got.has(`l:${R}`)).toBe(true)
+    const ring = scene.entities.find((e) => e.kind === 'ring' && e.node === R)!
+    const label = scene.entities.find((e) => e.kind === 'label' && e.node === R)!
+    const got = expandHover(ring.key, spec, scene.entities)
+    expect(got.has(ring.key)).toBe(true)
+    expect(got.has(label.key)).toBe(true)
     const strandsOf = (wid: string) => scene.entities.filter((e) => e.kind === 'strand' && e.wire === wid).map((e) => e.key)
     const ownStrands = strandsOf(wPR)
     expect(ownStrands.length).toBeGreaterThan(0)
     for (const k of ownStrands) expect(got.has(k)).toBe(true)
     // The unrelated wire (S-T, touching neither P nor R) must NOT light up.
     for (const k of strandsOf(wST)) expect(got.has(k)).toBe(false)
+  })
+
+  it('uses typed entity identity when drawing keys do not encode semantic ids', () => {
+    const { spec, scene, c1, c2, R, wPR, wST } = fixture()
+    const entities = scene.entities.map((entity, index) => ({ ...entity, key: `opaque-${index}` })) as Entity[]
+
+    const branch = entities.find((e) => e.kind === 'branch' && e.region === c1)!
+    const child = entities.find((e) => e.kind === 'branch' && e.region === c2)!
+    const ring = entities.find((e) => e.kind === 'ring' && e.node === R)!
+    const label = entities.find((e) => e.kind === 'label' && e.node === R)!
+    const strand = entities.find((e) => e.kind === 'strand' && e.wire === wPR)!
+    const pip = entities.find((e): e is Extract<Entity, { kind: 'pip' }> => e.kind === 'pip')!
+    const ownStrands = entities.filter((e) => e.kind === 'strand' && e.wire === wPR)
+    const unrelatedStrands = entities.filter((e) => e.kind === 'strand' && e.wire === wST)
+
+    expect(expandHover(branch.key, spec, entities)).toEqual(new Set([branch.key, child.key]))
+
+    const ringHover = expandHover(ring.key, spec, entities)
+    expect(ringHover.has(label.key)).toBe(true)
+    for (const entity of ownStrands) expect(ringHover.has(entity.key)).toBe(true)
+    for (const entity of unrelatedStrands) expect(ringHover.has(entity.key)).toBe(false)
+
+    expect(expandHover(strand.key, spec, entities)).toEqual(new Set(ownStrands.map((entity) => entity.key)))
+
+    const pipIncidentWires = new Set(
+      spec.wires.filter((wire) => wire.terminals.some((terminal) => terminal.node === pip.node)).map((wire) => wire.id),
+    )
+    const pipHover = expandHover(pip.key, spec, entities)
+    expect(pipHover).toEqual(new Set([
+      pip.key,
+      ...entities.filter((e) => e.kind === 'strand' && pipIncidentWires.has(e.wire)).map((e) => e.key),
+    ]))
+  })
+
+  it('preserves an unknown drawing key as the sole hover output', () => {
+    const { spec, scene } = fixture()
+    expect(expandHover('opaque-missing', spec, scene.entities)).toEqual(new Set(['opaque-missing']))
   })
 })
 

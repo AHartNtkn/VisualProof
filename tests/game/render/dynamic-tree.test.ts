@@ -49,6 +49,16 @@ function branchX(snapshot: TreeRenderSnapshot): number {
   return branch.pts[0]!.x
 }
 
+function publish(
+  dynamic: DynamicTreeObjects,
+  tree: RenderTree,
+  before: TreeRenderSnapshot,
+  after: TreeRenderSnapshot,
+  now: number,
+): void {
+  dynamic.commit(dynamic.prepare(tree, before, after, now))
+}
+
 describe('dynamic trees', () => {
   it('restarts an interrupted tween from its currently displayed geometry', () => {
     const displayed: TreeRenderSnapshot[] = []
@@ -62,14 +72,15 @@ describe('dynamic trees', () => {
     )
     const tree = renderTree('a')
 
-    dynamic.begin(tree, branchScene('b:a', 0), branchScene('b:a', 10), 0)
+    publish(dynamic, tree, branchScene('b:a', 0), branchScene('b:a', 10), 0)
     dynamic.update(SCENE_TWEEN_MS / 2)
     const beforeInterrupt = displayed.at(-1)!
     expect(branchX(beforeInterrupt)).toBeCloseTo(5)
 
     // The caller's `before` is the first target (x=10), not the halfway
     // frame currently on screen. Restarting from it would visibly pop.
-    dynamic.begin(
+    publish(
+      dynamic,
       tree,
       branchScene('b:a', 10),
       branchScene('b:a', 20),
@@ -88,14 +99,14 @@ describe('dynamic trees', () => {
       { suspend() {}, resume() {} },
       (snapshot, tree) => makeDynamicTreeObject(snapshot, tree.placement, materials()),
     )
-    dynamic.begin(renderTree('a'), branchScene('b:a', 0), branchScene('b:a', 10), 0)
-    dynamic.begin(renderTree('b'), branchScene('b:b', 30), branchScene('b:b', 40), 0)
+    publish(dynamic, renderTree('a'), branchScene('b:a', 0), branchScene('b:a', 10), 0)
+    publish(dynamic, renderTree('b'), branchScene('b:b', 30), branchScene('b:b', 40), 0)
 
     dynamic.update(175)
     expect(dynamic.objects('a')).toHaveLength(1)
     expect(dynamic.objects('b')).toHaveLength(1)
 
-    dynamic.begin(renderTree('a'), branchScene('b:a', 10), branchScene('b:a', 20), 175)
+    publish(dynamic, renderTree('a'), branchScene('b:a', 10), branchScene('b:a', 20), 175)
     dynamic.update(175)
     expect(dynamic.objects('a')).toHaveLength(1)
 

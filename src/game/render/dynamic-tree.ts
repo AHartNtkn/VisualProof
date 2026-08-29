@@ -9,21 +9,6 @@ export type TreeRenderSnapshot = ReturnType<typeof scene3>
 class TreeTweenTracks {
   private readonly tracks = new Map<string, SceneTweenTrack>()
 
-  public begin(
-    treeId: string,
-    before: TreeRenderSnapshot,
-    after: TreeRenderSnapshot,
-    now: number,
-  ): this {
-    const current = this.tracks.get(treeId)
-    const displayed = current?.sample(now) ?? before
-    const track = current === undefined
-      ? new SceneTweenTrack(displayed, after, now)
-      : current.begin(displayed, after, now)
-    this.tracks.set(treeId, track)
-    return this
-  }
-
   public prepare(
     treeId: string,
     before: TreeRenderSnapshot,
@@ -89,19 +74,6 @@ export class DynamicTreeObjects {
     private readonly buildObject: DynamicObjectBuilder,
     private readonly releaseObject: (object: THREE.Group) => void = disposeTreeObject,
   ) {}
-
-  public begin(
-    tree: RenderTree,
-    before: TreeRenderSnapshot,
-    after: TreeRenderSnapshot,
-    now: number,
-  ): void {
-    const wasActive = this.tracks.has(tree.id)
-    this.tracks.begin(tree.id, before, after, now)
-    this.targets.set(tree.id, tree)
-    if (!wasActive) this.runtime.suspend(tree.id)
-    this.replace(tree.id, this.tracks.at(now).get(tree.id)!, tree)
-  }
 
   public prepare(
     tree: RenderTree,
