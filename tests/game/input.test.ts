@@ -49,10 +49,8 @@ function createHarness(): {
   const escapeHandled = { value: false }
   const actions: WorldInputActions = {
     pointerDown: (button, clientX, clientY) => pointers.push(`down:${button}:${clientX}:${clientY}`),
-    pointerMove: (clientX, clientY) => pointers.push(`move:${clientX}:${clientY}`),
     pointerUp: (button, clientX, clientY) => pointers.push(`up:${button}:${clientX}:${clientY}`),
     pointerCancel: () => pointers.push('cancel'),
-    wheel: (deltaY) => pointers.push(`wheel:${deltaY}`),
     engagementChanged: (active) => engagements.push(active),
     escape: () => { escapes.count += 1; return escapeHandled.value },
   }
@@ -152,7 +150,7 @@ describe('world input sampling', () => {
     expect(contextMenu.defaultPrevented).toBe(true)
     expect(wheel.defaultPrevented).toBe(true)
     expect(pointers).toEqual([
-      'down:2:70:80', 'move:74:83', 'up:2:74:83', 'wheel:-120',
+      'down:2:70:80', 'up:2:74:83',
     ])
     expect(escapes.count).toBe(0)
   })
@@ -172,7 +170,7 @@ describe('world input sampling', () => {
     windowTarget.dispatchEvent(event('mouseup', { button: 0, clientX: 74, clientY: 83 }))
 
     expect(pointers).toEqual([
-      'down:0:70:80', 'move:74:83', 'up:0:74:83',
+      'down:0:70:80', 'up:0:74:83',
     ])
   })
 

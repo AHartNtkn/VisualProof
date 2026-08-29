@@ -1,5 +1,6 @@
 import { $, browser, expect } from '@wdio/globals'
 import { describe, it } from 'mocha'
+import { Key } from 'webdriverio'
 import { diagramFromJson } from '../../src/kernel/diagram'
 import { focusPoint } from '../../src/view3d/pick'
 import { scene3 } from '../../src/view3d/scene'
@@ -71,14 +72,25 @@ describe('orchard world controls', () => {
     const savedFreePose = storedCameraPose('large-1')
     await dragWorld(0, { x: -30, y: -20 }, { x: 45, y: 25 })
     await browser.pause(100)
+    await expectPoseClose(await displayedPose(), orbitPose)
+
+    await wheelWorld(-320)
+    await browser.pause(100)
+    await expectPoseClose(await displayedPose(), orbitPose)
+
+    await hold('a')
     const movedOrbitPose = await displayedPose()
     expect(poseEyeDistance(movedOrbitPose, orbitPose)).toBeGreaterThan(0.01)
     expectPoseClose(storedCameraPose('large-1'), savedFreePose)
 
-    await wheelWorld(-320)
-    await browser.pause(100)
+    await hold('w')
     const zoomedOrbitPose = await displayedPose()
     expect(poseEyeDistance(zoomedOrbitPose, movedOrbitPose)).toBeGreaterThan(0.01)
+    expectPoseClose(storedCameraPose('large-1'), savedFreePose)
+
+    await hold(Key.Space)
+    const raisedOrbitPose = await displayedPose()
+    expect(poseEyeDistance(raisedOrbitPose, zoomedOrbitPose)).toBeGreaterThan(0.01)
     expectPoseClose(storedCameraPose('large-1'), savedFreePose)
 
     const semanticScene = scene3(diagramFromJson(diagramBeforeDoubleCut))
@@ -114,24 +126,18 @@ describe('orchard world controls', () => {
       y: (segment.start.y + segment.end.y) / 2,
       z: (segment.start.z + segment.end.z) / 2,
     }
-    const focusOffset = await canvasOffsetForWorldPoint(zoomedOrbitPose, visibleBranchPoint)
+    const focusOffset = await canvasOffsetForWorldPoint(raisedOrbitPose, visibleBranchPoint)
     await clickWorld(focusOffset.x, focusOffset.y)
     await browser.pause(300)
     const focusedOrbitPose = await displayedPose()
     for (const axis of ['x', 'y', 'z'] as const) {
       const translation = offCenterBranch.focus[axis] - semanticScene.center[axis]
-      expect(focusedOrbitPose.eye[axis]).toBeCloseTo(zoomedOrbitPose.eye[axis] + translation, 6)
-      expect(focusedOrbitPose.direction[axis]).toBeCloseTo(zoomedOrbitPose.direction[axis], 6)
+      expect(focusedOrbitPose.eye[axis]).toBeCloseTo(raisedOrbitPose.eye[axis] + translation, 6)
+      expect(focusedOrbitPose.direction[axis]).toBeCloseTo(raisedOrbitPose.direction[axis], 6)
     }
 
-    await dragWorld(2, { x: -20, y: 15 }, { x: 35, y: -25 })
-    await browser.pause(100)
-    const pannedOrbitPose = await displayedPose()
-    expect(poseEyeDistance(pannedOrbitPose, focusedOrbitPose)).toBeGreaterThan(0.01)
-    expect(storedTreeDiagram('large-1', 'tree-0000')).toEqual(diagramBeforeDoubleCut)
-
-    const beforeToolPose = pannedOrbitPose
-    const toolOffset = await canvasOffsetForWorldPoint(pannedOrbitPose, offCenterBranch.focus)
+    const beforeToolPose = focusedOrbitPose
+    const toolOffset = await canvasOffsetForWorldPoint(focusedOrbitPose, offCenterBranch.focus)
     await rightClickWorld(toolOffset.x, toolOffset.y)
     await expect($('[data-feedback]')).toHaveText('Double cut applied to tree-0000.')
     await waitForVisibleTreeTween()

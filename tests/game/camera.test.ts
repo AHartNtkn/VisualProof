@@ -7,7 +7,6 @@ import {
   exitOrbit,
   initialCameraState,
 } from '../../src/game/camera'
-import { eyeOf, orbited } from '../../src/view3d/camera'
 
 const start = { position: { x: 0, y: 1.7, z: 8 }, yaw: 0, pitch: 0 }
 const target = {
@@ -91,14 +90,53 @@ describe('orbit camera motion and persistence', () => {
     expect(displayCameraPose(orbit, 0).eye.z).toBeCloseTo(start.position.z, 12)
   })
 
-  it('delegates orbit changes to the shared interaction', () => {
+  it('rotates the shared orbit interaction from A/D input at 1.5 radians per second', () => {
     const orbit = enterOrbit(initialCameraState(start), target)
-    const initialPose = orbit.interaction.poseAt(0)
-    orbit.interaction.pointerDown(0, 20, 30)
-    orbit.interaction.pointerMove(44, 18, 600, 0)
+    const advanced = advanceCamera(orbit, {
+      forward: 0, strafe: 1, vertical: 0, sprint: false, lookX: 0, lookY: 0,
+    }, 1, 0)
 
-    expect(orbit.interaction.poseAt(0)).toEqual(orbited(initialPose, 24, -12))
-    expect(displayCameraPose(orbit, 0).eye).toEqual(eyeOf(orbited(initialPose, 24, -12)))
+    expect(advanced).toBe(orbit)
+    expect(orbit.interaction.poseAt(0).yaw).toBeCloseTo(1.5, 12)
+  })
+
+  it('changes horizontal orbit radius from W/S input at 12 units per second', () => {
+    const orbit = enterOrbit(initialCameraState(start), target)
+
+    advanceCamera(orbit, {
+      forward: 1, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
+    }, 0.1, 0)
+
+    const eye = displayCameraPose(orbit, 0).eye
+    expect(eye.x).toBeCloseTo(0, 12)
+    expect(eye.y).toBeCloseTo(1.7, 12)
+    expect(eye.z).toBeCloseTo(6.8, 12)
+  })
+
+  it('changes orbit eye height from Space/Control input at 8 units per second', () => {
+    const orbit = enterOrbit(initialCameraState(start), target)
+
+    advanceCamera(orbit, {
+      forward: 0, strafe: 0, vertical: 1, sprint: false, lookX: 0, lookY: 0,
+    }, 1, 0)
+
+    const eye = displayCameraPose(orbit, 0).eye
+    expect(eye.x).toBeCloseTo(0, 12)
+    expect(eye.y).toBeCloseTo(9.7, 12)
+    expect(eye.z).toBeCloseTo(8, 12)
+  })
+
+  it('does not move inside one unit beyond the selected tree radius', () => {
+    const orbit = enterOrbit(initialCameraState(start), target)
+
+    advanceCamera(orbit, {
+      forward: 1, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
+    }, 1, 0)
+
+    const eye = displayCameraPose(orbit, 0).eye
+    expect(eye.x).toBeCloseTo(0, 12)
+    expect(eye.y).toBeCloseTo(1.7, 12)
+    expect(eye.z).toBeCloseTo(5, 12)
   })
 
   it('displays a normalized forward vector toward the target center', () => {
@@ -131,10 +169,12 @@ describe('orbit camera motion and persistence', () => {
     expect(cameraPoseForSave(enterOrbit(initialCameraState(start), target))).toEqual(start)
   })
 
-  it('ignores free-flight keyboard motion while orbiting', () => {
+  it('ignores look deltas and sprint while orbiting', () => {
     const orbit = enterOrbit(initialCameraState(start), target)
+    const pose = orbit.interaction.poseAt(0)
     expect(advanceCamera(orbit, {
-      forward: 1, strafe: 1, vertical: 1, sprint: true, lookX: 50, lookY: 50,
-    }, 1)).toBe(orbit)
+      forward: 0, strafe: 0, vertical: 0, sprint: true, lookX: 50, lookY: 50,
+    }, 1, 0)).toBe(orbit)
+    expect(orbit.interaction.poseAt(0)).toEqual(pose)
   })
 })

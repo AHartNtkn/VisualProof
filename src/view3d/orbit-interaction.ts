@@ -89,6 +89,33 @@ export class OrbitInteraction {
     this.#pose = zoomed(this.poseAt(now), deltaY)
   }
 
+  rotateYaw(delta: number, now: number): void {
+    const displayed = this.poseAt(now)
+    this.#pose = { ...displayed, yaw: displayed.yaw + delta }
+  }
+
+  changeHorizontalRadius(delta: number, minimum: number, now: number): void {
+    const displayed = this.poseAt(now)
+    const height = displayed.dist * Math.sin(displayed.pitch)
+    const radius = Math.max(minimum, displayed.dist * Math.cos(displayed.pitch) + delta)
+    this.#pose = {
+      ...displayed,
+      dist: Math.hypot(radius, height),
+      pitch: Math.atan2(height, radius),
+    }
+  }
+
+  changeHeight(delta: number, now: number): void {
+    const displayed = this.poseAt(now)
+    const radius = displayed.dist * Math.cos(displayed.pitch)
+    const height = displayed.dist * Math.sin(displayed.pitch) + delta
+    this.#pose = {
+      ...displayed,
+      dist: Math.hypot(radius, height),
+      pitch: Math.atan2(height, radius),
+    }
+  }
+
   focus(target: Vec3, now: number): void {
     const displayed = this.poseAt(now)
     this.#glide = { from: displayed.target, to: target, start: now }

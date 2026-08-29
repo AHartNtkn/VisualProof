@@ -167,7 +167,7 @@ function animate(now: number): void {
   const motion = currentCamera.mode === 'free' && !freeActive
     ? NEUTRAL_MOTION
     : sampledMotion
-  const nextCamera = advanceCamera(currentCamera, motion, timing.movementSeconds)
+  const nextCamera = advanceCamera(currentCamera, motion, timing.movementSeconds, now)
   camera = nextCamera
   activeRenderer.setCamera(displayCameraPose(nextCamera, now))
   const rendered = activeRenderer.render(now)
@@ -288,16 +288,6 @@ async function startWorld(world: GameWorld): Promise<void> {
         activeInput.release()
         mirrorControls()
       },
-      pointerMove(clientX, clientY) {
-        const activeCamera = camera
-        if (activeCamera?.mode !== 'orbit') return
-        activeCamera.interaction.pointerMove(
-          clientX,
-          clientY,
-          worldHost.clientHeight,
-          performance.now(),
-        )
-      },
       pointerUp(_button, clientX, clientY) {
         const activeCamera = camera
         const activeRenderer = renderer
@@ -320,9 +310,6 @@ async function startWorld(world: GameWorld): Promise<void> {
       },
       pointerCancel() {
         if (camera?.mode === 'orbit') camera.interaction.cancelPointer()
-      },
-      wheel(deltaY) {
-        if (camera?.mode === 'orbit') camera.interaction.wheel(deltaY, performance.now())
       },
       escape() {
         if (camera?.mode !== 'orbit') return false

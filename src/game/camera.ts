@@ -18,6 +18,7 @@ export type CameraState =
       readonly mode: 'orbit'
       readonly treeId: string
       readonly freePose: CameraPose
+      readonly minimumRadius: number
       readonly interaction: OrbitInteraction
     }
 
@@ -25,6 +26,9 @@ const LOOK_RADIANS_PER_PIXEL = 0.002
 const FREE_SPEED = 8
 const SPRINT_MULTIPLIER = 3
 const MAX_PITCH = Math.PI / 2 - 0.01
+const ORBIT_RADIANS_PER_SECOND = 1.5
+const ORBIT_RADIUS_PER_SECOND = 12
+const ORBIT_HEIGHT_PER_SECOND = 8
 
 export function initialCameraState(
   pose: CameraPose,
@@ -36,8 +40,24 @@ export function advanceCamera(
   state: CameraState,
   motion: CameraMotion,
   dt: number,
+  now: number = performance.now(),
 ): CameraState {
-  if (state.mode === 'orbit') return state
+  if (state.mode === 'orbit') {
+    if (motion.strafe !== 0) {
+      state.interaction.rotateYaw(motion.strafe * ORBIT_RADIANS_PER_SECOND * dt, now)
+    }
+    if (motion.forward !== 0) {
+      state.interaction.changeHorizontalRadius(
+        -motion.forward * ORBIT_RADIUS_PER_SECOND * dt,
+        state.minimumRadius,
+        now,
+      )
+    }
+    if (motion.vertical !== 0) {
+      state.interaction.changeHeight(motion.vertical * ORBIT_HEIGHT_PER_SECOND * dt, now)
+    }
+    return state
+  }
 
   const yaw = state.pose.yaw - motion.lookX * LOOK_RADIANS_PER_PIXEL
   const pitch = Math.max(
@@ -78,6 +98,7 @@ export function enterOrbit(
   readonly mode: 'orbit'
   readonly treeId: string
   readonly freePose: CameraPose
+  readonly minimumRadius: number
   readonly interaction: OrbitInteraction
 } {
   const dx = state.pose.position.x - target.center.x
@@ -94,6 +115,7 @@ export function enterOrbit(
     mode: 'orbit',
     treeId: target.treeId,
     freePose: state.pose,
+    minimumRadius: target.radius + 1,
     interaction: new OrbitInteraction(pose),
   }
 }

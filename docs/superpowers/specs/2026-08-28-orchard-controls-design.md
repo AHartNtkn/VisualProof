@@ -129,8 +129,12 @@ that controller.
 
 The orchard supplies its current tree entities in local coordinates and the
 placement authority converts the selected semantic focus into world
-coordinates. The orchard does not define orbit rates, orbit geometry, focus
-behavior, or another orbit state shape.
+coordinates. It maps `A`/`D` to rotation at 1.5 radians per second, `W`/`S` to
+horizontal-radius changes at 12 units per second, and `Space`/`Control` to eye
+height changes at 8 units per second. Those inputs call the shared controller's
+camera operations; they do not create another pose or orbit-geometry authority.
+Mouse movement and the wheel do not alter the orchard orbit camera. Component
+focus and click classification remain shared.
 
 Free flight remains game-specific. Entering orbit stores the exact free pose.
 Leaving orbit restores it. The free pose is the only camera pose sent to

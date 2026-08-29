@@ -2,10 +2,8 @@ import type { CameraMotion } from '../src/game/camera'
 
 export type WorldInputActions = {
   readonly pointerDown: (button: number, clientX: number, clientY: number) => void
-  readonly pointerMove: (clientX: number, clientY: number) => void
   readonly pointerUp: (button: number, clientX: number, clientY: number) => void
   readonly pointerCancel: () => void
-  readonly wheel: (deltaY: number) => void
   readonly escape: () => boolean
   readonly engagementChanged: (active: boolean) => void
 }
@@ -62,7 +60,6 @@ export function attachWorldInput(
   }) as EventListener
   const up = ((event: KeyboardEvent): void => { held.delete(event.code) }) as EventListener
   const mouseMove = ((event: MouseEvent): void => {
-    if (gestureActive) actions.pointerMove(event.clientX, event.clientY)
     if (environment.document.pointerLockElement === target) {
       lookX += event.movementX
       lookY += event.movementY
@@ -79,7 +76,6 @@ export function attachWorldInput(
   }) as EventListener
   const wheel = ((event: WheelEvent): void => {
     event.preventDefault()
-    actions.wheel(event.deltaY)
   }) as EventListener
   const contextMenu = ((event: Event): void => { event.preventDefault() }) as EventListener
   const pointerLockChange = (): void => {

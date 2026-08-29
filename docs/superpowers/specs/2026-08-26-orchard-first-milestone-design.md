@@ -173,11 +173,13 @@ clears transient input without changing the saved pose or loaded world.
 
 An active primary click targets the center of the view and selects a hit tree.
 Selection stores the exact initiating free pose and enters the same 3D
-proof-tree interaction used by the assistant. That shared interaction owns
-orbit, pan, zoom, component focus, click classification, and focus glide. A
-stationary secondary release applies the orchard proof action to the selected
-branch without changing the camera or navigation mode; secondary movement
-remains the shared pan gesture.
+proof-tree interaction used by the assistant. That shared interaction owns the
+selected-tree camera pose, component focus, click classification, and focus
+glide. The orchard maps `A`/`D` to rotation, `W`/`S` to horizontal radius, and
+`Space`/`Control` to eye height through that controller. Mouse movement and the
+wheel do not move the selected-tree camera. A stationary secondary release
+applies the orchard proof action to the selected branch without changing the
+camera or navigation mode; a dragged mouse fires no click action.
 
 `Escape` in the shared tree interaction restores the exact stored free pose and
 requests free-flight engagement during that same physical key event. Successful

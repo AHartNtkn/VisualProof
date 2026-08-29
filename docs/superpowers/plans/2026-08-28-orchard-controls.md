@@ -419,13 +419,19 @@ git commit -m "refactor(view3d): extract orbit interaction authority"
 - Test: `tests/game/render/world.test.ts`
 
 **Interfaces:**
-- Changes: game orbit state contains the shared `OrbitInteraction`, owning tree ID, and exact saved free pose; it has no game-owned azimuth/distance/height rules.
+- Changes: game orbit state contains the shared `OrbitInteraction`, owning tree ID, exact saved free pose, and minimum radius; it has no second camera pose or game-owned orbit geometry.
 - Produces: renderer semantic picking through typed entities, shared `focusPoint`, and `localPointToWorld`.
 - Changes: input reports engagement changes and returns whether Escape was handled.
 
 - [ ] **Step 1: Replace wrong assertions with behavior RED**
 
-Remove game-owned keyboard orbit assertions. Add shared-orbit delegation and exact free-pose persistence tests. In native E2E: focus an off-center branch; exercise the existing orbit interaction; apply the proof action without camera change; press Escape; assert active free mode; immediately hold `W` without a click and assert movement.
+Add behavior tests for the established selected-tree controls: `A`/`D` rotate,
+`W`/`S` change horizontal radius, `Space`/`Control` change eye height, mouse
+movement and the wheel leave the camera unchanged, and all camera changes go
+through the shared interaction. Add exact free-pose persistence tests. In native
+E2E: exercise each control dimension, focus an off-center branch, apply the
+proof action without camera change, press Escape, assert active free mode, then
+immediately hold `W` without another click and assert movement.
 
 - [ ] **Step 2: Run RED**
 
@@ -438,7 +444,12 @@ Expected: failures at shared component focus and immediate post-Escape movement.
 
 - [ ] **Step 3: Replace game orbit with the shared interaction**
 
-Keep free-flight pose and movement. Define orbit as `{ treeId, freePose, interaction }`. Derive display pose from `interaction.poseAt(now)` and `eyeOf`. Persist `freePose`. Remove game orbit constants, azimuth/distance/height fields, keyboard orbit rules, and separate orbit eye math.
+Keep free-flight pose and movement. Define orbit as
+`{ treeId, freePose, minimumRadius, interaction }`. Derive display pose from
+`interaction.poseAt(now)` and `eyeOf`. Persist `freePose`. Keep the established
+keyboard rates as orchard input mapping, but route their pose changes through
+the shared interaction. Do not add game-owned azimuth/distance/height fields or
+separate orbit eye math.
 
 Seed the interaction from the exact free eye and selected target using the full spherical pose: distance from the complete 3D delta, yaw from its horizontal direction, and pitch from its vertical component. Prove that entering orbit does not change the displayed eye.
 
@@ -460,7 +471,10 @@ Add `engagementChanged(active: boolean)` to input actions. Emit it from `pointer
 
 Escape returns `true` only when leaving orbit. For handled Escape, prevent the default and request engagement during that physical key event. The engagement event activates free flight; rejection or a subsequent inactive event leaves it inactive. Free-mode Escape remains browser-owned.
 
-Route orbit pointer and wheel events through `OrbitInteraction`. A stationary secondary release invokes the existing proof action; a secondary drag retains shared pan behavior without firing the tool.
+Route stationary orbit releases through `OrbitInteraction` for shared click
+classification. A primary click focuses the selected component and a secondary
+click invokes the proof action. Mouse movement and wheel input do not alter the
+orchard orbit camera, and a drag fires neither click action.
 
 - [ ] **Step 5: Run GREEN and type-check**
 
@@ -491,7 +505,11 @@ git commit -m "fix(game): reuse shared orbit interaction"
 
 - [ ] **Step 1: Update ratified interaction text**
 
-State that selecting a tree enters the existing shared 3D proof-tree interaction; the orchard defines no separate orbit mechanics; Escape restores the exact free pose and resumes gameplay input during the same interaction. Describe secondary proof use as application composition beside shared interaction.
+State that selecting a tree uses the shared 3D proof-tree pose, focus, and click
+authorities; the orchard supplies its established keyboard mapping without a
+second pose or geometry model. State that Escape restores the exact free pose
+and resumes gameplay input during the same interaction. Describe secondary
+proof use as application composition beside shared interaction.
 
 - [ ] **Step 2: Add a behavioral ownership test**
 
@@ -526,7 +544,8 @@ Launch the ordinary development app, load `large-1`, and directly exercise:
 1. Engage free flight and move/look.
 2. Select `tree-0000`.
 3. Select an off-center branch and inspect completed focus.
-4. Exercise the existing orbit interaction.
+4. Exercise selected-tree rotation, horizontal radius, and eye height with the
+   keyboard; confirm mouse movement and wheel input do not move the camera.
 5. Apply the secondary proof action and confirm animation/save without camera change.
 6. Press Escape and immediately move/look without another click.
 7. Re-enter orbit and confirm the committed tree's current bounds and components are targetable.

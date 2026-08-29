@@ -35,18 +35,21 @@ shows only “Click to play.”
 
 A primary click while free flight is active selects the tree under the reticle
 and enters the same 3D proof-tree interaction used by the assistant. The
-orchard supplies the selected tree and its world placement; it defines no
-separate orbit, pan, zoom, component-focus, click-threshold, or focus-glide
-rules. `Escape` restores the exact pre-selection free-flight pose and requests
-free-flight input again during that same key interaction, so play resumes
-without another click when engagement succeeds.
+orchard supplies the selected tree, its world placement, and its control
+mapping. While a tree is selected, `A`/`D` rotate around it, `W`/`S` change the
+horizontal radius, and `Space`/`Control` change eye height. Mouse movement and
+the wheel do not move the selected-tree camera. The shared interaction remains
+the sole owner of the camera pose, component focus, click classification, and
+focus glide. `Escape` restores the exact pre-selection free-flight pose and
+requests free-flight input again during that same key interaction, so play
+resumes without another click when engagement succeeds.
 
 The secondary proof action is orchard application behavior composed beside the
 shared 3D interaction. A stationary secondary release applies the proof move to
-the selected branch; secondary movement remains the shared interaction's pan.
-The proof action does not change the camera or navigation mode. A successful
-move publishes one complete tree value to the live session and renderer and
-queues that same value for saving.
+the selected branch. A dragged mouse does not move the camera or fire either
+click action. The proof action does not change the camera or navigation mode. A
+successful move publishes one complete tree value to the live session and
+renderer and queues that same value for saving.
 
 Game camera state owns free/selected mode and the exact free-flight pose. The
 shared 3D interaction owns the selected-tree camera pose. The renderer owns
