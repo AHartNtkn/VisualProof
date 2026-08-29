@@ -12,13 +12,13 @@ No production defect was found and no production file was changed.
 
 ## Files
 
-- `game/e2e/order-loop.e2e.ts` — two-process native play/reload scenario using
+- `game/e2e/order-loop.e2e.ts` — three-process native play/reload/verify scenario using
   WebDriver pointer and keyboard actions plus read-only durable-state assertions.
 - `game/e2e/native.ts` — read-only order, reputation, and tree-ID inspection;
   shared database opening; canvas/tween evidence helpers.
 - `game/wdio.conf.ts` — registered the `order-loop` native scenario on port 4550.
 - `scripts/check-game-desktop.sh` — controls receives a private root; order-loop
-  play and reload receive a second shared private root in separate processes.
+  play, reload, and verify receive a second shared private root in separate processes.
 - `docs/orchard-game-design.md` — current two-tool, iteration/citation,
   duplication, catalog, player-chosen pot, persistence, and future-deiteration
   contract.
@@ -45,7 +45,7 @@ Extra Task 10 production files: none.
 4. A reload run exposed boundary sensitivity in test positioning. The reticle
    helper now stands seven horizontal units from a target while production reach
    remains authoritative.
-5. Final GREEN: controls, order-loop play, and order-loop reload all pass in
+5. Final GREEN: controls plus order-loop play, reload, and verify all pass in
    separate native processes; all seven stress scenarios pass.
 
 No test-only gameplay control, injected DOM event, page evaluation, fallback
@@ -64,12 +64,14 @@ The separate `reload` process loads the same private root and proves the accepte
 pot persisted. Through native controls it swaps with `1`, takes the source whole
 tree, duplicates onto ground, proves a fresh ID and preserved source, applies
 Double Cut, performs legal same-tree proper-subtree iteration, rejects the next
-proper subtree against the original tree while retaining it, clears it with
-`Escape`, rejects the mutated duplicate at the pot without changing order,
-reputation, tree IDs, or source, grows the exact theorem on the separate original,
+proper subtree against the original tree while retaining it, proves the same
+cutting remains usable by applying it legally to its source, then rejects the
+mutated duplicate at the pot without changing the complete order record,
+duplicate, reputation, tree IDs, or source, grows the exact theorem on the separate original,
 delivers a whole-tree citation, and proves Completed/reputation 1/null pot/source
-preservation. It then inspects the Completed catalog and reloads once more in the
-same process to prove the durable outcome. The script-level play and reload runs
+preservation. It then inspects the Completed catalog. A fresh `verify` process
+loads the same root through the production slot UI and proves the durable
+Completed/reputation 1/null pot/two-tree/source outcome. All three order-loop runs
 are separate native application processes sharing one private data root.
 
 Final wrapper result:
@@ -78,6 +80,7 @@ Final wrapper result:
 controls.e2e.ts: 1 passing (5.8s)
 order-loop play: 1 passing (1.4s)
 order-loop reload: 1 passing (12s)
+order-loop verify: 1 passing (0.5s)
 Spec Files: 1 passed in each process; wrapper exit 0
 ```
 
@@ -169,7 +172,8 @@ git diff --exit-code -- game/generated-saves
   no output; exit 0
 
 ./scripts/check-game-desktop.sh e2e
-  controls 1/1; order-loop play 1/1; order-loop reload 1/1; exit 0
+  controls 1/1; order-loop play 1/1; order-loop reload 1/1;
+  order-loop verify 1/1; exit 0
 
 ./scripts/check-game-desktop.sh stress
   10:    visible 10,  full 6,  reduced 4,   marker 0,  culled 0,    p95 18ms
@@ -214,3 +218,90 @@ The current design document now states:
   state around every primary and adjacent transition.
 - The automated deliverable is green. Completion of the direct native and direct
   browser requirements remains blocked by the two environment limitations above.
+
+## Fix Round 1
+
+### Findings and RED/GREEN evidence
+
+1. **Gameplay target authority.** RED: after the two delivery actions were
+   changed to use the intended view-derived target, the isolated reload process
+   failed with `ReferenceError: potInteractionPoint is not defined`. GREEN: the
+   reload process now captures `displayedPose()` immediately after loading,
+   normalizes its horizontal direction, projects exactly six units from the
+   displayed eye to the contract-defined pot center, and aims at the visible pot
+   interaction point 0.85 world units along x and y 0.55. A fresh play/reload
+   pair passed (1.3s/11.4s). `storedOrder` is used only after actions for
+   assertions and never supplies an interaction coordinate.
+2. **Retained proper-subtree identity.** RED: the scenario first called the
+   missing legal-retry step and reload failed with `ReferenceError:
+   retryRetainedProperSubtree is not defined` after the cross-tree refusal.
+   GREEN: the scenario uses the real reticle and secondary pointer action to
+   retry the still-held cutting on its source tree, observes `Iteration applied`,
+   waits for visible growth, proves the durable region count increased, and
+   proves the cutting cleared only after success. A fresh play/reload pair passed
+   (1.3s/12.5s).
+3. **Mismatch invariants.** RED: the new post-refusal comparisons initially
+   failed at `duplicateBeforeMismatch is not defined`, proving the scenario had
+   no before-state snapshot. GREEN: immediately before pickup/delivery it now
+   snapshots the mutated duplicate diagram and complete accepted order record,
+   including the pot. After the mismatch both objects compare equal; reputation,
+   tree IDs, and source checks remain. A fresh play/reload pair passed
+   (1.3s/12.4s).
+4. **Fresh persistence process.** RED: after registering the third wrapper
+   invocation, controls/play/reload passed and the new process failed with
+   `unknown order-loop phase 'verify'`. GREEN: `verify` starts a fresh native
+   application against the shared private root, loads the slot through the
+   visible production UI, and observes Completed/reputation 1/two logical trees
+   in root UI state and the Completed catalog. Read-only storage independently
+   proves completed/null pot/reputation 1/two IDs/preserved exact source shape.
+   The wrapper passed controls 5.7s, play 1.4s, reload 12.2s, verify 0.5s. Page
+   refresh is not used as persistence evidence.
+5. **Durable gesture contract.** RED: document review found a deferred bullet
+   that placed all 3D proof gestures outside the document despite the current
+   stationary-secondary gesture being authoritative above. Human-facing prose
+   does not receive a synthetic source-text test. GREEN: the deferred item now
+   applies only to later proof moves beyond the current implemented releases.
+
+### Round files and self-review
+
+- Modified: `game/e2e/order-loop.e2e.ts`, `scripts/check-game-desktop.sh`,
+  `docs/orchard-game-design.md`, and this report.
+- Production files and generated saves changed in this round: none.
+- The three phases share only the private production data root. Each is a
+  distinct WDIO/native application invocation; SQLite remains read-only evidence.
+- Actions remain WebDriver keyboard/pointer actions using the existing displayed
+  view and root UI contract. No DOM event injection, page evaluation, fallback
+  transport, gameplay diagnostic, or test-only authority was introduced.
+- Mutation check: a wrong six-unit placement, discarded cutting after rejection,
+  mismatch mutation, missing save, or same-process-only state would each fail a
+  scenario assertion or phase.
+- Direct native and browser blockers are unchanged from the dedicated sections
+  above; this round does not claim direct completion.
+
+### Round validation
+
+```text
+targeted play/reload pairs during findings 1-3
+  finding 1: play 1/1 (1.3s), reload 1/1 (11.4s)
+  finding 2: play 1/1 (1.3s), reload 1/1 (12.5s)
+  finding 3: play 1/1 (1.3s), reload 1/1 (12.4s)
+
+targeted verify against a completed shared-root save
+  1/1 passed (485ms)
+
+npm run typecheck
+  tsc --noEmit; exit 0
+
+npm test
+  194 files passed; 1432 tests passed; duration 100.60s; exit 0
+
+npm test -- --run tests/game/orders/placement.test.ts
+  tests/game/orders/session.test.ts tests/game/session.test.ts
+  tests/game/tools.test.ts tests/game/save-client.test.ts
+  tests/game/save-writer.test.ts
+  6 files passed; 69 tests passed; exit 0
+
+./scripts/check-game-desktop.sh e2e
+  controls 1/1 (5.8s); play 1/1 (1.4s); reload 1/1 (12.4s);
+  verify 1/1 (488ms); exit 0
+```

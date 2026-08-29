@@ -126,7 +126,8 @@ No runtime puzzle generation, ever — it has been investigated repeatedly and d
 
 These are decisions the session explicitly ruled must be made in situ, not in this document:
 
-- Gesture design for proof moves in 3D (starting from the 2D app's gestures where they transfer; some, like wire severing, will be redesigned entirely).
+- Gesture design for later proof moves beyond the current stationary secondary
+  releases (some, like wire severing, may require a distinct interaction).
 - The tool taxonomy: likely by building many overlapping candidate tools and keeping the covering subset that individually feels good. Constraint fixed now: the shipped tool set must be closed over the shipped catalog (every order solvable), and must cover the full calculus.
 - Per-tool vocabulary and tutorial text.
 - Per-domain interestingness criteria for the enumeration pipelines.
