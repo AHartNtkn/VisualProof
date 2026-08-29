@@ -1,3 +1,4 @@
+import * as THREE from 'three'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const host = vi.hoisted(() => {
@@ -232,11 +233,16 @@ function pointCameraAtBranch(world: ReturnType<typeof mountGameWorld>, tree: Gam
   const branch = scene3(tree.diagram).entities[0]!
   if (!('pts' in branch)) throw new Error('expected a branch')
   const point = branch.pts[0]!
+  const group = new THREE.Object3D()
+  group.position.set(tree.placement.x, 0, tree.placement.z)
+  group.rotation.y = tree.placement.yaw
+  group.updateMatrixWorld(true)
+  const worldPoint = new THREE.Vector3(point.x, point.y, point.z).applyMatrix4(group.matrixWorld)
   world.setCamera({
     eye: {
-      x: tree.placement.x + point.x,
-      y: point.y,
-      z: tree.placement.z + point.z + 20,
+      x: worldPoint.x,
+      y: worldPoint.y,
+      z: worldPoint.z + 20,
     },
     forward: { x: 0, y: 0, z: -1 },
   })
@@ -335,6 +341,28 @@ describe('production game world', () => {
     world.dispose()
   })
 
+  it('uses the rendered placement transform for a rotated logical target', () => {
+    const tree = targetTree('shared-transform', 17, -11, Math.PI / 3)
+    const transform = new THREE.Object3D()
+    transform.position.set(17, 0, -11)
+    transform.rotation.y = Math.PI / 3
+    transform.updateMatrixWorld(true)
+    const center = new THREE.Vector3(3, 2, 4).applyMatrix4(transform.matrixWorld)
+    const world = mountGameWorld(container(), [tree])
+    world.setCamera({
+      eye: { x: center.x, y: center.y, z: center.z + 20 },
+      forward: { x: 0, y: 0, z: -1 },
+    })
+
+    const pointed = world.pickTree(0, 0)
+    expect(pointed).toMatchObject({ treeId: tree.id, radius: 5 })
+    expect(pointed!.center.x).toBeCloseTo(center.x)
+    expect(pointed!.center.y).toBeCloseTo(center.y)
+    expect(pointed!.center.z).toBeCloseTo(center.z)
+
+    world.dispose()
+  })
+
   it('returns null when the ray misses every logical tree', () => {
     const world = mountGameWorld(container(), [targetTree('only', 10, -20, Math.PI / 2)])
     world.setCamera({ eye: { x: 14, y: 2, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
@@ -371,6 +399,19 @@ describe('production game world', () => {
     expect(world.pointAtBranch(0, 0, 'orbit')).toMatchObject({
       treeId: 'orbit',
       entity: { kind: 'branch', key: 'b:r0', region: 'r0' },
+    })
+    world.dispose()
+  })
+
+  it('points a branch through the same rotated placement used for rendering', () => {
+    const orbit = blankTree('rotated-orbit', 17, -11)
+    const rotated = { ...orbit, placement: { ...orbit.placement, yaw: Math.PI / 3 } }
+    const world = mountGameWorld(container(), [rotated])
+    pointCameraAtBranch(world, rotated)
+
+    expect(world.pointAtBranch(0, 0, rotated.id)).toMatchObject({
+      treeId: rotated.id,
+      entity: { kind: 'branch', region: rotated.diagram.root },
     })
     world.dispose()
   })

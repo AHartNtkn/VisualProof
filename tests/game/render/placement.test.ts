@@ -1,5 +1,22 @@
+import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { orchardPlacements } from '../../../src/game/render/placement'
+import {
+  applyPlacement,
+  localPointToWorld,
+  orchardPlacements,
+  worldDirectionToLocal,
+  worldPointToLocal,
+  worldSphere,
+  type TreePlacement,
+} from '../../../src/game/render/placement'
+
+const placement: TreePlacement = {
+  id: 'tree-transform',
+  index: 7,
+  x: 17,
+  z: -11,
+  yaw: Math.PI / 3,
+}
 
 describe('orchardPlacements', () => {
   it('lays out stable tree records progressively from the world center', () => {
@@ -41,5 +58,50 @@ describe('orchardPlacements', () => {
     expect(() => orchardPlacements(-1, 10)).toThrow('non-negative integer')
     expect(() => orchardPlacements(1.5, 10)).toThrow('non-negative integer')
     expect(() => orchardPlacements(Number.POSITIVE_INFINITY, 10)).toThrow('non-negative integer')
+  })
+})
+
+describe('tree placement transform', () => {
+  it('round-trips points through the same positive-Y rotation used by rendered objects', () => {
+    const local = { x: 2, y: 4, z: -3 }
+    const world = localPointToWorld(local, placement)
+
+    const roundTripped = worldPointToLocal(world, placement)
+    expect(roundTripped.x).toBeCloseTo(local.x)
+    expect(roundTripped.y).toBeCloseTo(local.y)
+    expect(roundTripped.z).toBeCloseTo(local.z)
+
+    const object = new THREE.Object3D()
+    applyPlacement(object, placement)
+    object.updateMatrixWorld(true)
+    const rendered = new THREE.Vector3(local.x, local.y, local.z).applyMatrix4(object.matrixWorld)
+    expect(world.x).toBeCloseTo(rendered.x)
+    expect(world.y).toBeCloseTo(rendered.y)
+    expect(world.z).toBeCloseTo(rendered.z)
+  })
+
+  it('transforms directions and spheres without translating direction or changing radius', () => {
+    const localDirection = { x: 2, y: -1, z: -3 }
+    const localBounds = { center: { x: 2, y: 4, z: -3 }, radius: 6 }
+    const sphere = worldSphere(localBounds, placement)
+    const expectedCenter = localPointToWorld(localBounds.center, placement)
+    const worldDirection = new THREE.Vector3(
+      localDirection.x,
+      localDirection.y,
+      localDirection.z,
+    ).applyAxisAngle(new THREE.Vector3(0, 1, 0), placement.yaw)
+
+    const roundTripped = worldDirectionToLocal({
+      x: worldDirection.x,
+      y: worldDirection.y,
+      z: worldDirection.z,
+    }, placement)
+    expect(roundTripped.x).toBeCloseTo(localDirection.x)
+    expect(roundTripped.y).toBeCloseTo(localDirection.y)
+    expect(roundTripped.z).toBeCloseTo(localDirection.z)
+    expect(sphere.center.x).toBeCloseTo(expectedCenter.x)
+    expect(sphere.center.y).toBeCloseTo(expectedCenter.y)
+    expect(sphere.center.z).toBeCloseTo(expectedCenter.z)
+    expect(sphere.radius).toBe(6)
   })
 })

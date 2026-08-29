@@ -1,9 +1,60 @@
+import * as THREE from 'three'
+import type { Vec3 } from '../../view3d/vec3'
+
 export type TreePlacement = {
   readonly id: string
   readonly index: number
   readonly x: number
   readonly z: number
   readonly yaw: number
+}
+
+export function localPointToWorld(point: Vec3, placement: TreePlacement): Vec3 {
+  const cosine = Math.cos(placement.yaw)
+  const sine = Math.sin(placement.yaw)
+  return {
+    x: placement.x + point.x * cosine + point.z * sine,
+    y: point.y,
+    z: placement.z - point.x * sine + point.z * cosine,
+  }
+}
+
+export function worldPointToLocal(point: Vec3, placement: TreePlacement): Vec3 {
+  const cosine = Math.cos(placement.yaw)
+  const sine = Math.sin(placement.yaw)
+  const x = point.x - placement.x
+  const z = point.z - placement.z
+  return {
+    x: x * cosine - z * sine,
+    y: point.y,
+    z: x * sine + z * cosine,
+  }
+}
+
+export function worldDirectionToLocal(direction: Vec3, placement: TreePlacement): Vec3 {
+  const cosine = Math.cos(placement.yaw)
+  const sine = Math.sin(placement.yaw)
+  return {
+    x: direction.x * cosine - direction.z * sine,
+    y: direction.y,
+    z: direction.x * sine + direction.z * cosine,
+  }
+}
+
+export function worldSphere(
+  bounds: { readonly center: Vec3; readonly radius: number },
+  placement: TreePlacement,
+): THREE.Sphere {
+  const center = localPointToWorld(bounds.center, placement)
+  return new THREE.Sphere(
+    new THREE.Vector3(center.x, center.y, center.z),
+    bounds.radius,
+  )
+}
+
+export function applyPlacement(object: THREE.Object3D, placement: TreePlacement): void {
+  object.position.set(placement.x, 0, placement.z)
+  object.rotation.set(0, placement.yaw, 0)
 }
 
 export function orchardPlacements(count: number, spacing: number): TreePlacement[] {

@@ -7,7 +7,12 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import type { Entity } from '../../view3d/scene'
 import type { FadedEntity } from '../../view3d/transition'
 import type { LodLevel } from './lod-policy'
-import type { TreePlacement } from './placement'
+import {
+  applyPlacement,
+  worldDirectionToLocal,
+  worldPointToLocal,
+  type TreePlacement,
+} from './placement'
 import type { TreeLodAssets, TreeRenderAsset } from './types'
 import type { PointedTreePart } from '../session'
 
@@ -90,20 +95,10 @@ export function pointAtTreeAssets(
 
   for (const { treeId, placement, asset } of candidates) {
     if (orbitTarget !== null && treeId !== orbitTarget) continue
-    const cosine = Math.cos(placement.yaw)
-    const sine = Math.sin(placement.yaw)
-    const originX = ray.origin.x - placement.x
-    const originZ = ray.origin.z - placement.z
-    localRay.origin.set(
-      originX * cosine - originZ * sine,
-      ray.origin.y,
-      originX * sine + originZ * cosine,
-    )
-    localRay.direction.set(
-      ray.direction.x * cosine - ray.direction.z * sine,
-      ray.direction.y,
-      ray.direction.x * sine + ray.direction.z * cosine,
-    )
+    const origin = worldPointToLocal(ray.origin, placement)
+    const direction = worldDirectionToLocal(ray.direction, placement)
+    localRay.origin.set(origin.x, origin.y, origin.z)
+    localRay.direction.set(direction.x, direction.y, direction.z)
     boundsPoint.set(asset.bounds.center.x, asset.bounds.center.y, asset.bounds.center.z)
     localRay.closestPointToPoint(boundsPoint, onRay)
     if (onRay.distanceToSquared(boundsPoint) > asset.bounds.radius * asset.bounds.radius) continue
@@ -150,8 +145,7 @@ function treeGroup(
 ): THREE.Group {
   const group = new THREE.Group()
   group.name = placement.id
-  group.position.set(placement.x, 0, placement.z)
-  group.rotation.y = placement.yaw
+  applyPlacement(group, placement)
   group.userData['treeId'] = placement.id
   group.userData['treeIndex'] = placement.index
   group.userData['representation'] = representation

@@ -12,6 +12,7 @@ import type { PointedTreePart } from '../session'
 import { DARK } from '../../view/paint'
 import { TreeRenderAssetCache } from './assets'
 import { mountGlowRenderer } from './glow-render'
+import { localPointToWorld, worldSphere } from './placement'
 import {
   GameTreeRuntime,
   GameWorldLifecycle,
@@ -156,18 +157,11 @@ export function mountGameWorld(
     for (const tree of rendered) {
       const asset = assetsByJson.get(tree.diagramJson)
       if (asset === undefined) throw new Error('tree render asset was not registered')
-      const local = asset.bounds.center
-      const cosine = Math.cos(tree.placement.yaw)
-      const sine = Math.sin(tree.placement.yaw)
-      const center = {
-        x: tree.placement.x + local.x * cosine + local.z * sine,
-        y: local.y,
-        z: tree.placement.z - local.x * sine + local.z * cosine,
-      }
+      const center = localPointToWorld(asset.bounds.center, tree.placement)
       const target = { treeId: tree.id, center, radius: asset.bounds.radius }
       logicalTreeTargets.set(tree.id, {
         target,
-        sphere: new THREE.Sphere(new THREE.Vector3(center.x, center.y, center.z), target.radius),
+        sphere: worldSphere(asset.bounds, tree.placement),
       })
     }
     runtime.setTrees(rendered)

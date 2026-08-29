@@ -7,7 +7,11 @@ import { GlowTilePlan, type DirtyGlowTile } from './glow-tiles'
 import { projectedDiameterPx, selectLod, type LodLevel } from './lod-policy'
 import { SpatialIndex } from './spatial-index'
 import { disposeTreeObject, type TreeMaterialSource } from './tree-objects'
-import type { TreePlacement } from './placement'
+import {
+  applyPlacement as applyTreePlacement,
+  worldSphere,
+  type TreePlacement,
+} from './placement'
 import type { TreeLodAssets, TreeRenderAsset } from './types'
 
 const MAX_REPRESENTATION_OPERATIONS = 12
@@ -137,18 +141,6 @@ export type TreeRuntimeSnapshot = {
   readonly buildMs: number
   readonly error: string | null
   readonly failureCount: number
-}
-
-function treeWorldSphere(tree: RenderTree, asset: TreeRenderAsset): THREE.Sphere {
-  const center = new THREE.Vector3(
-    asset.bounds.center.x,
-    asset.bounds.center.y,
-    asset.bounds.center.z,
-  )
-  center.applyAxisAngle(new THREE.Vector3(0, 1, 0), tree.placement.yaw)
-  center.x += tree.placement.x
-  center.z += tree.placement.z
-  return new THREE.Sphere(center, asset.bounds.radius)
 }
 
 function objectCardinality(object: THREE.Group): {
@@ -460,7 +452,7 @@ export class GameTreeRuntime implements GameTreeRuntimeApi {
     const state: TreeRenderState = {
       tree,
       asset,
-      sphere: treeWorldSphere(tree, asset),
+      sphere: worldSphere(asset.bounds, tree.placement),
       desired,
       resident: 'culled',
       object: null,
@@ -493,7 +485,7 @@ export class GameTreeRuntime implements GameTreeRuntimeApi {
 
     state.tree = tree
     state.asset = asset
-    state.sphere = treeWorldSphere(tree, asset)
+    state.sphere = worldSphere(asset.bounds, tree.placement)
     this.clearFailure(state)
     this.indexState(state)
     this.setGlow(state)
@@ -676,8 +668,7 @@ export class GameTreeRuntime implements GameTreeRuntimeApi {
   }
 
   private applyPlacement(object: THREE.Group, tree: RenderTree): void {
-    object.position.set(tree.placement.x, 0, tree.placement.z)
-    object.rotation.y = tree.placement.yaw
+    applyTreePlacement(object, tree.placement)
     object.userData['treeId'] = tree.id
     object.userData['treeIndex'] = tree.placement.index
     object.traverse((child) => {

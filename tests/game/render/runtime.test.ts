@@ -217,6 +217,36 @@ describe('game tree runtime', () => {
     expect(runtime.snapshot()).toMatchObject({ visible: 1, full: 1, resident: 1 })
   })
 
+  it('places runtime bounds and rendered geometry with the same transform', () => {
+    const localCenter = { x: 2, y: 4, z: -3 }
+    const placement = tree('shared-transform', 17, -11, 'offset', Math.PI / 3, 7)
+    const runtime = new GameTreeRuntime(
+      resolve({ offset: asset(localCenter, 4, 0.1) }),
+      new THREE.Group(),
+      buildObject,
+    )
+    runtime.setMode('raw')
+    runtime.setTrees([placement])
+    settle(runtime)
+    const object = runtime.residentObjects(placement.id)[0]!
+    object.updateMatrixWorld(true)
+    const renderedCenter = new THREE.Vector3(
+      localCenter.x,
+      localCenter.y,
+      localCenter.z,
+    ).applyMatrix4(object.matrixWorld)
+
+    const candidates = runtime.interactionTrees(
+      new THREE.Ray(
+        new THREE.Vector3(renderedCenter.x, renderedCenter.y, renderedCenter.z + 5),
+        new THREE.Vector3(0, 0, -1),
+      ),
+      10,
+    )
+
+    expect(candidates.map(({ id }) => id)).toEqual([placement.id])
+  })
+
   it('makes removal authoritative immediately and settles without a representation', () => {
     const runtime = new GameTreeRuntime(resolve({ a: asset() }), new THREE.Group(), buildObject)
     runtime.setMode('raw')
