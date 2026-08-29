@@ -112,6 +112,55 @@ describe('save client transports', () => {
       .rejects.toThrow('create state orders must match the authored order catalog')
   })
 
+  // These fail if malformed current-order creation state reaches any selected transport.
+  it.each([
+    {
+      name: 'a negative reputation',
+      state: { ...createState, reputation: -1 },
+      error: 'create state.reputation must be a nonnegative safe integer',
+    },
+    {
+      name: 'an unsafe reputation',
+      state: { ...createState, reputation: Number.MAX_SAFE_INTEGER + 1 },
+      error: 'create state.reputation must be a nonnegative safe integer',
+    },
+    {
+      name: 'an accepted order without a pot',
+      state: {
+        ...createState,
+        orders: [{ orderId: 'starter-double-cut', state: 'accepted', pot: null }],
+      },
+      error: "create state order 'starter-double-cut' accepted state requires a pot",
+    },
+    {
+      name: 'a pending order with a pot',
+      state: {
+        ...createState,
+        orders: [{ orderId: 'starter-double-cut', state: 'pending', pot: { x: 2, z: -4, yaw: 0.25 } }],
+      },
+      error: "create state order 'starter-double-cut' pending state requires a null pot",
+    },
+    {
+      name: 'a non-finite accepted pot coordinate',
+      state: {
+        ...createState,
+        orders: [{ orderId: 'starter-double-cut', state: 'accepted', pot: { x: Number.NaN, z: -4, yaw: 0.25 } }],
+      },
+      error: "create state order 'starter-double-cut'.pot.x must be a finite number",
+    },
+  ])('rejects $name before transport', async ({ state, error }) => {
+    let requestCount = 0
+    const client = createSaveClient({
+      async request() {
+        requestCount += 1
+        throw new Error('transport was called')
+      },
+    })
+
+    await expect(client.create(state as unknown as CreateSlotState)).rejects.toThrow(error)
+    expect(requestCount).toBe(0)
+  })
+
   it('emits order records in authored order with state-specific pots', () => {
     const progress: OrderProgress = {
       reputation: 3,
@@ -141,7 +190,20 @@ describe('save client transports', () => {
     await expect(client.acceptOrder('slot-a', 'starter-double-cut', { x: 2, z: -4, yaw: 0.25 }))
       .rejects.toThrow('accepted order response must be null')
     await expect(client.completeOrder('slot-a', 'starter-double-cut', 1))
-      .rejects.toThrow('completed order reputation must be a safe integer')
+      .rejects.toThrow('completed order reputation must be a nonnegative safe integer')
+  })
+
+  // This fails if a negative reputation returned by completion reaches the game.
+  it('rejects a negative completed-order reputation response', async () => {
+    const client = createSaveClient({
+      async request(operation) {
+        if (operation === 'complete-order') return -1
+        throw new Error(`unexpected operation ${operation}`)
+      },
+    })
+
+    await expect(client.completeOrder('slot-a', 'starter-double-cut', 1))
+      .rejects.toThrow('completed order reputation must be a nonnegative safe integer')
   })
 
   // This fails if an HTTP error is swallowed or another transport is attempted.
