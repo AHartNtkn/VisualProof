@@ -13,9 +13,11 @@ import {
   type CameraState,
 } from '../src/game/camera'
 import type { GameWorld } from '../src/game/model'
+import { ORDER_CATALOG } from '../src/game/orders/catalog'
+import { initialOrderProgress } from '../src/game/orders/session'
 import { SettledFrameTelemetry, frameTiming, percentile } from '../src/game/render/frame'
 import { mountGameWorld, type GameWorldRenderer } from '../src/game/render/world'
-import { saveClient, treeUpdateFromGameTree, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
+import { orderRecordsFromProgress, saveClient, treeUpdateFromGameTree, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
 import { SaveWriter } from '../src/game/save-writer'
 import { gameSession, publishTreeMutation, type GameSession } from '../src/game/session'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
@@ -379,7 +381,13 @@ createForm.addEventListener('submit', (event) => {
     return
   }
   clearError()
-  startOpening(() => saveClient.create(displayName, initialCameraRecord, [initialTree]).then((created) => saveClient.load(created.slotId)))
+  startOpening(() => saveClient.create({
+    displayName,
+    camera: initialCameraRecord,
+    trees: [initialTree],
+    reputation: 0,
+    orders: orderRecordsFromProgress(initialOrderProgress(ORDER_CATALOG)),
+  }).then((created) => saveClient.load(created.slotId)))
 })
 saveRetry.addEventListener('click', () => writer?.retry())
 

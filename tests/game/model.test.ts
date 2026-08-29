@@ -24,6 +24,8 @@ function slotWire(overrides: Record<string, unknown> = {}) {
     camera: { x: 0, y: 1.7, z: 82, yaw: 0, pitch: -0.04 },
     trees: [treeWire('a', 7)],
     diagrams: [{ diagramKey: 7, diagramJson }],
+    reputation: 0,
+    orders: [{ orderId: 'starter-double-cut', state: 'pending', pot: null }],
     ...overrides,
   }
 }
@@ -50,6 +52,10 @@ describe('loaded game slot decoding', () => {
     expect(loaded).toMatchObject({
       slot: { id: 'large-1', name: 'Large Tree', updatedAtMs: 0 },
       camera: { position: { x: 0, y: 1.7, z: 82 }, yaw: 0, pitch: -0.04 },
+    })
+    expect(loaded.progress).toEqual({
+      reputation: 0,
+      orders: new Map([['starter-double-cut', { kind: 'pending' }]]),
     })
   })
 
@@ -82,6 +88,52 @@ describe('loaded game slot decoding', () => {
       .toThrow('loaded slot.updatedAtMs must be a safe integer')
     expect(() => decodeLoadedSlot(slotWire({ trees: 'not an array' })))
       .toThrow('loaded slot.trees must be an array')
+  })
+
+  it('rejects any saved order set that differs from the authored catalog', () => {
+    expect(() => decodeLoadedSlot(slotWire({ orders: [] })))
+      .toThrow('loaded slot.orders must match the authored order catalog')
+    expect(() => decodeLoadedSlot(slotWire({
+      orders: [{ orderId: 'not-authored', state: 'pending', pot: null }],
+    }))).toThrow('loaded slot.orders must match the authored order catalog')
+  })
+
+  it('rejects invalid order reputation and state-specific wire data', () => {
+    expect(() => decodeLoadedSlot(slotWire({ reputation: -1 })))
+      .toThrow('loaded slot.reputation must be a nonnegative safe integer')
+    expect(() => decodeLoadedSlot(slotWire({ reputation: Number.MAX_SAFE_INTEGER + 1 })))
+      .toThrow('loaded slot.reputation must be a nonnegative safe integer')
+    expect(() => decodeLoadedSlot(slotWire({
+      orders: [{ orderId: 'starter-double-cut', state: 'accepted', pot: null }],
+    }))).toThrow("order 'starter-double-cut'.pot must be an object")
+    expect(() => decodeLoadedSlot(slotWire({
+      orders: [{
+        orderId: 'starter-double-cut', state: 'accepted',
+        pot: { x: Number.NaN, z: -4, yaw: 0.25 },
+      }],
+    }))).toThrow("order 'starter-double-cut'.pot.x must be a finite number")
+    expect(() => decodeLoadedSlot(slotWire({
+      orders: [{ orderId: 'starter-double-cut', state: 'pending', pot: { x: 2, z: -4, yaw: 0.25 } }],
+    }))).toThrow("order 'starter-double-cut' pending state requires a null pot")
+    expect(() => decodeLoadedSlot(slotWire({
+      orders: [{ orderId: 'starter-double-cut', state: 'completed', pot: { x: 2, z: -4, yaw: 0.25 } }],
+    }))).toThrow("order 'starter-double-cut' completed state requires a null pot")
+    expect(() => decodeLoadedSlot(slotWire({
+      orders: [{ orderId: 'starter-double-cut', state: 'pending', pot: null, reward: 1 }],
+    }))).toThrow("order has unknown field 'reward'")
+  })
+
+  it('decodes an accepted saved order with its finite pot placement', () => {
+    const world = decodeLoadedSlot(slotWire({
+      orders: [{
+        orderId: 'starter-double-cut', state: 'accepted',
+        pot: { x: 2, z: -4, yaw: 0.25 },
+      }],
+    }))
+
+    expect(world.progress.orders.get('starter-double-cut')).toEqual({
+      kind: 'accepted', pot: { x: 2, z: -4, yaw: 0.25 },
+    })
   })
 })
 

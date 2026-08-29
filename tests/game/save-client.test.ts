@@ -2,17 +2,27 @@ import { describe, expect, it } from 'vitest'
 import {
   createSaveClient,
   httpSaveTransport,
+  orderRecordsFromProgress,
   selectSaveTransport,
   type CameraRecord,
+  type CreateSlotState,
+  type OrderRecordWire,
   type SaveOperation,
   type SaveTransport,
   type TreeUpdate,
 } from '../../src/game/save-client'
+import type { OrderProgress } from '../../src/game/orders/catalog'
 
 const diagramJson = '{"root":"r0","regions":{"r0":{"kind":"sheet"}},"nodes":{},"wires":{}}'
 
 const camera: CameraRecord = { x: 1, y: 1.7, z: 8, yaw: 0.2, pitch: -0.18 }
 const tree: TreeUpdate = { treeId: 'tree-a', diagramJson, x: 3, z: 4, yaw: 0.6 }
+const initialOrders: readonly OrderRecordWire[] = [
+  { orderId: 'starter-double-cut', state: 'pending', pot: null },
+]
+const createState: CreateSlotState = {
+  displayName: 'Second orchard', camera, trees: [tree], reputation: 0, orders: initialOrders,
+}
 
 const loadedSlot = {
   slotId: 'slot-a',
@@ -21,6 +31,8 @@ const loadedSlot = {
   camera,
   trees: [{ treeId: 'tree-a', diagramKey: 7, x: 3, z: 4, yaw: 0.6 }],
   diagrams: [{ diagramKey: 7, diagramJson }],
+  reputation: 0,
+  orders: initialOrders,
 }
 
 type RecordedRequest = {
@@ -45,7 +57,11 @@ describe('save client transports', () => {
           case 'create': return { slotId: 'slot-b', displayName: 'Second orchard', updatedAtMs: 25, error: null }
           case 'load': return loadedSlot
           case 'update-tree': return 9
+          case 'insert-tree': return 10
           case 'update-camera': return null
+          case 'accept-order': return null
+          case 'abandon-order': return null
+          case 'complete-order': return 1
         }
       },
     }
@@ -54,7 +70,7 @@ describe('save client transports', () => {
     await expect(client.list()).resolves.toEqual([
       { slotId: 'slot-a', displayName: 'First orchard', updatedAtMs: 24, error: null },
     ])
-    await expect(client.create('Second orchard', camera, [tree])).resolves.toEqual({
+    await expect(client.create(createState)).resolves.toEqual({
       slotId: 'slot-b', displayName: 'Second orchard', updatedAtMs: 25, error: null,
     })
     const world = await client.load('slot-a')
@@ -62,15 +78,70 @@ describe('save client transports', () => {
     expect(world.camera).toEqual({ position: { x: 1, y: 1.7, z: 8 }, yaw: 0.2, pitch: -0.18 })
     expect(world.trees.get('tree-a')?.placement).toEqual({ x: 3, z: 4, yaw: 0.6 })
     await expect(client.updateTree('slot-a', tree)).resolves.toBe(9)
+    await expect(client.insertTree('slot-a', tree)).resolves.toBe(10)
     await expect(client.updateCamera('slot-a', camera)).resolves.toBeUndefined()
+    await expect(client.acceptOrder('slot-a', 'starter-double-cut', { x: 2, z: -4, yaw: 0.25 }))
+      .resolves.toBeUndefined()
+    await expect(client.abandonOrder('slot-a', 'starter-double-cut')).resolves.toBeUndefined()
+    await expect(client.completeOrder('slot-a', 'starter-double-cut', 1)).resolves.toBe(1)
 
     expect(requests).toEqual([
       { operation: 'list', input: {} },
-      { operation: 'create', input: { displayName: 'Second orchard', camera, trees: [tree] } },
+      { operation: 'create', input: createState },
       { operation: 'load', input: { slotId: 'slot-a' } },
       { operation: 'update-tree', input: { slotId: 'slot-a', update: tree } },
+      { operation: 'insert-tree', input: { slotId: 'slot-a', update: tree } },
       { operation: 'update-camera', input: { slotId: 'slot-a', camera } },
+      { operation: 'accept-order', input: { slotId: 'slot-a', orderId: 'starter-double-cut', pot: { x: 2, z: -4, yaw: 0.25 } } },
+      { operation: 'abandon-order', input: { slotId: 'slot-a', orderId: 'starter-double-cut' } },
+      { operation: 'complete-order', input: { slotId: 'slot-a', orderId: 'starter-double-cut', reward: 1 } },
     ])
+  })
+
+  // This fails if creation sends any order set other than the authored catalog.
+  it('rejects creation progress with a non-catalog order set before transport', async () => {
+    const transport: SaveTransport = { request: async () => { throw new Error('transport was called') } }
+    const client = createSaveClient(transport)
+    const progress: OrderProgress = {
+      reputation: 0,
+      orders: new Map([['unknown-order', { kind: 'pending' }]]),
+    }
+
+    expect(() => orderRecordsFromProgress(progress)).toThrow('progress orders must match the authored order catalog')
+    await expect(client.create({ ...createState, orders: [{ orderId: 'unknown-order', state: 'pending', pot: null }] }))
+      .rejects.toThrow('create state orders must match the authored order catalog')
+  })
+
+  it('emits order records in authored order with state-specific pots', () => {
+    const progress: OrderProgress = {
+      reputation: 3,
+      orders: new Map([['starter-double-cut', { kind: 'completed' }]]),
+    }
+
+    expect(orderRecordsFromProgress(progress)).toEqual([
+      { orderId: 'starter-double-cut', state: 'completed', pot: null },
+    ])
+  })
+
+  // This fails if a Rust operation response reaches game state without matching its wire type.
+  it('rejects malformed order-operation and revision responses', async () => {
+    const transport: SaveTransport = {
+      async request(operation) {
+        switch (operation) {
+          case 'insert-tree': return 'not a revision'
+          case 'accept-order': return { accepted: true }
+          case 'complete-order': return Number.NaN
+          default: throw new Error(`unexpected operation ${operation}`)
+        }
+      },
+    }
+    const client = createSaveClient(transport)
+
+    await expect(client.insertTree('slot-a', tree)).rejects.toThrow('inserted tree revision must be a safe integer')
+    await expect(client.acceptOrder('slot-a', 'starter-double-cut', { x: 2, z: -4, yaw: 0.25 }))
+      .rejects.toThrow('accepted order response must be null')
+    await expect(client.completeOrder('slot-a', 'starter-double-cut', 1))
+      .rejects.toThrow('completed order reputation must be a safe integer')
   })
 
   // This fails if an HTTP error is swallowed or another transport is attempted.
@@ -163,7 +234,11 @@ describe('save client transports', () => {
         },
         '/__orchard_playtest/save/load': loadedSlot,
         '/__orchard_playtest/save/update-tree': 9,
+        '/__orchard_playtest/save/insert-tree': 10,
         '/__orchard_playtest/save/update-camera': null,
+        '/__orchard_playtest/save/accept-order': null,
+        '/__orchard_playtest/save/abandon-order': null,
+        '/__orchard_playtest/save/complete-order': 1,
       }
       return new Response(JSON.stringify(responses[new URL(request.url).pathname]), {
         status: 200,
@@ -179,7 +254,7 @@ describe('save client transports', () => {
     await expect(client.list()).resolves.toEqual([
       { slotId: 'slot-a', displayName: 'First orchard', updatedAtMs: 24, error: null },
     ])
-    await expect(client.create('Second orchard', camera, [tree])).resolves.toEqual({
+    await expect(client.create(createState)).resolves.toEqual({
       slotId: 'slot-b', displayName: 'Second orchard', updatedAtMs: 25, error: null,
     })
     const world = await client.load('slot-a')
@@ -187,7 +262,12 @@ describe('save client transports', () => {
     expect(world.camera).toEqual({ position: { x: 1, y: 1.7, z: 8 }, yaw: 0.2, pitch: -0.18 })
     expect(world.trees.get('tree-a')?.placement).toEqual({ x: 3, z: 4, yaw: 0.6 })
     await expect(client.updateTree('slot-a', tree)).resolves.toBe(9)
+    await expect(client.insertTree('slot-a', tree)).resolves.toBe(10)
     await expect(client.updateCamera('slot-a', camera)).resolves.toBeUndefined()
+    await expect(client.acceptOrder('slot-a', 'starter-double-cut', { x: 2, z: -4, yaw: 0.25 }))
+      .resolves.toBeUndefined()
+    await expect(client.abandonOrder('slot-a', 'starter-double-cut')).resolves.toBeUndefined()
+    await expect(client.completeOrder('slot-a', 'starter-double-cut', 1)).resolves.toBe(1)
 
     expect(requests.map(({ url, init }) => ({
       url,
@@ -205,7 +285,7 @@ describe('save client transports', () => {
         url: 'http://127.0.0.1:1421/__orchard_playtest/save/create',
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
-        body: '{"displayName":"Second orchard","camera":{"x":1,"y":1.7,"z":8,"yaw":0.2,"pitch":-0.18},"trees":[{"treeId":"tree-a","diagramJson":"{\\"root\\":\\"r0\\",\\"regions\\":{\\"r0\\":{\\"kind\\":\\"sheet\\"}},\\"nodes\\":{},\\"wires\\":{}}","x":3,"z":4,"yaw":0.6}]}',
+        body: '{"displayName":"Second orchard","camera":{"x":1,"y":1.7,"z":8,"yaw":0.2,"pitch":-0.18},"trees":[{"treeId":"tree-a","diagramJson":"{\\"root\\":\\"r0\\",\\"regions\\":{\\"r0\\":{\\"kind\\":\\"sheet\\"}},\\"nodes\\":{},\\"wires\\":{}}","x":3,"z":4,"yaw":0.6}],"reputation":0,"orders":[{"orderId":"starter-double-cut","state":"pending","pot":null}]}',
       },
       {
         url: 'http://127.0.0.1:1421/__orchard_playtest/save/load',
@@ -220,10 +300,34 @@ describe('save client transports', () => {
         body: '{"slotId":"slot-a","update":{"treeId":"tree-a","diagramJson":"{\\"root\\":\\"r0\\",\\"regions\\":{\\"r0\\":{\\"kind\\":\\"sheet\\"}},\\"nodes\\":{},\\"wires\\":{}}","x":3,"z":4,"yaw":0.6}}',
       },
       {
+        url: 'http://127.0.0.1:1421/__orchard_playtest/save/insert-tree',
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
+        body: '{"slotId":"slot-a","update":{"treeId":"tree-a","diagramJson":"{\\"root\\":\\"r0\\",\\"regions\\":{\\"r0\\":{\\"kind\\":\\"sheet\\"}},\\"nodes\\":{},\\"wires\\":{}}","x":3,"z":4,"yaw":0.6}}',
+      },
+      {
         url: 'http://127.0.0.1:1421/__orchard_playtest/save/update-camera',
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
         body: '{"slotId":"slot-a","camera":{"x":1,"y":1.7,"z":8,"yaw":0.2,"pitch":-0.18}}',
+      },
+      {
+        url: 'http://127.0.0.1:1421/__orchard_playtest/save/accept-order',
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
+        body: '{"slotId":"slot-a","orderId":"starter-double-cut","pot":{"x":2,"z":-4,"yaw":0.25}}',
+      },
+      {
+        url: 'http://127.0.0.1:1421/__orchard_playtest/save/abandon-order',
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
+        body: '{"slotId":"slot-a","orderId":"starter-double-cut"}',
+      },
+      {
+        url: 'http://127.0.0.1:1421/__orchard_playtest/save/complete-order',
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
+        body: '{"slotId":"slot-a","orderId":"starter-double-cut","reward":1}',
       },
     ])
   })

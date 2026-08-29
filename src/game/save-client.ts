@@ -2,6 +2,9 @@ import { invoke } from '@tauri-apps/api/core'
 import { decodeLoadedSlot } from './model'
 import type { GameWorld } from './model'
 import type { GameTree } from './model'
+import { ORDER_CATALOG, type OrderProgress, type PotPlacement } from './orders/catalog'
+
+export type { PotPlacement } from './orders/catalog'
 
 export type CameraRecord = {
   readonly x: number
@@ -17,6 +20,20 @@ export type TreeUpdate = {
   readonly x: number
   readonly z: number
   readonly yaw: number
+}
+
+export type OrderRecordWire = {
+  readonly orderId: string
+  readonly state: 'pending' | 'accepted' | 'completed'
+  readonly pot: PotPlacement | null
+}
+
+export type CreateSlotState = {
+  readonly displayName: string
+  readonly camera: CameraRecord
+  readonly trees: readonly TreeUpdate[]
+  readonly reputation: number
+  readonly orders: readonly OrderRecordWire[]
 }
 
 export function treeUpdateFromGameTree(tree: GameTree): TreeUpdate {
@@ -38,17 +55,26 @@ export type SlotListEntry = {
 
 export type SaveClient = {
   readonly list: () => Promise<readonly SlotListEntry[]>
-  readonly create: (
-    displayName: string,
-    camera: CameraRecord,
-    trees: readonly TreeUpdate[],
-  ) => Promise<SlotListEntry>
+  readonly create: (state: CreateSlotState) => Promise<SlotListEntry>
   readonly load: (slotId: string) => Promise<GameWorld>
   readonly updateTree: (slotId: string, update: TreeUpdate) => Promise<number>
+  readonly insertTree: (slotId: string, update: TreeUpdate) => Promise<number>
   readonly updateCamera: (slotId: string, camera: CameraRecord) => Promise<void>
+  readonly acceptOrder: (slotId: string, orderId: string, pot: PotPlacement) => Promise<void>
+  readonly abandonOrder: (slotId: string, orderId: string) => Promise<void>
+  readonly completeOrder: (slotId: string, orderId: string, reward: number) => Promise<number>
 }
 
-export type SaveOperation = 'list' | 'create' | 'load' | 'update-tree' | 'update-camera'
+export type SaveOperation =
+  | 'list'
+  | 'create'
+  | 'load'
+  | 'update-tree'
+  | 'insert-tree'
+  | 'update-camera'
+  | 'accept-order'
+  | 'abandon-order'
+  | 'complete-order'
 
 export type SaveTransport = {
   request(operation: SaveOperation, input: Record<string, unknown>): Promise<unknown>
@@ -100,17 +126,61 @@ export function decodeCreatedSlot(value: unknown): SlotListEntry {
   return decodeSlotEntry(value, 'created slot')
 }
 
+function assertCatalogOrderIds(orderIds: Iterable<string>, what: string): void {
+  const expected = ORDER_CATALOG.map(({ id }) => id)
+  const actual = new Set<string>()
+  for (const id of orderIds) {
+    if (actual.has(id)) throw new Error(`${what} must match the authored order catalog`)
+    actual.add(id)
+  }
+  if (actual.size !== expected.length || expected.some((id) => !actual.has(id))) {
+    throw new Error(`${what} must match the authored order catalog`)
+  }
+}
+
+export function orderRecordsFromProgress(progress: OrderProgress): readonly OrderRecordWire[] {
+  assertCatalogOrderIds(progress.orders.keys(), 'progress orders')
+  return ORDER_CATALOG.map(({ id }) => {
+    const order = progress.orders.get(id)!
+    switch (order.kind) {
+      case 'pending': return { orderId: id, state: 'pending', pot: null }
+      case 'accepted': return { orderId: id, state: 'accepted', pot: order.pot }
+      case 'completed': return { orderId: id, state: 'completed', pot: null }
+    }
+  })
+}
+
+function decodeNumber(value: unknown, what: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+    throw new Error(`${what} must be a safe integer`)
+  }
+  return value
+}
+
+function decodeVoid(value: unknown, what: string): void {
+  if (value !== null) throw new Error(`${what} must be null`)
+}
+
 export function createSaveClient(transport: SaveTransport): SaveClient {
   return {
     list: () => transport.request('list', {}).then(decodeSlotList),
-    create: (displayName, camera, trees) => transport.request('create', {
-      displayName, camera, trees,
-    }).then(decodeCreatedSlot),
+    create: async (state) => {
+      assertCatalogOrderIds(state.orders.map(({ orderId }) => orderId), 'create state orders')
+      return decodeCreatedSlot(await transport.request('create', state))
+    },
     load: (slotId) => transport.request('load', { slotId }).then(decodeLoadedSlot),
     updateTree: (slotId, update) => transport.request('update-tree', { slotId, update })
-      .then((value) => value as number),
+      .then((value) => decodeNumber(value, 'updated tree revision')),
+    insertTree: (slotId, update) => transport.request('insert-tree', { slotId, update })
+      .then((value) => decodeNumber(value, 'inserted tree revision')),
     updateCamera: (slotId, camera) => transport.request('update-camera', { slotId, camera })
-      .then(() => undefined),
+      .then((value) => decodeVoid(value, 'updated camera response')),
+    acceptOrder: (slotId, orderId, pot) => transport.request('accept-order', { slotId, orderId, pot })
+      .then((value) => decodeVoid(value, 'accepted order response')),
+    abandonOrder: (slotId, orderId) => transport.request('abandon-order', { slotId, orderId })
+      .then((value) => decodeVoid(value, 'abandoned order response')),
+    completeOrder: (slotId, orderId, reward) => transport.request('complete-order', { slotId, orderId, reward })
+      .then((value) => decodeNumber(value, 'completed order reputation')),
   }
 }
 
@@ -121,7 +191,11 @@ export const tauriSaveTransport: SaveTransport = {
       case 'create': return invoke('create_slot', { input })
       case 'load': return invoke('load_slot', input)
       case 'update-tree': return invoke('update_tree', input)
+      case 'insert-tree': return invoke('insert_tree', input)
       case 'update-camera': return invoke('update_camera', input)
+      case 'accept-order': return invoke('accept_order', input)
+      case 'abandon-order': return invoke('abandon_order', input)
+      case 'complete-order': return invoke('complete_order', input)
     }
   },
 }
@@ -131,7 +205,11 @@ const playtestPaths: Record<SaveOperation, string> = {
   create: '/__orchard_playtest/save/create',
   load: '/__orchard_playtest/save/load',
   'update-tree': '/__orchard_playtest/save/update-tree',
+  'insert-tree': '/__orchard_playtest/save/insert-tree',
   'update-camera': '/__orchard_playtest/save/update-camera',
+  'accept-order': '/__orchard_playtest/save/accept-order',
+  'abandon-order': '/__orchard_playtest/save/abandon-order',
+  'complete-order': '/__orchard_playtest/save/complete-order',
 }
 
 export function httpSaveTransport(config: {

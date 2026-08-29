@@ -1,5 +1,6 @@
 import type { DiagramSnapshot } from './diagram-snapshot'
 import { snapshotFromJson } from './diagram-snapshot'
+import { ORDER_CATALOG, type OrderProgress, type OrderState } from './orders/catalog'
 
 export type CameraPose = {
   readonly position: { readonly x: number; readonly y: number; readonly z: number }
@@ -23,6 +24,7 @@ export type GameWorld = {
   readonly slot: { readonly id: string; readonly name: string; readonly updatedAtMs: number }
   readonly camera: CameraPose
   readonly trees: ReadonlyMap<string, GameTree>
+  readonly progress: OrderProgress
 }
 
 function record(value: unknown, what: string): Record<string, unknown> {
@@ -65,6 +67,52 @@ function array(value: unknown, what: string): readonly unknown[] {
   return value
 }
 
+function nonnegativeSafeInteger(value: unknown, what: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${what} must be a nonnegative safe integer`)
+  }
+  return value
+}
+
+function decodeOrderProgress(reputationValue: unknown, ordersValue: unknown): OrderProgress {
+  const reputation = nonnegativeSafeInteger(reputationValue, 'loaded slot.reputation')
+  const orders = new Map<string, OrderState>()
+  for (const value of array(ordersValue, 'loaded slot.orders')) {
+    const wire = exactRecord(value, ['orderId', 'state', 'pot'], 'order')
+    const orderId = string(wire.orderId, 'order.orderId')
+    if (orders.has(orderId)) throw new Error(`duplicate order id '${orderId}'`)
+    const state = string(wire.state, `order '${orderId}'.state`)
+    switch (state) {
+      case 'pending':
+        if (wire.pot !== null) throw new Error(`order '${orderId}' pending state requires a null pot`)
+        orders.set(orderId, { kind: 'pending' })
+        break
+      case 'completed':
+        if (wire.pot !== null) throw new Error(`order '${orderId}' completed state requires a null pot`)
+        orders.set(orderId, { kind: 'completed' })
+        break
+      case 'accepted': {
+        const pot = exactRecord(wire.pot, ['x', 'z', 'yaw'], `order '${orderId}'.pot`)
+        orders.set(orderId, {
+          kind: 'accepted',
+          pot: {
+            x: finiteNumber(pot.x, `order '${orderId}'.pot.x`),
+            z: finiteNumber(pot.z, `order '${orderId}'.pot.z`),
+            yaw: finiteNumber(pot.yaw, `order '${orderId}'.pot.yaw`),
+          },
+        })
+        break
+      }
+      default: throw new Error(`order '${orderId}' has unknown state '${state}'`)
+    }
+  }
+  const catalogIds = ORDER_CATALOG.map(({ id }) => id)
+  if (orders.size !== catalogIds.length || catalogIds.some((id) => !orders.has(id))) {
+    throw new Error('loaded slot.orders must match the authored order catalog')
+  }
+  return { reputation, orders }
+}
+
 function decodeDiagramJson(diagramJson: string, what: string): DiagramSnapshot {
   try {
     return snapshotFromJson(diagramJson)
@@ -76,12 +124,13 @@ function decodeDiagramJson(diagramJson: string, what: string): DiagramSnapshot {
 export function decodeLoadedSlot(value: unknown): GameWorld {
   const loaded = exactRecord(
     value,
-    ['slotId', 'displayName', 'updatedAtMs', 'camera', 'trees', 'diagrams'],
+    ['slotId', 'displayName', 'updatedAtMs', 'camera', 'trees', 'diagrams', 'reputation', 'orders'],
     'loaded slot',
   )
   const slotId = string(loaded.slotId, 'loaded slot.slotId')
   const displayName = string(loaded.displayName, 'loaded slot.displayName')
   const updatedAtMs = safeInteger(loaded.updatedAtMs, 'loaded slot.updatedAtMs')
+  const progress = decodeOrderProgress(loaded.reputation, loaded.orders)
 
   const camera = exactRecord(
     loaded.camera,
@@ -142,5 +191,6 @@ export function decodeLoadedSlot(value: unknown): GameWorld {
     slot: { id: slotId, name: displayName, updatedAtMs },
     camera: cameraPose,
     trees,
+    progress,
   }
 }
