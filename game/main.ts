@@ -59,6 +59,10 @@ let previousFrame = performance.now()
 let disposed = false
 let freeActive = false
 
+function authoredGoalForOrder(orderId: string) {
+  return ORDER_CATALOG.find((entry) => entry.id === orderId)?.goal
+}
+
 if (import.meta.env.VITE_WDIO === 'true') {
   Object.defineProperty(window, '__ORCHARD_WDIO__', {
     configurable: false,
@@ -243,13 +247,21 @@ function applyDoubleCut(clientX: number, clientY: number): void {
 }
 
 async function startWorld(world: GameWorld): Promise<void> {
-  const nextRenderer = mountGameWorld(worldHost, [...world.trees.values()])
+  const nextRenderer = mountGameWorld(worldHost, [...world.trees.values()], {
+    goalForOrder: authoredGoalForOrder,
+  })
   const nextCamera = initialCameraState(world.camera)
   const nextSession = gameSession(world.trees)
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
   let nextInput: WorldInput | null = null
   let releaseWriterStatus = (): void => {}
   try {
+    nextRenderer.setPots([...world.progress.orders].flatMap(([orderId, state]) => {
+      if (state.kind !== 'accepted') return []
+      const goal = authoredGoalForOrder(orderId)
+      if (goal === undefined) throw new Error(`missing authored goal for '${orderId}'`)
+      return [{ orderId, placement: state.pot, goal }]
+    }))
     nextRenderer.resize(worldHost.clientWidth, worldHost.clientHeight)
     nextRenderer.setCamera(displayCameraPose(nextCamera))
     releaseWriterStatus = nextWriter.subscribe((status) => {

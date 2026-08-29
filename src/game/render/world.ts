@@ -6,10 +6,10 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import type { GameTree, TreeTarget } from '../model'
-import { snapshotFromDiagram } from '../diagram-snapshot'
+import { snapshotFromDiagram, type DiagramSnapshot } from '../diagram-snapshot'
 import type { PointedTreePart, TreeChange } from '../session'
 import type { OrderMutation } from '../orders/session'
-import { ORDER_CATALOG, type OrderState } from '../orders/catalog'
+import type { OrderState } from '../orders/catalog'
 import { DiagramBuilder } from '../../kernel/diagram/builder'
 import { DARK } from '../../view/paint'
 import { TreeRenderAssetCache } from './assets'
@@ -80,6 +80,11 @@ export type ToolWorldTarget =
   | { readonly kind: 'pot'; readonly orderId: string; readonly distance: number }
   | { readonly kind: 'ground'; readonly point: { readonly x: number; readonly z: number }; readonly distance: number }
 
+export type GameWorldOptions = {
+  readonly clock?: () => number
+  readonly goalForOrder?: (orderId: string) => DiagramSnapshot | undefined
+}
+
 const preparedTreeChange: unique symbol = Symbol('prepared tree change')
 
 export type PreparedTreeChange = {
@@ -114,8 +119,11 @@ const blankTreeSnapshot = snapshotFromDiagram(new DiagramBuilder().build())
 export function mountGameWorld(
   container: HTMLElement,
   initialTrees: readonly GameTree[],
-  clock: () => number = () => performance.now(),
+  optionsOrClock: GameWorldOptions | (() => number) = {},
 ): GameWorldRenderer {
+  const options = typeof optionsOrClock === 'function' ? { clock: optionsOrClock } : optionsOrClock
+  const clock = options.clock ?? (() => performance.now())
+  const goalForOrder = options.goalForOrder ?? (() => undefined)
   const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
   renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -247,13 +255,19 @@ export function mountGameWorld(
 
   const potFor = (orderId: string, state: OrderState | undefined): PotRender | null => {
     if (state?.kind !== 'accepted') return null
-    const definition = ORDER_CATALOG.find((entry) => entry.id === orderId)
-    if (definition === undefined) throw new Error(`unknown order '${orderId}'`)
-    return { orderId, placement: state.pot, goal: definition.goal }
+    const goal = goalForOrder(orderId)
+    if (goal === undefined) throw new Error(`missing authored goal for '${orderId}'`)
+    return { orderId, placement: state.pot, goal }
+  }
+
+  const trackPotLineMaterial = (material: LineMaterial): (() => void) => {
+    lineMaterials.add(material)
+    return () => lineMaterials.delete(material)
   }
 
   const addPot = (render: PotRender): PotObject => {
-    const object = makePotObject(render, assetCache.get(render.goal), materialsFor(assetCache.get(render.goal)))
+    const asset = assetCache.get(render.goal)
+    const object = makePotObject(render, asset, materialsFor(asset), trackPotLineMaterial)
     potObjects.add(object.group)
     potsByOrderId.set(render.orderId, object)
     return object
@@ -603,6 +617,7 @@ export function mountGameWorld(
         after,
         assetCache.get(after.goal),
         materialsFor(assetCache.get(after.goal)),
+        trackPotLineMaterial,
       )
       const payload: PreparedOrderChangePayload = { orderId: mutation.orderId, before, after, incoming }
       const prepared: PreparedOrderChange = { [preparedOrderChange]: true }

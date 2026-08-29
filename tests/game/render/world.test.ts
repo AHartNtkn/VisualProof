@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const host = vi.hoisted(() => {
@@ -15,6 +16,7 @@ const host = vi.hoisted(() => {
     rendererAcceptedFrame: false,
     viewport,
     resources,
+    potObjects: [] as unknown[],
     targetSnapshotJson: new Set<string>(),
     snapshotBounds: new Map<string, { center: { x: number; y: number; z: number }; radius: number }>(),
     trackResource() {
@@ -168,6 +170,18 @@ vi.mock('../../../src/game/render/assets', async (importOriginal) => {
   return { ...actual, TreeRenderAssetCache: TestTreeRenderAssetCache }
 })
 
+vi.mock('../../../src/game/render/pots', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../src/game/render/pots')>()
+  return {
+    ...actual,
+    makePotObject(...args: Parameters<typeof actual.makePotObject>) {
+      const object = actual.makePotObject(...args)
+      host.potObjects.push(object)
+      return object
+    },
+  }
+})
+
 import type { GameTree } from '../../../src/game/model'
 import { snapshotFromDiagram } from '../../../src/game/diagram-snapshot'
 import { mountGameWorld } from '../../../src/game/render/world'
@@ -181,7 +195,7 @@ import { SaveWriter } from '../../../src/game/save-writer'
 import { treeUpdateFromGameTree } from '../../../src/game/save-client'
 import { ORDER_CATALOG, STARTER_ORDER_ID, type OrderProgress } from '../../../src/game/orders/catalog'
 import { orderSession } from '../../../src/game/orders/session'
-import type { PotRender } from '../../../src/game/render/pots'
+import type { PotObject, PotRender } from '../../../src/game/render/pots'
 
 beforeEach(() => {
   host.attached = false
@@ -192,6 +206,7 @@ beforeEach(() => {
   host.viewport.postprocess = [0, 0]
   host.viewport.scaledEffect = [0, 0]
   host.resources.length = 0
+  host.potObjects.length = 0
   host.targetSnapshotJson.clear()
   host.snapshotBounds.clear()
   vi.stubGlobal('window', { devicePixelRatio: 2 })
@@ -276,6 +291,51 @@ function starterPot(x = 0, z = -20): PotRender {
 
 function pendingStarterOrder(): OrderProgress {
   return { reputation: 0, orders: new Map([[STARTER_ORDER_ID, { kind: 'pending' as const }]]) }
+}
+
+function authoredGoal(orderId: string) {
+  return ORDER_CATALOG.find(({ id }) => id === orderId)?.goal
+}
+
+function mountOrderWorld(
+  trees: readonly GameTree[] = [],
+  goalForOrder: (orderId: string) => ReturnType<typeof authoredGoal> = authoredGoal,
+): ReturnType<typeof mountGameWorld> {
+  return mountGameWorld(container(), trees, { goalForOrder })
+}
+
+function latestPot(): PotObject {
+  const object = host.potObjects.at(-1)
+  if (object === undefined) throw new Error('expected a created pot')
+  return object as PotObject
+}
+
+function potResourceSpies(object: PotObject): readonly { readonly geometry: ReturnType<typeof vi.spyOn>; readonly material: ReturnType<typeof vi.spyOn> }[] {
+  const body = object.group.getObjectByName('pot-body') as THREE.Mesh
+  const rim = object.group.getObjectByName('pot-rim') as THREE.Mesh
+  const hologram = object.group.getObjectByName('goal-hologram')!
+  let hologramRenderable: THREE.Object3D | null = null
+  hologram.traverse((candidate) => {
+    if (hologramRenderable === null && 'geometry' in candidate && 'material' in candidate) {
+      hologramRenderable = candidate
+    }
+  })
+  if (hologramRenderable === null) throw new Error('expected hologram render resource')
+  return [body, rim, hologramRenderable].map((resource) => {
+    const renderable = resource as THREE.Mesh
+    const material = Array.isArray(renderable.material) ? renderable.material[0]! : renderable.material
+    return {
+      geometry: vi.spyOn(renderable.geometry, 'dispose'),
+      material: vi.spyOn(material, 'dispose'),
+    }
+  })
+}
+
+function expectResourcesDisposedOnce(resources: readonly { readonly geometry: ReturnType<typeof vi.spyOn>; readonly material: ReturnType<typeof vi.spyOn> }[]): void {
+  for (const resource of resources) {
+    expect(resource.geometry).toHaveBeenCalledTimes(1)
+    expect(resource.material).toHaveBeenCalledTimes(1)
+  }
 }
 
 describe('production game world', () => {
@@ -675,6 +735,21 @@ describe('production game world', () => {
     world.dispose()
   })
 
+  it('orders close semantic branch and pot hits by their ray distances', () => {
+    const branch = blankTree('branch', 0, -20)
+    const world = mountGameWorld(container(), [branch])
+    world.setCamera({ eye: { x: 0, y: 1, z: 0 }, forward: { x: 0, y: -0.05, z: -1 } })
+
+    world.setPots([starterPot(0, -20)])
+    expect(world.pointAtToolTarget(0, 0, null)).toMatchObject({ kind: 'pot', orderId: STARTER_ORDER_ID })
+
+    world.setPots([starterPot(0, -21.5)])
+    expect(world.pointAtToolTarget(0, 0, null)).toMatchObject({
+      kind: 'branch', pointed: { treeId: branch.id },
+    })
+    world.dispose()
+  })
+
   it('returns terrain only when the camera ray actually hits it', () => {
     const world = mountGameWorld(container(), [])
     world.setCamera({ eye: { x: 2, y: 3, z: 4 }, forward: { x: 0, y: -1, z: 0 } })
@@ -684,6 +759,9 @@ describe('production game world', () => {
     expect(terrain?.kind === 'ground' && terrain.point.z).toBeCloseTo(4, 3)
 
     world.setCamera({ eye: { x: 2, y: 3, z: 4 }, forward: { x: 0, y: 0, z: -1 } })
+    expect(world.pointAtToolTarget(0, 0, null)).toBeNull()
+
+    world.setCamera({ eye: { x: 2001, y: 3, z: 4 }, forward: { x: 0, y: -1, z: 0 } })
     expect(world.pointAtToolTarget(0, 0, null)).toBeNull()
     world.dispose()
   })
@@ -703,7 +781,7 @@ describe('production game world', () => {
   })
 
   it('prepares pot appearance and removal without publishing either until commit', () => {
-    const world = mountGameWorld(container(), [])
+    const world = mountOrderWorld()
     const pending = pendingStarterOrder()
     const accept = orderSession(pending).planAccept(STARTER_ORDER_ID, { x: 0, z: -20, yaw: 0 })
     world.setCamera({ eye: { x: 0, y: 0.55, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
@@ -723,7 +801,7 @@ describe('production game world', () => {
   })
 
   it('rejects stale prepared pot changes and disposes discarded prepared appearance', () => {
-    const world = mountGameWorld(container(), [])
+    const world = mountOrderWorld()
     const pending = pendingStarterOrder()
     const accept = orderSession(pending).planAccept(STARTER_ORDER_ID, { x: 0, z: -20, yaw: 0 })
     const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose')
@@ -735,6 +813,140 @@ describe('production game world', () => {
     expect(() => world.prepareOrderChange(orderSession(accept.after).planAbandon(STARTER_ORDER_ID)))
       .toThrow(/stale order change/)
     world.dispose()
+  })
+
+  it('uses an injected authored goal and rejects missing goals without catalog fallback', () => {
+    const customGoal = snapshotFromDiagram(new DiagramBuilder().build())
+    const world = mountOrderWorld([], () => customGoal)
+    const accept = orderSession(pendingStarterOrder()).planAccept(STARTER_ORDER_ID, { x: 0, z: -20, yaw: 0 })
+
+    const prepared = world.prepareOrderChange(accept)
+    expect(latestPot().render.goal).toBe(customGoal)
+    world.discardOrderChange(prepared)
+    world.dispose()
+
+    const missing = mountOrderWorld([], () => undefined)
+    expect(() => missing.prepareOrderChange(accept)).toThrow(/missing authored goal/i)
+    const unknown = {
+      ...accept,
+      orderId: 'unknown-order',
+      before: { reputation: 0, orders: new Map([['unknown-order', { kind: 'pending' as const }]]) },
+      after: {
+        reputation: 0,
+        orders: new Map([['unknown-order', { kind: 'accepted' as const, pot: { x: 0, z: -20, yaw: 0 } }]]),
+      },
+    }
+    expect(() => missing.prepareOrderChange(unknown)).toThrow(/missing authored goal/i)
+    missing.dispose()
+  })
+
+  it('updates cloned hologram line materials when the world resizes', () => {
+    const world = mountOrderWorld()
+    world.setPots([starterPot()])
+    const hologram = latestPot().group.getObjectByName('goal-hologram')!
+    const lines: LineMaterial[] = []
+    hologram.traverse((object) => {
+      if ('material' in object && (object as THREE.Mesh).material instanceof LineMaterial) {
+        lines.push((object as THREE.Mesh).material as LineMaterial)
+      }
+    })
+    expect(lines.length).toBeGreaterThan(0)
+
+    world.resize(640, 360)
+
+    expect(lines.map(({ resolution }) => resolution.toArray())).toEqual(lines.map(() => [640, 360]))
+    world.dispose()
+  })
+
+  it('disposes each prepared appearance resource exactly once when discarded', () => {
+    const world = mountOrderWorld()
+    const accept = orderSession(pendingStarterOrder()).planAccept(STARTER_ORDER_ID, { x: 0, z: -20, yaw: 0 })
+    const prepared = world.prepareOrderChange(accept)
+    const resources = potResourceSpies(latestPot())
+
+    world.discardOrderChange(prepared)
+    world.discardOrderChange(prepared)
+
+    expectResourcesDisposedOnce(resources)
+    world.dispose()
+  })
+
+  it('disposes each live pot resource exactly once when setPots replaces it', () => {
+    const world = mountOrderWorld()
+    world.setPots([starterPot()])
+    const resources = potResourceSpies(latestPot())
+
+    world.setPots([starterPot(4, -20)])
+
+    expectResourcesDisposedOnce(resources)
+    world.dispose()
+  })
+
+  it('disposes each live pot resource exactly once after committed removal', () => {
+    const world = mountOrderWorld()
+    const accepted = orderSession(pendingStarterOrder()).planAccept(STARTER_ORDER_ID, { x: 0, z: -20, yaw: 0 }).after
+    world.setPots([starterPot()])
+    const resources = potResourceSpies(latestPot())
+    const removal = orderSession(accepted).planAbandon(STARTER_ORDER_ID)
+
+    world.commitOrderChange(world.prepareOrderChange(removal))
+
+    expectResourcesDisposedOnce(resources)
+    world.dispose()
+  })
+
+  it('disposes each live pot resource exactly once when the world is disposed', () => {
+    const world = mountOrderWorld()
+    world.setPots([starterPot()])
+    const resources = potResourceSpies(latestPot())
+
+    world.dispose()
+    world.dispose()
+
+    expectResourcesDisposedOnce(resources)
+  })
+
+  it('removes a completed order pot only at its prepared commit', () => {
+    const world = mountOrderWorld()
+    const accepted = orderSession(pendingStarterOrder()).planAccept(STARTER_ORDER_ID, { x: 0, z: -20, yaw: 0 }).after
+    world.setPots([starterPot()])
+    world.setCamera({ eye: { x: 0, y: 0.55, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
+    const complete = {
+      kind: 'complete' as const,
+      orderId: STARTER_ORDER_ID,
+      reward: 1,
+      before: accepted,
+      after: { reputation: 1, orders: new Map([[STARTER_ORDER_ID, { kind: 'completed' as const }]]) },
+    }
+
+    const prepared = world.prepareOrderChange(complete)
+    expect(world.pointAtToolTarget(0, 0, null)).toMatchObject({ kind: 'pot' })
+    world.commitOrderChange(prepared)
+    expect(world.pointAtToolTarget(0, 0, null)).toBeNull()
+    world.dispose()
+  })
+
+  it('invalidates prepared pot tokens when setPots replaces authoritative state', () => {
+    const world = mountOrderWorld()
+    const accept = orderSession(pendingStarterOrder()).planAccept(STARTER_ORDER_ID, { x: 0, z: -20, yaw: 0 })
+    const prepared = world.prepareOrderChange(accept)
+
+    world.setPots([])
+    world.commitOrderChange(prepared)
+
+    world.setCamera({ eye: { x: 0, y: 0.55, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
+    expect(world.pointAtToolTarget(0, 0, null)).toBeNull()
+    world.dispose()
+  })
+
+  it('invalidates prepared pot tokens when the world is disposed', () => {
+    const world = mountOrderWorld()
+    const accept = orderSession(pendingStarterOrder()).planAccept(STARTER_ORDER_ID, { x: 0, z: -20, yaw: 0 })
+    const prepared = world.prepareOrderChange(accept)
+
+    world.dispose()
+
+    expect(() => world.commitOrderChange(prepared)).not.toThrow()
   })
 
   it('points a branch through the same rotated placement used for rendering', () => {
