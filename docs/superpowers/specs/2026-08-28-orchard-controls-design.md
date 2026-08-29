@@ -1,211 +1,186 @@
-# Orchard Controls Design
+# Orchard Shared Authority Design
 
 ## Goal
 
-Add conventional browser-game navigation to the orchard without creating a
-general input framework or duplicating camera authority.
+Make the orchard consume the proof assistant's existing 3D interaction and
+semantic authorities, while retaining only the world-scale rendering,
+persistence, and free-flight responsibilities that are specific to the game.
 
-The player moves through the orchard in free flight, aims from the center of
-the view, and may temporarily orbit a tree. Browser cursor confinement is an
-input transport detail. It is not a game mode, persisted state, or condition
-for keeping the world open.
+This design also closes the state splits found during the orbit audit. The
+work is intentionally not a renderer rewrite: the orchard keeps its LOD,
+batching, spatial index, fog, terrain, glow, and multi-tree scheduling.
 
-## Player Behavior
+## Authority Map
 
-### Free flight
+The final system has these owners:
 
-- Loading an orchard restores its saved free-flight pose.
-- The world initially waits for a click before accepting free-flight input.
-- That click engages cursorless relative mouse input. It does not move the
-  camera or activate a world action.
-- Mouse motion changes yaw and pitch. Pitch is clamped short of vertical.
-- `W` and `S` move forward and backward in the horizontal view direction.
-- `A` and `D` strafe left and right.
-- `Space` rises, `Control` descends, and `Shift` triples movement speed.
-- Movement is time-based, normalized across simultaneous axes, and has no
-  acceleration, gravity, collision, or head bob.
-- While engaged, the view center is the aim point and a small reticle is
-  visible. There is no pointer.
-- A primary click while a tree is under the aim point enters orbit. A click
-  with no tree under the aim point does nothing.
+- `src/view3d/scene.ts` owns typed 3D proof entities and their kernel identity.
+- `src/view3d/entity-style.ts` owns the semantic entity-to-authored-color rule.
+- `src/view3d/camera.ts` and the interaction extracted from
+  `src/view3d/index.ts` own orbit pose, drag, pan, zoom, semantic focus, and
+  focus glide.
+- `src/view3d/transition.ts` owns proof-tree transition timing, interruption,
+  and sampling.
+- `src/game/render/placement.ts` owns every orchard local/world transform.
+- `GameSession` owns the current logical `GameTree` values.
+- `GameWorldRenderer` owns render projections of those values, never a second
+  logical tree model.
+- `SaveWriter` owns asynchronous durable-write ordering and retry. Save state
+  may lag live state while saving, but it may not describe a different queued
+  tree.
+- `game/input.ts` owns DOM input transport and transient samples. It reports
+  engagement changes; it does not decide gameplay mode.
+- The game navigation state owns free/orbit mode, the saved free pose, and
+  whether free-flight input is active.
 
-### Orbit
+## Shared Proof-Entity Semantics
 
-- Orbit stores the exact free-flight pose that initiated it.
-- Entering orbit releases cursorless input and restores the ordinary pointer.
-- Mouse motion never changes the orbit camera.
-- `A` and `D` rotate around the target.
-- `W` and `S` change distance from the target.
-- `Space` and `Control` raise and lower the orbit eye.
-- `Shift` has no orbit meaning.
-- The camera always looks at the target center.
-- Orbit distance cannot pass inside the target's bounds.
-- `Escape` leaves orbit and restores the stored free-flight pose exactly.
-- Free flight remains disengaged after leaving orbit; the next world click
-  re-engages cursorless input.
+Every branch entity carries its `RegionId` directly, just as rings, labels,
+pips, and strands already carry typed node or wire identity. Renderer keys
+remain stable drawing identities, but application code never recovers kernel
+identity by slicing a key string.
 
-### Focus and interruption
+One pure color policy receives an entity, wire hues, and an authored palette.
+Both renderers use it. Materials, line widths, textures, bloom, hover styling,
+and batching remain renderer-specific presentation.
 
-- Losing cursorless browser input, window focus, or page visibility clears
-  held keys and pending mouse motion.
-- Such loss never changes camera mode, camera pose, loaded world, or save.
-- In disengaged free flight, movement and mouse motion are ignored.
-- Orbit keyboard controls remain available because orbit uses the ordinary
-  pointer and does not require cursorless input.
-- A secondary press has no camera effect. In engaged free flight it applies a
-  double cut to the ordinary branch under the center reticle. In orbit it
-  applies the same tool at the pointer and restricts targeting to the orbit
-  target tree. Disengaged free flight does not apply a tool.
+Orchard picking remains renderer-specific because it must work across batched,
+culled, and tweening trees. Its semantic result carries the typed entity and a
+world-space focus derived through the shared `focusPoint` rule. Picking does
+not invent a second focus rule.
 
-## Camera Authority
+## Orchard Placement
 
-`src/game/camera.ts` is the only camera-state authority. Its state is a tagged
-union:
+`src/game/render/placement.ts` exposes the only local/world transform
+operations for a placed tree:
 
 ```ts
-export type CameraState =
-  | { readonly mode: 'free'; readonly pose: CameraPose }
-  | {
-      readonly mode: 'orbit'
-      readonly freePose: CameraPose
-      readonly target: TreeTarget
-      readonly azimuth: number
-      readonly distance: number
-      readonly height: number
-    }
+localPointToWorld(point: Vec3, placement: TreePlacement): Vec3
+worldPointToLocal(point: Vec3, placement: TreePlacement): Vec3
+worldDirectionToLocal(direction: Vec3, placement: TreePlacement): Vec3
+worldSphere(bounds: { center: Vec3; radius: number }, placement: TreePlacement): THREE.Sphere
+applyPlacement(object: THREE.Object3D, placement: TreePlacement): void
 ```
 
-There are no parallel mode booleans and no camera state inside the renderer.
-The camera module exposes pure operations to initialize, advance, enter orbit,
-leave orbit, derive the displayed pose, and derive the pose written to the
-save. The persisted pose is always the free-flight pose, including while the
-display is orbiting.
+Logical targeting, spatial bounds, analytic picking, rendered objects, and
+orbit focus all consume these operations.
 
-The initial constants are intentionally few:
+## Diagram and Tree State
 
-- mouse sensitivity: `0.002` radians per relative pixel;
-- free-flight speed: `8` world units per second;
-- sprint multiplier: `3`;
-- orbit angular speed: `1.5` radians per second;
-- orbit zoom speed: `12` world units per second;
-- orbit vertical speed: `8` world units per second;
-- minimum orbit distance: target radius plus `1` world unit;
-- pitch range: `±(π/2 - 0.01)`.
-
-These are direct constants, not settings infrastructure.
-
-## Input Boundary
-
-`game/input.ts` owns browser listeners and nothing else. It:
-
-- tracks held movement keys;
-- accumulates relative mouse deltas;
-- converts held keys to a semantic per-frame motion record;
-- delivers primary, secondary, and Escape callbacks synchronously;
-- suppresses the browser context menu on the world;
-- exposes whether the world currently has cursorless relative input;
-- requests or releases that browser mechanism when the composition root asks;
-- clears transient state on loss of engagement, blur, or hidden visibility;
-- detaches every listener on disposal.
-
-The input module never imports the renderer, changes camera state, targets a
-tree, persists data, or treats synthetic and physical events differently.
-
-## Tree Targeting
-
-`src/game/render/world.ts` remains the sole renderer. It gains one query:
+A diagram and its canonical JSON are one validated value:
 
 ```ts
-pickTree(ndcX: number, ndcY: number): TreeTarget | null
+type DiagramSnapshot = {
+  readonly diagram: Diagram
+  readonly json: string
+}
 ```
 
-The query casts through the renderer's current camera and intersects the
-logical world-space bounding sphere of every tree. It returns the nearest hit.
-It does not inspect render LOD or individual tree parts. This keeps focus
-stable even when a tree is represented as a marker or is waiting for render
-residency.
+Construction either derives JSON from a diagram or parses and validates JSON.
+Callers cannot independently supply a mismatched pair. `GameTree` contains one
+`snapshot` instead of parallel `diagram` and `diagramJson` fields.
 
-`TreeTarget` is a small game-model value containing the tree ID, world-space
-center, and radius. The camera copies this value when orbit begins; the
-renderer never owns orbit state.
+Tree mutation is planned before it becomes live. A double cut produces one
+immutable `TreeMutation` containing complete before and after `GameTree`
+values. The renderer prepares all derived assets and target bounds without
+changing live state. The save writer accepts the complete update, the renderer
+commits its prepared projection, and the session publishes the same after
+tree. Renderer commit after successful preparation is non-throwing.
 
-## Composition
+If planning, renderer preparation, or save enqueue fails, the live session and
+renderer remain on the before tree. A later asynchronous save failure leaves
+one live tree and one queued durable update; the existing retry state owns that
+lag. It does not roll back gameplay.
 
-`game/main.ts` is the composition root:
+Every committed tree update refreshes render geometry, runtime state, and
+logical target bounds from the same prepared asset. `pickTree` therefore
+cannot continue using bounds from an earlier diagram.
 
-1. Load or create the world normally.
-2. Initialize one `CameraState` from the saved `CameraPose`.
-3. Attach one world-input instance.
-4. On each animation frame, sample input once.
-5. Advance orbit unconditionally, or advance free flight only while relative
-   input is engaged.
-6. Send `displayCameraPose(state)` to the renderer.
-7. Send `cameraPoseForSave(state)` to the existing save writer.
+## Shared Tree Transitions
 
-Primary-down handling is synchronous:
+`src/view3d/transition.ts` owns one `SCENE_TWEEN_MS` and one reusable scene
+tween track. The track plans from the currently displayed interrupted scene,
+samples smooth progress, reports completion, and exposes the clean target.
 
-- disengaged free mode: request relative input and consume the click;
-- engaged free mode: query the center of the view and enter orbit on a hit;
-- orbit mode: no camera action.
+The assistant retains its camera-pose tween. The orchard retains a map of
+independent tracks and its runtime suspend/resume behavior. Neither consumer
+implements transition restart or timing rules separately.
 
-Escape exits orbit. In free mode it has no camera action; the browser's loss
-of relative input clears held input through the ordinary engagement-change
-path.
+## Shared Orbit Interaction
 
-Secondary-down handling is synchronous and never changes camera state. The
-composition root uses the engaged free-flight center ray or the orbit pointer
-ray to query a branch. A hit mutates the game session, starts the renderer's
-tree tween, and queues the existing tree save. A miss and tool error use the
-existing feedback messages.
+The existing assistant interaction in `src/view3d/index.ts` is extracted intact
+behind a reusable controller. It continues to use the existing `CamPose`,
+camera operations, semantic `focusPoint`, click threshold, and focus glide.
+Both the assistant view and orchard instantiate that controller.
 
-## Presentation
+The orchard supplies its current tree entities in local coordinates and the
+placement authority converts the selected semantic focus into world
+coordinates. The orchard does not define orbit rates, orbit geometry, focus
+behavior, or another orbit state shape.
 
-The loaded world has only two control affordances:
+Free flight remains game-specific. Entering orbit stores the exact free pose.
+Leaving orbit restores it. The free pose is the only camera pose sent to
+persistence while orbiting.
 
-- a small center reticle while free flight is engaged;
-- a short centered “Click to play” prompt while free flight is disengaged.
+The orchard's established secondary proof action is composed beside the
+shared interaction. It is not part of orbit mechanics and never mutates the
+camera.
 
-Both are derived presentation. Neither is an authority for control or camera
-state. Orbit uses the ordinary pointer and displays neither affordance.
+## Input and Escape
 
-## Failure Behavior
+Input engagement is reported to game navigation as an event; querying
+`document.pointerLockElement` is not a gameplay-state decision.
 
-- If requesting relative input is rejected, the world remains loaded in the
-  same free pose and the “Click to play” prompt remains visible.
-- A target miss is a no-op.
-- All input is cleared when the world is disposed.
-- No fallback gesture, drag-to-look mode, synthetic-event exception, or
-  compatibility control path is provided.
+Loading begins in inactive free flight. Successful engagement activates free
+flight. Losing engagement, focus, or visibility deactivates free flight and
+clears transient input without changing the saved pose or loaded world.
+
+Escape while orbiting is handled by the game, restores the saved free pose,
+requests free-flight engagement during the same physical key event, and
+prevents that event from immediately cancelling the request. On success the
+player can move and look immediately. On rejection, navigation becomes
+inactive free flight and presents the ordinary engagement prompt.
+
+Escape in free flight remains available to the browser's ordinary engagement
+release behavior.
+
+## Durable Documentation
+
+`docs/orchard-game-design.md` is updated to name the shared assistant orbit
+interaction rather than specify a separate keyboard orbit. The previous
+controls implementation plan is replaced by the implementation plan for this
+design. No current document or test may retain the displaced orbit or inactive
+Escape model.
 
 ## Validation
 
-Pure camera tests prove literal positions and directions for free movement,
-mouse look, combined-axis normalization, sprinting, orbit motion, distance
-clamping, exact orbit exit, and free-pose persistence during orbit.
+Behavior evidence must prove:
 
-Input tests use real `EventTarget` dispatch to prove key mapping, delta
-consumption, interruption clearing, synchronous action delivery, browser
-engagement delegation, and complete listener cleanup. They assert sampled
-behavior rather than source structure.
+- typed branch identity reaches the kernel operation without parsing a render
+  key;
+- both renderers obtain identical authored colors from one semantic rule;
+- every placement consumer agrees for rotated, translated trees;
+- mismatched diagram/JSON pairs are unrepresentable or rejected at creation;
+- failed mutation preparation or enqueue leaves session and renderer unchanged;
+- committed mutation refreshes geometry and logical target bounds together;
+- interrupted assistant and orchard transitions sample the same shared track;
+- the assistant retains its existing orbit interaction after extraction;
+- orchard orbit uses the same controller and semantic focus;
+- Escape resumes free movement without another interaction;
+- a proof action changes the tree and persistence while leaving orbit camera
+  state unchanged.
 
-Renderer tests prove nearest logical tree targeting through the current camera,
-branch targeting across render residency and LOD, and restriction to the orbit
-target.
+The full unit suite, type check, native Tauri end-to-end scenario, and direct
+application exercise are all required. Direct exercise must inspect the whole
+state after orbit entry, component focus, proof action, Escape, and immediate
+movement.
 
-The native game scenario proves loading, free movement, orbit entry and exit,
-camera persistence, interruption stability, and a secondary double cut that
-persists while leaving orbit camera mode and pose unchanged.
+## Non-Goals
 
-Completion also requires direct in-app browser exercise with actual mouse and
-keyboard controls. The full flow is inspected after each transition for camera
-mode, focus, cursor presentation, loaded world, save state, and unintended
-tree changes.
-
-## Explicit Non-Goals
-
-- rebinding, settings, gamepad, touch, accessibility alternatives, or an
-  action-map framework;
-- collision, gravity, terrain following, acceleration, animation, or sound;
-- an orbit mouse-drag control;
-- renderer-owned camera state;
-- special test-only runtime behavior.
+- Replacing the orchard renderer with the assistant renderer.
+- Removing orchard LOD, batching, culling, spatial indexing, telemetry, fog,
+  terrain, glow, or concurrent tree animation.
+- Replacing the kernel proof rule or adding proof-history persistence.
+- Adding a general action-map framework, settings, rebinding, gamepad, touch,
+  collision, gravity, or new proof tools.
+- Changing save-file format or introducing compatibility paths.
