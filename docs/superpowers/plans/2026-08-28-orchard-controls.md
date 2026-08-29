@@ -352,7 +352,7 @@ git commit -m "fix(game): publish tree mutations coherently"
 - Test: `e2e/view3.spec.ts`
 
 **Interfaces:**
-- Produces: `OrbitInteraction` owning the existing pointer threshold, drag orbit/pan, wheel zoom, focus retarget, cancellation, and 250 ms glide.
+- Produces: `OrbitInteraction` owning the existing pointer threshold, drag orbit/pan, wheel zoom, focus retarget, cancellation, external pose replacement, and 250 ms glide.
 - Consumes unchanged: `CamPose`, `orbited`, `panned`, `zoomed`, and `focusPoint`.
 
 - [ ] **Step 1: Capture existing behavior at the new boundary**
@@ -360,12 +360,15 @@ git commit -m "fix(game): publish tree mutations coherently"
 ```ts
 const orbit = new OrbitInteraction(initialPose, 0)
 orbit.pointerDown(0, 100, 100)
-expect(orbit.pointerUp(102, 101)).toEqual({ kind: 'focus', clientX: 102, clientY: 101 })
+expect(orbit.pointerUp(102, 101)).toEqual({
+  kind: 'stationary-release', button: 0, clientX: 102, clientY: 101,
+})
 orbit.focus(branchCenter, 0)
 expect(orbit.poseAt(FOCUS_MS).target).toEqual(branchCenter)
 ```
 
 Also assert left drag delegates to `orbited`, secondary drag delegates to `panned`, wheel delegates to `zoomed`, movement beyond the existing threshold is not a click, and pan cancels focus glide.
+Assert that pan during an in-flight glide begins from the currently displayed pose without a jump, and that external pose replacement cancels the glide and becomes the single current pose.
 
 - [ ] **Step 2: Run RED**
 
@@ -375,7 +378,7 @@ npm test -- --run tests/view3d/orbit-interaction.test.ts tests/view3d/camera.tes
 
 - [ ] **Step 3: Move the current state machine**
 
-Move the current `drag`, `press`, `glide`, click threshold, focus duration, and pose calculations from `mountView3` into `orbit-interaction.ts` without changing their values. DOM listener attachment, renderer picking, hover, scene updates, and scheduling remain in `mountView3`.
+Move the current `drag`, `press`, `glide`, click threshold, focus duration, and pose calculations from `mountView3` into `orbit-interaction.ts` without changing their values. Every stationary release reports its button and coordinates so consumers can compose semantics without duplicating the threshold. Diagram camera transitions replace the controller pose and cancel its focus glide rather than maintaining a second pose owner. DOM listener attachment, pointer capture, renderer picking, semantic `focusPoint` resolution, hover, scene updates, and scheduling remain in `mountView3`.
 
 - [ ] **Step 4: Prove assistant behavior is unchanged**
 
@@ -426,6 +429,8 @@ Expected: failures at shared component focus and immediate post-Escape movement.
 - [ ] **Step 3: Replace game orbit with the shared interaction**
 
 Keep free-flight pose and movement. Define orbit as `{ treeId, freePose, interaction }`. Derive display pose from `interaction.poseAt(now)` and `eyeOf`. Persist `freePose`. Remove game orbit constants, azimuth/distance/height fields, keyboard orbit rules, and separate orbit eye math.
+
+Seed the interaction from the exact free eye and selected target using the full spherical pose: distance from the complete 3D delta, yaw from its horizontal direction, and pitch from its vertical component. Prove that entering orbit does not change the displayed eye.
 
 Add:
 
