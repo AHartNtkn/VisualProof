@@ -55,6 +55,7 @@ let renderer: GameWorldRenderer | null = null
 let animationFrame = 0
 let previousFrame = performance.now()
 let disposed = false
+let freeActive = false
 
 if (import.meta.env.VITE_WDIO === 'true') {
   Object.defineProperty(window, '__ORCHARD_WDIO__', {
@@ -135,14 +136,13 @@ function pointerNdc(clientX: number, clientY: number, canvas: HTMLCanvasElement)
 function mirrorControls(): void {
   if (camera === null) return
   const display = displayCameraPose(camera)
-  const inputEngaged = input?.engaged() ?? false
   root.dataset['cameraMode'] = camera.mode
-  root.dataset['inputEngaged'] = String(inputEngaged)
-  root.dataset['orbitTarget'] = camera.mode === 'orbit' ? camera.target.treeId : ''
+  root.dataset['inputEngaged'] = String(freeActive)
+  root.dataset['orbitTarget'] = camera.mode === 'orbit' ? camera.treeId : ''
   root.dataset['displayedEye'] = JSON.stringify(display.eye)
   root.dataset['displayedDirection'] = JSON.stringify(display.forward)
-  reticle.hidden = camera.mode !== 'free' || !inputEngaged
-  engage.hidden = camera.mode !== 'free' || inputEngaged
+  reticle.hidden = camera.mode !== 'free' || !freeActive
+  engage.hidden = camera.mode !== 'free' || freeActive
 }
 
 function resize(): void {
@@ -164,12 +164,12 @@ function animate(now: number): void {
   const timing = frameTiming(now, previousFrame)
   previousFrame = now
   const sampledMotion = activeInput.sample()
-  const motion = currentCamera.mode === 'free' && !activeInput.engaged()
+  const motion = currentCamera.mode === 'free' && !freeActive
     ? NEUTRAL_MOTION
     : sampledMotion
   const nextCamera = advanceCamera(currentCamera, motion, timing.movementSeconds)
   camera = nextCamera
-  activeRenderer.setCamera(displayCameraPose(nextCamera))
+  activeRenderer.setCamera(displayCameraPose(nextCamera, now))
   const rendered = activeRenderer.render(now)
   maxRepresentationOperations = Math.max(maxRepresentationOperations, rendered.representationOperations)
   activeWriter.camera(cameraPoseForSave(nextCamera))
@@ -203,25 +203,23 @@ function animate(now: number): void {
 
 function applyDoubleCut(clientX: number, clientY: number): void {
   const activeCamera = camera
-  const activeInput = input
   const activeSession = session
   const activeWriter = writer
   const activeRenderer = renderer
   if (
     activeCamera === null
-    || activeInput === null
     || activeSession === null
     || activeWriter === null
     || activeRenderer === null
   ) return
-  if (activeCamera.mode === 'free' && !activeInput.engaged()) return
+  if (activeCamera.mode === 'free' && !freeActive) return
   const [ndcX, ndcY] = activeCamera.mode === 'free'
     ? [0, 0]
     : pointerNdc(clientX, clientY, activeRenderer.canvas)
   const pointed = activeRenderer.pointAtBranch(
     ndcX,
     ndcY,
-    activeCamera.mode === 'orbit' ? activeCamera.target.treeId : null,
+    activeCamera.mode === 'orbit' ? activeCamera.treeId : null,
   )
   if (pointed === null) {
     setError('Double cut requires an ordinary branch within reach.')
@@ -262,28 +260,79 @@ async function startWorld(world: GameWorld): Promise<void> {
       if (status.state === 'error') setError(saveStatus.textContent)
     })
     nextInput = attachWorldInput(worldHost, {
-      primary() {
+      pointerDown(button, clientX, clientY) {
         const activeCamera = camera
         const activeInput = input
         const activeRenderer = renderer
         if (activeCamera === null || activeInput === null || activeRenderer === null) return
-        if (activeCamera.mode === 'orbit') return
-        if (!activeInput.engaged()) {
-          void activeInput.engage().then(mirrorControls, mirrorControls)
+        if (activeCamera.mode === 'orbit') {
+          activeCamera.interaction.pointerDown(button, clientX, clientY)
+          return
+        }
+        if (button === 2) {
+          applyDoubleCut(clientX, clientY)
+          return
+        }
+        if (button !== 0) return
+        if (!freeActive) {
+          void activeInput.engage().catch(() => {
+            freeActive = false
+            mirrorControls()
+          })
           return
         }
         const target = activeRenderer.pickTree(0, 0)
         if (target === null) return
         camera = enterOrbit(activeCamera, target)
+        freeActive = false
         activeInput.release()
         mirrorControls()
       },
-      secondary(clientX, clientY) {
-        applyDoubleCut(clientX, clientY)
+      pointerMove(clientX, clientY) {
+        const activeCamera = camera
+        if (activeCamera?.mode !== 'orbit') return
+        activeCamera.interaction.pointerMove(
+          clientX,
+          clientY,
+          worldHost.clientHeight,
+          performance.now(),
+        )
+      },
+      pointerUp(_button, clientX, clientY) {
+        const activeCamera = camera
+        const activeRenderer = renderer
+        if (activeCamera === null || activeRenderer === null) return
+        if (activeCamera.mode === 'free') return
+        const release = activeCamera.interaction.pointerUp(clientX, clientY)
+        if (release === null) return
+        if (release.button === 2) {
+          applyDoubleCut(release.clientX, release.clientY)
+          return
+        }
+        if (release.button !== 0) return
+        const [ndcX, ndcY] = pointerNdc(
+          release.clientX,
+          release.clientY,
+          activeRenderer.canvas,
+        )
+        const focus = activeRenderer.pickTreeFocus(ndcX, ndcY, activeCamera.treeId)
+        if (focus !== null) activeCamera.interaction.focus(focus.worldFocus, performance.now())
+      },
+      pointerCancel() {
+        if (camera?.mode === 'orbit') camera.interaction.cancelPointer()
+      },
+      wheel(deltaY) {
+        if (camera?.mode === 'orbit') camera.interaction.wheel(deltaY, performance.now())
       },
       escape() {
-        if (camera?.mode !== 'orbit') return
+        if (camera?.mode !== 'orbit') return false
         camera = exitOrbit(camera)
+        freeActive = false
+        mirrorControls()
+        return true
+      },
+      engagementChanged(active) {
+        freeActive = active
         mirrorControls()
       },
     })
@@ -292,6 +341,7 @@ async function startWorld(world: GameWorld): Promise<void> {
     input = nextInput
     session = nextSession
     writer = nextWriter
+    freeActive = false
     start.hidden = true
     hud.hidden = false
     worldName.textContent = world.slot.name

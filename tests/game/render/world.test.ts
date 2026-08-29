@@ -174,6 +174,7 @@ import { mountGameWorld } from '../../../src/game/render/world'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { applyDoubleCutIntro } from '../../../src/kernel/rules/doublecut'
 import { scene3 } from '../../../src/view3d/scene'
+import { focusPoint } from '../../../src/view3d/pick'
 import type { TreeMutation } from '../../../src/game/session'
 import { gameSession, publishTreeMutation } from '../../../src/game/session'
 import { SaveWriter } from '../../../src/game/save-writer'
@@ -593,6 +594,63 @@ describe('production game world', () => {
       treeId: rotated.id,
       entity: { kind: 'branch', region: rotated.snapshot.diagram.root },
     })
+    world.dispose()
+  })
+
+  it('picks a semantic entity and returns its shared focus in world placement', () => {
+    const tree = blankTree('semantic-focus', 17, -11)
+    const rotated = { ...tree, placement: { ...tree.placement, yaw: Math.PI / 3 } }
+    const world = mountGameWorld(container(), [rotated])
+    pointCameraAtBranch(world, rotated)
+
+    expect(world.pickTreeFocus(0, 0, rotated.id)).toMatchObject({
+      treeId: rotated.id,
+      entity: { kind: 'branch', key: 'b:r0', region: 'r0' },
+      worldFocus: { x: 17, y: 0.25, z: -11 },
+    })
+    world.dispose()
+  })
+
+  it('focuses empty space on the owning tree authoritative placed scene center', () => {
+    const tree = blankTree('empty-focus', 17, -11)
+    const rotated = { ...tree, placement: { ...tree.placement, yaw: Math.PI / 3 } }
+    const world = mountGameWorld(container(), [rotated])
+    pointCameraAtBranch(world, rotated)
+
+    const focus = world.pickTreeFocus(0.9, 0.9, rotated.id)
+    expect(focus).toMatchObject({ treeId: rotated.id, entity: null })
+    expect(focus!.worldFocus.x).toBeCloseTo(17, 12)
+    expect(focus!.worldFocus.y).toBeCloseTo(0.25, 12)
+    expect(focus!.worldFocus.z).toBeCloseTo(-11, 12)
+    world.dispose()
+  })
+
+  it('does not recenter from outgoing visible geometry absent from the committed scene', () => {
+    const before = targetTree('transition-focus', 0, -20, 0)
+    const after = blankTree(before.id, 0, -20)
+    const beforeScene = scene3(before.snapshot.diagram)
+    const outgoing = beforeScene.entities.find((entity) =>
+      entity.kind === 'branch' && entity.region !== before.snapshot.diagram.root,
+    )
+    if (outgoing === undefined) throw new Error('fixture has no outgoing branch')
+    const localFocus = focusPoint(outgoing.key, beforeScene.entities)
+    if (localFocus === null) throw new Error('outgoing branch has no focus')
+    const world = mountGameWorld(container(), [before], () => 0)
+    world.setCamera({
+      eye: { x: localFocus.x, y: localFocus.y, z: localFocus.z },
+      forward: { x: 0, y: 0, z: -1 },
+    })
+    const prepared = world.prepareTreeUpdate({
+      treeId: before.id,
+      before,
+      after,
+    })
+    world.commitTreeUpdate(prepared)
+
+    expect(world.pointAtBranch(0, 0, before.id)).toMatchObject({
+      entity: { key: outgoing.key },
+    })
+    expect(world.pickTreeFocus(0, 0, before.id)).toBeNull()
     world.dispose()
   })
 

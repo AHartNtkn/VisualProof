@@ -98,6 +98,8 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
     container.dataset['view3Focus'] = key ?? ''
     schedule()
   })
+  listen('pointercancel', () => orbit.cancelPointer())
+  listen('lostpointercapture', () => orbit.cancelPointer())
   listen('contextmenu', (ev) => ev.preventDefault())
   listen('pointermove', (ev) => {
     if (orbit.pointerMove(ev.clientX, ev.clientY, container.clientHeight, performance.now())) {

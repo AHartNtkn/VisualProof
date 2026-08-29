@@ -30,6 +30,15 @@ describe('OrbitInteraction', () => {
     expect(orbit.pointerUp(103, 104)).toBeNull()
   })
 
+  it('cancels a pointer gesture without reporting a stationary release later', () => {
+    const orbit = new OrbitInteraction(initial)
+    orbit.pointerDown(2, 100, 100)
+
+    orbit.cancelPointer()
+
+    expect(orbit.pointerUp(100, 100)).toBeNull()
+  })
+
   it('applies left orbit incrementally', () => {
     const orbit = new OrbitInteraction(initial)
     orbit.pointerDown(0, 10, 20)

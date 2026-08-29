@@ -7,6 +7,7 @@ import {
   exitOrbit,
   initialCameraState,
 } from '../../src/game/camera'
+import { eyeOf, orbited } from '../../src/view3d/camera'
 
 const start = { position: { x: 0, y: 1.7, z: 8 }, yaw: 0, pitch: 0 }
 const target = {
@@ -85,49 +86,31 @@ describe('orbit camera motion and persistence', () => {
   it('begins orbit at the free-flight eye', () => {
     const orbit = enterOrbit(initialCameraState(start), target)
 
-    expect(displayCameraPose(orbit).eye).toEqual(start.position)
+    expect(displayCameraPose(orbit, 0).eye.x).toBeCloseTo(start.position.x, 12)
+    expect(displayCameraPose(orbit, 0).eye.y).toBeCloseTo(start.position.y, 12)
+    expect(displayCameraPose(orbit, 0).eye.z).toBeCloseTo(start.position.z, 12)
   })
 
-  it('changes azimuth from strafing at 1.5 radians per second', () => {
-    expect(advanceCamera(enterOrbit(initialCameraState(start), target), {
-      forward: 0, strafe: 1, vertical: 0, sprint: false, lookX: 0, lookY: 0,
-    }, 1)).toMatchObject({ mode: 'orbit', azimuth: 1.5 })
-  })
-
-  it('zooms from forward motion at 12 units per second', () => {
-    expect(advanceCamera(enterOrbit(initialCameraState(start), target), {
-      forward: 1, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
-    }, 0.1)).toMatchObject({ mode: 'orbit', distance: 6.8 })
-  })
-
-  it('changes orbit height from vertical motion at 8 units per second', () => {
-    expect(advanceCamera(enterOrbit(initialCameraState(start), target), {
-      forward: 0, strafe: 0, vertical: 1, sprint: false, lookX: 0, lookY: 0,
-    }, 1)).toMatchObject({ mode: 'orbit', height: 7.7 })
-  })
-
-  it('does not zoom closer than one unit outside the target radius', () => {
-    expect(advanceCamera(enterOrbit(initialCameraState(start), target), {
-      forward: 1, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
-    }, 1)).toMatchObject({ mode: 'orbit', distance: 5 })
-  })
-
-  it('ignores look deltas and sprint while orbiting', () => {
+  it('delegates orbit changes to the shared interaction', () => {
     const orbit = enterOrbit(initialCameraState(start), target)
+    const initialPose = orbit.interaction.poseAt(0)
+    orbit.interaction.pointerDown(0, 20, 30)
+    orbit.interaction.pointerMove(44, 18, 600, 0)
 
-    expect(advanceCamera(orbit, {
-      forward: 0, strafe: 0, vertical: 0, sprint: true, lookX: 50, lookY: 50,
-    }, 1)).toEqual(orbit)
+    expect(orbit.interaction.poseAt(0)).toEqual(orbited(initialPose, 24, -12))
+    expect(displayCameraPose(orbit, 0).eye).toEqual(eyeOf(orbited(initialPose, 24, -12)))
   })
 
   it('displays a normalized forward vector toward the target center', () => {
-    const pose = displayCameraPose(advanceCamera(enterOrbit(initialCameraState(start), target), {
-      forward: 0, strafe: 1, vertical: 1, sprint: false, lookX: 0, lookY: 0,
-    }, 1))
+    const orbit = enterOrbit(initialCameraState(start), target)
+    orbit.interaction.pointerDown(0, 0, 0)
+    orbit.interaction.pointerMove(30, 20, 600, 0)
+    const pose = displayCameraPose(orbit, 0)
+    const orbitTarget = orbit.interaction.poseAt(0).target
     const towardCenter = {
-      x: target.center.x - pose.eye.x,
-      y: target.center.y - pose.eye.y,
-      z: target.center.z - pose.eye.z,
+      x: orbitTarget.x - pose.eye.x,
+      y: orbitTarget.y - pose.eye.y,
+      z: orbitTarget.z - pose.eye.z,
     }
     const directionLength = Math.hypot(towardCenter.x, towardCenter.y, towardCenter.z)
 
@@ -146,5 +129,12 @@ describe('orbit camera motion and persistence', () => {
 
   it('saves the stored free pose while orbiting', () => {
     expect(cameraPoseForSave(enterOrbit(initialCameraState(start), target))).toEqual(start)
+  })
+
+  it('ignores free-flight keyboard motion while orbiting', () => {
+    const orbit = enterOrbit(initialCameraState(start), target)
+    expect(advanceCamera(orbit, {
+      forward: 1, strafe: 1, vertical: 1, sprint: true, lookX: 50, lookY: 50,
+    }, 1)).toBe(orbit)
   })
 })

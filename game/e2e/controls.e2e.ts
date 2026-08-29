@@ -1,20 +1,25 @@
 import { $, browser, expect } from '@wdio/globals'
 import { describe, it } from 'mocha'
+import { diagramFromJson } from '../../src/kernel/diagram'
+import { focusPoint } from '../../src/view3d/pick'
+import { scene3 } from '../../src/view3d/scene'
 import {
+  canvasOffsetForWorldPoint,
   canvas,
   clickWorld,
+  dragWorld,
   displayedPose,
   expectDirectionClose,
   expectDoubleCut,
   expectPoseClose,
   game,
   hold,
-  movePointer,
   poseEyeDistance,
   rightClickWorld,
   storedCameraPose,
   storedTreeDiagram,
   waitForVisibleTreeTween,
+  wheelWorld,
 } from './native'
 
 describe('orchard world controls', () => {
@@ -59,7 +64,6 @@ describe('orchard world controls', () => {
     await browser.keys('Escape')
     await expect(game()).toHaveAttribute('data-camera-mode', 'free')
     await expectPoseClose(await displayedPose(), loadedPose)
-    await clickWorld()
     await expect(game()).toHaveAttribute('data-input-engaged', 'true')
 
     await hold('w')
@@ -81,32 +85,70 @@ describe('orchard world controls', () => {
     expect(storedTreeDiagram('large-1', 'tree-0000')).toEqual(diagramBeforeDoubleCut)
 
     const orbitPose = await displayedPose()
-    await movePointer(40, 25)
-    await browser.pause(100)
-    await expectPoseClose(await displayedPose(), orbitPose)
-
     const savedFreePose = storedCameraPose('large-1')
-    await hold('a')
+    await dragWorld(0, { x: -30, y: -20 }, { x: 45, y: 25 })
+    await browser.pause(100)
     const movedOrbitPose = await displayedPose()
     expect(poseEyeDistance(movedOrbitPose, orbitPose)).toBeGreaterThan(0.01)
     expectPoseClose(storedCameraPose('large-1'), savedFreePose)
 
-    await rightClickWorld()
+    await wheelWorld(-320)
+    await browser.pause(100)
+    const zoomedOrbitPose = await displayedPose()
+    expect(poseEyeDistance(zoomedOrbitPose, movedOrbitPose)).toBeGreaterThan(0.01)
+    expectPoseClose(storedCameraPose('large-1'), savedFreePose)
+
+    const semanticScene = scene3(diagramFromJson(diagramBeforeDoubleCut))
+    const branchFocuses = semanticScene.entities.flatMap((entity) => {
+      if (entity.kind !== 'branch') return []
+      const focus = focusPoint(entity.key, semanticScene.entities)
+      return focus === null ? [] : [{ entity, focus }]
+    }).sort((a, b) => {
+      const distance = ({ focus }: typeof a): number => Math.hypot(
+        focus.x - semanticScene.center.x,
+        focus.y - semanticScene.center.y,
+        focus.z - semanticScene.center.z,
+      )
+      return distance(b) - distance(a)
+    })
+    const offCenterBranch = branchFocuses[0]
+    if (offCenterBranch === undefined) throw new Error('fixture has no branch to focus')
+    const focusOffset = await canvasOffsetForWorldPoint(zoomedOrbitPose, offCenterBranch.focus)
+    await clickWorld(focusOffset.x, focusOffset.y)
+    await browser.pause(300)
+    const focusedOrbitPose = await displayedPose()
+    for (const axis of ['x', 'y', 'z'] as const) {
+      const translation = offCenterBranch.focus[axis] - semanticScene.center[axis]
+      expect(focusedOrbitPose.eye[axis]).toBeCloseTo(zoomedOrbitPose.eye[axis] + translation, 6)
+      expect(focusedOrbitPose.direction[axis]).toBeCloseTo(zoomedOrbitPose.direction[axis], 6)
+    }
+
+    await dragWorld(2, { x: -20, y: 15 }, { x: 35, y: -25 })
+    await browser.pause(100)
+    const pannedOrbitPose = await displayedPose()
+    expect(poseEyeDistance(pannedOrbitPose, focusedOrbitPose)).toBeGreaterThan(0.01)
+    expect(storedTreeDiagram('large-1', 'tree-0000')).toEqual(diagramBeforeDoubleCut)
+
+    const beforeToolPose = pannedOrbitPose
+    const toolOffset = await canvasOffsetForWorldPoint(pannedOrbitPose, offCenterBranch.focus)
+    await rightClickWorld(toolOffset.x, toolOffset.y)
     await expect($('[data-feedback]')).toHaveText('Double cut applied to tree-0000.')
     await waitForVisibleTreeTween()
     const diagramAfterDoubleCut = storedTreeDiagram('large-1', 'tree-0000')
-    expectDoubleCut(diagramBeforeDoubleCut, diagramAfterDoubleCut, 'dc_5')
+    expectDoubleCut(
+      diagramBeforeDoubleCut,
+      diagramAfterDoubleCut,
+      offCenterBranch.entity.region,
+    )
     await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
     await expect(game()).toHaveAttribute('data-orbit-target', 'tree-0000')
-    await expectPoseClose(await displayedPose(), movedOrbitPose)
+    await expectPoseClose(await displayedPose(), beforeToolPose)
 
     await browser.keys('Escape')
     await expect(game()).toHaveAttribute('data-camera-mode', 'free')
-    await expect(game()).toHaveAttribute('data-input-engaged', 'false')
+    await expect(game()).toHaveAttribute('data-input-engaged', 'true')
     await expectPoseClose(await displayedPose(), preOrbitPose)
 
-    await clickWorld()
-    await expect(game()).toHaveAttribute('data-input-engaged', 'true')
     await hold('w')
     const finalPose = await displayedPose()
     expect(poseEyeDistance(finalPose, preOrbitPose)).toBeGreaterThan(0.01)

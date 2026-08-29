@@ -80,6 +80,11 @@ export class OrbitInteraction {
     }
   }
 
+  cancelPointer(): void {
+    this.#drag = null
+    this.#press = null
+  }
+
   wheel(deltaY: number, now: number): void {
     this.#pose = zoomed(this.poseAt(now), deltaY)
   }

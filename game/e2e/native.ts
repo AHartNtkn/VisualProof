@@ -89,10 +89,16 @@ export async function rightClickWorld(x = 0, y = 0): Promise<void> {
     .perform()
 }
 
-export function expectDoubleCut(before: StoredDiagram, after: StoredDiagram, parent: string): void {
+export function expectDoubleCut(
+  before: StoredDiagram,
+  after: StoredDiagram,
+  parent: string,
+): void {
   const added = Object.keys(after.regions).filter((id) => before.regions[id] === undefined)
   expect(added).toHaveLength(2)
-  const outer = added.find((id) => after.regions[id]?.kind === 'cut' && after.regions[id].parent === parent)
+  const outer = added.find((id) =>
+    after.regions[id]?.kind === 'cut' && after.regions[id].parent === parent,
+  )
   expect(outer).toBeDefined()
   const inner = added.find((id) => after.regions[id]?.kind === 'cut' && after.regions[id].parent === outer)
   expect(inner).toBeDefined()
@@ -187,6 +193,55 @@ export function storedCameraPose(slotId: string): DisplayPose {
 
 export async function movePointer(x: number, y: number): Promise<void> {
   await browser.action('pointer').move({ origin: 'pointer', x, y }).perform()
+}
+
+export async function dragWorld(
+  button: 0 | 1 | 2,
+  from: { readonly x: number; readonly y: number },
+  to: { readonly x: number; readonly y: number },
+): Promise<void> {
+  await browser.action('pointer')
+    .move({ origin: await canvas(), x: from.x, y: from.y })
+    .down({ button })
+    .move({ origin: await canvas(), x: to.x, y: to.y, duration: 120 })
+    .up({ button })
+    .perform()
+}
+
+export async function wheelWorld(deltaY: number): Promise<void> {
+  await browser.action('wheel')
+    .scroll({ origin: await canvas(), deltaX: 0, deltaY })
+    .perform()
+}
+
+export async function canvasOffsetForWorldPoint(
+  pose: DisplayPose,
+  point: { readonly x: number; readonly y: number; readonly z: number },
+): Promise<{ readonly x: number; readonly y: number }> {
+  const forward = pose.direction
+  const rightLength = Math.hypot(forward.z, forward.x)
+  if (rightLength === 0) throw new Error('cannot project through a vertical camera')
+  const right = { x: -forward.z / rightLength, y: 0, z: forward.x / rightLength }
+  const up = {
+    x: right.y * forward.z - right.z * forward.y,
+    y: right.z * forward.x - right.x * forward.z,
+    z: right.x * forward.y - right.y * forward.x,
+  }
+  const delta = {
+    x: point.x - pose.eye.x,
+    y: point.y - pose.eye.y,
+    z: point.z - pose.eye.z,
+  }
+  const depth = delta.x * forward.x + delta.y * forward.y + delta.z * forward.z
+  if (depth <= 0) throw new Error('world point is behind the camera')
+  const horizontal = delta.x * right.x + delta.y * right.y + delta.z * right.z
+  const vertical = delta.x * up.x + delta.y * up.y + delta.z * up.z
+  const height = (await canvas().getSize()).height
+  const pixelsPerWorld = height / (2 * depth * Math.tan((67 * Math.PI) / 360))
+  return {
+    x: Math.round(horizontal * pixelsPerWorld),
+    y: Math.round(-vertical * pixelsPerWorld),
+  }
 }
 
 export async function setRenderMode(mode: 'game' | 'raw'): Promise<void> {

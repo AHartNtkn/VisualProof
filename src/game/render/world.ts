@@ -33,6 +33,9 @@ import {
   type TreeMaterialSource,
 } from './tree-objects'
 import type { DisplayCameraPose, TreeRenderAsset } from './types'
+import type { Entity } from '../../view3d/scene'
+import { focusPoint } from '../../view3d/pick'
+import type { Vec3 } from '../../view3d/vec3'
 
 const MAX_PIXEL_RATIO = 1.5
 const TERRAIN_SIZE = 4000
@@ -47,6 +50,11 @@ export type GameWorldRenderer = {
   setTrees(trees: readonly GameTree[]): void
   setCamera(pose: DisplayCameraPose): void
   pickTree(ndcX: number, ndcY: number): TreeTarget | null
+  pickTreeFocus(ndcX: number, ndcY: number, treeId: string): {
+    readonly treeId: string
+    readonly entity: Entity | null
+    readonly worldFocus: Vec3
+  } | null
   pointAtBranch(ndcX: number, ndcY: number, orbitTarget: string | null): PointedTreePart | null
   setRenderMode(mode: RenderMode): void
   prepareTreeUpdate(mutation: TreeMutation): PreparedTreeUpdate
@@ -282,26 +290,26 @@ export function mountGameWorld(
     return dynamic.distance <= staticPart.distance ? dynamic : staticPart
   }
 
-  const pointAtBranch = (
+  const pointAtEntity = (
     ndcX: number,
     ndcY: number,
     orbitTarget: string | null,
+    accepts: EntityFilter = () => true,
   ): PointedTreePart | null => {
     treeRaycaster.setFromCamera({ x: ndcX, y: ndcY } as THREE.Vector2, camera)
-    const acceptsBranch: EntityFilter = (entity) => entity.kind === 'branch'
     const dynamic = pointAtVisibleParts(
       treeRaycaster,
       dynamicTrees.objects(),
       INTERACTION_REACH,
       orbitTarget,
-      acceptsBranch,
+      accepts,
     )
     const staticBranch = pointAtTreeAssets(
       treeRaycaster.ray,
       assetCandidates(),
       INTERACTION_REACH,
       orbitTarget,
-      acceptsBranch,
+      accepts,
     )
     return closest(dynamic, staticBranch)
   }
@@ -331,7 +339,32 @@ export function mountGameWorld(
       }
       return nearest
     },
-    pointAtBranch,
+    pickTreeFocus(ndcX, ndcY, treeId) {
+      const rendered = renderTreesById.get(treeId)
+      if (rendered === undefined) return null
+      const asset = assetsByJson.get(rendered.diagramJson)
+      if (asset === undefined) return null
+      const pointed = pointAtEntity(ndcX, ndcY, treeId)
+      if (pointed === null) {
+        return {
+          treeId,
+          entity: null,
+          worldFocus: localPointToWorld(asset.lods.full.center, rendered.placement),
+        }
+      }
+      const entity = asset.lods.full.entities.find(({ key }) => key === pointed.entity.key)
+      if (entity === undefined) return null
+      const localFocus = focusPoint(entity.key, asset.lods.full.entities)
+      if (localFocus === null) return null
+      return {
+        treeId,
+        entity,
+        worldFocus: localPointToWorld(localFocus, rendered.placement),
+      }
+    },
+    pointAtBranch(ndcX, ndcY, orbitTarget) {
+      return pointAtEntity(ndcX, ndcY, orbitTarget, (entity) => entity.kind === 'branch')
+    },
     setRenderMode(mode) {
       runtime.setMode(mode)
     },

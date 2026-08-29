@@ -3,11 +3,19 @@ import { attachWorldInput, type WorldInputActions } from '../../game/input'
 
 class TestWorldTarget extends EventTarget {
   requestPointerLockCalls = 0
+  captured = new Set<number>()
+  rejectEngagement = false
+  throwEngagement = false
 
   requestPointerLock(): Promise<void> {
     this.requestPointerLockCalls += 1
-    return Promise.resolve()
+    if (this.throwEngagement) throw new Error('synchronous denial')
+    return this.rejectEngagement ? Promise.reject(new Error('denied')) : Promise.resolve()
   }
+
+  setPointerCapture(pointerId: number): void { this.captured.add(pointerId) }
+  releasePointerCapture(pointerId: number): void { this.captured.delete(pointerId) }
+  hasPointerCapture(pointerId: number): boolean { return this.captured.has(pointerId) }
 }
 
 class TestDocumentTarget extends EventTarget {
@@ -20,8 +28,8 @@ class TestDocumentTarget extends EventTarget {
   }
 }
 
-function event(type: string, properties: Record<string, number | string> = {}): Event {
-  return Object.defineProperties(new Event(type), Object.fromEntries(
+function event(type: string, properties: Record<string, number | string> = {}, cancelable = false): Event {
+  return Object.defineProperties(new Event(type, { cancelable }), Object.fromEntries(
     Object.entries(properties).map(([name, value]) => [name, { value }]),
   ))
 }
@@ -30,30 +38,34 @@ function createHarness(): {
   readonly target: TestWorldTarget
   readonly windowTarget: EventTarget
   readonly documentTarget: TestDocumentTarget
-  readonly primary: Array<readonly [number, number]>
-  readonly secondary: Array<readonly [number, number]>
+  readonly pointers: string[]
+  readonly engagements: boolean[]
   readonly escapes: { count: number }
+  readonly escapeHandled: { value: boolean }
   readonly input: ReturnType<typeof attachWorldInput>
 } {
   const target = new TestWorldTarget()
   const windowTarget = new EventTarget()
   const documentTarget = new TestDocumentTarget()
-  const primary: Array<readonly [number, number]> = []
-  const secondary: Array<readonly [number, number]> = []
+  const pointers: string[] = []
+  const engagements: boolean[] = []
   const escapes = { count: 0 }
-  const actions: WorldInputActions & {
-    readonly secondary: (clientX: number, clientY: number) => void
-  } = {
-    primary: (clientX, clientY) => primary.push([clientX, clientY]),
-    secondary: (clientX, clientY) => secondary.push([clientX, clientY]),
-    escape: () => { escapes.count += 1 },
+  const escapeHandled = { value: false }
+  const actions: WorldInputActions = {
+    pointerDown: (button, clientX, clientY) => pointers.push(`down:${button}:${clientX}:${clientY}`),
+    pointerMove: (clientX, clientY) => pointers.push(`move:${clientX}:${clientY}`),
+    pointerUp: (button, clientX, clientY) => pointers.push(`up:${button}:${clientX}:${clientY}`),
+    pointerCancel: () => pointers.push('cancel'),
+    wheel: (deltaY) => pointers.push(`wheel:${deltaY}`),
+    engagementChanged: (active) => engagements.push(active),
+    escape: () => { escapes.count += 1; return escapeHandled.value },
   }
   const input = attachWorldInput(target as unknown as HTMLElement, actions, {
     window: windowTarget as Window,
     document: documentTarget as unknown as Document,
   })
 
-  return { target, windowTarget, documentTarget, primary, secondary, escapes, input }
+  return { target, windowTarget, documentTarget, pointers, engagements, escapes, escapeHandled, input }
 }
 
 describe('world input sampling', () => {
@@ -99,14 +111,16 @@ describe('world input sampling', () => {
     })
   })
 
-  it('reports primary coordinates and escape synchronously without retaining escape', () => {
-    const { target, windowTarget, primary, escapes, input } = createHarness()
+  it('reports pointer coordinates and leaves an unhandled Escape browser-owned', () => {
+    const { target, windowTarget, pointers, escapes, input } = createHarness()
 
     target.dispatchEvent(event('mousedown', { button: 0, clientX: 123, clientY: 456 }))
-    windowTarget.dispatchEvent(event('keydown', { code: 'Escape' }))
+    const escape = event('keydown', { code: 'Escape' }, true)
+    windowTarget.dispatchEvent(escape)
 
-    expect(primary).toEqual([[123, 456]])
+    expect(pointers).toEqual(['down:0:123:456'])
     expect(escapes.count).toBe(1)
+    expect(escape.defaultPrevented).toBe(false)
     expect(input.sample()).toEqual({
       forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
     })
@@ -129,16 +143,34 @@ describe('world input sampling', () => {
     })
   })
 
-  it('delivers secondary coordinates while preventing the world context menu', () => {
-    const { target, primary, secondary, escapes } = createHarness()
+  it('delivers raw pointer and wheel lifecycle while preventing native scrolling and menus', () => {
+    const { target, pointers, escapes } = createHarness()
+    target.dispatchEvent(event('pointerdown', { button: 2, clientX: 70, clientY: 80, pointerId: 4 }))
     target.dispatchEvent(event('mousedown', { button: 2, clientX: 70, clientY: 80 }))
+    target.dispatchEvent(event('mousemove', { clientX: 74, clientY: 83 }))
+    target.dispatchEvent(event('mouseup', { button: 2, clientX: 74, clientY: 83 }))
+    const wheel = event('wheel', { deltaY: -120 }, true)
+    target.dispatchEvent(wheel)
     const contextMenu = new Event('contextmenu', { cancelable: true })
 
     expect(target.dispatchEvent(contextMenu)).toBe(false)
     expect(contextMenu.defaultPrevented).toBe(true)
-    expect(primary).toEqual([])
-    expect(secondary).toEqual([[70, 80]])
+    expect(wheel.defaultPrevented).toBe(true)
+    expect(pointers).toEqual([
+      'down:2:70:80', 'move:74:83', 'up:2:74:83', 'wheel:-120',
+    ])
     expect(escapes.count).toBe(0)
+  })
+
+  it('handles orbit Escape by requesting engagement synchronously in the key event', () => {
+    const harness = createHarness()
+    harness.escapeHandled.value = true
+    const escape = event('keydown', { code: 'Escape' }, true)
+
+    harness.windowTarget.dispatchEvent(escape)
+
+    expect(escape.defaultPrevented).toBe(true)
+    expect(harness.target.requestPointerLockCalls).toBe(1)
   })
 })
 
@@ -160,19 +192,45 @@ describe('world input interruption and lifecycle', () => {
     harness.documentTarget.pointerLockElement = harness.target as unknown as Element
     harness.windowTarget.dispatchEvent(event('keydown', { code: 'KeyW' }))
     harness.target.dispatchEvent(event('mousemove', { movementX: 3, movementY: -4 }))
+    harness.target.dispatchEvent(event('pointerdown', {
+      button: 0, clientX: 10, clientY: 20, pointerId: 3,
+    }))
+    harness.target.dispatchEvent(event('mousedown', { button: 0, clientX: 10, clientY: 20 }))
 
     interrupt(harness)
+    harness.target.dispatchEvent(event('mousemove', {
+      clientX: 30, clientY: 40, movementX: 0, movementY: 0,
+    }))
+    harness.target.dispatchEvent(event('mouseup', { button: 0, clientX: 30, clientY: 40 }))
 
     expect(harness.input.sample()).toEqual({
       forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
     })
-    expect(harness.primary).toEqual([])
+    expect(harness.pointers).toEqual(['down:0:10:20', 'cancel'])
     expect(harness.escapes.count).toBe(0)
+    expect(harness.engagements.at(-1)).toBe(false)
+  })
+
+  it.each(['pointercancel', 'lostpointercapture'])('%s cancels the active pointer lifecycle', (type) => {
+    const harness = createHarness()
+    harness.target.dispatchEvent(event('pointerdown', {
+      button: 0, clientX: 10, clientY: 20, pointerId: 3,
+    }))
+    harness.target.dispatchEvent(event('mousedown', { button: 0, clientX: 10, clientY: 20 }))
+
+    harness.target.dispatchEvent(event(type, { pointerId: 3 }))
+
+    expect(harness.pointers).toEqual(['down:0:10:20', 'cancel'])
+    expect(harness.target.captured.size).toBe(0)
   })
 
   it('detaches every input effect when disposed', () => {
     const harness = createHarness()
     harness.documentTarget.pointerLockElement = harness.target as unknown as Element
+    harness.target.dispatchEvent(event('pointerdown', {
+      button: 0, clientX: 10, clientY: 20, pointerId: 3,
+    }))
+    harness.target.dispatchEvent(event('mousedown', { button: 0, clientX: 10, clientY: 20 }))
     harness.input.dispose()
     harness.input.dispose()
 
@@ -189,7 +247,7 @@ describe('world input interruption and lifecycle', () => {
     expect(harness.input.sample()).toEqual({
       forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
     })
-    expect(harness.primary).toEqual([])
+    expect(harness.pointers).toEqual(['down:0:10:20', 'cancel'])
     expect(harness.escapes.count).toBe(0)
   })
 
@@ -198,15 +256,45 @@ describe('world input interruption and lifecycle', () => {
 
     await input.engage()
     expect(target.requestPointerLockCalls).toBe(1)
-    expect(input.engaged()).toBe(false)
-
     documentTarget.pointerLockElement = new EventTarget() as unknown as Element
     input.release()
     expect(documentTarget.exitPointerLockCalls).toBe(0)
 
     documentTarget.pointerLockElement = target as unknown as Element
-    expect(input.engaged()).toBe(true)
     input.release()
     expect(documentTarget.exitPointerLockCalls).toBe(1)
+  })
+
+  it('reports engagement changes and reports a rejected handled-Escape request inactive', async () => {
+    const harness = createHarness()
+    harness.documentTarget.pointerLockElement = harness.target as unknown as Element
+    harness.documentTarget.dispatchEvent(event('pointerlockchange'))
+    harness.escapeHandled.value = true
+    harness.target.rejectEngagement = true
+
+    harness.windowTarget.dispatchEvent(event('keydown', { code: 'Escape' }, true))
+    await Promise.resolve()
+
+    expect(harness.engagements).toEqual([true, false])
+  })
+
+  it('reports a synchronous handled-Escape engagement failure inactive', async () => {
+    const harness = createHarness()
+    harness.escapeHandled.value = true
+    harness.target.throwEngagement = true
+
+    expect(() => harness.windowTarget.dispatchEvent(
+      event('keydown', { code: 'Escape' }, true),
+    )).not.toThrow()
+    await Promise.resolve()
+
+    expect(harness.engagements).toEqual([false])
+  })
+
+  it('normalizes a synchronous ordinary engagement failure to a rejected promise', async () => {
+    const harness = createHarness()
+    harness.target.throwEngagement = true
+
+    await expect(harness.input.engage()).rejects.toThrow('synchronous denial')
   })
 })

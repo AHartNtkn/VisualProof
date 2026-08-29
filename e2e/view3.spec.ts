@@ -52,6 +52,13 @@ test('3D view mounts, renders the trunk, reports hover, and unmounts', async ({ 
   }
   expect(hover).toMatch(/^b:/)
 
+  // A cancelled press must not become a click-to-focus when its physical
+  // release arrives later.
+  await page.mouse.down()
+  await canvas3.dispatchEvent('pointercancel', { pointerId: 1, bubbles: true })
+  await page.mouse.up()
+  expect((await wrap.getAttribute('data-view3-focus')) ?? '').toBe('')
+
   // Click-to-focus: clicking the hovered branch sets the orbit focus to it.
   await page.mouse.click(lastHoverX, lastHoverY)
   await page.waitForTimeout(100)
