@@ -13,14 +13,32 @@ import {
   type CameraState,
 } from '../src/game/camera'
 import type { GameWorld } from '../src/game/model'
-import { ORDER_CATALOG } from '../src/game/orders/catalog'
-import { initialOrderProgress } from '../src/game/orders/session'
+import {
+  ORDER_CATALOG,
+  STARTER_ORDER_ID,
+  type OrderProgress,
+} from '../src/game/orders/catalog'
+import { potPlacementAhead } from '../src/game/orders/placement'
+import {
+  orderSession,
+  publishOrderMutation,
+  type OrderMutation,
+  type OrderSession,
+} from '../src/game/orders/session'
 import { SettledFrameTelemetry, frameTiming, percentile } from '../src/game/render/frame'
 import { mountGameWorld, type GameWorldRenderer } from '../src/game/render/world'
 import { orderRecordsFromProgress, saveClient, treeUpdateFromGameTree, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
 import { SaveWriter } from '../src/game/save-writer'
-import { gameSession, publishTreeChange, type GameSession } from '../src/game/session'
+import { gameSession, publishTreeChange, ToolError, type GameSession, type TreeChange } from '../src/game/session'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
+import { completeBranchCutting, ToolState } from '../src/game/tools'
+import { libraryProposition } from '../src/kernel/proof/library'
+import {
+  mountCatalog,
+  renderEquippedItem,
+  type CatalogController,
+  type CatalogView,
+} from './catalog'
 import { attachWorldInput, requestWorldEngagement, type WorldInput } from './input'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
@@ -38,11 +56,17 @@ const saveRetry = document.querySelector<HTMLButtonElement>('[data-save-retry]')
 const feedback = document.querySelector<HTMLElement>('[data-feedback]')!
 const reticle = document.querySelector<HTMLElement>('[data-reticle]')!
 const engage = document.querySelector<HTMLElement>('[data-engage]')!
+const catalogRoot = document.querySelector<HTMLElement>('[data-catalog]')!
 
 const blankDiagram = new DiagramBuilder().build()
 const blankDiagramJson = JSON.stringify(diagramToJson(blankDiagram))
 const initialCameraRecord: CameraRecord = { x: 0, y: 1.7, z: 8, yaw: 0, pitch: -0.18 }
 const initialTree: TreeUpdate = { treeId: 'tree-0000', diagramJson: blankDiagramJson, x: 0, z: 0, yaw: 0 }
+const initialProgress: OrderProgress = {
+  reputation: 0,
+  orders: new Map([[STARTER_ORDER_ID, { kind: 'pending' }]]),
+}
+const POT_SPAWN_DISTANCE = 6
 const NEUTRAL_MOTION: CameraMotion = {
   forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
 }
@@ -52,8 +76,12 @@ let maxRepresentationOperations = 0
 let camera: CameraState | null = null
 let input: WorldInput | null = null
 let session: GameSession | null = null
+let orders: OrderSession | null = null
+let tools: ToolState | null = null
 let writer: SaveWriter | null = null
 let renderer: GameWorldRenderer | null = null
+let catalog: CatalogController | null = null
+let catalogView: CatalogView | null = null
 let animationFrame = 0
 let previousFrame = performance.now()
 let disposed = false
@@ -93,6 +121,100 @@ function setError(value: string): void {
 function clearError(): void {
   setError('')
   menuError.textContent = ''
+}
+
+function setFeedback(value: string): void {
+  setError('')
+  feedback.textContent = value
+}
+
+function mirrorToolState(activeTools: ToolState | null = tools): void {
+  if (activeTools === null) return
+  const cuttingHeld = activeTools.cutting !== null
+  renderEquippedItem(hud, activeTools.item, cuttingHeld)
+  root.dataset['equippedItem'] = activeTools.item
+  root.dataset['cuttingHeld'] = String(cuttingHeld)
+}
+
+function mirrorOrderProgress(activeOrders: OrderSession | null = orders): void {
+  if (activeOrders === null) return
+  root.dataset['reputation'] = String(activeOrders.progress.reputation)
+  root.dataset['orderState'] = activeOrders.progress.orders.get(STARTER_ORDER_ID)?.kind ?? ''
+}
+
+function mirrorCatalog(): void {
+  root.dataset['catalogOpen'] = String(!catalogRoot.hidden)
+}
+
+function refreshVisibleCatalog(): void {
+  const activeCatalog = catalog
+  const activeOrders = orders
+  const view = catalogView
+  if (activeCatalog === null || activeOrders === null || view === null || catalogRoot.hidden) return
+  activeCatalog.show(activeOrders.progress, view)
+}
+
+function acceptOrderWrite(activeWriter: SaveWriter, mutation: OrderMutation): void {
+  switch (mutation.kind) {
+    case 'accept': activeWriter.acceptOrder(mutation.orderId, mutation.pot); break
+    case 'abandon': activeWriter.abandonOrder(mutation.orderId); break
+    case 'complete': activeWriter.completeOrder(mutation.orderId, mutation.reward); break
+  }
+}
+
+function closeCatalog(requestEngagement: boolean): void {
+  catalog?.hide()
+  catalogView = null
+  mirrorCatalog()
+  if (!requestEngagement || input === null) return
+  void input.engage().catch(() => {
+    freeActive = false
+    mirrorControls()
+  })
+}
+
+function acceptCatalogOrder(orderId: string, view: CatalogView): void {
+  const activeOrders = orders
+  const activeWriter = writer
+  const activeRenderer = renderer
+  if (activeOrders === null || activeWriter === null || activeRenderer === null) return
+  try {
+    const mutation = activeOrders.planAccept(orderId, potPlacementAhead(view, POT_SPAWN_DISTANCE))
+    publishOrderMutation(
+      activeOrders,
+      mutation,
+      activeRenderer,
+      (accepted) => acceptOrderWrite(activeWriter, accepted),
+    )
+    mirrorOrderProgress(activeOrders)
+    refreshVisibleCatalog()
+    setFeedback(`Accepted ${orderId}.`)
+    closeCatalog(true)
+  } catch (error) {
+    setError(`Order acceptance failed: ${message(error)}`)
+  }
+}
+
+function abandonCatalogOrder(orderId: string): void {
+  const activeOrders = orders
+  const activeWriter = writer
+  const activeRenderer = renderer
+  if (activeOrders === null || activeWriter === null || activeRenderer === null) return
+  try {
+    const mutation = activeOrders.planAbandon(orderId)
+    publishOrderMutation(
+      activeOrders,
+      mutation,
+      activeRenderer,
+      (accepted) => acceptOrderWrite(activeWriter, accepted),
+    )
+    mirrorOrderProgress(activeOrders)
+    refreshVisibleCatalog()
+    setFeedback(`Abandoned ${orderId}.`)
+    closeCatalog(true)
+  } catch (error) {
+    setError(`Order abandonment failed: ${message(error)}`)
+  }
 }
 
 function renderSlots(slots: readonly SlotListEntry[]): void {
@@ -207,14 +329,36 @@ function animate(now: number): void {
   animationFrame = requestAnimationFrame(animate)
 }
 
-function applyDoubleCut(clientX: number, clientY: number): void {
+function publishPlannedTreeChange(
+  activeSession: GameSession,
+  activeWriter: SaveWriter,
+  activeRenderer: GameWorldRenderer,
+  change: TreeChange,
+): void {
+  publishTreeChange(
+    activeSession,
+    change,
+    activeRenderer,
+    (tree) => {
+      const update = treeUpdateFromGameTree(tree)
+      if (change.kind === 'insert') activeWriter.insertTree(update)
+      else activeWriter.tree(update)
+    },
+  )
+}
+
+function applySecondaryAction(clientX: number, clientY: number): void {
   const activeCamera = camera
   const activeSession = session
+  const activeOrders = orders
+  const activeTools = tools
   const activeWriter = writer
   const activeRenderer = renderer
   if (
     activeCamera === null
     || activeSession === null
+    || activeOrders === null
+    || activeTools === null
     || activeWriter === null
     || activeRenderer === null
   ) return
@@ -222,27 +366,68 @@ function applyDoubleCut(clientX: number, clientY: number): void {
   const [ndcX, ndcY] = activeCamera.mode === 'free'
     ? [0, 0]
     : pointerNdc(clientX, clientY, activeRenderer.canvas)
-  const pointed = activeRenderer.pointAtBranch(
-    ndcX,
-    ndcY,
-    activeCamera.mode === 'orbit' ? activeCamera.treeId : null,
-  )
-  if (pointed === null) {
-    setError('Double cut requires an ordinary branch within reach.')
-    return
-  }
+  const orbitTarget = activeCamera.mode === 'orbit' ? activeCamera.treeId : null
   try {
-    const change = activeSession.planDoubleCut(pointed)
-    publishTreeChange(
-      activeSession,
-      change,
-      activeRenderer,
-      (tree) => activeWriter.tree(treeUpdateFromGameTree(tree)),
-    )
-    setError('')
-    feedback.textContent = `Double cut applied to ${change.treeId}.`
+    if (activeTools.item === 'double-cut') {
+      const pointed = activeRenderer.pointAtBranch(ndcX, ndcY, orbitTarget)
+      if (pointed === null) throw new ToolError('Double cut requires an ordinary branch within reach.')
+      const change = activeSession.planDoubleCut(pointed)
+      publishPlannedTreeChange(activeSession, activeWriter, activeRenderer, change)
+      setFeedback(`Double cut applied to ${change.treeId}.`)
+      return
+    }
+
+    const cutting = activeTools.cutting
+    if (cutting === null) {
+      const pointed = activeRenderer.pointAtBranch(ndcX, ndcY, orbitTarget)
+      if (pointed === null) throw new ToolError('Iteration requires a branch cutting within reach.')
+      if (pointed.entity.kind !== 'branch') throw new ToolError('Iteration requires a branch cutting within reach.')
+      const source = activeSession.trees.get(pointed.treeId)
+      if (source === undefined) throw new ToolError(`unknown tree '${pointed.treeId}'`)
+      activeTools.hold(completeBranchCutting(source, pointed.entity.region))
+      mirrorToolState(activeTools)
+      setFeedback(pointed.entity.region === source.snapshot.diagram.root
+        ? `Whole-tree cutting held from ${source.id}.`
+        : `Subtree cutting held from ${source.id}.`)
+      return
+    }
+
+    const target = activeRenderer.pointAtToolTarget(ndcX, ndcY, orbitTarget)
+    if (target === null) throw new ToolError('Iteration requires a branch, ground, or pot within reach.')
+    if (target.kind === 'pot') {
+      if (cutting.kind !== 'whole') throw new ToolError('delivery requires a whole tree cutting')
+      const mutation = activeOrders.planDelivery(
+        target.orderId,
+        libraryProposition(cutting.sourceTree.id, cutting.sourceTree.snapshot.diagram),
+      )
+      publishOrderMutation(
+        activeOrders,
+        mutation,
+        activeRenderer,
+        (accepted) => acceptOrderWrite(activeWriter, accepted),
+      )
+      activeTools.cancel()
+      mirrorToolState(activeTools)
+      mirrorOrderProgress(activeOrders)
+      refreshVisibleCatalog()
+      setFeedback(`Completed ${target.orderId}. Reputation ${activeOrders.progress.reputation}.`)
+      return
+    }
+
+    const change = target.kind === 'branch'
+      ? activeSession.planIteration(cutting, target.pointed)
+      : activeSession.planDuplicate(cutting, {
+          ...target.point,
+          yaw: potPlacementAhead(displayCameraPose(activeCamera), 1).yaw,
+        })
+    publishPlannedTreeChange(activeSession, activeWriter, activeRenderer, change)
+    activeTools.cancel()
+    mirrorToolState(activeTools)
+    setFeedback(target.kind === 'branch'
+      ? `Iteration applied to ${change.treeId}.`
+      : `Duplicated tree as ${change.treeId}.`)
   } catch (error) {
-    setError(`Double cut failed: ${message(error)}`)
+    setError(message(error))
   }
 }
 
@@ -252,10 +437,18 @@ async function startWorld(world: GameWorld): Promise<void> {
   })
   const nextCamera = initialCameraState(world.camera)
   const nextSession = gameSession(world.trees)
+  const nextOrders = orderSession(world.progress)
+  const nextTools = new ToolState()
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
+  let nextCatalog: CatalogController | null = null
   let nextInput: WorldInput | null = null
   let releaseWriterStatus = (): void => {}
+  let freeSecondaryPress: { readonly x: number; readonly y: number } | null = null
   try {
+    nextCatalog = mountCatalog(catalogRoot, ORDER_CATALOG, {
+      accept: acceptCatalogOrder,
+      abandon: abandonCatalogOrder,
+    })
     nextRenderer.setPots([...world.progress.orders].flatMap(([orderId, state]) => {
       if (state.kind !== 'accepted') return []
       const goal = authoredGoalForOrder(orderId)
@@ -284,7 +477,7 @@ async function startWorld(world: GameWorld): Promise<void> {
           return
         }
         if (button === 2) {
-          applyDoubleCut(clientX, clientY)
+          freeSecondaryPress = { x: clientX, y: clientY }
           return
         }
         if (button !== 0) return
@@ -302,15 +495,24 @@ async function startWorld(world: GameWorld): Promise<void> {
         activeInput.release()
         mirrorControls()
       },
-      pointerUp(_button, clientX, clientY) {
+      pointerUp(button, clientX, clientY) {
         const activeCamera = camera
         const activeRenderer = renderer
         if (activeCamera === null || activeRenderer === null) return
-        if (activeCamera.mode === 'free') return
+        if (activeCamera.mode === 'free') {
+          const press = freeSecondaryPress
+          freeSecondaryPress = null
+          if (
+            button === 2
+            && press !== null
+            && Math.hypot(clientX - press.x, clientY - press.y) < 5
+          ) applySecondaryAction(clientX, clientY)
+          return
+        }
         const release = activeCamera.interaction.pointerUp(clientX, clientY)
         if (release === null) return
         if (release.button === 2) {
-          applyDoubleCut(release.clientX, release.clientY)
+          applySecondaryAction(release.clientX, release.clientY)
           return
         }
         if (release.button !== 0) return
@@ -323,14 +525,58 @@ async function startWorld(world: GameWorld): Promise<void> {
         if (focus !== null) activeCamera.interaction.focus(focus.worldFocus, performance.now())
       },
       pointerCancel() {
+        freeSecondaryPress = null
         if (camera?.mode === 'orbit') camera.interaction.cancelPointer()
       },
       escape() {
-        if (camera?.mode !== 'orbit') return false
-        camera = exitOrbit(camera)
-        freeActive = false
+        const activeTools = tools
+        let handled = false
+        if (activeTools !== null && activeTools.cutting !== null) {
+          activeTools.cancel()
+          mirrorToolState(activeTools)
+          setFeedback('Cutting cleared.')
+          handled = true
+        }
+        if (!catalogRoot.hidden) {
+          closeCatalog(false)
+          return true
+        }
+        if (camera?.mode === 'orbit') {
+          camera = exitOrbit(camera)
+          freeActive = false
+          handled = true
+        }
         mirrorControls()
-        return true
+        return handled
+      },
+      swapTool() {
+        const activeTools = tools
+        if (activeTools === null || !catalogRoot.hidden) return
+        activeTools.swap()
+        mirrorToolState(activeTools)
+        setFeedback(`Equipped ${activeTools.item === 'double-cut' ? 'Double Cut' : 'Iteration'}.`)
+      },
+      toggleCatalog() {
+        const activeCatalog = catalog
+        const activeOrders = orders
+        const activeCamera = camera
+        const activeInput = input
+        if (
+          activeCatalog === null
+          || activeOrders === null
+          || activeCamera === null
+          || activeInput === null
+        ) return
+        if (!catalogRoot.hidden) {
+          closeCatalog(true)
+          return
+        }
+        catalogView = displayCameraPose(activeCamera)
+        activeInput.release()
+        freeActive = false
+        activeCatalog.show(activeOrders.progress, catalogView)
+        mirrorCatalog()
+        mirrorControls()
       },
       engagementChanged(active) {
         freeActive = active
@@ -341,7 +587,12 @@ async function startWorld(world: GameWorld): Promise<void> {
     camera = nextCamera
     input = nextInput
     session = nextSession
+    orders = nextOrders
+    tools = nextTools
     writer = nextWriter
+    catalog = nextCatalog
+    catalogView = null
+    nextCatalog.hide()
     start.hidden = true
     hud.hidden = false
     worldName.textContent = world.slot.name
@@ -349,11 +600,15 @@ async function startWorld(world: GameWorld): Promise<void> {
     root.dataset['loadedSlot'] = world.slot.id
     maxRepresentationOperations = 0
     root.dataset['renderMode'] = 'game'
+    mirrorToolState(nextTools)
+    mirrorOrderProgress(nextOrders)
+    mirrorCatalog()
     telemetry.beginTransition()
     mirrorControls()
     previousFrame = performance.now()
     animationFrame = requestAnimationFrame(animate)
   } catch (error) {
+    nextCatalog?.dispose()
     nextInput?.dispose()
     releaseWriterStatus()
     await nextWriter.dispose().catch(() => {})
@@ -397,8 +652,8 @@ createForm.addEventListener('submit', (event) => {
     displayName,
     camera: initialCameraRecord,
     trees: [initialTree],
-    reputation: 0,
-    orders: orderRecordsFromProgress(initialOrderProgress(ORDER_CATALOG)),
+    reputation: initialProgress.reputation,
+    orders: orderRecordsFromProgress(initialProgress),
   }).then((created) => saveClient.load(created.slotId)))
 })
 saveRetry.addEventListener('click', () => writer?.retry())
@@ -414,7 +669,12 @@ window.addEventListener('pagehide', () => {
   resizeObserver.disconnect()
   input?.dispose()
   input = null
+  catalog?.dispose()
+  catalog = null
+  catalogView = null
   session = null
+  orders = null
+  tools = null
   void writer?.dispose().catch((error: unknown) => setError(`Save shutdown failed: ${message(error)}`))
   renderer?.dispose()
   renderer = null

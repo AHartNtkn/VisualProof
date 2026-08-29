@@ -194,7 +194,7 @@ import { gameSession, publishTreeChange } from '../../../src/game/session'
 import { SaveWriter } from '../../../src/game/save-writer'
 import { treeUpdateFromGameTree } from '../../../src/game/save-client'
 import { ORDER_CATALOG, STARTER_ORDER_ID, type OrderProgress } from '../../../src/game/orders/catalog'
-import { orderSession } from '../../../src/game/orders/session'
+import { orderSession, publishOrderMutation } from '../../../src/game/orders/session'
 import type { PotObject, PotRender } from '../../../src/game/render/pots'
 
 beforeEach(() => {
@@ -556,6 +556,35 @@ describe('production game world', () => {
     expect(world.pickTree(0, 0)).toEqual({
       treeId: 'tree', center: { x: 14, y: 2, z: -23 }, radius: 5,
     })
+    world.dispose()
+  })
+
+  it('discards a prepared insertion when save enqueue rejects without publishing the new tree', async () => {
+    // Catches the production renderer leaking a prepared insertion after the durable writer refuses it.
+    const inserted = targetTree('inserted', 0, -20, 0)
+    const session = gameSession(new Map())
+    const insertion: TreeChange = { kind: 'insert', treeId: inserted.id, after: inserted }
+    const world = mountGameWorld(container(), [], () => 0)
+    const writer = new SaveWriter('slot-a', {
+      updateTree: async () => 1,
+      insertTree: async () => 1,
+      updateCamera: async () => {},
+      acceptOrder: async () => {},
+      abandonOrder: async () => {},
+      completeOrder: async () => 1,
+    })
+    await writer.dispose()
+
+    expect(() => publishTreeChange(
+      session,
+      insertion,
+      world,
+      (tree) => writer.insertTree(treeUpdateFromGameTree(tree)),
+    )).toThrow('disposed')
+    expect(session.trees.has(inserted.id)).toBe(false)
+    world.setCamera({ eye: { x: 3, y: 2, z: 4 }, forward: { x: 0, y: 0, z: -1 } })
+    expect(world.pickTree(0, 0)).toBeNull()
+    expect(world.render(350)).toMatchObject({ logical: 0, resident: 0 })
     world.dispose()
   })
 
@@ -923,6 +952,47 @@ describe('production game world', () => {
     expect(world.pointAtToolTarget(0, 0, null)).toMatchObject({ kind: 'pot' })
     world.commitOrderChange(prepared)
     expect(world.pointAtToolTarget(0, 0, null)).toBeNull()
+    world.dispose()
+  })
+
+  it('discards prepared completion when save enqueue rejects without removing the accepted pot', async () => {
+    // Catches the production renderer removing a pot or awarding progress before durable acceptance.
+    const accepted = orderSession(pendingStarterOrder())
+    accepted.commit(accepted.prepare(accepted.planAccept(
+      STARTER_ORDER_ID,
+      { x: 0, z: -20, yaw: 0 },
+    )))
+    const completion = accepted.planDelivery(STARTER_ORDER_ID, {
+      name: 'starter source',
+      diagram: ORDER_CATALOG[0]!.goal.diagram,
+    })
+    const world = mountOrderWorld()
+    world.setPots([starterPot()])
+    world.setCamera({ eye: { x: 0, y: 0.55, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
+    const writer = new SaveWriter('slot-a', {
+      updateTree: async () => 1,
+      insertTree: async () => 1,
+      updateCamera: async () => {},
+      acceptOrder: async () => {},
+      abandonOrder: async () => {},
+      completeOrder: async () => 1,
+    })
+    await writer.dispose()
+
+    expect(() => publishOrderMutation(
+      accepted,
+      completion,
+      world,
+      (mutation) => {
+        if (mutation.kind !== 'complete') throw new Error('expected completion')
+        writer.completeOrder(mutation.orderId, mutation.reward)
+      },
+    )).toThrow('disposed')
+    expect(accepted.progress).toBe(completion.before)
+    expect(accepted.progress.reputation).toBe(0)
+    expect(world.pointAtToolTarget(0, 0, null)).toMatchObject({
+      kind: 'pot', orderId: STARTER_ORDER_ID,
+    })
     world.dispose()
   })
 

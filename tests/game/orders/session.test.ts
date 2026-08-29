@@ -191,4 +191,53 @@ describe('order session lifecycle', () => {
 
     expect(effects).toEqual(['renderer-prepare', 'save-accept', 'renderer-commit'])
   })
+
+  it('leaves an accepted order authoritative when completion renderer preparation fails', () => {
+    // Catches completion publication retaining prepared progress after renderer preparation rejects.
+    const session = acceptStarter()
+    const completion = session.planDelivery(
+      STARTER_ORDER_ID,
+      libraryProposition('source', starter.goal.diagram),
+    )
+    const preparationError = new Error('renderer could not prepare completion')
+    const effects: string[] = []
+
+    expect(() => publishOrderMutation(session, completion, {
+      prepareOrderChange() { effects.push('renderer-prepare'); throw preparationError },
+      commitOrderChange() { effects.push('renderer-commit') },
+      discardOrderChange() { effects.push('renderer-discard') },
+    }, () => { effects.push('save-accept') })).toThrow(preparationError)
+
+    expect(effects).toEqual(['renderer-prepare'])
+    expect(session.progress).toBe(completion.before)
+    expect(() => session.prepare(completion)).not.toThrow()
+  })
+
+  it('preserves completion writer rejection when renderer cleanup also fails', () => {
+    // Catches completion cleanup masking the writer rejection or awarding reputation.
+    const session = acceptStarter()
+    const completion = session.planDelivery(
+      STARTER_ORDER_ID,
+      libraryProposition('source', starter.goal.diagram),
+    )
+    const writerError = new Error('completion writer rejected')
+    const effects: string[] = []
+
+    expect(() => publishOrderMutation(session, completion, {
+      prepareOrderChange() { effects.push('renderer-prepare'); return {} },
+      commitOrderChange() { effects.push('renderer-commit') },
+      discardOrderChange() {
+        effects.push('renderer-discard')
+        throw new Error('renderer completion cleanup failed')
+      },
+    }, () => {
+      effects.push('save-accept')
+      throw writerError
+    })).toThrow(writerError)
+
+    expect(effects).toEqual(['renderer-prepare', 'save-accept', 'renderer-discard'])
+    expect(session.progress).toBe(completion.before)
+    expect(session.progress.reputation).toBe(0)
+    expect(() => session.prepare(completion)).not.toThrow()
+  })
 })

@@ -210,6 +210,56 @@ describe('game tool session', () => {
     expect(session.trees.get('large')).toBe(mutation.after)
   })
 
+  it('leaves an inserted tree unpublished when renderer preparation fails', () => {
+    // Catches insertion publication retaining a prepared session after renderer preparation rejects.
+    const source = tree('source', largeDiagram)
+    const session = gameSession(new Map([[source.id, source]]), () => 'tree-copy')
+    const insertion = session.planDuplicate(
+      completeBranchCutting(source, source.snapshot.diagram.root),
+      { x: 8, z: -9, yaw: 0.4 },
+    )
+    const preparationError = new Error('renderer could not prepare insertion')
+    const effects: string[] = []
+
+    expect(() => publishTreeChange(session, insertion, {
+      prepareTreeChange() { effects.push('renderer-prepare'); throw preparationError },
+      commitTreeChange() { effects.push('renderer-commit') },
+      discardTreeChange() { effects.push('renderer-discard') },
+    }, () => { effects.push('save-accept') })).toThrow(preparationError)
+
+    expect(effects).toEqual(['renderer-prepare'])
+    expect(session.trees.has(insertion.treeId)).toBe(false)
+    expect(() => session.prepare(insertion)).not.toThrow()
+  })
+
+  it('preserves insertion writer rejection when renderer cleanup also fails', () => {
+    // Catches insertion cleanup masking the writer rejection or publishing the inserted tree.
+    const source = tree('source', largeDiagram)
+    const session = gameSession(new Map([[source.id, source]]), () => 'tree-copy')
+    const insertion = session.planDuplicate(
+      completeBranchCutting(source, source.snapshot.diagram.root),
+      { x: 8, z: -9, yaw: 0.4 },
+    )
+    const writerError = new Error('insert writer rejected')
+    const effects: string[] = []
+
+    expect(() => publishTreeChange(session, insertion, {
+      prepareTreeChange() { effects.push('renderer-prepare'); return {} },
+      commitTreeChange() { effects.push('renderer-commit') },
+      discardTreeChange() {
+        effects.push('renderer-discard')
+        throw new Error('renderer insertion cleanup failed')
+      },
+    }, () => {
+      effects.push('save-accept')
+      throw writerError
+    })).toThrow(writerError)
+
+    expect(effects).toEqual(['renderer-prepare', 'save-accept', 'renderer-discard'])
+    expect(session.trees.has(insertion.treeId)).toBe(false)
+    expect(() => session.prepare(insertion)).not.toThrow()
+  })
+
   it('rejects non-branches and unknown trees without mutation', () => {
     const session = gameSession(worldWithTree('tree-a', blankDiagram).trees)
     const beforeTrees = treeValues(session.trees)
