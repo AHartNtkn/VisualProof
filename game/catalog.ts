@@ -108,6 +108,9 @@ export function mountCatalog(
     tab = 'completed'
     render()
   }, staticDisposers)
+  listen(root, 'keydown', (event) => {
+    if (!root.hidden && (event as KeyboardEvent).code === 'Tab') event.stopPropagation()
+  }, staticDisposers)
 
   return {
     show(progress, view) {
@@ -115,6 +118,7 @@ export function mountCatalog(
       capturedView = view
       root.hidden = false
       render()
+      pending.focus()
     },
     hide() {
       root.hidden = true

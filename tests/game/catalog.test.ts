@@ -10,6 +10,8 @@ class TestElement extends EventTarget {
   public type = ''
   public className = ''
   public ariaPressed = 'false'
+  public focusCalls = 0
+  public parent: EventTarget | null = null
   public readonly dataset: Record<string, string> = {}
   public readonly children: TestElement[] = []
 
@@ -18,11 +20,25 @@ class TestElement extends EventTarget {
   }
 
   public append(...children: TestElement[]): void {
+    for (const child of children) child.parent = this
     this.children.push(...children)
   }
 
   public replaceChildren(...children: TestElement[]): void {
+    for (const child of this.children) child.parent = null
+    for (const child of children) child.parent = this
     this.children.splice(0, this.children.length, ...children)
+  }
+
+  public focus(): void {
+    this.focusCalls += 1
+    this.ownerDocument.activeElement = this
+  }
+
+  public override dispatchEvent(event: Event): boolean {
+    const dispatched = super.dispatchEvent(event)
+    if (event.bubbles && !event.cancelBubble) this.parent?.dispatchEvent(event)
+    return dispatched && !event.defaultPrevented
   }
 
   public querySelector<T extends Element>(selector: string): T | null {
@@ -39,6 +55,8 @@ class TestElement extends EventTarget {
 }
 
 class TestDocument {
+  public activeElement: TestElement | null = null
+
   public createElement(_tagName: string): TestElement {
     return new TestElement(this)
   }
@@ -67,12 +85,15 @@ function catalogHarness(): {
   readonly completed: TestElement
   readonly reputation: TestElement
   readonly orders: TestElement
+  readonly global: EventTarget
   readonly accepts: Array<{ readonly orderId: string; readonly view: object }>
   readonly abandoned: string[]
   readonly controller: ReturnType<typeof mountCatalog>
 } {
   const documentTarget = new TestDocument()
   const root = element(documentTarget, '[data-catalog]')
+  const global = new EventTarget()
+  root.parent = global
   const pending = element(documentTarget, '[data-catalog-pending]')
   const completed = element(documentTarget, '[data-catalog-completed]')
   const reputation = element(documentTarget, '[data-catalog-reputation]')
@@ -84,7 +105,7 @@ function catalogHarness(): {
     accept: (orderId, view) => accepts.push({ orderId, view }),
     abandon: (orderId) => abandoned.push(orderId),
   })
-  return { root, pending, completed, reputation, orders, accepts, abandoned, controller }
+  return { root, pending, completed, reputation, orders, global, accepts, abandoned, controller }
 }
 
 function action(card: TestElement, name: 'accept' | 'abandon'): TestElement | null {
@@ -103,6 +124,34 @@ function onlyOrder(orders: TestElement): TestElement {
 }
 
 describe('catalog controller', () => {
+  it('focuses the first catalog filter when shown', () => {
+    const harness = catalogHarness()
+
+    harness.controller.show(progress('pending'), { eye: { x: 0, y: 0, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
+
+    expect(harness.pending.focusCalls).toBe(1)
+  })
+
+  it('keeps catalog Tab navigation local until its listener is disposed', () => {
+    const harness = catalogHarness()
+    let globalToggles = 0
+    harness.global.addEventListener('keydown', () => { globalToggles += 1 })
+    harness.controller.show(progress('pending'), { eye: { x: 0, y: 0, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
+    const tab = Object.defineProperty(new Event('keydown', { bubbles: true, cancelable: true }), 'code', { value: 'Tab' })
+
+    harness.pending.dispatchEvent(tab)
+
+    expect(globalToggles).toBe(0)
+    expect(tab.defaultPrevented).toBe(false)
+
+    harness.controller.dispose()
+    const releasedTab = Object.defineProperty(new Event('keydown', { bubbles: true, cancelable: true }), 'code', { value: 'Tab' })
+    harness.pending.dispatchEvent(releasedTab)
+
+    expect(globalToggles).toBe(1)
+    expect(releasedTab.defaultPrevented).toBe(false)
+  })
+
   it('projects pending and completed orders into the selected tab with one state-appropriate action', () => {
     const harness = catalogHarness()
     const view = { eye: { x: 3, y: 1.7, z: 5 }, forward: { x: 0, y: 0, z: -1 } }
