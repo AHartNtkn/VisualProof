@@ -90,11 +90,6 @@ placement must leave clearance from every existing tree and order pot. The
 initial clearance value is an authored gameplay constant that can be tuned
 later. An invalid placement explains the refusal and changes nothing.
 
-Tree spawning uses the same prepared session, renderer, and save publication
-discipline as other tree changes. The session plans one complete inserted tree,
-the renderer prepares its representation, and the save writer accepts the
-insertion before the live session and renderer publish it.
-
 The tool inventory stores acquired tool IDs. Authored tool definitions provide
 their category and reputation-capacity requirement. The established reputation
 system remains unchanged. Double Cut and Iteration both require zero capacity
