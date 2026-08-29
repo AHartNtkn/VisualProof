@@ -958,22 +958,30 @@ fn validate_required_check_constraints(connection: &Connection) -> rusqlite::Res
     }
 
     probe.execute_batch(&orders_sql)?;
-    for valid in [
-        "INSERT INTO orders VALUES('valid-pending', 'pending', NULL, NULL, NULL)",
-        "INSERT INTO orders VALUES('valid-accepted', 'accepted', 1, 2, 3)",
-        "INSERT INTO orders VALUES('valid-completed', 'completed', NULL, NULL, NULL)",
-    ] {
-        probe.execute(valid, [])?;
-    }
-    for invalid in [
-        "INSERT INTO orders VALUES('bad-state', 'lost', NULL, NULL, NULL)",
-        "INSERT INTO orders VALUES('accepted-without-pot', 'accepted', NULL, NULL, NULL)",
-        "INSERT INTO orders VALUES('pending-with-pot', 'pending', 1, 2, 3)",
-        "INSERT INTO orders VALUES('completed-with-pot', 'completed', 1, 2, 3)",
-    ] {
-        if !is_constraint_error(probe.execute(invalid, [])) {
-            return Err(rusqlite::Error::InvalidQuery);
+    for state in ["pending", "accepted", "completed"] {
+        for present_mask in 0_u8..8 {
+            let value = |bit| if present_mask & bit == 0 { "NULL" } else { "1" };
+            let insert = format!(
+                "INSERT INTO orders VALUES('probe-{state}-{present_mask}', '{state}', {}, {}, {})",
+                value(1),
+                value(2),
+                value(4),
+            );
+            let legal = (state == "accepted" && present_mask == 7)
+                || (state != "accepted" && present_mask == 0);
+            let result = probe.execute(&insert, []);
+            if legal {
+                result?;
+            } else if !is_constraint_error(result) {
+                return Err(rusqlite::Error::InvalidQuery);
+            }
         }
+    }
+    if !is_constraint_error(probe.execute(
+        "INSERT INTO orders VALUES('bad-state', 'lost', NULL, NULL, NULL)",
+        [],
+    )) {
+        return Err(rusqlite::Error::InvalidQuery);
     }
     Ok(())
 }
@@ -1001,7 +1009,7 @@ fn validate_required_columns(
     table: &str,
     expected: Vec<Column>,
 ) -> rusqlite::Result<()> {
-    let mut statement = connection.prepare(&format!("PRAGMA table_info('{table}')"))?;
+    let mut statement = connection.prepare(&format!("PRAGMA table_xinfo('{table}')"))?;
     let actual = statement
         .query_map([], |row| {
             Ok(Column {
@@ -1012,6 +1020,9 @@ fn validate_required_columns(
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
+    if actual.len() != expected.len() {
+        return Err(rusqlite::Error::InvalidQuery);
+    }
     for required in expected {
         let Some(actual) = actual.iter().find(|actual| actual.name == required.name) else {
             return Err(rusqlite::Error::InvalidQuery);
@@ -1698,6 +1709,45 @@ mod tests {
         assert_invalid_list_entry(temp.path(), "missing-foreign-key.sqlite3");
     }
 
+    // This catches treating the required columns as a subset instead of the complete current shape.
+    #[test]
+    fn rejects_extra_columns_in_required_tables() {
+        let temp = tempfile::tempdir().unwrap();
+        for (slot_id, extra_column) in [
+            ("extra-metadata-column", "legacy_version INTEGER"),
+            (
+                "extra-generated-column",
+                "legacy_version INTEGER GENERATED ALWAYS AS (0) VIRTUAL",
+            ),
+        ] {
+            let path = temp.path().join(format!("{slot_id}.sqlite3"));
+            let connection = Connection::open(path).unwrap();
+            connection
+                .execute_batch(&SCHEMA.replace(
+                    "updated_at_ms INTEGER NOT NULL",
+                    &format!("updated_at_ms INTEGER NOT NULL, {extra_column}"),
+                ))
+                .unwrap();
+            connection
+                .execute_batch(&format!(
+                    "INSERT INTO metadata(singleton, slot_id, display_name, updated_at_ms)
+                     VALUES(1, '{slot_id}', 'Invalid', 0);
+                     INSERT INTO camera VALUES(1, 0, 0, 0, 0, 0);
+                     INSERT INTO progress VALUES(1, 0);
+                     INSERT INTO orders VALUES('starter-double-cut', 'pending', NULL, NULL, NULL);"
+                ))
+                .unwrap();
+
+            assert!(
+                matches!(
+                    SaveStore::new(temp.path().to_path_buf()).load(slot_id),
+                    Err(SaveStoreError::InvalidStructure)
+                ),
+                "{slot_id}"
+            );
+        }
+    }
+
     // This catches accepting lookalike progress/order tables that do not enforce the save model.
     #[test]
     fn rejects_missing_progress_and_order_schema_semantics() {
@@ -1738,6 +1788,41 @@ mod tests {
                     Err(SaveStoreError::InvalidStructure)
                 ),
                 "{slot_id}"
+            );
+        }
+    }
+
+    // This catches constraints that inspect only one pot coordinate and permit partial rows.
+    #[test]
+    fn rejects_order_schemas_that_permit_partial_pots() {
+        let temp = tempfile::tempdir().unwrap();
+        let required_payload_check = "CHECK (\n    (state = 'accepted' AND pot_x IS NOT NULL AND pot_z IS NOT NULL AND pot_yaw IS NOT NULL)\n    OR\n    (state IN ('pending', 'completed') AND pot_x IS NULL AND pot_z IS NULL AND pot_yaw IS NULL)\n  )";
+
+        for coordinate in ["pot_x", "pot_z", "pot_yaw"] {
+            let slot_id = format!("partial-{}", coordinate.replace('_', "-"));
+            let weaker_check = format!(
+                "CHECK ((state = 'accepted' AND {coordinate} IS NOT NULL) OR
+                 (state IN ('pending', 'completed') AND {coordinate} IS NULL))"
+            );
+            let schema = SCHEMA.replace(required_payload_check, &weaker_check);
+            let path = temp.path().join(format!("{slot_id}.sqlite3"));
+            let connection = Connection::open(path).unwrap();
+            connection.execute_batch(&schema).unwrap();
+            connection
+                .execute_batch(&format!(
+                    "INSERT INTO metadata VALUES(1, '{slot_id}', 'Invalid', 0);
+                     INSERT INTO camera VALUES(1, 0, 0, 0, 0, 0);
+                     INSERT INTO progress VALUES(1, 0);
+                     INSERT INTO orders VALUES('starter-double-cut', 'pending', NULL, NULL, NULL);"
+                ))
+                .unwrap();
+
+            assert!(
+                matches!(
+                    SaveStore::new(temp.path().to_path_buf()).load(&slot_id),
+                    Err(SaveStoreError::InvalidStructure)
+                ),
+                "{coordinate}"
             );
         }
     }
