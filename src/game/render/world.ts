@@ -30,7 +30,7 @@ import {
   makeRawTreeObject,
   pointAtTreeAssets,
   pointAtVisibleParts,
-  type EntityKeyFilter,
+  type EntityFilter,
   type TreeMaterialSource,
 } from './tree-objects'
 import type { DisplayCameraPose, TreeRenderAsset } from './types'
@@ -249,7 +249,7 @@ export function mountGameWorld(
     orbitTarget: string | null,
   ): PointedTreePart | null => {
     treeRaycaster.setFromCamera({ x: ndcX, y: ndcY } as THREE.Vector2, camera)
-    const acceptsBranch: EntityKeyFilter = (entityKey) => entityKey.startsWith('b:')
+    const acceptsBranch: EntityFilter = (entity) => entity.kind === 'branch'
     const dynamic = pointAtVisibleParts(
       treeRaycaster,
       dynamicTrees.objects(),
