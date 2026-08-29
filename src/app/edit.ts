@@ -4,7 +4,10 @@ import type { Sig } from '../kernel/diagram/sig'
 import { sigEquals, sigKey } from '../kernel/diagram/sig'
 import { derivedScope, isAncestorOrEqual, wireVisibleAt } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
-import { selectionContents } from '../kernel/diagram/subgraph/selection'
+import {
+  orphanedWires,
+  selectionContents,
+} from '../kernel/diagram/subgraph/selection'
 import { removeSubgraph } from '../kernel/diagram/subgraph/splice'
 import { freshId } from '../kernel/diagram/subgraph/freshId'
 import type { PartsInProgress } from '../kernel/rules/wire-ends'
@@ -28,6 +31,7 @@ export type ConstructionHit =
 
 function moveNodeToRegion(node: DiagramNode, region: RegionId): DiagramNode {
   switch (node.kind) {
+    case 'term': return { kind: 'term', region, term: node.term, freeArity: node.freeArity }
     case 'atom': return { kind: 'atom', region, sig: node.sig }
     case 'ref': return { kind: 'ref', region, defId: node.defId, sig: node.sig }
     case 'identity': return { kind: 'identity', region, sig: node.sig, arity: node.arity }
@@ -290,15 +294,6 @@ export function dissolveRegion(d: Diagram, regionId: RegionId): Diagram {
   // Wires are untouched: a quantifier living in the dissolving boundary rides
   // its nodes up to the parent, which is where the derived scope now lands.
   return mkDiagram({ root: d.root, regions, nodes, wires: { ...d.wires } })
-}
-
-/** Wires whose every endpoint belongs to a deleted node: nothing of them
-    survives the deletion, so they die with their ends. */
-export function orphanedWires(d: Diagram, nodeIds: ReadonlySet<NodeId>): WireId[] {
-  return Object.entries(d.wires)
-    .filter(([, wire]) => wire.endpoints.every((endpoint) => nodeIds.has(endpoint.node)))
-    .map(([id]) => id)
-    .sort()
 }
 
 /** Construction deletion over arbitrary anchors. Nodes and selected wires die;

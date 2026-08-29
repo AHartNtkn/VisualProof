@@ -1,4 +1,4 @@
-import VisualProof.Rule.Completeness.Comprehension.Structural.Parallel
+import VisualProof.Rule.Completeness.Comprehension.Structural.ParallelFrames
 import VisualProof.Rule.Completeness.Comprehension.Structural.Support
 
 namespace VisualProof.Rule.Completeness.Comprehension
@@ -9,197 +9,6 @@ open WirePrimitive
 
 namespace Structural
 
-theorem supportParallelAppendRightNil
-    (wire : Var wires signature) : Var.appendRight [] wire = wire := by
-  induction wire with
-  | here => rfl
-  | there wire induction => exact congrArg Var.there induction
-
-/-- The one coherent pair of sequential comprehension frames underlying a
-Parallel edit. The first child removes the first split binder, the second
-removes the remaining binder, and their retained maps compose to the edit's
-target map. -/
-structure SupportParallelFrames
-    {arguments common sourceWires splitWires middleWires : List Sig}
-    (frame : Transform.Frame arguments common sourceWires splitWires)
-    (data : (Content.Parallel.operation arguments).Data frame) where
-  head : Transform.Frame arguments middleWires splitWires middleWires
-  tail : Transform.Frame arguments common middleWires common
-  headTarget : ∀ {signature} (wire : Var middleWires signature),
-    head.targetKeep wire = wire
-  tailTarget : ∀ {signature} (wire : Var common signature),
-    tail.targetKeep wire = wire
-  retained : ∀ {signature} (wire : Var common signature),
-    head.sourceKeep (tail.sourceKeep wire) = frame.targetKeep wire
-  first : head.selected = data.1
-  second : head.sourceKeep tail.selected = data.2
-
-def SupportParallelFrames.append
-    {arguments common sourceWires splitWires middleWires locals : List Sig}
-    {frame : Transform.Frame arguments common sourceWires splitWires}
-    {data : (Content.Parallel.operation arguments).Data frame}
-    (frames : SupportParallelFrames
-      (middleWires := middleWires) frame data) :
-    SupportParallelFrames (middleWires := middleWires ++ locals)
-      (frame.append locals)
-      ((Content.Parallel.operation arguments).appendData frame data locals) :=
-  {
-    head := frames.head.append locals
-    tail := frames.tail.append locals
-    headTarget := by
-      intro signature wire
-      apply Var.appendCases (left := middleWires) (right := locals)
-        (motive := fun wire =>
-          (frames.head.append locals).targetKeep wire = wire)
-      · intro inheritedSignature inherited
-        simpa [Transform.Frame.append, WireRenaming.appendRight] using
-          congrArg (fun wire => wire.appendLeft locals)
-            (frames.headTarget inherited)
-      · intro localSignature localWire
-        simp [Transform.Frame.append, WireRenaming.appendRight]
-    tailTarget := by
-      intro signature wire
-      apply Var.appendCases (left := common) (right := locals)
-        (motive := fun wire =>
-          (frames.tail.append locals).targetKeep wire = wire)
-      · intro inheritedSignature inherited
-        simpa [Transform.Frame.append, WireRenaming.appendRight] using
-          congrArg (fun wire => wire.appendLeft locals)
-            (frames.tailTarget inherited)
-      · intro localSignature localWire
-        simp [Transform.Frame.append, WireRenaming.appendRight]
-    retained := by
-      intro signature wire
-      apply Var.appendCases (left := common) (right := locals)
-        (motive := fun wire =>
-          ((frames.head.append locals).sourceKeep
-              ((frames.tail.append locals).sourceKeep wire)) =
-            (frame.append locals).targetKeep wire)
-      · intro inheritedSignature inherited
-        simpa [Transform.Frame.append, WireRenaming.appendRight] using
-          congrArg (fun wire => wire.appendLeft locals)
-            (frames.retained inherited)
-      · intro localSignature localWire
-        simp [Transform.Frame.append, WireRenaming.appendRight]
-    first := by
-      simpa [Content.Parallel.operation, Transform.Frame.append,
-        WireRenaming.appendRight] using congrArg (fun wire =>
-          wire.appendLeft locals) frames.first
-    second := by
-      simpa [Content.Parallel.operation, Transform.Frame.append,
-        WireRenaming.appendRight] using congrArg (fun wire =>
-          wire.appendLeft locals) frames.second
-  }
-
-def supportParallelRootFrames
-    (outer before after arguments : List Sig) :
-    SupportParallelFrames
-      (middleWires :=
-        outer ++ (before ++ .rel arguments :: after))
-      (Content.Parallel.rootFrame outer before after arguments)
-      (Content.Parallel.firstHead outer before after arguments,
-        Content.Parallel.secondHead outer before after arguments) :=
-  {
-    head := Transform.Frame.replace outer before
-      (.rel arguments :: after) [] arguments
-    tail := Transform.Frame.replace outer before after [] arguments
-    headTarget := by
-      intro signature wire
-      apply Var.appendCases (left := outer)
-        (right := before ++ .rel arguments :: after)
-        (motive := fun wire =>
-          (Transform.Frame.replace outer before
-            (.rel arguments :: after) [] arguments).targetKeep wire = wire)
-      · intro inheritedSignature inherited
-        simp [Transform.Frame.replace, Transform.Frame.keep]
-      · intro localSignature localWire
-        apply Var.appendCases (left := before)
-          (right := .rel arguments :: after)
-          (motive := fun localWire' =>
-            (Transform.Frame.replace outer before
-              (.rel arguments :: after) [] arguments).targetKeep
-                (Var.appendRight outer localWire') =
-                  Var.appendRight outer localWire')
-        · intro beforeSignature beforeWire
-          simp [Transform.Frame.replace, Transform.Frame.keep,
-            Transform.Frame.localKeep]
-        · intro afterSignature afterWire
-          simp [Transform.Frame.replace, Transform.Frame.keep,
-            Transform.Frame.localKeep]
-          exact congrArg (fun wire => Var.appendRight outer
-            (Var.appendRight before wire))
-              (supportParallelAppendRightNil afterWire)
-    tailTarget := by
-      intro signature wire
-      apply Var.appendCases (left := outer) (right := before ++ after)
-        (motive := fun wire =>
-          (Transform.Frame.replace outer before after [] arguments
-            ).targetKeep wire = wire)
-      · intro inheritedSignature inherited
-        simp [Transform.Frame.replace, Transform.Frame.keep]
-      · intro localSignature localWire
-        apply Var.appendCases (left := before) (right := after)
-          (motive := fun localWire' =>
-            (Transform.Frame.replace outer before after [] arguments
-              ).targetKeep (Var.appendRight outer localWire') =
-                Var.appendRight outer localWire')
-        · intro beforeSignature beforeWire
-          simp [Transform.Frame.replace, Transform.Frame.keep,
-            Transform.Frame.localKeep]
-        · intro afterSignature afterWire
-          simp [Transform.Frame.replace, Transform.Frame.keep,
-            Transform.Frame.localKeep]
-          exact congrArg (fun wire => Var.appendRight outer
-            (Var.appendRight before wire))
-              (supportParallelAppendRightNil afterWire)
-    retained := by
-      intro signature wire
-      apply Var.appendCases (left := outer)
-        (right := before ++ after)
-        (motive := fun wire =>
-          ((Transform.Frame.replace outer before
-              (.rel arguments :: after) [] arguments).sourceKeep
-            ((Transform.Frame.replace outer before after [] arguments
-              ).sourceKeep wire)) =
-            (Content.Parallel.rootFrame outer before after arguments
-              ).targetKeep wire)
-      · intro inheritedSignature inherited
-        simp [Content.Parallel.rootFrame, Transform.Frame.replace,
-          Transform.Frame.keep]
-      · intro localSignature localWire
-        apply Var.appendCases (left := before) (right := after)
-          (motive := fun wire =>
-            ((Transform.Frame.replace outer before
-                (.rel arguments :: after) [] arguments).sourceKeep
-              ((Transform.Frame.replace outer before after [] arguments
-                ).sourceKeep (Var.appendRight outer wire))) =
-              (Content.Parallel.rootFrame outer before after arguments
-                ).targetKeep (Var.appendRight outer wire))
-        · intro beforeSignature beforeWire
-          simp [Content.Parallel.rootFrame, Transform.Frame.replace,
-            Transform.Frame.keep, Transform.Frame.localKeep]
-        · intro afterSignature afterWire
-          simp [Content.Parallel.rootFrame, Transform.Frame.replace,
-            Transform.Frame.keep, Transform.Frame.localKeep]
-          change Var.appendRight outer
-              (Var.appendRight before (.there (.there afterWire))) =
-            Var.appendRight outer
-              (Var.appendRight before (.there (.there afterWire)))
-          rfl
-    first := by
-      rfl
-    second := by
-      simp [Content.Parallel.secondHead, Transform.Frame.replace,
-        Transform.Frame.keep, Transform.Frame.localKeep,
-        Transform.Frame.insertedHead]
-      change Var.appendRight outer (Var.appendRight before (.there .here)) =
-        Var.appendRight outer (Var.appendRight before (.there .here))
-      rfl
-  }
-
-/-- Canonicality and retained-wire incidence facts transported by one factor
-endpoint.  The incidence algebra remains `SupportParallelIncidenceScope`; this
-record only keeps the exact fields consumed by the owning theorem together. -/
 structure SupportParallelRetainedValidity
     {common sourceWires targetWires : List Sig}
     (sourceKeep : WireRenaming common sourceWires)
@@ -669,6 +478,34 @@ theorem supportParallelIdentityRetainedValidity
     rw [portsEq]
     exact SupportParallelIncidenceScope.refl _
 
+theorem supportParallelTermRetainedValidity
+    {sourceKeep : WireRenaming common sourceWires}
+    {targetKeep : WireRenaming common targetWires}
+    (reflects : ∀ {leftSignature rightSignature}
+      (left : Var common leftSignature) (right : Var common rightSignature),
+      (sourceKeep left).index.val = (sourceKeep right).index.val ↔
+        (targetKeep left).index.val = (targetKeep right).index.val)
+    (output : Var common .iota) (freeArity : Nat)
+    (ports : Fin freeArity → Var common .iota)
+    (term : Lambda.Term 0 (Fin freeArity)) :
+    SupportParallelRetainedValidity sourceKeep targetKeep
+      (Region.singleton (.term (sourceKeep output) freeArity
+        (fun index => sourceKeep (ports index)) term))
+      (Region.singleton (.term (targetKeep output) freeArity
+        (fun index => targetKeep (ports index)) term)) := by
+  constructor
+  · intro _
+    exact ⟨fun index => Fin.elim0 index, ⟨True.intro, True.intro⟩⟩
+  · intro wireSignature wire
+    have outputEq := reflects output wire
+    have portsEq := Transform.countPorts_map_eq_of_reflection
+      freeArity ports sourceKeep targetKeep reflects wire
+    simp only [Region.singleton, Region.ofItems, Region.incidencePaths,
+      ItemSeq.renameWires, Item.renameWires, ItemSeq.incidencePaths,
+      Item.incidencePaths, List.append_nil, Var.index_appendLeft]
+    simp only [outputEq, portsEq]
+    exact SupportParallelIncidenceScope.refl _
+
 theorem supportParallelAtomFreshScope
     {sourceKeep : WireRenaming common sourceWires}
     {targetKeep : WireRenaming common targetWires}
@@ -729,6 +566,39 @@ theorem supportParallelIdentityFreshScope
     ItemSeq.renameWires, Item.renameWires, ItemSeq.incidencePaths,
     Item.incidencePaths, List.append_nil, Var.index_appendLeft]
   rw [sourcePortsZero, targetPortsZero]
+  exact SupportParallelIncidenceScope.refl []
+
+theorem supportParallelTermFreshScope
+    {sourceKeep : WireRenaming common sourceWires}
+    {targetKeep : WireRenaming common targetWires}
+    (sourceSelected : Var sourceWires (.rel selectedArguments))
+    (targetSelected : Var targetWires (.rel selectedArguments))
+    (sourceFresh : ∀ {signature} (wire : Var common signature),
+      sourceSelected.index.val ≠ (sourceKeep wire).index.val)
+    (targetFresh : ∀ {signature} (wire : Var common signature),
+      targetSelected.index.val ≠ (targetKeep wire).index.val)
+    (output : Var common .iota) (freeArity : Nat)
+    (ports : Fin freeArity → Var common .iota)
+    (term : Lambda.Term 0 (Fin freeArity)) :
+    SupportParallelIncidenceScope
+      ((Region.singleton (.term (sourceKeep output) freeArity
+        (fun index => sourceKeep (ports index)) term)).incidencePaths
+          sourceSelected.index.val)
+      ((Region.singleton (.term (targetKeep output) freeArity
+        (fun index => targetKeep (ports index)) term)).incidencePaths
+          targetSelected.index.val) := by
+  have sourcePortsZero := countPorts_map_eq_zero_of_no_preimage freeArity ports
+    sourceKeep sourceSelected.index.val
+      (fun wire => Ne.symm (sourceFresh wire))
+  have targetPortsZero := countPorts_map_eq_zero_of_no_preimage freeArity ports
+    targetKeep targetSelected.index.val
+      (fun wire => Ne.symm (targetFresh wire))
+  simp only [Region.singleton, Region.ofItems, Region.incidencePaths,
+    ItemSeq.renameWires, Item.renameWires, ItemSeq.incidencePaths,
+    Item.incidencePaths, List.append_nil, Var.index_appendLeft]
+  rw [sourcePortsZero, targetPortsZero,
+    if_neg (Ne.symm (sourceFresh output)),
+    if_neg (Ne.symm (targetFresh output))]
   exact SupportParallelIncidenceScope.refl []
 
 theorem supportParallelSelectedAtomToHeadScope
@@ -1881,6 +1751,167 @@ mutual
               retained := fun wire => by
                 simpa using SupportParallelIncidenceScope.refl
                   ((Region.singleton (.identity signature arity ports)
+                    ).incidencePaths wire.index.val)
+            }
+            let splitValidityCore :=
+              siteSplitValidity.conjoin childSplitValidity
+            let sourceTailValidityCore :=
+              siteSourceTailValidity.conjoin childSourceTailValidity
+            have tailHeadValidity : SupportParallelSelectedValidity
+                frames.tail.sourceKeep frames.tail.sourceKeep
+                  frames.tail.selected frames.tail.selected
+                (Region.ofItems tailItems) headResult := by
+              rw [← Region.singleton_conjoin_ofItems]
+              exact siteTailHeadValidity.conjoin childTailHeadValidity
+            let resultValidityCore :=
+              siteResultValidity.conjoin childResultValidity
+            exact ⟨edit, splitItems, headResult, tailItems, tailResult,
+              headEvidence, tailEvidence', editIso, headBridge,
+              HostedStrict.conjoin _ _ _ _ (HostedStrict.refl _)
+                childResultBridge,
+              (by simpa only [Region.singleton_conjoin_ofItems] using
+                splitValidityCore),
+              (by simpa only [Region.singleton_conjoin_ofItems] using
+                sourceTailValidityCore), tailHeadValidity,
+              resultValidityCore⟩
+        | term output freeArity ports term =>
+            let splitItem := Item.term (frame.targetKeep output) freeArity
+              (fun index => frame.targetKeep (ports index)) term
+            let middleItem := Item.term (frames.tail.sourceKeep output)
+              freeArity (fun index => frames.tail.sourceKeep (ports index)) term
+            have splitEq :
+                Item.term
+                    (frames.head.sourceKeep (frames.tail.sourceKeep output))
+                    freeArity
+                    (fun index => frames.head.sourceKeep
+                      (frames.tail.sourceKeep (ports index))) term =
+                  splitItem := by
+              simp only [splitItem]
+              congr 1
+              · exact frames.retained output
+              · funext index
+                exact frames.retained (ports index)
+            let edit : Transform.ItemsEdit (Content.Parallel.operation wires)
+                frame data _ := .cons (.term output freeArity ports term) tailEdit
+            let splitItems := ItemSeq.cons splitItem splitTail
+            let headResult :=
+              (Region.singleton middleItem).conjoin childHeadResult
+            let tailItems := ItemSeq.cons middleItem childTailItems
+            let tailResult :=
+              (Region.singleton (.term output freeArity ports term)).conjoin
+                childTailResult
+            have headEvidence :
+                VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+                  (Erasure.Exposure.supportPattern
+                    (Region.singleton materialHead) headCanonical)
+                  frames.head.sourceKeep frames.head.selected
+                  splitItems headResult := by
+              simp only [splitItems, headResult]
+              rw [← splitEq]
+              exact
+                VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+                  (VisualProof.Rule.Comprehension.Instantiation.ItemResult.term
+                    (frames.tail.sourceKeep output) freeArity
+                    (fun index => frames.tail.sourceKeep (ports index)) term)
+                  childHeadEvidence
+            have tailEvidence' :
+                VisualProof.Rule.Comprehension.Instantiation.ItemsResult
+                  (Erasure.Exposure.supportPattern
+                    (Region.ofItems materialTail) tailCanonical)
+                  frames.tail.sourceKeep frames.tail.selected
+                  tailItems tailResult := by
+              exact
+                VisualProof.Rule.Comprehension.Instantiation.ItemsResult.cons
+                  (VisualProof.Rule.Comprehension.Instantiation.ItemResult.term
+                    output freeArity ports term) childTailEvidence
+            have editIso : Nonempty (RegionIso (WireEquiv.refl splitWires)
+                edit.run (Region.ofItems splitItems)) := by
+              exact ⟨(RegionIso.conjoinCongr (RegionIso.refl _) tailIso).trans
+                (RegionIso.ofEq
+                  (Region.singleton_conjoin_ofItems splitItem splitTail))⟩
+            have headBridge : HostedStrict headResult
+                (Region.ofItems tailItems) := by
+              apply HostedStrict.iso (RegionIso.refl _)
+                (RegionIso.ofEq
+                  (Region.singleton_conjoin_ofItems middleItem childTailItems))
+              exact HostedStrict.conjoin _ _ _ _ (HostedStrict.refl _)
+                childHeadBridge
+            have sourceTailReflects : ∀ {leftSignature rightSignature}
+                (left : Var common leftSignature)
+                (right : Var common rightSignature),
+                (frame.sourceKeep left).index.val =
+                    (frame.sourceKeep right).index.val ↔
+                  (frames.tail.sourceKeep left).index.val =
+                    (frames.tail.sourceKeep right).index.val := by
+              intro leftSignature rightSignature left right
+              rw [frameInvariant.reflects left right]
+              rw [← frames.retained left, ← frames.retained right]
+              rw [headInvariant.reflects
+                (frames.tail.sourceKeep left) (frames.tail.sourceKeep right)]
+              rw [frames.headTarget, frames.headTarget]
+            have firstFresh : ∀ {wireSignature}
+                (wire : Var common wireSignature),
+                data.1.index.val ≠ (frame.targetKeep wire).index.val := by
+              intro wireSignature wire
+              rw [← frames.first, ← frames.retained wire]
+              exact headInvariant.selectedFresh (frames.tail.sourceKeep wire)
+            have secondFresh : ∀ {wireSignature}
+                (wire : Var common wireSignature),
+                data.2.index.val ≠ (frame.targetKeep wire).index.val := by
+              intro wireSignature wire equality
+              rw [← frames.second, ← frames.retained wire] at equality
+              have targetEquality := (headInvariant.reflects
+                frames.tail.selected (frames.tail.sourceKeep wire)).mp equality
+              rw [frames.headTarget, frames.headTarget] at targetEquality
+              exact tailInvariant.selectedFresh wire targetEquality
+            have siteSplitValidity : SupportParallelSplitValidity frame data
+                (Region.singleton (.term (frame.sourceKeep output) freeArity
+                  (fun index => frame.sourceKeep (ports index)) term))
+                (Region.singleton splitItem) := {
+              toSupportParallelRetainedValidity :=
+                supportParallelTermRetainedValidity frameInvariant.reflects
+                  output freeArity ports term
+              first := supportParallelTermFreshScope frame.selected data.1
+                frameInvariant.selectedFresh firstFresh output freeArity ports
+                  term
+              second := supportParallelTermFreshScope frame.selected data.2
+                frameInvariant.selectedFresh secondFresh output freeArity ports
+                  term
+            }
+            have siteSourceTailValidity : SupportParallelSelectedValidity
+                frame.sourceKeep frames.tail.sourceKeep frame.selected
+                  frames.tail.selected
+                (Region.singleton (.term (frame.sourceKeep output) freeArity
+                  (fun index => frame.sourceKeep (ports index)) term))
+                (Region.singleton middleItem) := {
+              toSupportParallelRetainedValidity :=
+                supportParallelTermRetainedValidity sourceTailReflects
+                  output freeArity ports term
+              selected := supportParallelTermFreshScope frame.selected
+                frames.tail.selected frameInvariant.selectedFresh
+                  tailInvariant.selectedFresh output freeArity ports term
+            }
+            have siteTailHeadValidity : SupportParallelSelectedValidity
+                frames.tail.sourceKeep frames.tail.sourceKeep
+                  frames.tail.selected frames.tail.selected
+                (Region.singleton middleItem) (Region.singleton middleItem) := {
+              toSupportParallelRetainedValidity :=
+                supportParallelTermRetainedValidity
+                  (fun _ _ => Iff.rfl) output freeArity ports term
+              selected := supportParallelTermFreshScope
+                frames.tail.selected frames.tail.selected
+                  tailInvariant.selectedFresh tailInvariant.selectedFresh
+                  output freeArity ports term
+            }
+            have siteResultValidity : SupportParallelRetainedValidity
+                (WireEquiv.refl common).toRenaming
+                (WireEquiv.refl common).toRenaming
+                (Region.singleton (.term output freeArity ports term))
+                (Region.singleton (.term output freeArity ports term)) := {
+              canonical := fun canonical => canonical
+              retained := fun wire => by
+                simpa using SupportParallelIncidenceScope.refl
+                  ((Region.singleton (.term output freeArity ports term)
                     ).incidencePaths wire.index.val)
             }
             let splitValidityCore :=

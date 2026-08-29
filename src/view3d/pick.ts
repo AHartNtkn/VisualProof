@@ -10,6 +10,25 @@ export function expandHover(key: string, spec: DiagramSpec, entities: readonly E
   const out = new Set<string>([key])
   const hit = entities.find((entity) => entity.key === key)
   if (hit === undefined) return out
+  if (hit.kind === 'lambda') {
+    const ownedByHit = (path: readonly string[]): boolean => (
+      hit.subtermPath.every((segment, index) => path[index] === segment)
+    )
+    for (const entity of entities) {
+      if (entity.kind === 'lambda' && entity.node === hit.node && ownedByHit(entity.subtermPath)) {
+        out.add(entity.key)
+      }
+    }
+    const incidentWires = new Set(
+      spec.wires
+        .filter((wire) => wire.terminals.some((terminal) => terminal.node === hit.node))
+        .map((wire) => wire.id),
+    )
+    for (const entity of entities) {
+      if (entity.kind === 'strand' && incidentWires.has(entity.wire)) out.add(entity.key)
+    }
+    return out
+  }
   if (hit.kind === 'strand') {
     for (const entity of entities) {
       if (entity.kind === 'strand' && entity.wire === hit.wire) out.add(entity.key)
@@ -58,6 +77,13 @@ export function focusPoint(key: string, entities: readonly Entity[]): Vec3 | nul
   const pts: Vec3[] = []
   if (hit.kind === 'strand') {
     for (const e of entities) if (e.kind === 'strand' && e.wire === hit.wire) pts.push(...e.pts)
+  } else if (hit.kind === 'lambda') {
+    const ownedByHit = (path: readonly string[]): boolean => (
+      hit.subtermPath.every((segment, index) => path[index] === segment)
+    )
+    for (const entity of entities) {
+      if (entity.kind === 'lambda' && entity.node === hit.node && ownedByHit(entity.subtermPath)) pts.push(...entity.pts)
+    }
   } else {
     pts.push(...hit.pts)
   }

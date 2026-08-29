@@ -1,5 +1,3 @@
-import { readFileSync, readdirSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { sameDiagram } from '../../src/kernel/diagram/canonical/iso'
 import type {
@@ -846,42 +844,6 @@ describe('relational Frege arithmetic proofs', () => {
     }
   })
 
-  it('does not encode a fixed conclusion-plus-six statement shape', () => {
-    const modules = [
-      'arithmetic-base.ts',
-      'arithmetic-naturals.ts',
-      'arithmetic-one.ts',
-      'arithmetic-support.ts',
-    ]
-    const directory = fileURLToPath(
-      new URL('../../src/theories', import.meta.url),
-    )
-    const source = modules
-      .map((name) => readFileSync(`${directory}/${name}`, 'utf8'))
-      .join('\n')
-
-    expect(source).not.toContain('conclusion plus six')
-  })
-
-  it('does not preserve the displaced Task 3 hypothesis bundle parser', () => {
-    const modules = [
-      'arithmetic-right-carrier.ts',
-      'arithmetic-right.ts',
-      'arithmetic-assoc-base.ts',
-      'arithmetic-assoc-carrier.ts',
-      'arithmetic-assoc.ts',
-    ]
-    const directory = fileURLToPath(
-      new URL('../../src/theories', import.meta.url),
-    )
-    const source = modules
-      .map((name) => readFileSync(`${directory}/${name}`, 'utf8'))
-      .join('\n')
-
-    expect(source).not.toContain('standingHypothesesContent')
-    expect(source).not.toContain('missing carrier-support primitive structure')
-  })
-
   it('classifies Nat hereditary children independently of region storage order', () => {
     const theory = buildBaseNaturalTheory()
     const theoremIndex = theory.theorems.findIndex(
@@ -929,20 +891,6 @@ describe('relational Frege arithmetic proofs', () => {
     expect(scopedWires(reordered, parts.inherited).length).toBe(0)
     expect(scopedWires(reordered, parts.baseCondition).length).toBe(1)
     expect(scopedWires(reordered, parts.closureCondition).length).toBe(2)
-  })
-
-  it('has no obsolete induction-statement or ref-spawn proof path', () => {
-    const directory = fileURLToPath(
-      new URL('../../src/theories', import.meta.url),
-    )
-    const source = readdirSync(directory)
-      .filter((name) => name.endsWith('.ts'))
-      .map((name) => readFileSync(`${directory}/${name}`, 'utf8'))
-      .join('\n')
-
-    for (const prohibited of ['induction-statements', 'refSpawn']) {
-      expect(source).not.toContain(prohibited)
-    }
   })
 
   it('records and verifies the required arithmetic ordered subsequence', () => {

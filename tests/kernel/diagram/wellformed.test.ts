@@ -8,6 +8,7 @@ import {
 } from '../../../src/kernel/diagram/diagram'
 import { derivedScope, isAncestorOrEqual } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { free } from '../../../src/kernel/term/term'
 
 const sheet: Record<string, Region> = { r0: { kind: 'sheet' } }
 const refNode: DiagramNode = {
@@ -174,22 +175,36 @@ describe('mkDiagram validation', () => {
     expect(isAncestorOrEqual(spanning, 'r0', 'r1')).toBe(true)
   })
 
-  it('rejects displaced term/body node vocabulary and throws DiagramError', () => {
+  it('rejects malformed term interfaces and terms', () => {
     for (const node of [
-      { kind: 'term', region: 'r0', term: {} },
-      { kind: 'body', region: 'r0', content: {} },
+      { kind: 'term', region: 'r0', term: free(0), freeArity: -1 },
+      { kind: 'term', region: 'r0', term: free(1), freeArity: 1 },
     ]) {
       try {
         mkDiagram({
           root: 'r0',
           regions: sheet,
-          nodes: { legacy: node as never },
+          nodes: { malformed: node as never },
         })
-        expect.unreachable('legacy node should be rejected')
+        expect.unreachable('malformed term node should be rejected')
       } catch (error) {
         expect(error).toBeInstanceOf(DiagramError)
-        expect((error as Error).message).toMatch(/unrecognized kind/)
+        expect((error as Error).message).toMatch(/freeArity|outside interface arity/)
       }
+    }
+  })
+
+  it('rejects displaced body node vocabulary and throws DiagramError', () => {
+    try {
+      mkDiagram({
+        root: 'r0',
+        regions: sheet,
+        nodes: { legacy: { kind: 'body', region: 'r0', content: {} } as never },
+      })
+      expect.unreachable('legacy node should be rejected')
+    } catch (error) {
+      expect(error).toBeInstanceOf(DiagramError)
+      expect((error as Error).message).toMatch(/unrecognized kind/)
     }
   })
 })

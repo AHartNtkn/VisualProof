@@ -229,6 +229,9 @@ function applyVerifiedTheorem(
       const node = freshId(takenCandidateNodes, `capturepin${index}`)
       takenCandidateNodes.add(node)
       const sourceNode = from.diagram.nodes[sourcePin.node]!
+      if (sourceNode.kind !== 'identity') {
+        throw new RuleError(`capture pin '${sourcePin.node}' is not an identity node`)
+      }
       candidateNodes[node] = {
         kind: 'identity',
         region: pattern.diagram.root,

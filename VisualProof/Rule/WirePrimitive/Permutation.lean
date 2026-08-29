@@ -291,6 +291,7 @@ inductive Permutes : Region outer → Region outer → Prop
   | .selectedAtom _ _ => rfl
   | .selectedPin _ _ => rfl
   | .identity _ _ _ => rfl
+  | .term _ _ _ _ => rfl
   | .cut _ => rfl
 
 theorem moveHeadSelectedAtom_source_target_extension

@@ -19,6 +19,9 @@ mutual
     | .identity _ arity ports =>
         ∀ left right : Fin arity,
           env.lookup (ports left) = env.lookup (ports right)
+    | .term output _ ports term =>
+        env.lookup output =
+          model.eval term (fun slot => env.lookup (ports slot))
     | .cut body => Not (denoteRegion model env body)
 
   def denoteItemSeq (model : Model) (env : Values model wires) :
@@ -56,6 +59,15 @@ def denoteOpen (model : Model) (diagram : OpenDiagram boundary)
     denoteItem model env (.identity signature arity ports) ↔
       ∀ left right : Fin arity,
         env.lookup (ports left) = env.lookup (ports right) := by
+  rfl
+
+@[simp] theorem denoteItem_term
+    (model : Model) (env : Values model wires)
+    (output : Var wires .iota) (ports : Fin freeArity → Var wires .iota)
+    (term : Lambda.Term 0 (Fin freeArity)) :
+    denoteItem model env (.term output freeArity ports term) ↔
+      env.lookup output =
+        model.eval term (fun slot => env.lookup (ports slot)) := by
   rfl
 
 @[simp] theorem denoteItem_cut

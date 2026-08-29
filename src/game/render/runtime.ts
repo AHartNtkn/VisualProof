@@ -760,13 +760,14 @@ export function makeTreeMaterialSource(
   const lines = new Map<string, LineMaterial>()
   const sprites = new Map<string, THREE.SpriteMaterial>()
   const hues = new Map<WireId, string>(asset.hues)
-  const colorFor = (entity: Entity): string => entityColor(entity, hues, {
+  const colorFor = (entity: Entity): string => entityColor(entity, {
     line: asset.palette.branch,
     lineAlt: asset.palette.cutBranch,
     baseWire: asset.palette.baseWire,
+    hues,
   })
   const line = (
-    entity: Extract<Entity, { kind: 'branch' | 'ring' | 'strand' }>,
+    entity: Extract<Entity, { kind: 'branch' | 'ring' | 'strand' | 'lambda' }>,
     width: number,
   ): LineMaterial => {
     const color = colorFor(entity)

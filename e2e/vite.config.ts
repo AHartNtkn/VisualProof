@@ -7,6 +7,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         app: resolve(process.cwd(), 'app/index.html'),
+        view3Render: resolve(process.cwd(), 'app/test/view3-render.html'),
       },
     },
   },

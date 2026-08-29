@@ -32,11 +32,14 @@ export function readPropRegion(
   for (const nodeId of nodesIn(diagram, region)) {
     const node = diagram.nodes[nodeId]!
     if (node.kind === 'identity' && node.arity === 1) continue
-    if (node.kind !== 'atom') fail(`region holds unsupported node '${nodeId}' (${node.kind})`)
-    if (!sigEquals(node.sig, relSig([]))) fail(`atom '${nodeId}' is not propositional`)
-    const index = wireIndex.get(headWireOf(diagram, nodeId))
-    if (index === undefined) fail(`atom '${nodeId}' heads an unindexed wire`)
-    items.push({ kind: 'atom', index: index! })
+    if (node.kind === 'atom') {
+      if (!sigEquals(node.sig, relSig([]))) fail(`atom '${nodeId}' is not propositional`)
+      const index = wireIndex.get(headWireOf(diagram, nodeId))
+      if (index === undefined) fail(`atom '${nodeId}' heads an unindexed wire`)
+      items.push({ kind: 'atom', index: index! })
+      continue
+    }
+    fail(`region holds unsupported node '${nodeId}' (${node.kind})`)
   }
   for (const cut of childCuts(diagram, region)) {
     items.push({ kind: 'not', body: readPropRegion(diagram, cut, wireIndex) })

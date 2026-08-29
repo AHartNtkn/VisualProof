@@ -33,6 +33,14 @@ mutual
     | identity {wires : List Sig} {signature : Sig} {arity : Nat}
         {ports : Fin arity → Var wires signature} (argument : Fin arity) :
         Item.Port (.identity signature arity ports) (ports argument)
+    | termOutput {wires : List Sig} {output : Var wires .iota}
+        {freeArity : Nat} {ports : Fin freeArity → Var wires .iota}
+        {term : Lambda.Term 0 (Fin freeArity)} :
+        Item.Port (.term output freeArity ports term) output
+    | termPort {wires : List Sig} {output : Var wires .iota}
+        {freeArity : Nat} {ports : Fin freeArity → Var wires .iota}
+        {term : Lambda.Term 0 (Fin freeArity)} (slot : Fin freeArity) :
+        Item.Port (.term output freeArity ports term) (ports slot)
     | cut {wires : List Sig} {body : Region wires}
         {signature : Sig} {wire : Var wires signature}
         (port : Region.Port body wire) : Item.Port (.cut body) wire
@@ -78,6 +86,16 @@ mutual
         (argument : Fin arguments.length) :
         Item.Port.IsNonIdentity
           (@Item.Port.atomArgument wires arguments head ports argument)
+    | termOutput {wires : List Sig} {output : Var wires .iota}
+        {freeArity : Nat} {ports : Fin freeArity → Var wires .iota}
+        {term : Lambda.Term 0 (Fin freeArity)} :
+        Item.Port.IsNonIdentity
+          (@Item.Port.termOutput wires output freeArity ports term)
+    | termPort {wires : List Sig} {output : Var wires .iota}
+        {freeArity : Nat} {ports : Fin freeArity → Var wires .iota}
+        {term : Lambda.Term 0 (Fin freeArity)} (slot : Fin freeArity) :
+        Item.Port.IsNonIdentity
+          (@Item.Port.termPort wires output freeArity ports term slot)
     | cut {wires : List Sig} {body : Region wires}
         {signature : Sig} {wire : Var wires signature}
         {port : Region.Port body wire}
@@ -244,6 +262,10 @@ mutual
     | .identity signature arity ports, partition =>
         .identity signature arity fun argument =>
           (partition.output (ports argument) (.identity argument)).val
+    | .term output freeArity ports term, partition =>
+        .term (partition.output output .termOutput).val freeArity
+          (fun slot =>
+            (partition.output (ports slot) (.termPort slot)).val) term
     | .cut body, partition =>
         .cut (Region.partitionOutput collapse body {
           output := fun wire port => partition.output wire (.cut port) })
@@ -291,6 +313,10 @@ mutual
     | .cons (.identity _signature _arity _ports) tail, partition, _, .tail wire =>
       .tail (ItemSeq.InternalWire.partitionOutput collapse tail
           { output := fun wire port => partition.output wire (.tail port) } wire)
+    | .cons (.term _output _freeArity _ports _term) tail, partition, _,
+        .tail wire =>
+      .tail (ItemSeq.InternalWire.partitionOutput collapse tail
+          { output := fun wire port => partition.output wire (.tail port) } wire)
     | .cons (.cut body) _tail, partition, _, .headCut wire =>
       .headCut (Region.InternalWire.partitionOutput collapse body
           { output := fun wire port => partition.output wire (.head (.cut port)) }
@@ -332,6 +358,11 @@ mutual
                 exact ItemSeq.InternalWire.ownerPathFrom_partitionOutput
                   collapse tail _ wire (itemIndex + 1)
         | identity signature arity ports =>
+            cases wire with
+            | tail wire =>
+                exact ItemSeq.InternalWire.ownerPathFrom_partitionOutput
+                  collapse tail _ wire (itemIndex + 1)
+        | term output freeArity ports term =>
             cases wire with
             | tail wire =>
                 exact ItemSeq.InternalWire.ownerPathFrom_partitionOutput
@@ -395,6 +426,12 @@ mutual
         apply congrArg (Item.identity signature arity)
         funext argument
         exact (partition.output (ports argument) (.identity argument)).property
+    | term output freeArity ports term =>
+        simp only [Item.partitionOutput, Item.renameWires]
+        rw [(partition.output output .termOutput).property]
+        congr 1
+        funext slot
+        exact (partition.output (ports slot) (.termPort slot)).property
     | cut body =>
         simp only [Item.partitionOutput, Item.renameWires]
         rw [Region.partitionOutput_renameWires]
@@ -598,6 +635,17 @@ private def Item.identityPartition
   output
   | _, .identity argument => ⟨ports argument, rfl⟩
 
+private def Item.termPartition
+    (collapse : WireRenaming target source)
+    (output : Var target .iota) (freeArity : Nat)
+    (ports : Fin freeArity → Var target .iota)
+    (term : Lambda.Term 0 (Fin freeArity)) :
+    Item.PortPartition collapse
+      ((Item.term output freeArity ports term).renameWires collapse) where
+  output
+  | _, .termOutput => ⟨output, rfl⟩
+  | _, .termPort slot => ⟨ports slot, rfl⟩
+
 private def Item.cutPartition
     (collapse : WireRenaming target source) {body : Region target}
     (partition : Region.PortPartition collapse (body.renameWires collapse)) :
@@ -661,6 +709,11 @@ mutual
         refine ⟨partition, ?_⟩
         simp only [Item.renameWires, Item.partitionOutput, partition,
           Item.identityPartition]
+    | term output freeArity ports term =>
+        let partition := Item.termPartition collapse output freeArity ports term
+        refine ⟨partition, ?_⟩
+        simp only [Item.renameWires, Item.partitionOutput, partition,
+          Item.termPartition]
     | cut body =>
         obtain ⟨bodyPartition, body_eq⟩ :=
           Region.exists_partition_of_renamed collapse body

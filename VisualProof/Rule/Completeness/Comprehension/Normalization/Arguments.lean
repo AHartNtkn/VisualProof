@@ -138,6 +138,8 @@ mutual
           (selectedSite frame data siteData.2)⟩
     | .identity signature arity ports =>
         ⟨_, .identity signature arity ports⟩
+    | .term output freeArity ports term =>
+        ⟨_, .term output freeArity ports term⟩
     | .cut childSites =>
         let child := argumentRegionEdit childSites current operation frame data
           selectedSite
@@ -298,6 +300,13 @@ mutual
           (fun wire => Ne.symm (invariant.selectedFresh wire))
         simp [argumentItemEdit, ItemSites.selectedPaths,
           Item.incidencePaths, portsZero]
+    | .term output freeArity ports term => by
+        have outputNe := Ne.symm (invariant.selectedFresh output)
+        have portsZero := countPorts_map_eq_zero_of_no_preimage freeArity ports
+          frame.sourceKeep frame.selected.index.val
+          (fun wire => Ne.symm (invariant.selectedFresh wire))
+        simp [argumentItemEdit, ItemSites.selectedPaths,
+          Item.incidencePaths, outputNe, portsZero]
     | .cut childSites => by
         simp only [argumentItemEdit, Item.incidencePaths,
           ItemSites.selectedPaths]
@@ -564,6 +573,18 @@ mutual
           Item.identity signature arity
             (fun position => secondFrame.sourceKeep (ports position))
         apply congrArg (Item.identity signature arity)
+        funext position
+        exact sourceKeepEq (ports position)
+    | .term output freeArity ports term =>
+      by
+        unfold argumentItemEdit
+        change Item.term (firstFrame.sourceKeep output) freeArity
+            (fun position => firstFrame.sourceKeep (ports position)) term =
+          Item.term (secondFrame.sourceKeep output) freeArity
+            (fun position => secondFrame.sourceKeep (ports position)) term
+        rw [sourceKeepEq output]
+        apply congrArg
+          (Item.term (secondFrame.sourceKeep output) freeArity · term)
         funext position
         exact sourceKeepEq (ports position)
     | .cut childSites =>
@@ -843,6 +864,7 @@ mutual
         unfold argumentItemEdit Transform.ItemEdit.run
         exact siteEndpoint frame data siteData.2
     | .identity signature arity ports => rfl
+    | .term output freeArity ports term => rfl
     | .cut childSites => by
         unfold argumentItemEdit Transform.ItemEdit.run
         exact congrArg (fun child => Region.singleton (.cut child))

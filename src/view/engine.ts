@@ -4,7 +4,7 @@ import { derivedScope } from '../kernel/diagram/regions'
 import type { Vec2 } from './vec'
 import { add } from './vec'
 import type { NodeGeometry } from './bend'
-import { atomGeometry, identityGeometry, refGeometry } from './bend'
+import { atomGeometry, identityGeometry, refGeometry, termGeometry } from './bend'
 import type { Disc, FreeSpace } from './route/freespace'
 import { mkFreeSpace } from './route/freespace'
 import type { CurveBC } from './route/curve'
@@ -39,7 +39,7 @@ export const FRAME_MARGIN = 6
     visible frame line exactly. */
 export const FRAME_CORNER_W = 8
 
-export type BodyKind = 'ref' | 'atom' | 'identity' | 'anchor'
+export type BodyKind = 'ref' | 'term' | 'atom' | 'identity' | 'anchor'
 
 export type Body = {
   readonly id: string
@@ -144,7 +144,7 @@ export type StoredFrame = { readonly center: Vec2; readonly half: number }
 
 /** Local anatomy scale per node kind. */
 export function ascaleOf(kind: BodyKind): number {
-  return kind === 'atom' ? 2 : 1
+  return kind === 'atom' ? 2 : kind === 'term' ? 1.4 : 1
 }
 
 /** Shared layout clearance for point nodes: dangling quantifiers and equality. */
@@ -159,6 +159,8 @@ export function nodeGeometry(d: Diagram, id: NodeId): NodeGeometry {
   const n = d.nodes[id]
   if (n === undefined) throw new Error(`unknown node '${id}'`)
   switch (n.kind) {
+    case 'term':
+      return termGeometry(n.term, n.freeArity)
     case 'atom':
       return atomGeometry(n.sig.args.length)
     case 'ref':

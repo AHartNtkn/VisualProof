@@ -1,11 +1,15 @@
 import type {
   Diagram,
+  Endpoint,
   NodeId,
   RegionId,
   WireId,
 } from '../diagram/diagram'
 import { derivedScope, isAncestorOrEqual } from '../diagram/regions'
 import type { RelSig, Sig } from '../diagram/sig'
+import type { Term } from '../term/term'
+import type { PathSeg } from '../term/reduce'
+import type { ConversionCertificate } from '../term/certificate'
 import {
   createIdMintRecorder,
   freezeIdMintLog,
@@ -16,6 +20,7 @@ import {
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { applyDoubleCutElim, applyDoubleCutIntro } from '../rules/doublecut'
+import { wireAt as portWireAt } from '../rules/access'
 import { applyErasure } from '../rules/erasure'
 import { applyFold, applyUnfold } from '../rules/fold'
 import { applyIdentityInsertion } from '../rules/identity'
@@ -63,6 +68,19 @@ import {
   type WireJoinInput,
   type WireSeverInput,
 } from '../rules/wire-quantifier'
+import {
+  applyFreeVariableIdentity,
+  applyLambdaAnchoredWireContract,
+  applyLambdaAnchoredWireSplit,
+  applyLambdaCongruenceJoin,
+  applyLambdaConversion,
+  applyLambdaFission,
+  applyLambdaFusion,
+  applyLambdaHeadStrip,
+  applyLambdaTermSpawn,
+  type FreeVariableIdentityAction,
+  type SlotCorrespondence,
+} from '../rules/lambda'
 import { assertProofContext, type ProofContext } from './context'
 import { ProofError } from './error'
 import { applyTheorem, type TheoremApplication } from './theorem'
@@ -79,6 +97,15 @@ export type ProofStep =
   | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate }
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
+  | { readonly rule: 'lambdaTermSpawn'; readonly region: RegionId; readonly term: Term; readonly freeArity: number }
+  | { readonly rule: 'lambdaConversion'; readonly node: NodeId; readonly term: Term; readonly correspondence: SlotCorrespondence; readonly certificate: ConversionCertificate; readonly attachments: Readonly<Record<number, WireId>> }
+  | { readonly rule: 'lambdaFreeVariableIdentity'; readonly action: FreeVariableIdentityAction }
+  | { readonly rule: 'lambdaFission'; readonly node: NodeId; readonly path: readonly PathSeg[] }
+  | { readonly rule: 'lambdaFusion'; readonly wire: WireId }
+  | { readonly rule: 'lambdaCongruenceJoin'; readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate; readonly correspondence: SlotCorrespondence }
+  | { readonly rule: 'lambdaHeadStrip'; readonly a: NodeId; readonly b: NodeId; readonly correspondence: SlotCorrespondence }
+  | { readonly rule: 'lambdaAnchoredWireSplit'; readonly wire: WireId; readonly witness: NodeId; readonly endpoints: readonly Endpoint[]; readonly target: RegionId }
+  | { readonly rule: 'lambdaAnchoredWireContract'; readonly redundant: NodeId; readonly survivor: NodeId; readonly certificate: ConversionCertificate }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
   | { readonly rule: 'vacuity'; readonly direction: 'insert' | 'delete'; readonly instance: VacuityInstance }
   | { readonly rule: 'presentation'; readonly input: PresentationInput }
@@ -143,6 +170,15 @@ export function reboundWires(step: ProofStep): readonly WireId[] {
     case 'deiteration':
     case 'doubleCutIntro':
     case 'doubleCutElim':
+    case 'lambdaTermSpawn':
+    case 'lambdaConversion':
+    case 'lambdaFreeVariableIdentity':
+    case 'lambdaFission':
+    case 'lambdaFusion':
+    case 'lambdaCongruenceJoin':
+    case 'lambdaHeadStrip':
+    case 'lambdaAnchoredWireSplit':
+    case 'lambdaAnchoredWireContract':
     case 'theorem':
     case 'vacuity':
     case 'presentation':
@@ -265,6 +301,64 @@ function applyStepRaw(
       return applyDoubleCutIntro(diagram, step.sel, reservation)
     case 'doubleCutElim':
       return applyDoubleCutElim(diagram, step.region)
+    case 'lambdaTermSpawn':
+      return applyLambdaTermSpawn(
+        diagram,
+        step.region,
+        step.term,
+        step.freeArity,
+        orientation,
+        reservation,
+      )
+    case 'lambdaConversion':
+      return applyLambdaConversion(
+        diagram,
+        step.node,
+        step.term,
+        step.correspondence,
+        step.certificate,
+        step.attachments,
+        reservation,
+      )
+    case 'lambdaFreeVariableIdentity':
+      return applyFreeVariableIdentity(diagram, step.action)
+    case 'lambdaFission':
+      return applyLambdaFission(diagram, step.node, step.path, reservation)
+    case 'lambdaFusion':
+      return applyLambdaFusion(diagram, step.wire, reservation)
+    case 'lambdaCongruenceJoin':
+      return applyLambdaCongruenceJoin(
+        diagram,
+        step.a,
+        step.b,
+        step.certificate,
+        step.correspondence,
+      )
+    case 'lambdaHeadStrip':
+      return applyLambdaHeadStrip(
+        diagram,
+        step.a,
+        step.b,
+        step.correspondence,
+        reservation,
+      )
+    case 'lambdaAnchoredWireSplit':
+      return applyLambdaAnchoredWireSplit(
+        diagram,
+        step.wire,
+        step.witness,
+        step.endpoints,
+        step.target,
+        reservation,
+      )
+    case 'lambdaAnchoredWireContract':
+      return applyLambdaAnchoredWireContract(
+        diagram,
+        step.redundant,
+        step.survivor,
+        step.certificate,
+        reservation,
+      )
     case 'theorem':
       return applyTheorem(
         diagram,
@@ -398,6 +492,21 @@ function joinedRepresentative(
 ): WireId {
   if (step.rule === 'identification' && step.input.kind === 'collapse') {
     return step.input.absorbed.includes(wire) ? step.input.survivor : wire
+  }
+  if (step.rule === 'lambdaCongruenceJoin') {
+    const a = portWireAt(diagram, step.a, { kind: 'output' })
+    const b = portWireAt(diagram, step.b, { kind: 'output' })
+    const retained = isAncestorOrEqual(
+      diagram,
+      derivedScope(diagram, a),
+      derivedScope(diagram, b),
+    ) ? a : b
+    return wire === a || wire === b ? retained : wire
+  }
+  if (step.rule === 'lambdaAnchoredWireContract') {
+    const drop = portWireAt(diagram, step.redundant, { kind: 'output' })
+    const keep = portWireAt(diagram, step.survivor, { kind: 'output' })
+    return wire === drop || wire === keep ? keep : wire
   }
   if (step.rule !== 'wireJoin') return wire
   const a = diagram.wires[step.input.a]

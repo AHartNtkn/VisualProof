@@ -393,6 +393,16 @@ mutual
       · intro targetDenotes left right
         rw [realizes.1 (ports left), realizes.1 (ports right)]
         exact targetDenotes left right
+    | term output freeArity ports term =>
+      rw [denote_singleton_iff]
+      simp only [denoteItem_term]
+      rw [realizes.1 output]
+      have argumentsEq :
+          (fun slot => sourceEnv.lookup (retain (ports slot))) =
+            (fun slot => targetEnv.lookup (ports slot)) := by
+        funext slot
+        exact realizes.1 (ports slot)
+      rw [argumentsEq]
     | cut bodyEvidence =>
       rw [denote_singleton_iff]
       simp only [denoteItem_cut]

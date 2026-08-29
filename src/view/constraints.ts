@@ -1,7 +1,12 @@
 import type { RegionId } from '../kernel/diagram/diagram'
 import type { Engine, RegionCircle } from './engine'
 import type { Vec2 } from './vec'
-import { clampDragToFeasible, containedPath, recomputeRegions } from './relax'
+import {
+  ancestorRegionIds,
+  clampDragToFeasible,
+  containedPath,
+  recomputeRegions,
+} from './relax'
 
 /** A geometric contradiction of the diagram's semantic region tree. `depth` is
     the penetration past the hard bound in world units — the frontier compares
@@ -233,11 +238,10 @@ export function projectDragToSemanticFrontier(e: Engine, targets: ReadonlyMap<st
   // strict no-deepening comparison would read as a wall.
   const draggedAncestors = new Set<RegionId>()
   for (const id of paths.keys()) {
-    for (let r = e.bodies.get(id)!.region; ;) {
+    for (const r of ancestorRegionIds(e, e.bodies.get(id)!.region)) {
       const reg = e.d.regions[r]!
       if (reg.kind === 'sheet') break
       draggedAncestors.add(r)
-      r = reg.parent
     }
   }
   const clampOwned = (c: SemanticConflict): boolean =>

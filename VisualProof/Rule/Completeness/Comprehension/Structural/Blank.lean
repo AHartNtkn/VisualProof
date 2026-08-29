@@ -86,152 +86,9 @@ theorem supportBlankInstantiationScope
           (Region.ofItems (ItemSeq.nil : ItemSeq wires))).renameWires
             substitution).conjoin
         (Region.ofItems (pins.append pins))) := by
-  dsimp only
-  let substitution := EqualityNormalization.formalSubstitution application
-  let pins := EqualityNormalization.allPins wires substitution
-  let material := Region.ofItems (ItemSeq.nil : ItemSeq wires)
-  let supported := Erasure.Exposure.supportBody material
-  let pinRegion := Region.ofItems (pins.append pins)
-  have ofItemsRenameEq : ∀ {sourceWires targetWires : List Sig}
-      (items : ItemSeq sourceWires)
-      (rename : WireRenaming sourceWires targetWires),
-      (Region.ofItems items).renameWires rename =
-        Region.ofItems (items.renameWires rename) := by
-    intro sourceWires targetWires items rename
-    unfold Region.ofItems Region.renameWires
-    congr 1
-    simp only [ItemSeq.renameWires_comp]
-    apply congrArg (fun mapped => items.renameWires mapped)
-    apply WireRenaming.ext
-    intro signature wire
-    simp [WireRenaming.comp, WireRenaming.appendRight]
-  have mappedFormalOfPositive : ∀ {signature}
-      (wire : Var common signature),
-      0 < application.countIndex wire.index.val →
-      ∃ sourceSignature, ∃ sourceWire : Var wires sourceSignature,
-        (substitution sourceWire).index.val = wire.index.val := by
-    intro signature wire positive
-    obtain ⟨position, positionEq⟩ :=
-      EqualityNormalization.Vars.exists_get_index_of_countIndex_pos
-        application wire.index.val positive
-    let sourceWire := (EqualityNormalization.formalPorts wires).get position
-    have mappedAt : substitution sourceWire = application.get position := by
-      have mappedTuple :=
-        EqualityNormalization.formalPorts_map_substitution application
-      have mappedGet := congrArg (fun variables => variables.get position)
-        mappedTuple
-      simpa only [EqualityNormalization.Vars.get_map, sourceWire,
-        substitution] using mappedGet
-    exact ⟨wires.get position, sourceWire, by rw [mappedAt, positionEq]⟩
-  have noPreimageOfCountZero :
-      ∀ {sourceSignatures : List Sig}
-        (variables : Vars common sourceSignatures)
-        {targetSignature} (targetWire : Var common targetSignature),
-        variables.countIndex targetWire.index.val = 0 →
-        ∀ {sourceSignature} (sourceWire : Var sourceSignatures sourceSignature),
-          (EqualityNormalization.formalSubstitution variables
-            sourceWire).index.val ≠ targetWire.index.val := by
-    intro sourceSignatures variables
-    induction variables with
-    | nil =>
-        intro targetSignature targetWire zero sourceSignature sourceWire
-        exact nomatch sourceWire
-    | cons applicationHead applicationTail induction =>
-        intro targetSignature targetWire zero sourceSignature sourceWire
-        cases sourceWire with
-        | here =>
-            intro mapped
-            simp only [EqualityNormalization.formalSubstitution_here] at mapped
-            simp only [Vars.countIndex, mapped, if_true] at zero
-            omega
-        | there tailWire =>
-            apply induction targetWire
-            simp only [Vars.countIndex] at zero
-            omega
-  have supportedCanonical : supported.Canonical :=
-    Erasure.Exposure.supportBody_canonical material
-      (supportBlankMaterial_canonical wires)
-  have pinCanonical : pinRegion.Canonical := by
-    change (∀ localIndex : Fin 0, RegionPath.RootedTwo _) ∧
-      ((pins.append pins).renameWires _).ChildrenCanonical
-    exact ⟨fun localIndex => Fin.elim0 localIndex,
-      (ItemSeq.ChildrenCanonical.renameWires_iff _ _).mpr
-        (EqualityNormalization.allPins_twice_childrenCanonical
-          wires substitution)⟩
-  constructor
-  · intro _
-    exact EqualityNormalization.canonical_conjoin
-      ((Region.Canonical.renameWires_iff supported substitution).mpr
-        supportedCanonical) pinCanonical
-  · intro signature wire
-    rw [EqualityNormalization.instantiate_incidence_nonempty_iff]
-    constructor
-    · intro positive
-      obtain ⟨sourceSignature, sourceWire, mappedIndex⟩ :=
-        mappedFormalOfPositive wire positive
-      have pinRoot := EqualityNormalization.allPins_twice_rooted
-        wires substitution sourceWire 0
-      rw [mappedIndex] at pinRoot
-      have pinNonempty : pinRegion.incidencePaths wire.index.val ≠ [] := by
-        rw [Region.incidencePaths_ofItems]
-        exact pinRoot.nonempty
-      rw [Region.incidencePaths_conjoin]
-      intro empty
-      have mappedEmpty := (List.append_eq_nil_iff.mp empty).2
-      exact pinNonempty ((List.map_eq_nil_iff).mp mappedEmpty)
-    · intro targetNonempty
-      cases countEq : application.countIndex wire.index.val with
-      | zero =>
-          have noPreimage : ∀ {sourceSignature}
-              (sourceWire : Var wires sourceSignature),
-              (substitution sourceWire).index.val ≠ wire.index.val := by
-            exact noPreimageOfCountZero application wire countEq
-          have supportedEmpty :
-              (supported.renameWires substitution).incidencePaths
-                wire.index.val = [] := by
-            change ((Erasure.Exposure.supportBody
-              (Region.ofItems (ItemSeq.nil : ItemSeq wires))).renameWires
-                substitution).incidencePaths wire.index.val = []
-            rw [supportBlankBody_eq wires, ofItemsRenameEq,
-              Region.incidencePaths_ofItems]
-            apply ItemSeq.incidencePaths_renameWires_eq_nil_of_no_preimage
-            · exact wire.index.isLt
-            · exact noPreimage
-          have firstPinsEmpty : pins.incidencePaths wire.index.val 0 = [] := by
-            exact ItemSeq.pinWires_incidence_eq_nil_of wires substitution
-              (fun _ => true) wire.index.val 0
-              (fun sourceWire _ => noPreimage sourceWire)
-          have secondPinsEmpty :
-              pins.incidencePaths wire.index.val pins.length = [] := by
-            exact ItemSeq.pinWires_incidence_eq_nil_of wires substitution
-              (fun _ => true) wire.index.val pins.length
-              (fun sourceWire _ => noPreimage sourceWire)
-          have pinEmpty : pinRegion.incidencePaths wire.index.val = [] := by
-            rw [Region.incidencePaths_ofItems,
-              ItemSeq.incidencePaths_append, firstPinsEmpty]
-            simpa only [List.nil_append, Nat.zero_add] using secondPinsEmpty
-          rw [Region.incidencePaths_conjoin, supportedEmpty, pinEmpty]
-            at targetNonempty
-          exact False.elim (targetNonempty (by simp))
-      | succ count => omega
-  · intro signature wire sourceRoot
-    have positive : 0 < application.countIndex wire.index.val := by
-      have countBound :=
-        (EqualityNormalization.instantiate_rootedTwo_iff
-          (Erasure.Exposure.supportPattern material
-            (supportBlankMaterial_canonical wires)) application wire).mp
-          sourceRoot
-      omega
-    obtain ⟨sourceSignature, sourceWire, mappedIndex⟩ :=
-      mappedFormalOfPositive wire positive
-    have pinRoot := EqualityNormalization.allPins_twice_rooted
-      wires substitution sourceWire 0
-    rw [mappedIndex] at pinRoot
-    rw [Region.incidencePaths_conjoin]
-    apply RegionPath.RootedTwo.of_sublist (List.sublist_append_right _ _)
-    exact (RegionPath.RootedTwo.map_shiftHead_iff _ _).mpr (by
-      rw [Region.incidencePaths_ofItems]
-      exact pinRoot)
+  exact EqualityNormalization.supportInstantiationPinnedScope
+    (Region.ofItems (ItemSeq.nil : ItemSeq wires))
+    (supportBlankMaterial_canonical wires) application
 
 def endsFormalPrefixSource
     (frame : Transform.Frame [] common sourceWires targetWires)
@@ -607,6 +464,21 @@ mutual
             Item.renameWires, ItemSeq.incidencePaths, Item.incidencePaths,
             List.append_nil, Var.index_appendLeft]
           rw [← portsEq]
+          exact SupportParallelIncidenceScope.refl _
+    | term output freeArity ports term =>
+        constructor
+        · intro _
+          exact ⟨fun index => Fin.elim0 index, ⟨True.intro, True.intro⟩⟩
+        · intro wireSignature wire
+          have outputEq := invariant.reflects output wire
+          have portsEq := Transform.countPorts_map_eq_of_reflection
+            freeArity ports frame.sourceKeep frame.targetKeep
+              invariant.reflects wire
+          simp only [Transform.ItemEdit.run, Region.singleton,
+            Region.ofItems, Region.incidencePaths, ItemSeq.renameWires,
+            Item.renameWires, ItemSeq.incidencePaths, Item.incidencePaths,
+            List.append_nil, Var.index_appendLeft]
+          simp only [outputEq, portsEq]
           exact SupportParallelIncidenceScope.refl _
     | cut childEdit =>
         exact EndsSpawnScope.cut
@@ -1332,7 +1204,7 @@ theorem supportBlankSelectedTargetItem
 
 mutual
   /-- The Ends operation has unit site data at every selected blank-pattern
-  application, so authoritative region evidence admits exact sites. -/
+  application, so the region evidence supports exact sites. -/
   theorem endsRegionSites_nonempty
       {frame : Transform.Frame [] common sourceWires targetWires}
       {source : Region sourceWires} {result : Region common}
@@ -1375,6 +1247,9 @@ mutual
         exact ⟨.selectedAtom (pattern := blankPattern) application PUnit.unit⟩
     | identity signature arity ports =>
         exact ⟨.identity (pattern := blankPattern) signature arity ports⟩
+    | term output freeArity ports term =>
+        exact ⟨.term (pattern := blankPattern)
+          output freeArity ports term⟩
     | cut childEvidence =>
         obtain ⟨childSites⟩ := endsRegionSites_nonempty childEvidence
         exact ⟨.cut childSites⟩
@@ -1475,6 +1350,18 @@ mutual
         exact ⟨RegionIso.ofEq (by
           simp only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
             portsEq])⟩
+    | .term output freeArity ports term => by
+        have outputEq : frame.targetKeep output = output := by
+          rw [targetKeepEq]
+          rfl
+        have portsEq :
+            (fun position => frame.targetKeep (ports position)) = ports := by
+          funext position
+          rw [targetKeepEq]
+          rfl
+        exact ⟨RegionIso.ofEq (by
+          simp only [itemEdit, ExactEdit.refl, Transform.ItemEdit.run,
+            outputEq, portsEq])⟩
     | .cut childSites => by
         obtain ⟨childIso⟩ :=
           endsRegionEndpointIso_nonempty childSites targetKeepEq

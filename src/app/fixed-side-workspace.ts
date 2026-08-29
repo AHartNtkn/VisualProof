@@ -26,6 +26,7 @@ import type { KeySample } from './interact/viewport'
 import type { MotionPreferences } from './interact/motion'
 import { proofSnapshot, type ProofSnapshot } from './proof-snapshot'
 import { seedActionHistoryPlacements } from './proof-placement'
+import { stepActionLabel } from './proof-front-policy'
 
 export type FixedSideWorkspaceOptions = {
   readonly host: HTMLElement
@@ -140,16 +141,30 @@ export class FixedSideWorkspace {
     this.#refresh()
   }
 
-  reconcile(side: FixedSide): void {
-    this.#front(side).reconcileDiagram()
+  reconcile(
+    side: FixedSide,
+    action?: ProofAction,
+    direction: 'forward' | 'reverse' = 'forward',
+  ): void {
+    this.#front(side).reconcileDiagram(action, direction)
     this.#presentHistory(side)
     this.#refresh()
   }
 
   moveFocusedCursor(cursor: number): void {
-    const next = moveSide(this.#options.session(), this.#focused, cursor)
+    const session = this.#options.session()
+    const timeline = session[this.#focused]
+    const previous = timeline.cursor
+    const next = moveSide(session, this.#focused, cursor)
     this.#options.commit(next, this.#focused)
-    this.reconcile(this.#focused)
+    const action = Math.abs(cursor - previous) === 1
+      ? timeline.actions[Math.min(cursor, previous)]
+      : undefined
+    this.reconcile(
+      this.#focused,
+      action,
+      cursor < previous ? 'reverse' : 'forward',
+    )
   }
 
   cancelGestures(): void {
@@ -223,7 +238,7 @@ export class FixedSideWorkspace {
   }
 
   #prepare(side: FixedSide, step: ProofStep): () => void {
-    const action = singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step)
+    const action = singleStepAction(stepActionLabel(step), step)
     return this.#prepareAction(side, action)
   }
 
@@ -232,7 +247,7 @@ export class FixedSideWorkspace {
     const next = side === 'forward' ? applyForward(session, action) : applyBackward(session, action)
     return () => {
       this.#options.commit(next, side)
-      this.reconcile(side)
+      this.reconcile(side, action)
     }
   }
 
@@ -248,8 +263,9 @@ export class FixedSideWorkspace {
       })
       return true
     }
+    const action = timeline.actions[Math.min(cursor, timeline.cursor)]
     this.#options.commit(moveSide(session, side, cursor), side)
-    this.reconcile(side)
+    this.reconcile(side, action, cursor < timeline.cursor ? 'reverse' : 'forward')
     return true
   }
 

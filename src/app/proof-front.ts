@@ -7,7 +7,7 @@ import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import type { Engine } from '../view/engine'
 import { carryOver, mkEngine } from '../view/engine'
 import type { Shape, Theme } from '../view/paint'
-import { highlightGroup, paint, relationWireHues, wireOverlayShapes } from '../view/paint'
+import { highlightGroup, relationWireHues, wireOverlayShapes } from '../view/paint'
 import { seedBodyPlacement } from '../view/placement'
 import { seedProject } from '../view/relax'
 import type { Vec2 } from '../view/vec'
@@ -21,6 +21,7 @@ import {
 } from './interact/motion'
 import { ProofMoveController } from './interact/moves'
 import { ProofSpawnController } from './interact/proof-spawn'
+import { fissionDropPoint, fissionTargetPoint } from './interact/fission'
 import {
   InteractiveViewport,
   type KeySample,
@@ -77,6 +78,14 @@ export type ProofFrontDebugState = {
     readonly r: number
   }[]
   readonly motion: MotionDebugState
+  readonly fissionTargets: readonly {
+    readonly node: string
+    readonly path: readonly string[]
+    readonly x: number
+    readonly y: number
+    readonly dropX: number
+    readonly dropY: number
+  }[]
   readonly interactionOverlays: readonly string[]
 }
 
@@ -129,8 +138,8 @@ export class ProofFrontViewport {
       host: document.body,
       diagram: model.diagram,
       context: model.context,
-      commit: (step) => {
-        model.prepare(step)()
+      commit: (action) => {
+        model.prepareAction(action)()
         return model.diagram()
       },
       place: (node, at) => seedBodyPlacement(this.#engine, node, at),
@@ -162,6 +171,16 @@ export class ProofFrontViewport {
       context: model.context,
       orientation: () => model.side,
       apply: (action) => model.prepareAction(action)(),
+      commitFission: ({ node, path, at }) => {
+        const before = model.diagram()
+        model.prepare({ rule: 'lambdaFission', node, path })()
+        const introduced = Object.keys(model.diagram().nodes)
+          .find((id) => before.nodes[id] === undefined)
+        if (introduced === undefined) {
+          throw new Error('Lambda fission did not introduce a producer node')
+        }
+        seedBodyPlacement(this.#engine, introduced, at)
+      },
       refuse: model.refuse,
       theme: model.theme,
       fuel: model.fuel,
@@ -221,11 +240,20 @@ export class ProofFrontViewport {
     }
   }
 
-  reconcileDiagram(): void {
+  reconcileDiagram(
+    action?: ProofAction,
+    direction: 'forward' | 'reverse' = 'forward',
+  ): void {
     const next = mkEngine(this.#model.diagram(), this.#model.boundary())
     const carried = carryOver(this.#engine, next)
     seedProject(next, false, carried)
-    this.motion.observeSwap(this.#engine, next, performance.now())
+    this.motion.observeSwap(
+      this.#engine,
+      next,
+      performance.now(),
+      action,
+      direction,
+    )
     this.#engine = next
     this.#rebuilds++
     this.interaction.reconcileDiagram(true)
@@ -246,7 +274,7 @@ export class ProofFrontViewport {
     if (this.#disposed) return
     this.interaction.advance(true)
     const theme = this.#model.theme()
-    const shapes: Shape[] = paint(this.#engine, theme)
+    const shapes: Shape[] = this.motion.paint(now)
     for (const id of this.interaction.pins) {
       const body = this.#engine.bodies.get(id)
       if (body === undefined) continue
@@ -330,6 +358,21 @@ export class ProofFrontViewport {
         r: region.radius,
       })),
       motion: this.motion.debugState(performance.now()),
+      fissionTargets: [...this.#engine.bodies.values()].flatMap((body) =>
+        body.node?.kind === 'term'
+          ? body.geometry!.occurrences.flatMap((occurrence) => {
+              const point = fissionTargetPoint(this.#engine, body.id, occurrence.path)
+              const drop = fissionDropPoint(this.#engine, this.#model.diagram(), body.id)
+              return point === null || drop === null ? [] : [{
+                node: body.id,
+                path: occurrence.path,
+                x: point.x,
+                y: point.y,
+                dropX: drop.x,
+                dropY: drop.y,
+              }]
+            })
+          : []),
       interactionOverlays: this.#moves.overlay().map((shape) => shape.kind),
     }
   }

@@ -1,6 +1,7 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../diagram'
 import { DiagramError, endpointPositionKey } from '../diagram'
 import { sigEquals } from '../sig'
+import { serializeTerm } from '../../term/serialize'
 import { buildRefineIndexes, refineJointlyIndexed, type Mark, type Sort, type SideColors } from './refine'
 
 /**
@@ -201,6 +202,16 @@ export function __verifyIso(
     const mappedRegion = iso.regions.get(an.region)
     if (mappedRegion !== bn.region) return `node '${aId}' region does not transport to node '${bId}' region`
     switch (an.kind) {
+      case 'term':
+        if (bn.kind === 'term') {
+          if (an.freeArity !== bn.freeArity) {
+            return `term '${aId}' freeArity ${an.freeArity} does not match '${bId}' freeArity ${bn.freeArity}`
+          }
+          if (serializeTerm(an.term) !== serializeTerm(bn.term)) {
+            return `term '${aId}' structure does not match '${bId}' structure`
+          }
+        }
+        break
       case 'atom':
         if (bn.kind === 'atom' && !sigEquals(an.sig, bn.sig)) {
           return `atom '${aId}' sig does not match '${bId}' sig`

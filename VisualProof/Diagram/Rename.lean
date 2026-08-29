@@ -16,6 +16,8 @@ mutual
         .atom (rename head) (ports.map (fun wire => rename wire))
     | .identity signature arity ports =>
         .identity signature arity (fun index => rename (ports index))
+    | .term output freeArity ports term =>
+        .term (rename output) freeArity (fun slot => rename (ports slot)) term
     | .cut body => .cut (body.renameWires rename)
 
   def ItemSeq.renameWires (rename : WireRenaming source target) :
@@ -39,6 +41,7 @@ end
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => rfl)
     (fun _ _ _ induction second target rename =>
@@ -100,6 +103,13 @@ private def renameIdIdentityCase
     ItemRenameIdMotive wires (.identity signature arity ports) := by
   rfl
 
+private def renameIdTermCase
+    (output : Var wires .iota) (freeArity : Nat)
+    (ports : Fin freeArity → Var wires .iota)
+    (term : Lambda.Term 0 (Fin freeArity)) :
+    ItemRenameIdMotive wires (.term output freeArity ports term) := by
+  rfl
+
 private def renameIdCutCase
     (body : Region wires) (bodyIH : RegionRenameIdMotive wires body) :
     ItemRenameIdMotive wires (.cut body) :=
@@ -118,17 +128,17 @@ private def renameIdConsCase
 
 theorem Region.renameWires_id (region : Region wires) :
     region.renameWires WireRenaming.id = region :=
-  Region.rec renameIdMkCase renameIdAtomCase renameIdIdentityCase
+  Region.rec renameIdMkCase renameIdAtomCase renameIdIdentityCase renameIdTermCase
     renameIdCutCase renameIdNilCase renameIdConsCase region
 
 theorem Item.renameWires_id (item : Item wires) :
     item.renameWires WireRenaming.id = item :=
-  Item.rec renameIdMkCase renameIdAtomCase renameIdIdentityCase
+  Item.rec renameIdMkCase renameIdAtomCase renameIdIdentityCase renameIdTermCase
     renameIdCutCase renameIdNilCase renameIdConsCase item
 
 theorem ItemSeq.renameWires_id (items : ItemSeq wires) :
     items.renameWires WireRenaming.id = items :=
-  ItemSeq.rec renameIdMkCase renameIdAtomCase renameIdIdentityCase
+  ItemSeq.rec renameIdMkCase renameIdAtomCase renameIdIdentityCase renameIdTermCase
     renameIdCutCase renameIdNilCase renameIdConsCase items
 
 private abbrev RegionRenameCompMotive
@@ -188,6 +198,14 @@ private def renameCompIdentityCase
   intro middle target first second
   rfl
 
+private def renameCompTermCase
+    (output : Var source .iota) (freeArity : Nat)
+    (ports : Fin freeArity → Var source .iota)
+    (term : Lambda.Term 0 (Fin freeArity)) :
+    ItemRenameCompMotive source (.term output freeArity ports term) := by
+  intro middle target first second
+  rfl
+
 private def renameCompCutCase
     (body : Region source) (bodyIH : RegionRenameCompMotive source body) :
     ItemRenameCompMotive source (.cut body) := by
@@ -216,7 +234,7 @@ theorem Region.renameWires_comp (region : Region source)
   Region.rec (motive_1 := RegionRenameCompMotive)
     (motive_2 := ItemRenameCompMotive)
     (motive_3 := ItemsRenameCompMotive)
-    renameCompMkCase renameCompAtomCase renameCompIdentityCase
+    renameCompMkCase renameCompAtomCase renameCompIdentityCase renameCompTermCase
     renameCompCutCase renameCompNilCase renameCompConsCase region first second
 
 theorem Item.renameWires_comp (item : Item source)
@@ -227,7 +245,7 @@ theorem Item.renameWires_comp (item : Item source)
   Item.rec (motive_1 := RegionRenameCompMotive)
     (motive_2 := ItemRenameCompMotive)
     (motive_3 := ItemsRenameCompMotive)
-    renameCompMkCase renameCompAtomCase renameCompIdentityCase
+    renameCompMkCase renameCompAtomCase renameCompIdentityCase renameCompTermCase
     renameCompCutCase renameCompNilCase renameCompConsCase item first second
 
 theorem ItemSeq.renameWires_comp (items : ItemSeq source)
@@ -238,7 +256,7 @@ theorem ItemSeq.renameWires_comp (items : ItemSeq source)
   ItemSeq.rec (motive_1 := RegionRenameCompMotive)
     (motive_2 := ItemRenameCompMotive)
     (motive_3 := ItemsRenameCompMotive)
-    renameCompMkCase renameCompAtomCase renameCompIdentityCase
+    renameCompMkCase renameCompAtomCase renameCompIdentityCase renameCompTermCase
     renameCompCutCase renameCompNilCase renameCompConsCase items first second
 
 end VisualProof.Diagram

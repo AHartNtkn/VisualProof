@@ -555,6 +555,10 @@ private def mapRetainedInternal
           match wire with
           | .tail nested =>
               .tail (mapRetainedInternal source target tail nested)
+      | .term _ _ _ _ =>
+          match wire with
+          | .tail nested =>
+              .tail (mapRetainedInternal source target tail nested)
       | .cut _ =>
           match wire with
           | .headCut nested => .headCut nested
@@ -581,6 +585,13 @@ private theorem ownerPathFrom_mapRetainedInternal
               exact ownerPathFrom_mapRetainedInternal tail source target nested
                 (itemIndex + 1)
       | identity signature arity ports =>
+          cases wire with
+          | tail nested =>
+              simp only [mapRetainedInternal,
+                ItemSeq.InternalWire.ownerPathFrom]
+              exact ownerPathFrom_mapRetainedInternal tail source target nested
+                (itemIndex + 1)
+      | term output freeArity ports term =>
           cases wire with
           | tail nested =>
               simp only [mapRetainedInternal,

@@ -1,10 +1,184 @@
 import { expect, type Page } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { test } from './zero-signature-fixture'
 import { DARK, LIGHT } from '../src/view/paint'
 import { formulaToDiagram } from '../src/formula'
+import { loadTheory } from '../src/kernel/proof/store'
+import { mkReplay } from '../src/app/replay'
 import { scene3 } from '../src/view3d/scene'
 import { FOV_DEG, eyeOf, fitPose } from '../src/view3d/camera'
 import { cross3, dot3, norm3, sub3 } from '../src/view3d/vec3'
+
+type ScreenPoint = { readonly x: number; readonly y: number }
+
+function screenSegmentDistance(point: ScreenPoint, from: ScreenPoint, to: ScreenPoint): number {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const lengthSquared = dx * dx + dy * dy
+  const t = lengthSquared === 0
+    ? 0
+    : Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared))
+  return Math.hypot(point.x - (from.x + t * dx), point.y - (from.y + t * dy))
+}
+
+test('a normally loaded Lambda proof remains rendered and pickable in 3D', async ({ page }) => {
+  const lambdaFile = resolve('examples/lambda.json')
+  const loaded = loadTheory(JSON.parse(await readFile(lambdaFile, 'utf8')))
+  const expectedDiagram = mkReplay('LambdaWorkflow', loaded.ctx).diagramAt(1)
+  const expectedScene = scene3(expectedDiagram)
+  const lambdaStrokes = expectedScene.entities.filter((entity) => entity.kind === 'lambda')
+  expect(lambdaStrokes.length).toBeGreaterThan(0)
+
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await page.locator('#open-file-input').setInputFiles(lambdaFile)
+  await page.locator('#library')
+    .getByRole('button', { name: '▸ lambda.json', exact: true }).click()
+  await page.locator('#library').locator('.vpa-lib-detail')
+    .filter({ hasText: 'LambdaWorkflow' })
+    .getByRole('button', { name: '▶ Replay', exact: true })
+    .click()
+  await page.keyboard.press('ArrowRight')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.replay().k)).toBe(1)
+
+  await page.getByRole('button', { name: 'Utilities', exact: true }).click()
+  await page.getByRole('button', { name: '3D view', exact: true }).click()
+  const canvas3 = page.locator('canvas[data-view3]')
+  await expect(canvas3).toBeVisible()
+  await page.waitForTimeout(900)
+
+  const box = await canvas3.boundingBox()
+  if (box === null) throw new Error('the 3D Lambda canvas has no bounding box')
+  const aspect = box.width / box.height
+  const pose = fitPose(expectedScene.center, expectedScene.radius, aspect)
+  const eye = eyeOf(pose)
+  const fwd = norm3(sub3(pose.target, eye))
+  const right = norm3(cross3(fwd, { x: 0, y: 1, z: 0 }))
+  const up = cross3(right, fwd)
+  const tanHalf = Math.tan((FOV_DEG * Math.PI) / 360)
+  const project = (point: { x: number; y: number; z: number }) => {
+    const d = sub3(point, eye)
+    const z = dot3(d, fwd)
+    return {
+      x: box.x + ((dot3(d, right) / z / (tanHalf * aspect)) + 1) / 2 * box.width,
+      y: box.y + (1 - dot3(d, up) / z / tanHalf) / 2 * box.height,
+    }
+  }
+  const nonLambdaSegments = expectedScene.entities.flatMap((entity) => {
+    if (entity.kind === 'lambda') return []
+    if ('pts' in entity) {
+      const points = entity.pts.map(project)
+      return points.slice(1).map((point, index) => [points[index]!, point] as const)
+    }
+    const point = project(entity.pos)
+    return [[point, point] as const]
+  })
+  const candidates = lambdaStrokes.flatMap((stroke) => stroke.pts.slice(1).map((point, index) => {
+    const before = stroke.pts[index]!
+    const screen = project({
+      x: (before.x + point.x) / 2,
+      y: (before.y + point.y) / 2,
+      z: (before.z + point.z) / 2,
+    })
+    return {
+      point: screen,
+      separation: Math.min(...nonLambdaSegments.map(([from, to]) =>
+        screenSegmentDistance(screen, from, to))),
+    }
+  })).sort((left, rightCandidate) => rightCandidate.separation - left.separation)
+  const wrap = page.locator('div[data-view3-hover]')
+  let picked = ''
+  let pickedCandidate = candidates[0]!
+  for (const candidate of candidates) {
+    await page.mouse.move(candidate.point.x, candidate.point.y)
+    await page.waitForTimeout(35)
+    const hover = (await wrap.getAttribute('data-view3-hover')) ?? ''
+    if (hover.startsWith('t:')) {
+      picked = hover
+      pickedCandidate = candidate
+      break
+    }
+  }
+  expect(picked).toMatch(/^t:/u)
+  expect(
+    pickedCandidate.separation,
+    'the Lambda visibility probe must be isolated from non-Lambda scene geometry',
+  ).toBeGreaterThan(4)
+
+  const readPatch = async () => canvas3.evaluate((canvas, point) => {
+    const element = canvas as HTMLCanvasElement
+    const offscreen = document.createElement('canvas')
+    offscreen.width = element.width
+    offscreen.height = element.height
+    const context = offscreen.getContext('2d')
+    if (context === null) throw new Error('no 2D context for Lambda readback')
+    context.drawImage(element, 0, 0)
+    const image = context.getImageData(0, 0, offscreen.width, offscreen.height).data
+    const scaleX = element.width / element.clientWidth
+    const scaleY = element.height / element.clientHeight
+    const centerX = Math.round(point.x * scaleX)
+    const centerY = Math.round(point.y * scaleY)
+    const radiusX = Math.max(3, Math.ceil(4 * scaleX))
+    const radiusY = Math.max(3, Math.ceil(4 * scaleY))
+    const pixels: number[] = []
+    for (let y = Math.max(0, centerY - radiusY); y <= Math.min(offscreen.height - 1, centerY + radiusY); y++) {
+      for (let x = Math.max(0, centerX - radiusX); x <= Math.min(offscreen.width - 1, centerX + radiusX); x++) {
+        const offset = (y * offscreen.width + x) * 4
+        pixels.push(image[offset]!, image[offset + 1]!, image[offset + 2]!)
+      }
+    }
+    return {
+      background: [image[0]!, image[1]!, image[2]!] as const,
+      pixels,
+    }
+  }, {
+    x: pickedCandidate.point.x - box.x,
+    y: pickedCandidate.point.y - box.y,
+  })
+
+  await page.mouse.move(box.x + 2, box.y + 2)
+  await expect.poll(async () => (await wrap.getAttribute('data-view3-hover')) ?? '').toBe('')
+  const basePatch = await readPatch()
+  let baseContrast = 0
+  for (let index = 0; index < basePatch.pixels.length; index += 3) {
+    baseContrast = Math.max(baseContrast,
+      Math.abs(basePatch.pixels[index]! - basePatch.background[0])
+      + Math.abs(basePatch.pixels[index + 1]! - basePatch.background[1])
+      + Math.abs(basePatch.pixels[index + 2]! - basePatch.background[2]))
+  }
+  expect(
+    baseContrast,
+    'projected Lambda carrier has no visible pixels distinct from the 3D background',
+  ).toBeGreaterThan(60)
+
+  await page.mouse.move(pickedCandidate.point.x, pickedCandidate.point.y)
+  await expect.poll(async () => (await wrap.getAttribute('data-view3-hover')) ?? '').toBe(picked)
+  const hoverPatch = await readPatch()
+  let hoverDelta = 0
+  for (let index = 0; index < basePatch.pixels.length; index++) {
+    hoverDelta = Math.max(hoverDelta, Math.abs(basePatch.pixels[index]! - hoverPatch.pixels[index]!))
+  }
+  expect(
+    hoverDelta,
+    'hovered Lambda pick geometry did not alter the visible Line2 carrier',
+  ).toBeGreaterThan(20)
+
+  await page.mouse.click(pickedCandidate.point.x, pickedCandidate.point.y)
+  await expect.poll(async () => (await wrap.getAttribute('data-view3-focus')) ?? '')
+    .toBe(picked)
+})
+
+test('WebGL preserves Lambda painter order and restores identity pips above Lambda lines', async ({ page }) => {
+  await page.goto('/test/view3-render.html')
+  await page.waitForFunction(() => window.__view3RenderResults !== undefined)
+  const results = await page.evaluate(() => window.__view3RenderResults!)
+
+  for (const result of results) {
+    expect(result.lambda, `${result.theme} Lambda painter order`).toEqual([0, 0, 255])
+    expect(result.pip, `${result.theme} pip-over-Lambda order`).toEqual([0, 255, 0])
+  }
+})
 
 test('3D view mounts, renders the trunk, reports hover, and unmounts', async ({ page }) => {
   await page.goto('/')

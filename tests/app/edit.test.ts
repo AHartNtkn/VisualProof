@@ -17,10 +17,10 @@ import {
   emptyDiagram,
   joinPorts,
   joinWires,
-  orphanedWires,
   reparentNode,
   severEndpoint,
 } from '../../src/app/edit'
+import { orphanedWires } from '../../src/kernel/diagram/subgraph/selection'
 import { ConstructController } from '../../src/app/interact/construct'
 import type { Hit } from '../../src/app/hittest'
 import type { PointerSample } from '../../src/app/interact/viewport'
@@ -73,6 +73,7 @@ function constructHarness(
     selection,
     setSelection: () => undefined,
     commit: (next) => { committed.push(next) },
+    commitFission: () => undefined,
     refuse: (text) => { refusals.push(text) },
     setProblem: () => undefined,
     clearProblem: () => undefined,

@@ -33,7 +33,7 @@ describe('mountFormulaEntry', () => {
     expect(symbols.getAttribute('role')).toBe('group')
     expect(symbols.getAttribute('aria-label')).toBe('Formula symbols')
     expect(symbols.children.map((button) => button.textContent))
-      .toEqual(['∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔'])
+      .toEqual(['∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔', 'λ'])
     expect(symbols.children.every((button) => button.type === 'button')).toBe(true)
     expect(symbols.children.map((button) => button.getAttribute('aria-label'))).toEqual([
       'Universal quantifier',
@@ -44,6 +44,7 @@ describe('mountFormulaEntry', () => {
       'Implication',
       'Alternative implication',
       'Biconditional',
+      'Lambda abstraction',
     ])
     expect(form.children.indexOf(symbols)).toBe(form.children.indexOf(textarea) + 1)
   })
@@ -57,9 +58,9 @@ describe('mountFormulaEntry', () => {
     expect(textarea.getAttribute('aria-invalid')).toBe('true')
 
     textarea.setSelectionRange(1, 1)
-    symbols.children[4]!.dispatchEvent(new Event('click'))
+    symbols.children[8]!.dispatchEvent(new Event('click'))
 
-    expect(textarea.value).toBe('A∨B')
+    expect(textarea.value).toBe('AλB')
     expect(textarea.selectionStart).toBe(2)
     expect(textarea.selectionEnd).toBe(2)
     expect(documentDouble.activeElement).toBe(textarea)

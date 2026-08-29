@@ -33,6 +33,7 @@ theorem supportParallelStartsWithOfMemIncidencePathsLt
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (by
       intro _ wireIndex itemIndex path index member starts
@@ -48,6 +49,10 @@ theorem supportParallelStartsWithOfMemIncidencePathsLt
             subst path
             simp [RegionPath.StartsWith] at starts
         | identity signature arity ports =>
+            have pathEq := List.eq_of_mem_replicate headMember
+            subst path
+            simp [RegionPath.StartsWith] at starts
+        | term output freeArity ports term =>
             have pathEq := List.eq_of_mem_replicate headMember
             subst path
             simp [RegionPath.StartsWith] at starts

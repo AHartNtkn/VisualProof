@@ -1,14 +1,17 @@
 import type { Diagram, NodeId, Region, RegionId, WireId } from '../kernel/diagram/diagram'
 import { portKey } from '../kernel/diagram/diagram'
+import type { Term } from '../kernel/term/term'
 
 export type SceneItem = { kind: 'node'; id: NodeId } | { kind: 'branch'; region: RegionId }
 export type RegionSpec = { id: RegionId; parent: RegionId | null; items: SceneItem[] }
 export type NodeSpec = {
   id: NodeId
   region: RegionId
-  kind: 'identity' | 'atom' | 'ref'
+  kind: 'identity' | 'term' | 'atom' | 'ref'
   label: string | null
   portKeys: string[]
+  term: Term | null
+  interfaceArity: number | null
 }
 export type Terminal = { node: NodeId; portKey: string }
 export type WireSpec = { id: WireId; terminals: Terminal[] }
@@ -32,10 +35,13 @@ export function diagramSpec(d: Diagram): DiagramSpec {
     const portKeys =
       n.kind === 'atom' ? ['hd', ...n.sig.args.map((_, i) => `a:${i}`)]
       : n.kind === 'ref' ? n.sig.args.map((_, i) => `a:${i}`)
+      : n.kind === 'term' ? ['out', ...Array.from({ length: n.freeArity }, (_, i) => `f:${i}`)]
       : []
     nodes.set(nid, {
       id: nid, region: n.region, kind: n.kind,
       label: n.kind === 'ref' ? n.defId : null, portKeys,
+      term: n.kind === 'term' ? n.term : null,
+      interfaceArity: n.kind === 'term' ? n.freeArity : null,
     })
     regions.get(n.region)!.items.push({ kind: 'node', id: nid })
   }

@@ -527,6 +527,142 @@ theorem allPins_twice_childrenCanonical
   exact (ItemSeq.childrenCanonical_append _ _).mpr
     ⟨ItemSeq.pinWires_childrenCanonical source rename (fun _ => true),
       ItemSeq.pinWires_childrenCanonical source rename (fun _ => true)⟩
+
+/-- Instantiating a support-completed material preserves exactly the scope of
+its renamed support body once every substituted boundary wire receives two
+temporary root pins. -/
+theorem supportInstantiationPinnedScope
+    (material : Region materialWires)
+    (materialCanonical : material.Canonical)
+    (application : Vars common materialWires) :
+    let substitution := formalSubstitution application
+    let pins := allPins materialWires substitution
+    ScopePreservation
+      (VisualProof.Rule.Comprehension.Instantiation.instantiate
+        (Erasure.Exposure.supportPattern material materialCanonical)
+        application)
+      (((Erasure.Exposure.supportBody material).renameWires
+          substitution).conjoin
+        (Region.ofItems (pins.append pins))) := by
+  dsimp only
+  let substitution := formalSubstitution application
+  let pins := allPins materialWires substitution
+  let supported := Erasure.Exposure.supportBody material
+  let pinRegion := Region.ofItems (pins.append pins)
+  have mappedFormalOfPositive : ∀ {signature}
+      (wire : Var common signature),
+      0 < application.countIndex wire.index.val →
+      ∃ sourceSignature, ∃ sourceWire : Var materialWires sourceSignature,
+        (substitution sourceWire).index.val = wire.index.val := by
+    intro signature wire positive
+    obtain ⟨position, positionEq⟩ :=
+      Vars.exists_get_index_of_countIndex_pos application wire.index.val
+        positive
+    let sourceWire := (formalPorts materialWires).get position
+    have mappedAt : substitution sourceWire = application.get position := by
+      have mappedTuple := formalPorts_map_substitution application
+      have mappedGet := congrArg (fun variables => variables.get position)
+        mappedTuple
+      simpa only [Vars.get_map, sourceWire, substitution] using mappedGet
+    exact ⟨materialWires.get position, sourceWire, by
+      rw [mappedAt, positionEq]⟩
+  have supportedCanonical : supported.Canonical :=
+    Erasure.Exposure.supportBody_canonical material materialCanonical
+  have pinCanonical : pinRegion.Canonical := by
+    change (∀ localIndex : Fin 0, RegionPath.RootedTwo _) ∧
+      ((pins.append pins).renameWires _).ChildrenCanonical
+    exact ⟨fun localIndex => Fin.elim0 localIndex,
+      (ItemSeq.ChildrenCanonical.renameWires_iff _ _).mpr
+        (allPins_twice_childrenCanonical materialWires substitution)⟩
+  constructor
+  · intro _
+    exact canonical_conjoin
+      ((Region.Canonical.renameWires_iff supported substitution).mpr
+        supportedCanonical)
+      pinCanonical
+  · intro signature wire
+    rw [instantiate_incidence_nonempty_iff]
+    constructor
+    · intro positive
+      obtain ⟨sourceSignature, sourceWire, mappedIndex⟩ :=
+        mappedFormalOfPositive wire positive
+      have pinRoot := allPins_twice_rooted materialWires substitution
+        sourceWire 0
+      rw [mappedIndex] at pinRoot
+      have pinNonempty : pinRegion.incidencePaths wire.index.val ≠ [] := by
+        rw [Region.incidencePaths_ofItems]
+        exact pinRoot.nonempty
+      rw [Region.incidencePaths_conjoin]
+      intro empty
+      have mappedEmpty := (List.append_eq_nil_iff.mp empty).2
+      exact pinNonempty ((List.map_eq_nil_iff).mp mappedEmpty)
+    · intro targetNonempty
+      cases countEq : application.countIndex wire.index.val with
+      | zero =>
+          have noPreimage : ∀ {sourceSignature}
+              (sourceWire : Var materialWires sourceSignature),
+              (substitution sourceWire).index.val ≠ wire.index.val := by
+            exact formalSubstitution_index_ne_of_countIndex_eq_zero
+              application wire countEq
+          have supportedEmpty :
+              (supported.renameWires substitution).incidencePaths
+                wire.index.val = [] := by
+            cases supported with
+            | mk locals items =>
+                simp only [Region.renameWires, Region.incidencePaths]
+                apply ItemSeq.incidencePaths_renameWires_eq_nil_of_no_preimage
+                · simpa only [List.length_append] using
+                    Nat.lt_of_lt_of_le wire.index.isLt
+                      (Nat.le_add_right common.length locals.length)
+                · intro sourceSignature sourceWire
+                  apply Var.appendCases (left := materialWires)
+                    (right := locals)
+                    (motive := fun sourceWire =>
+                      ((substitution.appendRight locals) sourceWire).index.val
+                        ≠ wire.index.val)
+                  · intro inheritedSignature inherited
+                    simpa [WireRenaming.appendRight] using
+                      noPreimage inherited
+                  · intro localSignature localWire
+                    simp [WireRenaming.appendRight]
+                    omega
+          have firstPinsEmpty :
+              pins.incidencePaths wire.index.val 0 = [] := by
+            exact ItemSeq.pinWires_incidence_eq_nil_of materialWires
+              substitution (fun _ => true) wire.index.val 0
+              (fun sourceWire _ => noPreimage sourceWire)
+          have secondPinsEmpty :
+              pins.incidencePaths wire.index.val pins.length = [] := by
+            exact ItemSeq.pinWires_incidence_eq_nil_of materialWires
+              substitution (fun _ => true) wire.index.val pins.length
+              (fun sourceWire _ => noPreimage sourceWire)
+          have pinEmpty : pinRegion.incidencePaths wire.index.val = [] := by
+            rw [Region.incidencePaths_ofItems,
+              ItemSeq.incidencePaths_append, firstPinsEmpty]
+            simpa only [List.nil_append, Nat.zero_add] using secondPinsEmpty
+          rw [Region.incidencePaths_conjoin, supportedEmpty, pinEmpty]
+            at targetNonempty
+          exact False.elim (targetNonempty (by simp))
+      | succ count => omega
+  · intro signature wire sourceRoot
+    have positive : 0 < application.countIndex wire.index.val := by
+      have countBound :=
+        (instantiate_rootedTwo_iff
+          (Erasure.Exposure.supportPattern material materialCanonical)
+          application wire).mp sourceRoot
+      omega
+    obtain ⟨sourceSignature, sourceWire, mappedIndex⟩ :=
+      mappedFormalOfPositive wire positive
+    have pinRoot := allPins_twice_rooted materialWires substitution
+      sourceWire 0
+    rw [mappedIndex] at pinRoot
+    rw [Region.incidencePaths_conjoin]
+    apply RegionPath.RootedTwo.of_sublist
+      (List.sublist_append_right _ _)
+    exact (RegionPath.RootedTwo.map_shiftHead_iff _ _).mpr (by
+      rw [Region.incidencePaths_ofItems]
+      exact pinRoot)
+
 def appendAdjoinedPins
     (hostLocals : List Sig) (hostItems pins : ItemSeq (outer ++ hostLocals))
     (material : Region (outer ++ hostLocals)) : Region outer :=
@@ -1013,7 +1149,7 @@ theorem exposureCore
     {before after : Region holeWires}
     {source : OpenDiagram boundary}
     (occurrence : Occurrence before source)
-    (description : Rule.Erasure.Description holeWires)
+    (description : Rule.UncappedErasure.Description holeWires)
     (sourceEq : description.source = before)
     (erasedCanonical :
       (occurrence.context.fill description.target).Canonical)
@@ -1062,7 +1198,7 @@ theorem pinnedExposureCore
     (occurrence : Occurrence
       (Region.adjoinAt hostLocals
         (hostItems.append (contextPins outer hostLocals)) before) source)
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (sourceEq : description.source =
       Region.adjoinAt hostLocals
         (hostItems.append (contextPins outer hostLocals)) before)
@@ -1557,7 +1693,7 @@ theorem pinnedExposureStrict
       (occurrence.context.fill
         (Region.adjoinAt hostLocals hostItems after)))
     (nonempty : outer ++ hostLocals ≠ [])
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (sourceEq : description.source =
       Region.adjoinAt hostLocals
         (hostItems.append (contextPins outer hostLocals)) before)

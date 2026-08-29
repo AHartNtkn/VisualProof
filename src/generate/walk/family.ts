@@ -8,7 +8,7 @@ import { RuleError } from '../../kernel/rules'
 import { bareWireDeletionSteps } from '../../kernel/proof/bare-wire'
 import { emptyGraph, finishDiagramWithBoundary } from '../../theories/graph'
 import { PrimitiveStepRecorder, onlyNewCut } from '../../theories/record'
-import { deiterationStep } from '../../app/interact/moves'
+import { deiterationStep } from '../../kernel/proof/selection-step'
 import { bareWires, childCuts, headWireOf, nodesIn } from '../diagram-scan'
 import { readKnobs, type GeneratedProblem, type GeneratorFamily } from '../index'
 import {

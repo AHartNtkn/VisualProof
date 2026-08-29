@@ -12,6 +12,7 @@ import {
   quantifierScope,
 } from '../../src/theories/graph'
 import { formulaToDiagram } from '../../src/formula'
+import { parseTerm } from '../../src/kernel/term'
 
 const EXAMPLE_SOURCE = '∀ Z : i → o. ∀ S : i → i → o. (∃ z. Z(z)) ⇒ (∀ z. Z(z) ⇒ (∀ P : i → o. ((∀ n. Z(n) ⇒ P(n)) & (∀ n m. (P(n) & S(n, m)) ⇒ P(m))) ⇒ P(z)))'
 
@@ -121,6 +122,43 @@ describe('formulaToDiagram', () => {
       sig: signature,
       arity: 2,
     })
+  })
+
+  it('draws one whole-term node and connects its free slots positionally', () => {
+    const diagram = formulaToDiagram('∀ P : i → o. ∀ y. P(λx. x y)')
+    const entry = Object.entries(diagram.nodes).find(([, node]) => node.kind === 'term')
+
+    expect(entry?.[1]).toEqual({
+      kind: 'term',
+      region: 'r4',
+      term: parseTerm('\\x. x y').term,
+      freeArity: 1,
+    })
+    const incidences = Object.entries(diagram.wires).flatMap(([wire, value]) =>
+      value.endpoints
+        .filter((endpoint) => endpoint.node === entry?.[0])
+        .map((endpoint) => ({ wire, port: endpoint.port })))
+    expect(incidences.map(({ port }) => port)).toEqual(expect.arrayContaining([
+      { kind: 'output' },
+      { kind: 'free', index: 0 },
+    ]))
+    const output = incidences.find(({ port }) => port.kind === 'output')!
+    const free = incidences.find(({ port }) => port.kind === 'free' && port.index === 0)!
+    expect(diagram.wires[output.wire]!.endpoints.some((endpoint) =>
+      diagram.nodes[endpoint.node]?.kind === 'atom' && endpoint.port.kind === 'arg')).toBe(true)
+    expect(diagram.wires[free.wire]!.endpoints.some((endpoint) =>
+      diagram.nodes[endpoint.node]?.kind === 'identity')).toBe(true)
+    expect(Object.values(diagram.wires).every((wire) => wire.endpoints.length >= 2)).toBe(true)
+  })
+
+  it('connects whole-term outputs as equality operands', () => {
+    const diagram = formulaToDiagram('(\\x. x) = (\\y. y)')
+
+    expect(Object.values(diagram.nodes).filter((node) => node.kind === 'term')).toHaveLength(2)
+    expect(Object.values(diagram.nodes).filter((node) =>
+      node.kind === 'identity' && node.arity === 2)).toHaveLength(1)
+    expect(Object.values(diagram.wires)).toHaveLength(2)
+    expect(Object.values(diagram.wires).every((wire) => wire.endpoints.length === 2)).toBe(true)
   })
 
   it('draws an equality chain as one multi-port dangling-existential-style identity node', () => {

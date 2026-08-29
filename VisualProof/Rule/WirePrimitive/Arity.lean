@@ -16,10 +16,9 @@ def Vars.append : Vars context left → Vars context right →
 @[simp] theorem Vars.append_map
     (left : Vars source leftSignatures)
     (right : Vars source rightSignatures)
-    (rename : WireRenaming source target) :
-    (Vars.append left right).map (fun wire => rename wire) =
-      Vars.append (left.map fun wire => rename wire)
-        (right.map fun wire => rename wire) := by
+    (rename : ∀ {signature}, Var source signature → Var target signature) :
+    (Vars.append left right).map rename =
+      Vars.append (left.map rename) (right.map rename) := by
   induction left with
   | nil => rfl
   | cons head tail induction =>

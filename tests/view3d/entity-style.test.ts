@@ -6,6 +6,7 @@ const palette: EntityPalette = {
   line: '#ffffff',
   lineAlt: '#777777',
   baseWire: '#00ffff',
+  hues: new Map(),
 }
 
 describe('3D entity authored colors', () => {
@@ -17,8 +18,8 @@ describe('3D entity authored colors', () => {
       kind: 'branch', key: 'drawing-odd', region: 'semantic-odd', polarity: 1, pts: [],
     }
 
-    expect(entityColor(even, new Map(), palette)).toBe(palette.line)
-    expect(entityColor(odd, new Map(), palette)).toBe(palette.lineAlt)
+    expect(entityColor(even, palette)).toBe(palette.line)
+    expect(entityColor(odd, palette)).toBe(palette.lineAlt)
   })
 
   it('uses authored wire hues for every wire-owned entity', () => {
@@ -29,7 +30,7 @@ describe('3D entity authored colors', () => {
       { kind: 'pip', key: 'pip', node: 'node', ownerWire: 'wire-a', pos: { x: 0, y: 0, z: 0 } },
     ]
 
-    for (const entity of entities) expect(entityColor(entity, hues, palette)).toBe('#123456')
+    for (const entity of entities) expect(entityColor(entity, { ...palette, hues })).toBe('#123456')
   })
 
   it('falls back to the palette for missing or absent wire hues', () => {
@@ -40,7 +41,7 @@ describe('3D entity authored colors', () => {
       { kind: 'label', key: 'label', node: 'node', text: 'N', pos: { x: 0, y: 0, z: 0 } },
     ]
 
-    expect(entityColor(entities[0]!, new Map(), palette)).toBe(palette.baseWire)
-    for (const entity of entities.slice(1)) expect(entityColor(entity, new Map(), palette)).toBe(palette.line)
+    expect(entityColor(entities[0]!, palette)).toBe(palette.baseWire)
+    for (const entity of entities.slice(1)) expect(entityColor(entity, palette)).toBe(palette.line)
   })
 })

@@ -179,6 +179,31 @@ private theorem identityDenotationCase
       ports_eq sourceLeft, ports_eq sourceRight]
     exact targetDenotes (positions sourceLeft) (positions sourceRight)
 
+private theorem termDenotationCase
+    {sourceWires targetWires : List Sig} {freeArity : Nat}
+    {ambient : WireEquiv sourceWires targetWires}
+    {sourceOutput : Var sourceWires .iota}
+    {targetOutput : Var targetWires .iota}
+    {sourcePorts : Fin freeArity → Var sourceWires .iota}
+    {targetPorts : Fin freeArity → Var targetWires .iota}
+    {lambdaTerm : Lambda.Term 0 (Fin freeArity)}
+    (outputEq : ambient sourceOutput = targetOutput)
+    (portsEq : ∀ slot,
+      ambient (sourcePorts slot) = targetPorts slot) :
+    ItemDenotationMotive ambient
+      (.term sourceOutput freeArity sourcePorts lambdaTerm)
+      (.term targetOutput freeArity targetPorts lambdaTerm)
+      (.term outputEq portsEq) := by
+  intro model sourceEnv targetEnv agree
+  simp only [denoteItem_term]
+  have evalEq :
+      model.eval lambdaTerm (fun slot => sourceEnv.lookup (sourcePorts slot)) =
+        model.eval lambdaTerm (fun slot => targetEnv.lookup (targetPorts slot)) := by
+    apply congrArg (model.eval lambdaTerm)
+    funext slot
+    rw [agree (sourcePorts slot), portsEq slot]
+  rw [agree sourceOutput, outputEq, evalEq]
+
 private theorem cutDenotationCase
     {sourceWires targetWires : List Sig}
     {ambient : WireEquiv sourceWires targetWires}
@@ -226,7 +251,7 @@ private theorem regionDenotationRec
     (motive_1 := RegionDenotationMotive)
     (motive_2 := ItemDenotationMotive)
     (motive_3 := ItemsDenotationMotive)
-    regionDenotationCase atomDenotationCase identityDenotationCase
+    regionDenotationCase atomDenotationCase identityDenotationCase termDenotationCase
     cutDenotationCase permuteDenotationCase iso
 
 private theorem itemDenotationRec
@@ -238,7 +263,7 @@ private theorem itemDenotationRec
     (motive_1 := RegionDenotationMotive)
     (motive_2 := ItemDenotationMotive)
     (motive_3 := ItemsDenotationMotive)
-    regionDenotationCase atomDenotationCase identityDenotationCase
+    regionDenotationCase atomDenotationCase identityDenotationCase termDenotationCase
     cutDenotationCase permuteDenotationCase iso
 
 private theorem itemsDenotationRec
@@ -250,7 +275,7 @@ private theorem itemsDenotationRec
     (motive_1 := RegionDenotationMotive)
     (motive_2 := ItemDenotationMotive)
     (motive_3 := ItemsDenotationMotive)
-    regionDenotationCase atomDenotationCase identityDenotationCase
+    regionDenotationCase atomDenotationCase identityDenotationCase termDenotationCase
     cutDenotationCase permuteDenotationCase iso
 
 theorem RegionIso.denotation

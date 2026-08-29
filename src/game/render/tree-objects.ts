@@ -16,7 +16,7 @@ import {
 import type { TreeLodAssets, TreeRenderAsset } from './types'
 import type { PointedTreePart } from '../session'
 
-type LineEntity = Extract<Entity, { kind: 'branch' | 'ring' | 'strand' }>
+type LineEntity = Extract<Entity, { kind: 'branch' | 'ring' | 'strand' | 'lambda' }>
 type SpriteEntity = Extract<Entity, { kind: 'pip' | 'label' }>
 type GeometryLod = Extract<LodLevel, 'full' | 'reduced'>
 

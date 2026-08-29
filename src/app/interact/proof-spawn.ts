@@ -7,8 +7,14 @@ import type {
 } from '../../kernel/diagram/diagram'
 import type { ProofContext } from '../../kernel/proof/context'
 import { assertProofContext } from '../../kernel/proof/context'
+import {
+  introducedNodeIds,
+  singleStepAction,
+  type ProofAction,
+} from '../../kernel/proof/action'
 import type { ProofStep } from '../../kernel/proof/step'
 import { definitionSig } from '../../kernel/rules/fold'
+import type { ParsedTerm } from '../../kernel/term/parse'
 import type { Vec2 } from '../../view/vec'
 import {
   atomHeadOptions,
@@ -17,7 +23,7 @@ import {
 } from './spawn'
 
 export type StructuralSpawnRequest = {
-  readonly node: Exclude<DiagramNode, { readonly kind: 'identity' }>
+  readonly node: Exclude<DiagramNode, { readonly kind: 'identity' | 'term' }>
   readonly region: RegionId
   readonly wires: readonly WireId[]
 }
@@ -44,7 +50,7 @@ export type ProofSpawnControllerOptions = {
   readonly host: HTMLElement
   readonly diagram: () => Diagram
   readonly context: () => ProofContext
-  readonly commit: (step: ProofStep) => Diagram
+  readonly commit: (action: ProofAction) => Diagram
   readonly place: (node: NodeId, at: Vec2) => void
   readonly refuse: (text: string, pointer: Vec2) => void
   readonly headWireColor: (wire: WireId) => string
@@ -52,14 +58,27 @@ export type ProofSpawnControllerOptions = {
   readonly openChanged?: (open: boolean) => void
 }
 
-function introducedNode(before: Diagram, after: Diagram): NodeId {
-  const introduced = Object.keys(after.nodes)
-    .filter((node) => before.nodes[node] === undefined)
-    .sort()
+function introducedContentNode(before: Diagram, after: Diagram): NodeId {
+  const introduced = introducedNodeIds(before, after)
+    .filter((node) => after.nodes[node]?.kind !== 'identity')
   if (introduced.length !== 1) {
-    throw new Error(`structural spawn introduced ${introduced.length} nodes instead of one`)
+    throw new Error(
+      `structural spawn introduced ${introduced.length} content nodes instead of one`,
+    )
   }
   return introduced[0]!
+}
+
+export function proofTermSpawnStep(
+  source: ParsedTerm,
+  region: RegionId,
+): ProofStep {
+  return {
+    rule: 'lambdaTermSpawn',
+    region,
+    term: source.term,
+    freeArity: source.freeIdentifiers.length,
+  }
 }
 
 export class ProofSpawnController {
@@ -71,6 +90,11 @@ export class ProofSpawnController {
     this.#options = options
     this.#cascade = new SpawnCascade({
       host: options.host,
+      spawnTerm: ({ parsed, invocation }) => this.#attempt(
+        invocation,
+        () => proofTermSpawnStep(parsed, invocation.region),
+        'Lambda expression',
+      ),
       spawnRef: ({ defId, invocation }) => this.#attempt(invocation, () => {
         const relation = options.context().relations.get(defId)
         if (relation === undefined) throw new Error(`unknown relation '${defId}'`)
@@ -85,6 +109,7 @@ export class ProofSpawnController {
           wires: [],
         })
       }),
+      refuse: options.refuse,
       spawnAtom: ({ wire, invocation }) => this.#attempt(invocation, () => {
         const target = options.diagram().wires[wire]
         if (target === undefined || target.sig.kind !== 'rel') {
@@ -120,11 +145,25 @@ export class ProofSpawnController {
   close(): boolean { return this.#cascade.close() }
   dispose(): void { this.#cascade.dispose() }
 
-  #attempt(invocation: SpawnInvocation, makeStep: () => ProofStep): boolean {
+  #attempt(
+    invocation: SpawnInvocation,
+    makeStep: () => ProofStep,
+    label?: string,
+  ): boolean {
     try {
       const before = this.#options.diagram()
-      const after = this.#options.commit(makeStep())
-      this.#options.place(introducedNode(before, after), invocation.world)
+      const step = makeStep()
+      const action = singleStepAction(label ?? step.rule, step, [{
+        introducedNode: 0,
+        x: invocation.world.x,
+        y: invocation.world.y,
+      }])
+      const after = this.#options.commit(action)
+      const node = introducedContentNode(before, after)
+      if (introducedNodeIds(before, after)[0] !== node) {
+        throw new Error('spawn placement index 0 does not identify its content node')
+      }
+      this.#options.place(node, invocation.world)
       return true
     } catch (error) {
       this.#options.refuse(

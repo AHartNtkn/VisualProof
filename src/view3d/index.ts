@@ -9,8 +9,13 @@ import { lerp3 } from './vec3'
 import { expandHover, focusPoint } from './pick'
 import { mountRender, type RenderTheme } from './render'
 import { OrbitInteraction } from './orbit-interaction'
+import type { LambdaMotionTransition } from '../view/lambda-transition'
 
-export type View3State = { diagram: Diagram; theme: Theme }
+export type View3State = {
+  diagram: Diagram
+  theme: Theme
+  lambdaTransition?: LambdaMotionTransition | null
+}
 export type View3 = { update(s: View3State): void; dispose(): void }
 
 const renderThemeOf = (theme: Theme, diagram: Diagram): RenderTheme => ({
@@ -28,6 +33,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
   let theme = initial.theme
   let spec: DiagramSpec = diagramSpec(diagram)
   let scene: Scene3 = scene3(diagram)
+  let presented: Scene3 = scene
   const aspectOf = (): number => container.clientWidth / Math.max(1, container.clientHeight)
   const orbit = new OrbitInteraction(fitPose(scene.center, scene.radius, aspectOf()))
   let tween: { track: SceneTweenTrack; poseFrom: CamPose; poseTo: CamPose; start: number } | null = null
@@ -36,7 +42,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
   container.dataset['view3Focus'] = ''
 
   const renderer = mountRender(container, renderThemeOf(theme, diagram))
-  renderer.setEntities(scene.entities)
+  renderer.setEntities(presented.entities)
 
   let pending = false
   const schedule = (): void => {
@@ -61,11 +67,20 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
         // The clean target list, not sceneAt's interpolated frame — that
         // still carries alpha-0 exits, which would otherwise linger in the
         // scene (and stay pickable) forever after the tween ends.
-        renderer.setEntities(tween.track.target.entities)
+        presented = tween.track.target
+        renderer.setEntities(presented.entities)
         tween = null
       } else {
-        renderer.setEntities(tween.track.sample(now).entities)
+        presented = tween.track.sample(now)
+        renderer.setEntities(presented.entities)
         schedule()
+      }
+      if (hoverKey !== null) {
+        if (!presented.entities.some((entity) => entity.key === hoverKey)) {
+          hoverKey = null
+          container.dataset['view3Hover'] = ''
+        }
+        renderer.setHoverKeys(hoverKey === null ? new Set() : expandHover(hoverKey, spec, presented.entities))
       }
     }
     renderer.setPose(orbit.poseAt(now))
@@ -92,7 +107,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
     const ndcX = ((release.clientX - rect.left) / rect.width) * 2 - 1
     const ndcY = -(((release.clientY - rect.top) / rect.height) * 2 - 1)
     const key = renderer.pickAt(ndcX, ndcY)
-    const to = key === null ? scene.center : focusPoint(key, scene.entities)
+    const to = key === null ? presented.center : focusPoint(key, presented.entities)
     if (to === null) return
     orbit.focus(to, performance.now())
     container.dataset['view3Focus'] = key ?? ''
@@ -113,7 +128,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
     if (key !== hoverKey) {
       hoverKey = key
       container.dataset['view3Hover'] = key ?? ''
-      renderer.setHoverKeys(key === null ? new Set() : expandHover(key, spec, scene.entities))
+      renderer.setHoverKeys(key === null ? new Set() : expandHover(key, spec, presented.entities))
       schedule()
     }
   })
@@ -148,10 +163,10 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
         // the interpolated frame at its current t, not `scene` (the last
         // COMPLETED scene) — planning from `scene` would pop the display
         // back to that stale geometry for one frame before animating on.
-        const fromScene = tween?.track.sample(now) ?? scene
+        const fromScene = presented
         const track = tween === null
-          ? new SceneTweenTrack(fromScene, nextScene, now)
-          : tween.track.begin(fromScene, nextScene, now)
+          ? new SceneTweenTrack(fromScene, nextScene, now, theme.wire, s.lambdaTransition ?? null)
+          : tween.track.begin(fromScene, nextScene, now, theme.wire, s.lambdaTransition ?? null)
         tween = { track, poseFrom: displayedPose, poseTo, start: now }
         orbit.replacePose(displayedPose)
         container.dataset['view3Focus'] = ''

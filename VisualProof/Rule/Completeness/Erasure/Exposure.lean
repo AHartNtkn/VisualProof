@@ -423,12 +423,12 @@ theorem advanceAllDerives
             simpa only [source, occurrence, exactOccurrence, State.advanceAll]
               using reverseCombined⟩
 
-def applicationPorts (description : Rule.Erasure.Description outer) :
+def applicationPorts (description : Rule.UncappedErasure.Description outer) :
     Vars (outer ++ description.hostLocals) description.materialWires :=
   (identityBoundary description.materialWires).map
     (fun wire => description.wireMap wire)
 
-def exposedRegion (description : Rule.Erasure.Description outer)
+def exposedRegion (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) : Region outer :=
   Region.adjoinAt description.hostLocals description.hostItems
     (Comprehension.Instantiation.instantiate
@@ -436,7 +436,7 @@ def exposedRegion (description : Rule.Erasure.Description outer)
       (applicationPorts description))
 
 def endpointHostWire
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     WireRenaming (outer ++ description.hostLocals)
       (outer ++ (description.hostLocals ++
         (description.materialWires ++ description.material.locals))) :=
@@ -444,7 +444,7 @@ def endpointHostWire
     (description.materialWires ++ description.material.locals)
 
 def endpointMaterialWire
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     WireRenaming
       (description.materialWires ++ description.material.locals)
       (outer ++ (description.hostLocals ++
@@ -453,7 +453,7 @@ def endpointMaterialWire
     (Var.appendRight description.hostLocals wire)⟩
 
 def endpointEqualityWire
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     WireRenaming
       ((outer ++ description.hostLocals) ++ description.materialWires)
       (outer ++ (description.hostLocals ++
@@ -464,7 +464,7 @@ def endpointEqualityWire
       (wire.appendLeft description.material.locals))⟩
 
 def endpointEqualityItems
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     ItemSeq (outer ++ (description.hostLocals ++
       (description.materialWires ++ description.material.locals))) :=
   (Comprehension.Instantiation.equalityItems
@@ -476,7 +476,7 @@ def endpointEqualityItems
     (endpointEqualityWire description)
 
 def endpointLeft
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     Vars (outer ++ (description.hostLocals ++
       (description.materialWires ++ description.material.locals)))
       description.materialWires :=
@@ -484,7 +484,7 @@ def endpointLeft
     (fun wire => endpointHostWire description wire)
 
 def endpointRight
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     Vars (outer ++ (description.hostLocals ++
       (description.materialWires ++ description.material.locals)))
       description.materialWires :=
@@ -493,7 +493,7 @@ def endpointRight
       (wire.appendLeft description.material.locals))
 
 theorem endpointEqualityItems_eq
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     endpointEqualityItems description =
       Comprehension.Instantiation.equalityItems
         (endpointLeft description) (endpointRight description) := by
@@ -536,7 +536,7 @@ theorem endpointEqualityItems_eq
   rw [leftEq, rightEq]
 
 def endpointItems
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     ItemSeq (outer ++ (description.hostLocals ++
       (description.materialWires ++ description.material.locals))) :=
   (description.hostItems.renameWires
@@ -549,7 +549,7 @@ def endpointItems
         (endpointEqualityItems description)))
 
 def instantiatedBodyWire
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     WireRenaming
       (description.materialWires ++ description.material.locals)
       (outer ++ (description.hostLocals ++
@@ -573,7 +573,7 @@ def instantiatedBodyWire
           description.material.locals)))
 
 def instantiatedEqualityWire
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     WireRenaming
       ((outer ++ description.hostLocals) ++ description.materialWires)
       (outer ++ (description.hostLocals ++
@@ -592,7 +592,7 @@ def instantiatedEqualityWire
         ⟨fun wire => wire.appendLeft []⟩))
 
 noncomputable def exposedRegionEndpointIso
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     RegionIso (WireEquiv.refl outer)
       (exposedRegion description materialCanonical)
@@ -614,7 +614,7 @@ noncomputable def exposedRegionEndpointIso
           simp only [ItemSeq.renameWires_append,
             ItemSeq.renameWires_comp,
             ItemSeq.renameWires, ItemSeq.nil_append]
-          let description : Rule.Erasure.Description outer := {
+          let description : Rule.UncappedErasure.Description outer := {
             materialWires := materialWires
             hostLocals := hostLocals
             hostItems := hostItems
@@ -733,7 +733,7 @@ noncomputable def exposedRegionEndpointIso
             ItemSeq.append_assoc] using combined
 
 def initialState
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     State outer description.materialWires description.material where
   locals := description.hostLocals ++ description.material.locals
   before := description.hostItems.renameWires
@@ -746,19 +746,19 @@ def initialState
     (description.wireMap.appendRight description.material.locals)
 
 theorem initialState_region
-    (description : Rule.Erasure.Description outer) :
+    (description : Rule.UncappedErasure.Description outer) :
     (initialState description).region = description.source := by
   cases description with
   | mk materialWires hostLocals hostItems material wireMap =>
       cases material with
       | mk materialLocals materialItems =>
           simp [initialState, State.region, State.items,
-            Rule.Erasure.Description.source, Region.spliceAt, Region.adjoinAt,
+            Rule.UncappedErasure.Description.source, Region.spliceAt, Region.adjoinAt,
             Region.renameWires, Region.locals, Region.items,
             ItemSeq.renameWires_comp]
 
 theorem initialState_materialMap_external_index
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (external : Var description.materialWires signature) :
     ((initialState description).materialMap
       (external.appendLeft description.material.locals)).index.val =
@@ -788,7 +788,7 @@ theorem initialState_materialMap_external_index
     simp [Region.adjoinMaterialWire]
 
 theorem initialState_supports
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (targetCanonical : description.target.Canonical) :
     (initialState description).Supports
       (identityBoundary description.materialWires) := by
@@ -808,7 +808,7 @@ theorem initialState_supports
   have hostRoot : RegionPath.RootedTwo
       (description.hostItems.incidencePaths
         (outer.length + hostIndex.val) 0) := by
-    simpa only [Rule.Erasure.Description.target, Region.Canonical] using
+    simpa only [Rule.UncappedErasure.Description.target, Region.Canonical] using
       targetCanonical.1 hostIndex
   have renamedPaths :=
     ItemSeq.incidencePaths_renameWires_adjoinHost
@@ -824,7 +824,7 @@ theorem initialState_supports
   simpa [hostIndex] using hostRoot
 
 theorem materialCanonical_of_source
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     {source : OpenDiagram boundary}
     (occurrence : Occurrence description.source source) :
     description.material.Canonical := by
@@ -834,13 +834,13 @@ theorem materialCanonical_of_source
       (description.material.renameWires description.wireMap).Canonical := by
     apply Region.Canonical.material_of_adjoinAt
       description.hostLocals description.hostItems
-    simpa only [Rule.Erasure.Description.source, Region.spliceAt] using
+    simpa only [Rule.UncappedErasure.Description.source, Region.spliceAt] using
       sourceCanonical
   exact (Region.Canonical.renameWires_iff
     description.material description.wireMap).mp renamedCanonical
 
 noncomputable def endpointRegionIso
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     (materialCanonical : description.material.Canonical) :
     RegionIso (WireEquiv.refl outer)
       ((initialState description).advanceAll
@@ -850,7 +850,7 @@ noncomputable def endpointRegionIso
   | mk materialWires hostLocals hostItems material wireMap =>
       cases material with
       | mk materialLocals materialItems =>
-          let description : Rule.Erasure.Description outer := {
+          let description : Rule.UncappedErasure.Description outer := {
             materialWires := materialWires
             hostLocals := hostLocals
             hostItems := hostItems
@@ -1139,7 +1139,7 @@ noncomputable def endpointRegionIso
 
 theorem equatesCore
     {boundary outer : List Sig}
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     {source : OpenDiagram boundary}
     (occurrence : Occurrence description.source source)
     (materialCanonical : description.material.Canonical)
@@ -1311,7 +1311,7 @@ The original erased-target validity premises also determine the material and
 the exact exposed-endpoint validity returned to the caller. -/
 theorem equates
     {boundary outer : List Sig}
-    (description : Rule.Erasure.Description outer)
+    (description : Rule.UncappedErasure.Description outer)
     {source : OpenDiagram boundary}
     (occurrence : Occurrence description.source source)
     (erasedCanonical :
@@ -1352,7 +1352,7 @@ theorem equates
     (exposedRegion description materialCanonical) erasedCanonical
     exposedLocalCanonical (by
       intro signature wire
-      simpa only [Rule.Erasure.Description.target, exposedRegion] using
+      simpa only [Rule.UncappedErasure.Description.target, exposedRegion] using
         Region.incidencePaths_adjoinAt_host_sublist
           description.hostLocals description.hostItems
           (Comprehension.Instantiation.instantiate

@@ -6,6 +6,7 @@ import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 import { checkOccurrenceCertificate } from '../../../src/kernel/diagram/subgraph/occurrence-certificate'
 import { bareWireParts } from '../../fixtures/pins'
+import { parseTerm } from '../../../src/kernel/term/parse'
 
 function unaryPattern(defId = 'P') {
   const builder = new DiagramBuilder()
@@ -26,6 +27,30 @@ function unaryHost(defId = 'P') {
 }
 
 describe('exact occurrence matching', () => {
+  it('matches exact nameless term content and ordered free-slot ports', () => {
+    const make = (source: string) => {
+      const builder = new DiagramBuilder()
+      const node = builder.term(builder.root, parseTerm(source).term, 1)
+      const output = builder.wire([{ node, port: { kind: 'output' } }])
+      const free = builder.wire([{ node, port: { kind: 'free', index: 0 } }])
+      return { diagram: builder.build(), node, output, free }
+    }
+    const host = make('\\x. x y')
+    const matching = make('\\z. z y')
+    const different = make('\\x. y x')
+    const matchingPattern = mkDiagramWithBoundary(matching.diagram, [matching.output, matching.free])
+    const differentPattern = mkDiagramWithBoundary(different.diagram, [different.output, different.free])
+
+    expect(findOccurrences(host.diagram, matchingPattern, {
+      inRegion: host.diagram.root,
+      attachments: [host.output, host.free],
+    }).matches).toHaveLength(1)
+    expect(findOccurrences(host.diagram, differentPattern, {
+      inRegion: host.diagram.root,
+      attachments: [host.output, host.free],
+    }).matches).toHaveLength(0)
+  })
+
   it('finds and certifies an exact ref occurrence', () => {
     const host = unaryHost()
     const pattern = unaryPattern()

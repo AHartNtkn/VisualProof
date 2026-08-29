@@ -9,6 +9,10 @@ import { mkReplay } from '../../src/app/replay'
 import { applyTrack, declareTrack, startTrack } from '../../src/app/session'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { tinyTheory } from '../fixtures/zero-signature'
+import { proofTermSpawnStep } from '../../src/app/interact/proof-spawn'
+import { convertToNormal } from '../../src/app/tactics'
+import { parseTerm } from '../../src/kernel/term/parse'
+import { currentTrack } from '../../src/app/session'
 
 function replayFixture() {
   const diagram = new DiagramBuilder().build()
@@ -165,5 +169,44 @@ describe('structural replay', () => {
     )).toBe(true)
     expect(Object.values(final.nodes).some((node) =>
       node.kind === 'ref' && node.defId === 'nat')).toBe(true)
+  })
+
+  it('replays Lambda spawning and checked normalization through the declared theorem', () => {
+    const builder = new DiagramBuilder()
+    const region = builder.cut(builder.root)
+    const origin = mkDiagramWithBoundary(builder.build(), [])
+    const base = verifyTheory(tinyTheory())
+    let track = startTrack(origin, 'forward', base)
+    track = applyTrack(track, singleStepAction(
+      'Lambda expression',
+      proofTermSpawnStep(parseTerm('(\\x. x) y'), region),
+      [{ introducedNode: 0, x: 90, y: 120 }],
+    ))
+    const term = Object.entries(currentTrack(track).nodes)
+      .find(([, node]) => node.kind === 'term')
+    if (term === undefined) throw new Error('spawn replay fixture has no term')
+    track = applyTrack(track, singleStepAction(
+      'Convert → normal',
+      convertToNormal(currentTrack(track), term[0], 64).step,
+    ))
+    const theorem = declareTrack(track, 'LambdaSpawnAndNormalize')
+    const replay = mkReplay(
+      theorem.name,
+      registerTheorem(base, theorem),
+    )
+
+    expect(replay.actionCount).toBe(2)
+    expect(replay.stepsAt(1)[0]?.rule).toBe('lambdaTermSpawn')
+    expect(replay.stepsAt(2)[0]?.rule).toBe('lambdaConversion')
+    const finalTerm = Object.values(replay.diagramAt(2).nodes)
+      .find((node) => node.kind === 'term')
+    expect(finalTerm).toMatchObject({
+      kind: 'term',
+      term: parseTerm('y').term,
+      freeArity: 1,
+    })
+    expect(Object.values(replay.diagramAt(2).nodes)
+      .filter((node) => node.kind === 'identity' && node.arity === 1))
+      .toHaveLength(2)
   })
 })

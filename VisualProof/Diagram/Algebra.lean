@@ -211,6 +211,7 @@ theorem ItemSeq.focusAt_item_eq_get
     (fun _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun _ _ _ => True.intro)
+    (fun _ _ _ _ => True.intro)
     (fun _ _ => True.intro)
     (fun index => Fin.elim0 index)
     (fun _ _ _ induction index => Fin.cases rfl induction index)

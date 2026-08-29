@@ -1,4 +1,5 @@
 import type { Sig } from '../kernel/diagram/sig'
+import type { ParsedTerm } from '../kernel/term'
 
 export type SourceSpan = { readonly start: number; readonly end: number }
 
@@ -16,6 +17,7 @@ export type FormulaUnicodeTokenKind =
   | 'or'
   | 'implies'
   | 'iff'
+  | 'lambda'
 
 export type FormulaUnicodeSymbol = {
   readonly symbol: string
@@ -32,11 +34,16 @@ export const FORMULA_UNICODE_SYMBOLS = Object.freeze([
   { symbol: '→', label: 'Implication', token: 'implies' },
   { symbol: '⇒', label: 'Alternative implication', token: 'implies' },
   { symbol: '↔', label: 'Biconditional', token: 'iff' },
+  { symbol: 'λ', label: 'Lambda abstraction', token: 'lambda' },
 ] as const satisfies readonly FormulaUnicodeSymbol[])
 
+export type FormulaOperand =
+  | { readonly kind: 'reference'; readonly name: string; readonly span: SourceSpan }
+  | { readonly kind: 'term'; readonly parsed: ParsedTerm; readonly span: SourceSpan }
+
 export type Formula =
-  | { readonly kind: 'atom'; readonly name: string; readonly args: readonly string[]; readonly span: SourceSpan }
-  | { readonly kind: 'equality'; readonly operands: readonly [string, string, ...string[]]; readonly span: SourceSpan }
+  | { readonly kind: 'atom'; readonly name: string; readonly args: readonly FormulaOperand[]; readonly span: SourceSpan }
+  | { readonly kind: 'equality'; readonly operands: readonly [FormulaOperand, FormulaOperand, ...FormulaOperand[]]; readonly span: SourceSpan }
   | { readonly kind: 'not'; readonly body: Formula; readonly span: SourceSpan }
   | { readonly kind: 'and'; readonly left: Formula; readonly right: Formula; readonly span: SourceSpan }
   | { readonly kind: 'or'; readonly left: Formula; readonly right: Formula; readonly span: SourceSpan }

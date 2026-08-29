@@ -15,6 +15,7 @@ import {
   type PrimitiveName,
 } from '../../src/theories/statements'
 import { derivedScope } from '../../src/kernel/diagram/regions'
+import { serializeTerm } from '../../src/kernel/term/serialize'
 
 const UNARY = relSig([IOTA])
 const BINARY = relSig([IOTA, IOTA])
@@ -104,6 +105,7 @@ function descriptor(
       label(endpointWire(diagram, nodeId, 'arg', index)))
     return `${node.defId}(${args.join(',')})`
   }
+  if (node.kind === 'term') return serializeTerm(node.term)
   const args = Array.from({ length: node.arity }, (_, index) =>
     label(endpointWire(diagram, nodeId, 'identity', index)))
   return `=(${args.join(',')})`

@@ -1,13 +1,18 @@
-import type { Diagram, Endpoint, RegionId, WireId } from '../../kernel/diagram/diagram'
-import { derivedScope } from '../../kernel/diagram/regions'
+import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
 import { IOTA, relSig, type Sig } from '../../kernel/diagram/sig'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../kernel/proof/action'
-import type { ProofStep } from '../../kernel/proof/step'
+import { applyStep, type ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
-import { assertProofContext } from '../../kernel/proof/context'
+import { EMPTY_PROOF_CONTEXT, assertProofContext } from '../../kernel/proof/context'
 import { bareWireDeletionSteps, bareWireInsertSteps } from '../../kernel/proof/bare-wire'
-import { findDeiterationEvidence } from '../../kernel/rules/iteration'
+import { deiterationStep, erasureStep } from '../../kernel/proof/selection-step'
+import { termNodeAt } from '../../kernel/rules/access'
+import { proposeAttachedSlotCorrespondence } from '../../kernel/rules/lambda'
+import { mapFreeSlots } from '../../kernel/term/interface'
+import { convertible } from '../../kernel/term/convert'
+import type { ConversionCertificate } from '../../kernel/term/certificate'
+import { parseTerm } from '../../kernel/term/parse'
 import { pkey, type Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
@@ -16,10 +21,22 @@ import {
   type ActionDescriptor,
 } from '../actions'
 import { inferFoldArgs } from '../define'
-import { absorbHits, orphanedWires } from '../edit'
+import {
+  convertToHeadNormal,
+  convertToNormal,
+  convertToWeakHeadNormal,
+} from '../tactics'
+import {
+  authorLambdaConversionTarget,
+  completeLambdaConversion,
+} from '../lambda-conversion'
+import { absorbHits } from '../edit'
 import { buildSelection, regionAt, wireManipulationHitTest, type Hit } from '../hittest'
+import { stepActionLabel } from '../proof-front-policy'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
 import { CopyDragController } from './copy'
+import { ConnectionDragController, type ConnectionEnd } from './connection'
+import { FissionDragController, type FissionRequest } from './fission'
 import { IdentityOpsController } from './identity-ops'
 import { SlashController } from './slash'
 import { WireOpsDragController } from './wire-ops'
@@ -27,6 +44,125 @@ import { copyDestinationPreview, copySelectionPreview } from './copy-view'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
 export type ProofOrientation = 'forward' | 'backward'
+
+function outputNodes(diagram: Diagram, wire: WireId): NodeId[] {
+  return diagram.wires[wire]!.endpoints
+    .filter((endpoint) =>
+      endpoint.port.kind === 'output'
+      && diagram.nodes[endpoint.node]?.kind === 'term')
+    .map((endpoint) => endpoint.node)
+}
+
+/** Resolve a term connection gesture to one dedicated replayable Lambda step. */
+export function proofConnectionStep(
+  diagram: Diagram,
+  source: ConnectionEnd,
+  target: ConnectionEnd,
+  orientation: ProofOrientation,
+  fuel: number,
+): ProofStep {
+  if (source.wire === target.wire) {
+    const a = source.endpoint
+    const b = target.endpoint
+    if (
+      a === null
+      || b === null
+      || a.port.kind !== 'output'
+      || b.port.kind !== 'output'
+      || a.node === b.node
+      || diagram.nodes[a.node]?.kind !== 'term'
+      || diagram.nodes[b.node]?.kind !== 'term'
+    ) {
+      throw new Error("release on another term's output strand to compare arguments")
+    }
+    const step: ProofStep = {
+      rule: 'lambdaHeadStrip',
+      a: a.node,
+      b: b.node,
+      correspondence: proposeAttachedSlotCorrespondence(diagram, a.node, b.node),
+    }
+    applyStep(diagram, step, EMPTY_PROOF_CONTEXT, orientation)
+    return step
+  }
+
+  const candidates: ProofStep[] = [{
+    rule: 'wireJoin',
+    input: { a: source.wire, b: target.wire },
+  }]
+  const concreteOutput = (end: ConnectionEnd): NodeId | null =>
+    end.endpoint?.port.kind === 'output'
+    && diagram.nodes[end.endpoint.node]?.kind === 'term'
+      ? end.endpoint.node
+      : null
+  const sourceNode = concreteOutput(source)
+  const targetNode = concreteOutput(target)
+  const leftCandidates = sourceNode === null
+    ? outputNodes(diagram, source.wire)
+    : [sourceNode]
+  const rightCandidates = targetNode === null
+    ? outputNodes(diagram, target.wire)
+    : [targetNode]
+  const unambiguous = leftCandidates.length === 1 && rightCandidates.length === 1
+  const convertiblePairs: Array<{
+    readonly a: NodeId
+    readonly b: NodeId
+    readonly certificate: ConversionCertificate
+  }> = []
+  if (unambiguous) {
+    for (const a of leftCandidates) for (const b of rightCandidates) {
+      const left = termNodeAt(diagram, a)
+      const right = termNodeAt(diagram, b)
+      const correspondence = proposeAttachedSlotCorrespondence(diagram, a, b)
+      const result = convertible(
+        mapFreeSlots(left.term, correspondence.left),
+        mapFreeSlots(right.term, correspondence.right),
+        fuel,
+      )
+      if (result.status !== 'convertible') continue
+      convertiblePairs.push({ a, b, certificate: result.certificate })
+      candidates.push({
+        rule: 'lambdaCongruenceJoin',
+        a,
+        b,
+        certificate: result.certificate,
+        correspondence,
+      })
+    }
+  }
+  for (const pair of convertiblePairs) {
+    candidates.push({
+      rule: 'lambdaAnchoredWireContract',
+      redundant: pair.a,
+      survivor: pair.b,
+      certificate: pair.certificate,
+    })
+    candidates.push({
+      rule: 'lambdaAnchoredWireContract',
+      redundant: pair.b,
+      survivor: pair.a,
+      certificate: {
+        leftSteps: pair.certificate.rightSteps,
+        rightSteps: pair.certificate.leftSteps,
+      },
+    })
+  }
+  for (const candidate of candidates) {
+    try {
+      applyStep(diagram, candidate, EMPTY_PROOF_CONTEXT, orientation)
+      return candidate
+    } catch {
+      // Several proof justifications can yield the same visible merge.
+    }
+  }
+  if (!unambiguous && (leftCandidates.length > 1 || rightCandidates.length > 1)) {
+    throw new Error(
+      'proof connection is ambiguous; drag from one producer output strand to the other',
+    )
+  }
+  throw new Error(
+    `no valid proof connection joins lines '${source.wire}' and '${target.wire}'`,
+  )
+}
 
 export type ProofDiscovery = {
   readonly sel: SubgraphSelection
@@ -49,31 +185,6 @@ export function discoverProofActions(
     }
   } catch {
     return null
-  }
-}
-
-function erasureSelection(diagram: Diagram, selection: SubgraphSelection): SubgraphSelection {
-  const existing = new Set(selection.wires)
-  const riders = orphanedWires(diagram, new Set(selection.nodes))
-    .filter((wire) => !existing.has(wire) && derivedScope(diagram, wire) === selection.region)
-  return riders.length === 0
-    ? selection
-    : { ...selection, wires: [...selection.wires, ...riders] }
-}
-
-export function erasureStep(diagram: Diagram, selection: SubgraphSelection): ProofStep {
-  return { rule: 'erasure', sel: erasureSelection(diagram, selection) }
-}
-
-export function deiterationStep(
-  diagram: Diagram,
-  selection: SubgraphSelection,
-): ProofStep {
-  const evidence = findDeiterationEvidence(diagram, selection)
-  return {
-    rule: 'deiteration',
-    sel: selection,
-    ...evidence,
   }
 }
 
@@ -104,6 +215,7 @@ export type ProofMoveControllerOptions = {
   readonly context: () => ProofContext
   readonly orientation: () => ProofOrientation
   readonly apply: (action: ProofAction) => void
+  readonly commitFission: (request: FissionRequest) => void
   readonly refuse: (text: string, pointer: Vec2) => void
   readonly theme: () => Theme
   readonly fuel: () => number
@@ -120,6 +232,8 @@ export class ProofMoveController {
   readonly #options: ProofMoveControllerOptions
   readonly #document: Document
   readonly #identity: IdentityOpsController
+  readonly #connection: ConnectionDragController
+  readonly #fission: FissionDragController
   readonly #wireOps: WireOpsDragController
   readonly #copy: CopyDragController
   readonly #slash: SlashController
@@ -133,6 +247,46 @@ export class ProofMoveController {
     assertProofContext(options.context())
     this.#options = options
     this.#document = options.host.ownerDocument
+    this.#connection = new ConnectionDragController({
+      active: options.active,
+      engine: options.engine,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      acceptSource: (source) => source.endpoint !== null
+        && options.diagram().nodes[source.endpoint.node]?.kind === 'term'
+        && (source.endpoint.port.kind === 'output' || source.endpoint.port.kind === 'free'),
+      commit: (gesture, pointer) => {
+        this.#lastPointer = pointer
+        try {
+          if ('identity' in gesture.target) {
+            throw new Error('term connections land on a line, not an identity dot')
+          }
+          return this.#commit(proofConnectionStep(
+            options.diagram(),
+            gesture.source,
+            gesture.target,
+            options.orientation(),
+            options.fuel(),
+          ))
+        } catch (error) {
+          options.refuse(
+            error instanceof Error ? error.message : String(error),
+            pointer,
+          )
+          return false
+        }
+      },
+      refuse: options.refuse,
+    })
+    this.#fission = new FissionDragController({
+      active: options.active,
+      diagram: options.diagram,
+      engine: options.engine,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      commit: options.commitFission,
+      refuse: options.refuse,
+    })
     this.#identity = new IdentityOpsController({
       active: options.active,
       engine: options.engine,
@@ -217,10 +371,12 @@ export class ProofMoveController {
   passiveSample(sample: PointerSample | null): void {
     if (sample === null) {
       this.#lastWorld = null
+      this.#fission.hover(null)
       return
     }
     this.#lastPointer = sample.client
     this.#lastWorld = sample.world
+    this.#fission.hover(this.#copy.dragging ? null : sample)
   }
 
   claim(sample: PointerSample): PointerClaim | null {
@@ -233,7 +389,13 @@ export class ProofMoveController {
     if (this.#menu !== null) this.#closeMenu()
     if (sample.shiftKey || sample.ctrlKey) return null
     if (sample.button === 2) return this.#slash.claim(sample)
-    return this.#identity.claim(sample) ?? this.#wireOps.claim(sample) ?? this.#copy.claim(sample)
+    const claim = this.#identity.claim(sample)
+      ?? this.#connection.claim(sample)
+      ?? this.#fission.claim(sample)
+      ?? this.#wireOps.claim(sample)
+      ?? this.#copy.claim(sample)
+    if (claim !== null && this.#copy.dragging) this.#fission.hover(null)
+    return claim
   }
 
   contextMenu(sample: PointerSample): boolean {
@@ -275,10 +437,31 @@ export class ProofMoveController {
 
   doubleClick(sample: PointerSample): boolean {
     this.#context()
-    if (!this.#options.active() || sample.hit?.kind !== 'node') return false
+    this.#lastPointer = sample.client
+    if (!this.#options.active()) return false
+    if (sample.hit?.kind === 'wire') {
+      this.#commit({ rule: 'lambdaFusion', wire: sample.hit.id })
+      return true
+    }
+    if (sample.hit?.kind !== 'node') return false
     const node = this.#options.diagram().nodes[sample.hit.id]
-    if (node?.kind !== 'ref') return false
-    this.#commit({ rule: 'unfold', nodeId: sample.hit.id })
+    if (node?.kind === 'ref') {
+      this.#commit({ rule: 'unfold', nodeId: sample.hit.id })
+      return true
+    }
+    if (node?.kind !== 'term') return false
+    try {
+      this.#commit(convertToNormal(
+        this.#options.diagram(),
+        sample.hit.id,
+        this.#options.fuel(),
+      ).step)
+    } catch (error) {
+      this.#options.refuse(
+        error instanceof Error ? error.message : String(error),
+        sample.client,
+      )
+    }
     return true
   }
 
@@ -353,14 +536,28 @@ export class ProofMoveController {
       return true
     }
     if (
+      (sample.key === 'f' || sample.key === 'F')
+      && !sample.ctrlKey
+      && !sample.altKey
+      && !sample.metaKey
+    ) {
+      const selection = this.#options.selection()
+      if (selection.length !== 1 || selection[0]?.kind !== 'wire') return false
+      this.#commit({ rule: 'lambdaFusion', wire: selection[0].id })
+      return true
+    }
+    if (
       sample.key !== 'Delete'
       && sample.key !== 'Backspace'
       && sample.key !== 'w'
       && sample.key !== 'W'
     ) return false
+    const isDelete = sample.key === 'Delete' || sample.key === 'Backspace'
+    const diagram = this.#options.diagram()
+    const hits = this.#options.selection()
     if (
       (sample.key === 'w' || sample.key === 'W')
-      && this.#options.selection().length === 0
+      && hits.length === 0
     ) {
       // W with nothing highlighted spawns an empty double cut at the region
       // under the pointer (2026-07-10 approved design; 2026-07-30 ruling).
@@ -373,7 +570,7 @@ export class ProofMoveController {
         sel: {
           region: regionAt(
             this.#options.engine(),
-            this.#options.diagram(),
+            diagram,
             this.#lastWorld,
           ),
           regions: [],
@@ -389,10 +586,8 @@ export class ProofMoveController {
     // floor means that end can't be a detach target) or detaches as a spare
     // pin. Arity ≥ 2 is content in a path, not apparatus, so it falls
     // through to discovery unchanged.
-    if (sample.key === 'Delete' || sample.key === 'Backspace') {
-      const hits = this.#options.selection()
+    if (isDelete) {
       if (hits.length === 1 && hits[0]!.kind === 'node') {
-        const diagram = this.#options.diagram()
         const node = diagram.nodes[hits[0]!.id]
         if (node?.kind === 'identity') {
           if (node.arity === 0) {
@@ -432,10 +627,9 @@ export class ProofMoveController {
     // Delete on a lone attached wire deletes its ends; the wire itself
     // stays, quantified. This never forms a subgraph selection (the ends
     // stay behind), so it dispatches before discovery.
-    if (sample.key === 'Delete' || sample.key === 'Backspace') {
-      const hits = this.#options.selection()
+    if (isDelete) {
       if (hits.length === 1 && hits[0]!.kind === 'wire') {
-        const wire = this.#options.diagram().wires[hits[0]!.id]
+        const wire = diagram.wires[hits[0]!.id]
         if (wire !== undefined && wire.endpoints.length > 0) {
           this.#commit({ rule: 'endsDelete', wire: hits[0]!.id })
           return true
@@ -443,24 +637,24 @@ export class ProofMoveController {
       }
     }
     const discovery = discoverProofActions(
-      this.#options.diagram(),
-      this.#options.selection(),
+      diagram,
+      hits,
       this.#context(),
       this.#options.orientation(),
     )
     if (discovery === null) {
       this.#options.refuse(
-        this.#options.selection().length === 0
+        hits.length === 0
           ? 'select something first'
           : 'this selection spans several regions',
         this.#lastPointer,
       )
       return true
     }
-    if (sample.key === 'Delete' || sample.key === 'Backspace') {
+    if (isDelete) {
       try {
         const steps = contextualDeleteSteps(
-          this.#options.diagram(),
+          diagram,
           discovery,
         )
         if (steps === null) {
@@ -482,6 +676,8 @@ export class ProofMoveController {
     this.#context()
     const result: Shape[] = [
       ...this.#identity.overlay(),
+      ...this.#connection.overlay(),
+      ...this.#fission.overlay(),
       ...this.#wireOps.overlay(),
       ...this.#copy.overlay(),
       ...this.#slash.overlay(),
@@ -514,6 +710,8 @@ export class ProofMoveController {
     this.#cycle = null
     this.#closePrompt()
     this.#identity.cancel()
+    this.#connection.cancel()
+    this.#fission.cancel()
     this.#wireOps.cancel()
     this.#copy.cancel()
     this.#slash.cancel()
@@ -521,19 +719,18 @@ export class ProofMoveController {
 
   dispose(): void {
     this.cancel()
+    this.#fission.dispose()
     this.#copy.dispose()
   }
 
   modifiersChanged(ctrlHeld: boolean): void {
     this.#context()
+    this.#fission.modifiersChanged(ctrlHeld)
     this.#copy.modifiersChanged(ctrlHeld)
   }
 
   #commit(step: ProofStep): boolean {
-    return this.#commitSteps(
-      step.rule === 'theorem' ? `cite ${step.name}` : step.rule,
-      [step],
-    )
+    return this.#commitSteps(stepActionLabel(step), [step])
   }
 
   #commitSteps(label: string, steps: readonly ProofStep[]): boolean {
@@ -590,7 +787,8 @@ export class ProofMoveController {
       // stored name is inherently a picker — the diagram cannot determine
       // it — so these rows are the interface, not debt.
       const paletteRows = discovery.actions.filter((action) =>
-        action.kind === 'relFold'
+        action.kind === 'convert'
+        || action.kind === 'relFold'
         || action.kind === 'citeTheorem')
       if (paletteRows.length > 0) row('Actions', null)
       for (const action of paletteRows) {
@@ -657,6 +855,9 @@ export class ProofMoveController {
           selection,
         )))
         return
+      case 'convert':
+        this.#appendConversions(row, selection.nodes[0]!)
+        return
       case 'relFold':
         row('Fold into', null)
         for (const [name] of this.#context().relations) {
@@ -680,6 +881,52 @@ export class ProofMoveController {
     }
   }
 
+  #appendConversions(
+    row: (label: string, run: (() => void) | null) => void,
+    node: NodeId,
+  ): void {
+    row('Convert → normal', () => this.#commit(convertToNormal(
+      this.#options.diagram(), node, this.#options.fuel(),
+    ).step))
+    row('Convert → head normal', () => this.#commit(convertToHeadNormal(
+      this.#options.diagram(), node, this.#options.fuel(),
+    ).step))
+    row('Convert → weak head normal', () => this.#commit(convertToWeakHeadNormal(
+      this.#options.diagram(), node, this.#options.fuel(),
+    ).step))
+    row('Convert → custom target…', () => this.#openTextPrompt(
+      'Conversion target',
+      'target term',
+      (value) => {
+        const parsed = parseTerm(value)
+        const diagram = this.#options.diagram()
+        const source = termNodeAt(diagram, node)
+        const target = authorLambdaConversionTarget(
+          diagram,
+          node,
+          { kind: 'parsed', parsed },
+        )
+        const conversion = convertible(
+          mapFreeSlots(source.term, target.correspondence.left),
+          mapFreeSlots(target.term, target.correspondence.right),
+          this.#options.fuel(),
+        )
+        if (conversion.status === 'fuel-exhausted') {
+          throw new Error(conversion.detail)
+        }
+        if (conversion.status === 'not-convertible') {
+          throw new Error('conversion target is not beta-eta convertible to the source term')
+        }
+        this.#commit(completeLambdaConversion(
+          diagram,
+          node,
+          target,
+          conversion.certificate,
+        ).step)
+      },
+    ))
+  }
+
   #beginCitation(candidate: CitationCandidate): void {
     if (candidate.occurrences === null) return
     this.#closeMenu()
@@ -691,6 +938,43 @@ export class ProofMoveController {
   #closeMenu(): void {
     this.#menu?.remove()
     this.#menu = null
+  }
+
+  #openTextPrompt(
+    label: string,
+    placeholder: string,
+    accept: (value: string) => void,
+  ): void {
+    this.#closePrompt()
+    const wrap = this.#document.createElement('div')
+    wrap.className = 'vpa-proof-prompt'
+    wrap.style.left = `${this.#lastPointer.x + 10}px`
+    wrap.style.top = `${this.#lastPointer.y + 10}px`
+    const input = this.#document.createElement('input')
+    input.type = 'text'
+    input.placeholder = placeholder
+    input.setAttribute('aria-label', label)
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation()
+      if (event.key === 'Escape') {
+        this.#closePrompt()
+        return
+      }
+      if (event.key !== 'Enter') return
+      try {
+        accept(input.value)
+        this.#closePrompt()
+      } catch (error) {
+        this.#options.refuse(
+          error instanceof Error ? error.message : String(error),
+          this.#lastPointer,
+        )
+      }
+    })
+    wrap.append(input)
+    this.#prompt = wrap
+    this.#options.host.append(wrap)
+    queueMicrotask(() => input.focus())
   }
 
   /** The arity prompt: blank means an individual (ι); n means rel(ιⁿ). */

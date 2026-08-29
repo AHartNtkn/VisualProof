@@ -5,6 +5,7 @@ import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
+import { parseTerm } from '../../../src/kernel/term/parse'
 
 function host() {
   const builder = new DiagramBuilder()
@@ -29,6 +30,36 @@ function host() {
 }
 
 describe('extractSubgraph', () => {
+  it('retains the whole term and exposes output/free attachments in storage order', () => {
+    const builder = new DiagramBuilder()
+    const term = parseTerm('\\x. x y z').term
+    const node = builder.term(builder.root, term, 2)
+    builder.wire([{ node, port: { kind: 'output' } }])
+    builder.wire([{ node, port: { kind: 'free', index: 0 } }])
+    builder.wire([{ node, port: { kind: 'free', index: 1 } }])
+    const diagram = builder.build()
+    const extraction = extractSubgraph(diagram, mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [node],
+      wires: [],
+    }))
+
+    expect(extraction.pattern.diagram.nodes[node]).toEqual({
+      kind: 'term',
+      region: extraction.pattern.diagram.root,
+      term,
+      freeArity: 2,
+    })
+    expect(extraction.attachments).toEqual(['w0', 'w1', 'w2'])
+    expect(extraction.pattern.boundary.map((wire) =>
+      extraction.pattern.diagram.wires[wire]!.endpoints[0]!.port)).toEqual([
+      { kind: 'output' },
+      { kind: 'free', index: 0 },
+      { kind: 'free', index: 1 },
+    ])
+  })
+
   it('copies a selected subtree and exposes crossings as ordered root stubs', () => {
     const value = host()
     const selection = mkSelection(value.diagram, {

@@ -44,6 +44,7 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
   // Return-typed switch (no default): a new node kind forces its rebuild here.
   const rebuildNode = (n: DiagramNode, region: RegionId): DiagramNode => {
     switch (n.kind) {
+      case 'term': return { kind: 'term', region, term: n.term, freeArity: n.freeArity }
       case 'atom': return { kind: 'atom', region, sig: n.sig }
       case 'ref': return { kind: 'ref', region, defId: n.defId, sig: n.sig }
       case 'identity': return { kind: 'identity', region, sig: n.sig, arity: n.arity }

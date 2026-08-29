@@ -13,6 +13,7 @@ import {
   spliceSubgraphMapped,
 } from '../../../src/kernel/diagram/subgraph/splice'
 import { bareWire, bareWireParts, contentEndpoints } from '../../fixtures/pins'
+import { parseTerm } from '../../../src/kernel/term/parse'
 
 function host() {
   const builder = new DiagramBuilder()
@@ -64,6 +65,50 @@ function bareHost(regions: Record<string, Region> = {}) {
 }
 
 describe('subgraph removal and splice', () => {
+  it('round-trips a whole term with every external attachment', () => {
+    const builder = new DiagramBuilder()
+    const term = parseTerm('\\x. x y z').term
+    const node = builder.term(builder.root, term, 2)
+    for (const port of [
+      { kind: 'output' as const },
+      { kind: 'free' as const, index: 0 },
+      { kind: 'free' as const, index: 1 },
+    ]) {
+      const left = builder.identity(builder.root, IOTA, 1)
+      const right = builder.identity(builder.root, IOTA, 1)
+      builder.wire([
+        { node, port },
+        { node: left, port: { kind: 'identity', index: 0 } },
+        { node: right, port: { kind: 'identity', index: 0 } },
+      ])
+    }
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [node],
+      wires: [],
+    })
+    const extraction = extractSubgraph(diagram, selection)
+    const removed = removeSubgraph(diagram, selection)
+    const spliced = spliceSubgraphMapped(
+      removed,
+      removed.root,
+      extraction.pattern,
+      extraction.attachments,
+    )
+
+    expect(extraction.attachments).toEqual(['w0', 'w1', 'w2'])
+    expect(sameDiagram(spliced.diagram, diagram)).toBe(true)
+    expect(spliced.diagram.nodes[spliced.nodeMap.get(node)!]).toMatchObject({
+      kind: 'term',
+      term,
+      freeArity: 2,
+    })
+    expect(extraction.pattern.boundary.map((wire) => spliced.wireMap.get(wire)))
+      .toEqual(extraction.attachments)
+  })
+
   it('removes selected content and trims touching wires', () => {
     const value = host()
     const selection = mkSelection(value.diagram, {

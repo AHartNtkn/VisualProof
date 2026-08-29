@@ -479,7 +479,7 @@ theorem accumulateSelectedAtomFormal
     (head := head) (ports := ports) tail hostLocals outerHostItems application
   have rawSourceEq : raw.source =
       Region.adjoinAt retainedLocals hostItems direct := by
-    simp only [raw, Rule.Erasure.Description.source, Region.spliceAt,
+    simp only [raw, Rule.UncappedErasure.Description.source, Region.spliceAt,
       atomExposureDescription, retainedLocals, hostItems, direct]
     exact congrArg
       (fun material => Region.adjoinAt
@@ -1715,6 +1715,80 @@ mutual
           apply congrArg (Item.identity signature arity)
           funext position
           exact targetKeepCommutes (identityPorts position)
+        exact ⟨_, _, mappedEvidence, mappedSites, mappedSource,
+          mappedSource, mappedSourceArgument, ⟨RegionIso.ofEq mappedResult⟩,
+          ⟨RegionIso.ofEq mappedEndpoint⟩⟩
+    | .term output freeArity ports term => by
+        let mappedOutput := commonRename output
+        let mappedPorts := fun position => commonRename (ports position)
+        have mappedSource :
+            (Item.term (frame.sourceKeep output) freeArity
+              (fun position => frame.sourceKeep (ports position)) term).renameWires
+                sourceRename =
+              Item.term (mappedFrame.sourceKeep mappedOutput) freeArity
+                (fun position => mappedFrame.sourceKeep
+                  (mappedPorts position)) term := by
+          simp only [Item.renameWires, mappedOutput, mappedPorts]
+          rw [keepCommutes output]
+          apply congrArg
+            (Item.term (mappedFrame.sourceKeep (commonRename output))
+              freeArity · term)
+          funext position
+          exact keepCommutes (ports position)
+        have mappedSourceArgument :
+            (Item.term (argumentFrame.sourceKeep output) freeArity
+              (fun position => argumentFrame.sourceKeep (ports position))
+                term).renameWires argumentSourceRename =
+              Item.term (mappedArgumentFrame.sourceKeep mappedOutput) freeArity
+                (fun position => mappedArgumentFrame.sourceKeep
+                  (mappedPorts position)) term := by
+          simp only [Item.renameWires, mappedOutput, mappedPorts]
+          rw [argumentKeepCommutes output]
+          apply congrArg
+            (Item.term
+              (mappedArgumentFrame.sourceKeep (commonRename output))
+              freeArity · term)
+          funext position
+          exact argumentKeepCommutes (ports position)
+        let mappedEvidence :=
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.term
+            (pattern := pattern)
+            (retain := mappedFrame.sourceKeep)
+            (selected := mappedFrame.selected)
+            mappedOutput freeArity mappedPorts term
+        let mappedSites : ItemSites
+            (recordingOperation baseOperation external) mappedData
+            mappedEvidence :=
+          ItemSites.term (pattern := pattern) (frame := mappedFrame)
+            mappedOutput freeArity mappedPorts term
+        have mappedResult :
+            (Region.singleton (.term output freeArity ports term)).renameWires
+                commonRename =
+              Region.singleton
+                (.term mappedOutput freeArity mappedPorts term) := by
+          rw [Region.singleton_renameWires]
+          rfl
+        have mappedEndpoint :
+            (itemEdit
+              (operation := recordingOperation baseOperation external)
+              data originalEvidence
+              (ItemSites.term
+                (pattern := pattern) (frame := frame)
+                output freeArity ports term)).endpoint.renameWires
+                targetRename =
+              (itemEdit
+                (operation := recordingOperation baseOperation external)
+                mappedData mappedEvidence mappedSites).endpoint := by
+          unfold itemEdit ExactEdit.refl
+          simp only [Transform.ItemEdit.run, Region.singleton_renameWires,
+            Item.renameWires, mappedOutput, mappedPorts]
+          rw [targetKeepCommutes output]
+          apply congrArg Region.singleton
+          apply congrArg
+            (Item.term (mappedFrame.targetKeep (commonRename output))
+              freeArity · term)
+          funext position
+          exact targetKeepCommutes (ports position)
         exact ⟨_, _, mappedEvidence, mappedSites, mappedSource,
           mappedSource, mappedSourceArgument, ⟨RegionIso.ofEq mappedResult⟩,
           ⟨RegionIso.ofEq mappedEndpoint⟩⟩

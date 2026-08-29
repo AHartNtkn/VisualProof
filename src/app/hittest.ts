@@ -1,5 +1,6 @@
-import type { Diagram, Endpoint, RegionId, WireId } from '../kernel/diagram/diagram'
-import { pkey, resolvedFrameSlot, type Engine, type LegEnd } from '../view/engine'
+import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import type { PathSeg } from '../kernel/term/reduce'
+import { ascaleOf, pkey, resolvedFrameSlot, type Body, type Engine, type LegEnd } from '../view/engine'
 import { computeLegs, legPaths } from '../view/wires'
 import type { Vec2 } from '../view/vec'
 import { length, sub } from '../view/vec'
@@ -37,6 +38,97 @@ function polylineDistance(p: Vec2, pts: readonly Vec2[]): number {
   let best = Infinity
   for (let i = 1; i < pts.length; i++) best = Math.min(best, segmentDistance(p, pts[i - 1]!, pts[i]!))
   return best
+}
+
+export type TermOccurrenceTarget = {
+  readonly node: NodeId
+  readonly path: readonly PathSeg[]
+}
+
+function worldToAnatomyLocal(e: Engine, body: Body, point: Vec2): Vec2 {
+  const dx = point.x - body.pos.x
+  const dy = point.y - body.pos.y
+  const cosine = Math.cos(body.theta)
+  const sine = Math.sin(body.theta)
+  const anatomyScale = ascaleOf(body.kind) * e.scale
+  return {
+    x: (dx * cosine + dy * sine) / anatomyScale,
+    y: (-dx * sine + dy * cosine) / anatomyScale,
+  }
+}
+
+function arcDistance(point: Vec2, radius: number, angleStart: number, angleEnd: number): number {
+  let angle = Math.atan2(point.y, point.x)
+  while (angle < angleStart) angle += 2 * Math.PI
+  while (angle > angleStart + 2 * Math.PI) angle -= 2 * Math.PI
+  if (angle <= angleEnd) return Math.abs(length(point) - radius)
+  return Math.min(
+    length(sub(point, { x: Math.cos(angleStart) * radius, y: Math.sin(angleStart) * radius })),
+    length(sub(point, { x: Math.cos(angleEnd) * radius, y: Math.sin(angleEnd) * radius })),
+  )
+}
+
+/**
+ * The exact painted Lambda carrier under a point, including its structural path.
+ * Occurrences own indices into the same arcs and radials consumed by paint;
+ * body order selects among overlapping term figures, then overlapping carriers
+ * within that body resolve to the deepest syntax path.
+ */
+export function termOccurrenceHitTest(
+  e: Engine,
+  point: Vec2,
+  viewport: HitViewport,
+): TermOccurrenceTarget | null {
+  const worldRadius = wireHitRadius(viewport)
+  for (const body of e.bodies.values()) {
+    if (body.kind !== 'term' || body.geometry === null) continue
+    let best: { readonly target: TermOccurrenceTarget; readonly depth: number; readonly distance: number } | null = null
+    const geometry = body.geometry
+    const localPoint = worldToAnatomyLocal(e, body, point)
+    const anatomyScale = ascaleOf(body.kind) * e.scale
+    const localRadius = worldRadius / anatomyScale
+    for (const occurrence of geometry.occurrences) {
+      let distance = Infinity
+      for (const arcIndex of occurrence.arcIndices) {
+        const arc = geometry.arcs[arcIndex]
+        if (arc !== undefined) {
+          distance = Math.min(distance, arcDistance(localPoint, arc.r, arc.a0, arc.a1))
+        }
+      }
+      for (const radialIndex of occurrence.radialIndices) {
+        const radial = geometry.radials[radialIndex]
+        if (radial !== undefined) {
+          distance = Math.min(distance, segmentDistance(
+            localPoint,
+            { x: Math.cos(radial.angle) * radial.r0, y: Math.sin(radial.angle) * radial.r0 },
+            { x: Math.cos(radial.angle) * radial.r1, y: Math.sin(radial.angle) * radial.r1 },
+          ))
+        }
+      }
+      if (occurrence.includeExit && geometry.exitArc !== null) {
+        distance = Math.min(
+          distance,
+          arcDistance(localPoint, geometry.exitArc.r, geometry.exitArc.a0, geometry.exitArc.a1),
+        )
+      }
+      if (occurrence.includeExit && geometry.exitLine !== null) {
+        distance = Math.min(distance, segmentDistance(localPoint, geometry.exitLine[0], geometry.exitLine[1]))
+      }
+      if (distance > localRadius) continue
+      const candidate = {
+        target: { node: body.id, path: occurrence.path },
+        depth: occurrence.depth,
+        distance: distance * anatomyScale,
+      }
+      if (
+        best === null
+        || candidate.depth > best.depth
+        || (candidate.depth === best.depth && candidate.distance < best.distance)
+      ) best = candidate
+    }
+    if (best !== null) return best.target
+  }
+  return null
 }
 
 /**
@@ -191,8 +283,10 @@ export function hitTest(e: Engine, point: Vec2, viewport: HitViewport): Hit | nu
   const radius = wireHitRadius(viewport)
   const topWire = nearestWire(boundaryCandidates(e, point), radius)
   if (topWire !== null) return topWire
+  const termOccurrence = termOccurrenceHitTest(e, point, viewport)
+  if (termOccurrence !== null) return { kind: 'node', id: termOccurrence.node }
   for (const b of e.bodies.values()) {
-    if (b.kind === 'anchor') continue
+    if (b.kind === 'anchor' || b.kind === 'term') continue
     // the drawn disc is scaled by e.scale (paint) — the hit radius must match, or
     // a content-scaled node is clicked at a different size than it is drawn
     if (length(sub(point, b.pos)) <= b.discR * e.scale) return { kind: 'node', id: b.id }

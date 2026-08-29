@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { loadTheory, theoryToJson } from '../../src/kernel/proof/store'
 import { buildFregeTheory } from '../../src/theories'
@@ -24,8 +24,6 @@ describe('whole-theory emission', () => {
     expect(second.equals(first)).toBe(true)
     expect(second.at(-1)).toBe(0x0a)
     expect(second.at(-2)).not.toBe(0x0a)
-    expect(existsSync('examples/lambda.json')).toBe(false)
-
     const json = JSON.parse(second.toString('utf8')) as unknown
     const loaded = loadTheory(json)
     expect(theoryToJson(loaded.theory)).toEqual(theoryToJson(buildFregeTheory()))

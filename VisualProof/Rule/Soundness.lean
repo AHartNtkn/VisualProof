@@ -7,6 +7,7 @@ import VisualProof.Rule.Soundness.Comprehension
 import VisualProof.Rule.Soundness.Vacuity
 import VisualProof.Rule.Soundness.Presentation
 import VisualProof.Rule.Soundness.Identification
+import VisualProof.Rule.Soundness.Lambda
 import VisualProof.Rule.Soundness.WirePrimitive
 
 namespace VisualProof.Rule
@@ -51,6 +52,32 @@ theorem Step.Evidence.sound
       exact WirePrimitive.FormalApplication.sound step
   | identityLeaf step =>
       exact WirePrimitive.IdentityLeaf.sound step
+  | lambdaSpawn step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.Spawn.sound step model args).mp sourceDenotes
+  | lambdaTermLeaf step =>
+      exact Lambda.TermLeaf.sound step
+  | lambdaFission step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.Fission.sound step model args).mp sourceDenotes
+  | lambdaFusion step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.Fusion.sound step model args).mp sourceDenotes
+  | lambdaCongruence step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.Congruence.sound step model args).mp sourceDenotes
+  | lambdaHeadStrip step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.HeadStrip.sound step model args).mp sourceDenotes
+  | lambdaAnchoredWire step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.AnchoredWire.sound step model args).mp sourceDenotes
+  | lambdaConversion step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.Conversion.sound step model args).mp sourceDenotes
+  | lambdaFreeVariableIdentity step =>
+      exact fun model args sourceDenotes =>
+        (Lambda.FreeVariableIdentity.sound step model args).mp sourceDenotes
 
 theorem Step.sound
     {boundary : List Sig}

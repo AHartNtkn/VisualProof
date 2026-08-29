@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { snapshotFromDiagram } from '../../../src/game/diagram-snapshot'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { bound, lambda } from '../../../src/kernel/term/term'
 import { TreeRenderAssetCache } from '../../../src/game/render/assets'
 import {
   makeBatchedTreeObject,
@@ -85,6 +86,7 @@ function representativeAsset(): TreeRenderAsset {
   const outer = builder.atom(builder.root, relSig([IOTA]))
   const inner = builder.atom(cut, relSig([IOTA]))
   const reference = builder.ref(cut, 'Def', relSig([IOTA]))
+  builder.term(builder.root, lambda(bound(0)))
   builder.wire([
     { node: outer, port: { kind: 'arg', index: 0 } },
     { node: inner, port: { kind: 'arg', index: 0 } },
@@ -99,6 +101,7 @@ function kindColoredMaterials(): TreeMaterialSource {
     branch: '#ff0000',
     ring: '#00ff00',
     strand: '#0000ff',
+    lambda: '#ffaa00',
     pip: '#ff00ff',
     label: '#00ffff',
   } as const
@@ -190,7 +193,7 @@ describe('game tree representations', () => {
     }
     const raw = makeRawTreeObject(derived, representativePlacement, kindColoredMaterials())
     const full = makeBatchedTreeObject(derived, 'full', representativePlacement, kindColoredMaterials())
-    const expected = new Set(['ff0000', '00ff00', '0000ff', 'ff00ff', '00ffff'])
+    const expected = new Set(['ff0000', '00ff00', '0000ff', 'ffaa00', 'ff00ff', '00ffff'])
 
     expect(visibleColors(raw)).toEqual(expected)
     expect(visibleColors(full)).toEqual(expected)

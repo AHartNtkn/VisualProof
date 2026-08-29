@@ -1,6 +1,10 @@
 import type { NodeId, RegionId } from '../kernel/diagram/diagram'
 import type { DiagramSpec, SceneItem, Terminal } from './spec'
 import {
+  lambdaDiagram, lambdaOutlineRadius, type LambdaDiagram, type LambdaPlane,
+} from './lambda'
+import type { Term } from '../kernel/term/term'
+import {
   add3, cross3, dist3, dot3, len3, norm3, scale3, segSegDist, sub3, v3, type Vec3,
 } from './vec3'
 
@@ -36,10 +40,20 @@ export type PlacedRing = {
   radius: number
   anchors: Map<string, Vec3>
 }
+export type PlacedLambda = LambdaDiagram & {
+  node: NodeId
+  region: RegionId
+  term: Term
+  interfaceArity: number
+  center: Vec3
+  axis: Vec3
+  plane: LambdaPlane
+}
 export type TreeLayout = {
   regions: Map<RegionId, PlacedRegion>
   identityAnchor: Map<NodeId, Vec3>
   rings: Map<NodeId, PlacedRing>
+  lambdas: Map<NodeId, PlacedLambda>
   spheres: Map<RegionId, { center: Vec3; r: number }>
   anchorOf(t: Terminal): Vec3
 }
@@ -105,10 +119,15 @@ export function layoutTree(spec: DiagramSpec): TreeLayout {
     endpointCount.set(t.node, (endpointCount.get(t.node) ?? 0) + 1)
   }
   const portCountOf = (id: NodeId): number => spec.nodes.get(id)!.portKeys.length
+  const radiusOf = (id: NodeId): number => {
+    const n = spec.nodes.get(id)!
+    if (n.kind === 'term') return lambdaOutlineRadius(n.term!, n.interfaceArity!)
+    return ringRadius(portCountOf(id))
+  }
   const spacingOf = (id: NodeId): number => {
     const n = spec.nodes.get(id)!
     if (n.kind === 'identity') return 2 * DELTA + DELTA * (endpointCount.get(id) ?? 0)
-    return 2 * ringRadius(portCountOf(id)) + 2 * DELTA
+    return 2 * radiusOf(id) + 2 * DELTA
   }
 
   // ---- bottom-up summaries ----
@@ -138,13 +157,13 @@ export function layoutTree(spec: DiagramSpec): TreeLayout {
     // segment, or the sheet (which has no lead-in stem) collapses to a
     // point and vanishes from every non-empty diagram.
     const segLen = branchItems.length > 0 ? Math.max(acc, TIP_PAD) : acc + TIP_PAD
-    let maxRingR = 0
+    let maxNodeR = 0
     for (const item of rs.items) {
       if (item.kind === 'node' && spec.nodes.get(item.id)!.kind !== 'identity') {
-        maxRingR = Math.max(maxRingR, ringRadius(portCountOf(item.id)))
+        maxNodeR = Math.max(maxNodeR, radiusOf(item.id))
       }
     }
-    const corridorR = DELTA * (1 + spec.escapes.get(rid)!) + maxRingR
+    const corridorR = DELTA * (1 + spec.escapes.get(rid)!) + maxNodeR
 
     const ownCorridor: LCap = { a: v3(0, 0, 0), b: v3(0, 0, segLen), r: corridorR }
     const capsAt = (region: RegionId, tilt: number, azimuth: number, stem: number): LCap[] => {
@@ -278,6 +297,7 @@ export function layoutTree(spec: DiagramSpec): TreeLayout {
   const regions = new Map<RegionId, PlacedRegion>()
   const identityAnchor = new Map<NodeId, Vec3>()
   const rings = new Map<NodeId, PlacedRing>()
+  const lambdas = new Map<NodeId, PlacedLambda>()
   const spheres = new Map<RegionId, { center: Vec3; r: number }>()
   const nodePrimary = new Map<NodeId, Vec3>()
 
@@ -294,7 +314,13 @@ export function layoutTree(spec: DiagramSpec): TreeLayout {
       nodePrimary.set(item.id, pos)
       const n = spec.nodes.get(item.id)!
       if (n.kind === 'identity') identityAnchor.set(item.id, pos)
-      else rings.set(item.id, { node: item.id, center: pos, axis: dir, radius: ringRadius(n.portKeys.length), anchors: new Map() })
+      else if (n.kind === 'term') {
+        const term = n.term!, interfaceArity = n.interfaceArity!
+        const embedded = lambdaDiagram({ node: item.id, region: rid, term, interfaceArity, center: pos, tangent: dir })
+        lambdas.set(item.id, { node: item.id, region: rid, term, interfaceArity, center: pos, axis: dir, ...embedded })
+      } else {
+        rings.set(item.id, { node: item.id, center: pos, axis: dir, radius: ringRadius(n.portKeys.length), anchors: new Map() })
+      }
     }
     const n2 = norm3(cross3(dir, ref))
     for (const cp of s.children) {
@@ -349,10 +375,11 @@ export function layoutTree(spec: DiagramSpec): TreeLayout {
     const ia = identityAnchor.get(t.node)
     if (ia !== undefined) return ia
     const ring = rings.get(t.node)
-    if (ring === undefined) throw new Error(`layout: no anchor host for node ${t.node}`)
-    const a = ring.anchors.get(t.portKey)
+    const lambda = lambdas.get(t.node)
+    if (ring === undefined && lambda === undefined) throw new Error(`layout: no anchor host for node ${t.node}`)
+    const a = ring?.anchors.get(t.portKey) ?? lambda?.anchors.get(t.portKey)
     if (a === undefined) throw new Error(`layout: node ${t.node} has no port ${t.portKey}`)
     return a
   }
-  return { regions, identityAnchor, rings, spheres, anchorOf }
+  return { regions, identityAnchor, rings, lambdas, spheres, anchorOf }
 }

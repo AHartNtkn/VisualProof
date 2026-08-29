@@ -6,6 +6,13 @@ import { verifyTheory } from '../../src/kernel/proof/context'
 import { applicableActions } from '../../src/app/actions'
 import { identityInCut, tinyTheory, UNARY } from '../fixtures/zero-signature'
 import { segment } from './helpers/build'
+import {
+  convertToHeadNormal,
+  convertToNormal,
+  convertToWeakHeadNormal,
+} from '../../src/app/tactics'
+import { applyStep } from '../../src/kernel/proof/step'
+import { parseTerm } from '../../src/kernel/term/parse'
 
 const kinds = (
   diagram: Parameters<typeof applicableActions>[0],
@@ -206,5 +213,114 @@ describe('applicableActions', () => {
     })
     expect(kinds(diagram, positiveWire)).not.toContain('relationJoin')
     expect(kinds(diagram, positiveWire, true)).not.toContain('relationJoin')
+  })
+
+  it('offers conversion only for exactly one whole term node', () => {
+    const builder = new DiagramBuilder()
+    const term = builder.term(builder.root, parseTerm('(\\x. x) y').term, 1)
+    const ref = builder.ref(builder.root, 'UnaryWitness', UNARY)
+    const diagram = builder.build()
+    const termSelection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [term],
+      wires: [],
+    })
+    const mixedSelection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [term, ref],
+      wires: [],
+    })
+
+    expect(kinds(diagram, termSelection)).toContain('convert')
+    expect(kinds(diagram, termSelection, true)).toContain('convert')
+    expect(kinds(diagram, mixedSelection)).not.toContain('convert')
+  })
+})
+
+describe('Lambda conversion tactics', () => {
+  it.each([
+    {
+      name: 'normal',
+      source: 'f ((\\x. x) y)',
+      target: 'f y',
+      convert: convertToNormal,
+    },
+    {
+      name: 'head-normal',
+      source: '\\z. (\\x. x) y',
+      target: '\\z. y',
+      convert: convertToHeadNormal,
+    },
+    {
+      name: 'weak-head-normal',
+      source: '(\\x. x) y',
+      target: 'y',
+      convert: convertToWeakHeadNormal,
+    },
+  ])('emits a checked, replayable $name conversion', ({ source, target, convert }) => {
+    const builder = new DiagramBuilder()
+    const parsed = parseTerm(source)
+    const node = builder.term(
+      builder.root,
+      parsed.term,
+      parsed.freeIdentifiers.length,
+    )
+    const diagram = builder.build()
+    const context = verifyTheory(tinyTheory())
+
+    const tactic = convert(diagram, node, 64)
+    expect(tactic.step).toMatchObject({
+      rule: 'lambdaConversion',
+      node,
+      term: parseTerm(target).term,
+    })
+    expect(applyStep(diagram, tactic.step, context)).toEqual(tactic.diagram)
+  })
+
+  it('refuses exhausted and no-op normalization instead of committing unchecked output', () => {
+    const normalBuilder = new DiagramBuilder()
+    const normal = normalBuilder.term(normalBuilder.root, parseTerm('f0').term, 1)
+    const normalDiagram = normalBuilder.build()
+    expect(() => convertToNormal(normalDiagram, normal, 64)).toThrow(/already.*normal form/i)
+
+    const omegaBuilder = new DiagramBuilder()
+    const omega = omegaBuilder.term(
+      omegaBuilder.root,
+      parseTerm('(\\x. x x) (\\x. x x)').term,
+      0,
+    )
+    const omegaDiagram = omegaBuilder.build()
+    expect(() => convertToNormal(omegaDiagram, omega, 1)).toThrow(/fuel/i)
+  })
+
+  it('authors normalization from the free slots used by the reduct', () => {
+    const builder = new DiagramBuilder()
+    const parsed = parseTerm('(\\x. kept) discarded')
+    const node = builder.term(builder.root, parsed.term, parsed.freeIdentifiers.length)
+    const source = builder.build()
+    const discardedWire = Object.entries(source.wires).find(([, wire]) =>
+      wire.endpoints.some((endpoint) => (
+        endpoint.node === node
+        && endpoint.port.kind === 'free'
+        && endpoint.port.index === 1
+      )))![0]
+
+    const conversion = convertToNormal(source, node, 64)
+    const target = conversion.diagram.nodes[node]
+    const context = verifyTheory(tinyTheory())
+
+    expect(conversion.step.rule).toBe('lambdaConversion')
+    expect(applyStep(source, conversion.step, context)).toEqual(conversion.diagram)
+    expect(target?.kind).toBe('term')
+    if (target?.kind !== 'term') throw new Error('normalization lost the term node')
+    expect(target.freeArity).toBe(1)
+    expect(target.term).toEqual(parseTerm('kept').term)
+    expect(source.wires[discardedWire]!.endpoints).toHaveLength(2)
+    expect(conversion.diagram.wires[discardedWire]!.endpoints).toHaveLength(2)
+    expect(conversion.diagram.wires[discardedWire]!.endpoints.every((endpoint) => (
+      conversion.diagram.nodes[endpoint.node]?.kind === 'identity'
+    ))).toBe(true)
   })
 })

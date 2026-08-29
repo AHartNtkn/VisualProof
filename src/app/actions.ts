@@ -18,6 +18,7 @@ export type ActionDescriptor =
   | { readonly kind: 'vacuityDelete'; readonly label: string }
   | { readonly kind: 'iterate'; readonly label: string; readonly needsTarget: true }
   | { readonly kind: 'deiterate'; readonly label: string }
+  | { readonly kind: 'convert'; readonly label: string; readonly needsInput: 'term' }
   | { readonly kind: 'relUnfold'; readonly label: string }
   | { readonly kind: 'relFold'; readonly label: string; readonly needsInput: 'relation' }
   | { readonly kind: 'citeTheorem'; readonly label: string; readonly name: string; readonly direction: 'forward' | 'reverse' }
@@ -41,6 +42,19 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
   if (hasContent) {
     out.push({ kind: 'iterate', label: 'Iterate into…', needsTarget: true })
     out.push({ kind: 'deiterate', label: 'Deiterate (needs a justifying copy)' })
+  }
+
+  if (
+    sel.nodes.length === 1
+    && sel.regions.length === 0
+    && sel.wires.length === 0
+    && d.nodes[sel.nodes[0]!]?.kind === 'term'
+  ) {
+    out.push({
+      kind: 'convert',
+      label: 'Convert (βη)…',
+      needsInput: 'term',
+    })
   }
 
   // A single reference node unfolds when its relation is in scope. Unfold is a

@@ -2,6 +2,7 @@ import VisualProof.Rule.Completeness.Comprehension.Structural.Atom
 import VisualProof.Rule.Completeness.Comprehension.Structural.Blank
 import VisualProof.Rule.Completeness.Comprehension.Structural.Cut
 import VisualProof.Rule.Completeness.Comprehension.Structural.Identity
+import VisualProof.Rule.Completeness.Comprehension.Lambda.Structural.Term
 import VisualProof.Rule.Completeness.Comprehension.Structural.ParallelDerives
 import VisualProof.Rule.Completeness.Comprehension.Structural.Region
 
@@ -43,7 +44,7 @@ theorem supportPatternDerives
     (motive_3 := fun _ materialItems =>
       SupportDerives (Region.ofItems materialItems))
     supportRegionDerives supportAtomDerives supportIdentityDerives
-      supportCutDerives supportBlankDerives
+      LambdaTerm.Structural.supportTermDerives supportCutDerives supportBlankDerives
       supportParallelDerives material) materialCanonical evidence request
 end Structural
 

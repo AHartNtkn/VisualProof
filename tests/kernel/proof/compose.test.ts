@@ -13,6 +13,7 @@ import { composeActions, mapStepIds } from '../../../src/kernel/proof/compose'
 import { EMPTY_PROOF_CONTEXT } from '../../../src/kernel/proof/context'
 import type { ProofStep } from '../../../src/kernel/proof/step'
 import { bareWire } from '../../fixtures/pins'
+import { free } from '../../../src/kernel/term/term'
 
 function action(label: string, steps: readonly ProofStep[]): ProofAction {
   return { label, steps, placements: [] }
@@ -36,6 +37,31 @@ function asymmetricCopies() {
 }
 
 describe('composeActions', () => {
+  it('maps a Lambda term spawn region while preserving its nameless payload', () => {
+    const sourceBuilder = new DiagramBuilder()
+    const sourceRegion = sourceBuilder.cut(sourceBuilder.root)
+    const source = sourceBuilder.build()
+    const targetBuilder = new DiagramBuilder()
+    const targetRegion = targetBuilder.cut(targetBuilder.root)
+    const target = targetBuilder.build()
+    const iso = {
+      regions: new Map([[source.root, target.root], [sourceRegion, targetRegion]]),
+      nodes: new Map(),
+      wires: new Map(),
+    }
+    const step: ProofStep = {
+      rule: 'lambdaTermSpawn',
+      region: sourceRegion,
+      term: free(0),
+      freeArity: 1,
+    }
+
+    expect(mapStepIds(step, iso)).toEqual({
+      ...step,
+      region: targetRegion,
+    })
+  })
+
   it('rewrites a structural tail across a non-identity isomorphism', () => {
     const copies = asymmetricCopies()
     const tail = [action('wrap the atom', [{
@@ -435,6 +461,54 @@ describe('mapStepIds', () => {
     }, iso)).toEqual({
       rule: 'doubleCutElim',
       region: 'R1',
+    })
+  })
+
+  it('maps Lambda nodes and conversion attachment wires', () => {
+    expect(mapStepIds({
+      rule: 'lambdaConversion',
+      node: 'n0',
+      term: free(0),
+      correspondence: { commonArity: 1, left: [], right: [0] },
+      certificate: { leftSteps: [], rightSteps: [] },
+      attachments: { 0: 'w0' },
+    }, iso)).toEqual({
+      rule: 'lambdaConversion',
+      node: 'N0',
+      term: free(0),
+      correspondence: { commonArity: 1, left: [], right: [0] },
+      certificate: { leftSteps: [], rightSteps: [] },
+      attachments: { 0: 'W0' },
+    })
+    expect(mapStepIds({
+      rule: 'lambdaFreeVariableIdentity',
+      action: { direction: 'toTerm', node: 'n1', outputPort: 1 },
+    }, iso)).toEqual({
+      rule: 'lambdaFreeVariableIdentity',
+      action: { direction: 'toTerm', node: 'N1', outputPort: 1 },
+    })
+    expect(mapStepIds({
+      rule: 'lambdaFission', node: 'n0', path: ['argument'],
+    }, iso)).toEqual({
+      rule: 'lambdaFission', node: 'N0', path: ['argument'],
+    })
+    expect(mapStepIds({
+      rule: 'lambdaFusion', wire: 'w0',
+    }, iso)).toEqual({
+      rule: 'lambdaFusion', wire: 'W0',
+    })
+    expect(mapStepIds({
+      rule: 'lambdaAnchoredWireSplit',
+      wire: 'w0',
+      witness: 'n0',
+      endpoints: [{ node: 'n1', port: { kind: 'free', index: 0 } }],
+      target: 'r1',
+    }, iso)).toEqual({
+      rule: 'lambdaAnchoredWireSplit',
+      wire: 'W0',
+      witness: 'N0',
+      endpoints: [{ node: 'N1', port: { kind: 'free', index: 0 } }],
+      target: 'R1',
     })
   })
 

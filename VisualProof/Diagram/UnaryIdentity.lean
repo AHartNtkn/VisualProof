@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Scope
+import VisualProof.Diagram.Rename
 
 namespace VisualProof.Diagram
 
@@ -22,6 +22,27 @@ def pinWires :
       if selected (.here) then
         .cons (.identity _ 1 (fun _ => renameWires (.here))) tail
       else tail
+
+theorem pinWires_renameWires
+    (source : List Sig) (rename : WireRenaming source middle)
+    (next : WireRenaming middle target)
+    (selected : ∀ {signature}, Var source signature → Bool) :
+    (pinWires source rename selected).renameWires next =
+      pinWires source (WireRenaming.comp next rename) selected := by
+  induction source with
+  | nil => rfl
+  | cons signature tail induction =>
+      simp only [pinWires]
+      split
+      · simp only [ItemSeq.renameWires, Item.renameWires]
+        exact congrArg (ItemSeq.cons
+          (.identity signature 1
+            (fun _ => next (rename (.here : Var (signature :: tail)
+              signature)))))
+          (induction ⟨fun wire => rename (.there wire)⟩
+            (fun wire => selected (.there wire)))
+      · exact induction ⟨fun wire => rename (.there wire)⟩
+          (fun wire => selected (.there wire))
 
 /-- Whether one wire has any incidence in an item sequence. -/
 def usesWire (items : ItemSeq wires) (wire : Var wires signature) : Bool :=

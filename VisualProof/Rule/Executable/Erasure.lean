@@ -1,7 +1,7 @@
 import VisualProof.Rule.Erasure
 import VisualProof.Rule.Executable.WirePrimitive.Uniform
 
-namespace VisualProof.Rule.Erasure
+namespace VisualProof.Rule.UncappedErasure
 
 open Theory
 open Diagram
@@ -40,7 +40,7 @@ theorem forward_exact (source target : OpenDiagram boundary) :
     (∃ (index : ForwardIndex source) (output : OpenDiagram boundary),
       runForward source index = some output ∧
         OpenDiagram.Isomorphic output target) ↔
-      Rule.Erasure source target := by
+      Rule.UncappedErasure source target := by
   exact WirePrimitive.Executable.ComputedDirected.forward_exact family Local
     build view source target
 
@@ -48,8 +48,8 @@ theorem backward_exact (source target : OpenDiagram boundary) :
     (∃ (index : BackwardIndex source) (output : OpenDiagram boundary),
       runBackward source index = some output ∧
         OpenDiagram.Isomorphic output target) ↔
-      Rule.Erasure target source := by
+      Rule.UncappedErasure target source := by
   exact WirePrimitive.Executable.ComputedDirected.backward_exact family Local
     build view source target
 
-end VisualProof.Rule.Erasure
+end VisualProof.Rule.UncappedErasure

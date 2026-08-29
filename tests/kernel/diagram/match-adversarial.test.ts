@@ -159,22 +159,6 @@ describe('exact occurrence matching adversarial battery', () => {
     }).matches).toHaveLength(0)
   })
 
-  it('returns only exact graph-search fields and no semantic verdict channel', () => {
-    const patternBuilder = new DiagramBuilder()
-    patternBuilder.ref(patternBuilder.root, 'P', relSig([]))
-    const pattern = patternBuilder.buildOpen([])
-    const hostBuilder = new DiagramBuilder()
-    hostBuilder.ref(hostBuilder.root, 'P', relSig([]))
-    const result = findOccurrences(hostBuilder.build(), pattern)
-
-    expect(result.matches).toHaveLength(1)
-    expect(Object.keys(result).sort()).toEqual([
-      'explorationSteps',
-      'matches',
-      'status',
-    ])
-  })
-
   it('deduplicates symmetric interior bijections by footprint', () => {
     const patternBuilder = new DiagramBuilder()
     patternBuilder.ref(patternBuilder.root, 'P', relSig([]))

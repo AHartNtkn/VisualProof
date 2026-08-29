@@ -163,7 +163,7 @@ test('formula symbol palette sits below the source and inserts at the caret', as
   const source = dialog.getByLabel('Formula to diagram')
   const palette = dialog.getByRole('group', { name: 'Formula symbols' })
   await expect(palette.getByRole('button')).toHaveText([
-    '∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔',
+    '∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔', 'λ',
   ])
 
   const sourceBox = await source.boundingBox()

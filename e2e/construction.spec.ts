@@ -11,6 +11,7 @@ type Debug = {
   wireBinds(): { id: string; node: string; x: number; y: number }[]
   interactionOverlays(): string[]
   interaction(): { selected: readonly Hit[] }
+  editJson(): string
   diagram(): {
     nodes: { id: string; kind: string; region: string }[]
     wires: { id: string; scope: string; endpoints: number }[]
@@ -69,6 +70,54 @@ async function spawnRef(
 async function waitForNodes(page: Page, count: number): Promise<void> {
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(count)
 }
+
+test('the empty-region cascade spawns a Lambda term with one unary cap per incidence', async ({ page, theoryFiles }) => {
+  await openApp(page, theoryFiles)
+  const box = await canvasBox(page)
+  await page.mouse.click(box.x + box.width * 0.55, box.y + box.height * 0.52, {
+    button: 'right',
+  })
+  const cascade = page.locator('.vpa-spawn-cascade')
+  const lambdaRow = cascade.getByRole('button', { name: 'Lambda expression', exact: true })
+  await expect(lambdaRow).toBeVisible()
+  await lambdaRow.click()
+  const input = page.getByLabel('Lambda term to spawn')
+  await input.fill('(\\x. x) a')
+  await input.press('Enter')
+
+  await waitForNodes(page, 3)
+  const stored = await page.evaluate(() => JSON.parse(window.__vpaDebug!.editJson()) as {
+    nodes: Record<string, { kind: string; arity?: number; freeArity?: number; term?: string }>
+    wires: Record<string, {
+      sig: { kind: string }
+      endpoints: { node: string; port: string }[]
+    }>
+  })
+  const termEntry = Object.entries(stored.nodes).find(([, node]) => node.kind === 'term')
+  expect(termEntry).toBeDefined()
+  const [termId, term] = termEntry!
+  const caps = Object.entries(stored.nodes)
+    .filter(([, node]) => node.kind === 'identity' && node.arity === 1)
+  expect(term.term).toBe('A(L(B(0)),F(0))')
+  expect(term.freeArity).toBe(1)
+  expect(caps).toHaveLength(2)
+  expect(Object.keys(stored.nodes)).toHaveLength(3)
+  expect(Object.values(stored.wires)).toHaveLength(2)
+  for (const wire of Object.values(stored.wires)) {
+    expect(wire.sig).toEqual({ kind: 'iota' })
+    expect(wire.endpoints).toHaveLength(2)
+    expect(wire.endpoints.some((endpoint) => endpoint.node === termId)).toBe(true)
+    expect(wire.endpoints.some((endpoint) => (
+      caps.some(([capId]) => endpoint.node === capId)
+      && endpoint.port === 'i:0'
+    ))).toBe(true)
+  }
+  expect(Object.values(stored.wires)
+    .flatMap((wire) => wire.endpoints)
+    .filter((endpoint) => endpoint.node === termId)
+    .map((endpoint) => endpoint.port)
+    .sort()).toEqual(['f:0', 'out'])
+})
 
 test('the structural spawn cascade is disposable and preserves selection', async ({ page, theoryFiles }) => {
   await openApp(page, theoryFiles)

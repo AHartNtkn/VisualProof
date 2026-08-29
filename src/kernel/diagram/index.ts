@@ -1,5 +1,5 @@
 export type {
-  RegionId, NodeId, WireId, Region, IdentityDiagramNode, DiagramNode, Port,
+  RegionId, NodeId, WireId, Region, IdentityDiagramNode, TermDiagramNode, DiagramNode, Port,
   Endpoint, Wire, Diagram, DiagramParts,
 } from './diagram'
 export {
@@ -17,7 +17,7 @@ export { mkDiagramWithBoundary, boundaryArity } from './boundary'
 export type { DiagramIso } from './canonical/iso'
 export { diagramIso, sameDiagram } from './canonical/iso'
 export type { SubgraphSelection, SelectionContents } from './subgraph/selection'
-export { mkSelection, selectionContents } from './subgraph/selection'
+export { mkSelection, orphanedWires, selectionContents } from './subgraph/selection'
 export type { Extraction } from './subgraph/extract'
 export { extractSubgraph } from './subgraph/extract'
 export { removeSubgraph, spliceSubgraph } from './subgraph/splice'

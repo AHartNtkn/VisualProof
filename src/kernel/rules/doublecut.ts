@@ -12,6 +12,7 @@ import { RuleError } from './error'
  */
 function reparent(n: DiagramNode, region: RegionId): DiagramNode {
   switch (n.kind) {
+    case 'term': return { kind: 'term', region, term: n.term, freeArity: n.freeArity }
     case 'atom': return { kind: 'atom', region, sig: n.sig }
     case 'ref': return { kind: 'ref', region, defId: n.defId, sig: n.sig }
     case 'identity':

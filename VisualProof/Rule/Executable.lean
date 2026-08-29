@@ -5,5 +5,6 @@ import VisualProof.Rule.Executable.DoubleCut
 import VisualProof.Rule.Executable.Vacuity
 import VisualProof.Rule.Executable.Presentation
 import VisualProof.Rule.Executable.Identification
+import VisualProof.Rule.Executable.Lambda
 import VisualProof.Rule.Executable.WirePrimitive
 import VisualProof.Rule.Executable.Step

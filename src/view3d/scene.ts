@@ -3,6 +3,7 @@ import { diagramSpec } from './spec'
 import { CLEARANCE, UNIT, layoutTree, type TreeLayout } from './layout'
 import { steinerNet } from './steiner'
 import { routeAll, type Capsule, type NetIn } from './route3'
+import type { LambdaEntity } from './lambda'
 import { add3, anyPerp, cross3, dist3, dot3, len3, norm3, scale3, sub3, v3, type Vec3 } from './vec3'
 
 export const RING_SEGMENTS = 32
@@ -22,6 +23,7 @@ export type Entity =
   | { kind: 'ring'; key: string; node: NodeId; headWire: WireId | null; pts: Vec3[] }
   | { kind: 'label'; key: string; node: NodeId; text: string; pos: Vec3 }
   | { kind: 'strand'; key: string; wire: WireId; pts: Vec3[] }
+  | LambdaEntity
 export type Scene3 = { entities: Entity[]; center: Vec3; radius: number }
 
 function ringPolyline(tl: TreeLayout, node: NodeId): Vec3[] {
@@ -70,6 +72,13 @@ export function scene3(d: Diagram): Scene3 {
       })
     }
   }
+  for (const [node, lambda] of tl.lambdas) {
+    for (const stroke of lambda.strokes) {
+      for (let i = 1; i < stroke.pts.length; i++) {
+        tree.push({ a: stroke.pts[i - 1]!, b: stroke.pts[i]!, r: 0, g: `lambda:${node}` })
+      }
+    }
+  }
 
   const nets: NetIn[] = []
   for (const w of spec.wires) {
@@ -109,6 +118,8 @@ export function scene3(d: Diagram): Scene3 {
       const term = w.terminals[t]!
       const ring = tl.rings.get(term.node)
       if (ring !== undefined) return norm3(sub3(anchors[t]!, ring.center))
+      const lambda = tl.lambdas.get(term.node)
+      if (lambda !== undefined) return norm3(sub3(anchors[t]!, lambda.center))
       const pr = tl.regions.get(spec.nodes.get(term.node)!.region)!
       let cen = v3(0, 0, 0)
       let n = 0
@@ -179,6 +190,7 @@ export function scene3(d: Diagram): Scene3 {
   for (const [node, pts] of ringPts) {
     entities.push({ kind: 'ring', key: `r:${node}`, node, headWire: headWireOf.get(node) ?? null, pts })
   }
+  for (const lambda of tl.lambdas.values()) entities.push(...lambda.strokes)
   for (const [nid, n] of spec.nodes) {
     if (n.label === null) continue
     const ring = tl.rings.get(nid)!

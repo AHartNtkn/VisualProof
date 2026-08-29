@@ -20,6 +20,7 @@ import {
 import { relSig, IOTA } from '../../kernel/diagram/sig'
 import { buildSelection, wireManipulationHitTest, type Hit } from '../hittest'
 import { ConnectionDragController } from './connection'
+import { FissionDragController, type FissionRequest } from './fission'
 import { CopyDragController } from './copy'
 import { copyDestinationPreview, copySelectionPreview } from './copy-view'
 import {
@@ -48,6 +49,7 @@ export type ConstructOptions = {
   readonly selection: () => readonly Hit[]
   readonly setSelection: (selection: readonly Hit[]) => void
   readonly commit: (diagram: Diagram) => void
+  readonly commitFission: (request: FissionRequest) => void
   readonly refuse: (text: string, pointer?: Vec2) => void
   readonly setProblem: (problemId: string, text: string) => void
   readonly clearProblem: (problemId: string) => void
@@ -77,6 +79,7 @@ export class ConstructController {
   readonly #options: ConstructOptions
   readonly #identity: IdentityOpsController
   readonly #connection: ConnectionDragController
+  readonly #fission: FissionDragController
   readonly #copy: CopyDragController | null
   readonly #slash: SlashController
   #preview: Preview | null = null
@@ -167,6 +170,15 @@ export class ConstructController {
       },
       refuse: options.refuse,
     })
+    this.#fission = new FissionDragController({
+      active: options.active,
+      diagram: options.diagram,
+      engine: options.engine,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      commit: options.commitFission,
+      refuse: (text, pointer) => options.refuse(text, pointer),
+    })
     this.#copy = options.copy === undefined ? null : new CopyDragController({
       active: options.active,
       sourceDiagram: options.diagram,
@@ -187,6 +199,7 @@ export class ConstructController {
   /** Track the hovered world point for pointer-located keyboard actions. */
   passiveSample(sample: PointerSample | null): void {
     this.#lastWorld = sample === null ? null : sample.world
+    this.#fission.hover(this.#copy?.dragging === true ? null : sample)
   }
 
   claim(sample: PointerSample): PointerClaim | null {
@@ -198,6 +211,8 @@ export class ConstructController {
     if (identity !== null) return identity
     const connection = this.#connection.claim(sample)
     if (connection !== null) return connection
+    const fission = this.#fission.claim(sample)
+    if (fission !== null) return fission
     const selected = this.#options.selection()
     const copy = this.#copy?.claim(sample) ?? null
     if (copy !== null) return copy
@@ -262,12 +277,13 @@ export class ConstructController {
     }
     if (sample.key === 'Escape') {
       this.#identity.cancel()
+      const cancelledFission = this.#fission.cancel()
       this.#copy?.cancel()
       if (this.#prompt !== null) {
         this.#closePrompt()
         return true
       }
-      return false
+      return cancelledFission
     }
     return false
   }
@@ -276,6 +292,7 @@ export class ConstructController {
     const connection = [
       ...this.#identity.overlay(),
       ...this.#connection.overlay(),
+      ...this.#fission.overlay(),
       ...(this.#copy?.overlay() ?? []),
       ...this.#slash.overlay(),
     ]
@@ -294,10 +311,14 @@ export class ConstructController {
     this.#closePrompt()
     this.#identity.cancel()
     this.#connection.cancel()
+    this.#fission.dispose()
     this.#copy?.dispose()
   }
 
-  modifiersChanged(ctrlHeld: boolean): void { this.#copy?.modifiersChanged(ctrlHeld) }
+  modifiersChanged(ctrlHeld: boolean): void {
+    this.#fission.modifiersChanged(ctrlHeld)
+    this.#copy?.modifiersChanged(ctrlHeld)
+  }
 
   #placementClaim(node: NodeId): PointerClaim {
     const state: PlacementState = {

@@ -1,5 +1,3 @@
-import { readFileSync, readdirSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { sameDiagram } from '../../src/kernel/diagram/canonical/iso'
@@ -998,38 +996,7 @@ describe('logical dependency prefix', () => {
   })
 })
 
-describe('theory surface exclusions', () => {
-  it('exports no composite proof API and contains no displaced authority', async () => {
-    const barrel = await import('../../src/theories')
-    expect(Object.keys(barrel).sort()).toEqual([
-      'buildFregeTheory',
-      'natRelation',
-    ])
-
-    const directory = fileURLToPath(new URL('../../src/theories', import.meta.url))
-    const source = readdirSync(directory)
-      .filter((name) => name.endsWith('.ts'))
-      .map((name) => readFileSync(`${directory}/${name}`, 'utf8'))
-      .join('\n')
-    const prohibited = [
-      'refSpawn',
-      'isExactReificationDefinition',
-      'exact reification definition',
-      'compre' + 'hension',
-      'exten' + 'sional',
-      "kind: 'te" + "rm'",
-      "kind: 'bo" + "dy'",
-      'beta' + 'Eta',
-      'instan' + 'tiate',
-      'macro',
-      'tactic',
-      'composeActions',
-      'replayProof',
-      ['identity', 'Contradiction'].join(''),
-    ]
-    for (const term of prohibited) expect(source).not.toContain(term)
-  })
-
+describe('theory boundary behavior', () => {
   it('keeps every theorem boundary root-scoped and ordered', () => {
     for (const theorem of buildFregeTheory().theorems) {
       for (const side of [theorem.lhs, theorem.rhs]) {

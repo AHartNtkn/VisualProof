@@ -13,6 +13,8 @@ import type { DiagramWithBoundary } from './boundary'
 import { mkDiagramWithBoundary } from './boundary'
 import type { RelSig, Sig } from './sig'
 import { IOTA } from './sig'
+import type { Term } from '../term/term'
+import { freeArity } from '../term/term'
 
 /**
  * Incremental construction with deterministic region, node, and wire IDs.
@@ -49,6 +51,12 @@ export class DiagramBuilder {
   ref(region: RegionId, defId: string, sig: RelSig): NodeId {
     const id = `n${this.nodeCount++}`
     this.nodes[id] = { kind: 'ref', region, defId, sig }
+    return id
+  }
+
+  term(region: RegionId, term: Term, interfaceArity: number = freeArity(term)): NodeId {
+    const id = `n${this.nodeCount++}`
+    this.nodes[id] = { kind: 'term', region, term, freeArity: interfaceArity }
     return id
   }
 

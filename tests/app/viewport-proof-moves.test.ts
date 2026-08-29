@@ -150,6 +150,7 @@ function createHarness(
       currentEngine = mkEngine(currentDiagram, [])
       carryOver(previous, currentEngine)
     },
+    commitFission: () => undefined,
     refuse: (text) => { refusals.push(text) },
     theme: () => LIGHT,
     fuel: () => 0,

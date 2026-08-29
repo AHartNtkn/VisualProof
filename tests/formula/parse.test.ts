@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { IOTA, relSig } from '../../src/kernel/diagram/sig'
+import { parseTerm } from '../../src/kernel/term'
 import { parseFormula } from '../../src/formula/parse'
 import {
   FORMULA_UNICODE_SYMBOLS,
@@ -29,20 +30,20 @@ function expectAtom(formula: Formula, name: string, args: readonly string[]): vo
   expect(formula.kind).toBe('atom')
   if (formula.kind !== 'atom') throw new Error('expected atom')
   expect(formula.name).toBe(name)
-  expect(formula.args).toEqual(args)
+  expect(formula.args.map((argument) => argument.kind === 'reference' ? argument.name : argument.kind)).toEqual(args)
 }
 
 function expectEquality(formula: Formula, operands: readonly string[]): void {
   expect(formula.kind).toBe('equality')
   if (formula.kind !== 'equality') throw new Error('expected equality')
-  expect(formula.operands).toEqual(operands)
+  expect(formula.operands.map((operand) => operand.kind === 'reference' ? operand.name : operand.kind)).toEqual(operands)
   expect(Object.isFrozen(formula.operands)).toBe(true)
 }
 
 describe('parseFormula', () => {
   it('publishes every accepted Unicode formula symbol in reading order', () => {
     expect(FORMULA_UNICODE_SYMBOLS.map(({ symbol }) => symbol))
-      .toEqual(['∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔'])
+      .toEqual(['∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔', 'λ'])
   })
 
   it('parses the typed Unicode example with grouped individual binders', () => {
@@ -126,6 +127,49 @@ describe('parseFormula', () => {
     expect(formula.kind).toBe('quantifier')
     if (formula.kind !== 'quantifier') throw new Error('expected quantifier')
     expectEquality(formula.body, ['x', 'y'])
+  })
+
+  it('accepts lambda terms as proposition operands', () => {
+    expect(parseFormula('forall P : i -> o. P(λx. x)').kind).toBe('quantifier')
+
+    const formula = parseFormula('(\\x. x) = (\\y. y)')
+    expect(formula.kind).toBe('equality')
+    if (formula.kind !== 'equality') throw new Error('expected equality')
+    const [left, right] = formula.operands
+    expect(left.kind).toBe('term')
+    expect(right.kind).toBe('term')
+    if (left.kind !== 'term' || right.kind !== 'term') throw new Error('expected term operands')
+    expect(left.parsed.term).toEqual(right.parsed.term)
+
+    const application = parseFormula('forall P : i -> o. forall f x. P(f x)')
+    expect(application.kind).toBe('quantifier')
+    if (application.kind !== 'quantifier' || application.body.kind !== 'quantifier') {
+      throw new Error('expected nested quantifiers')
+    }
+    expect(application.body.body.kind).toBe('atom')
+    if (application.body.body.kind !== 'atom') throw new Error('expected atom')
+    expect(application.body.body.args[0]?.kind).toBe('term')
+  })
+
+  it('accepts a closed lambda term with a primed binder', () => {
+    const formula = parseFormula("forall P : i -> o. P(λx'. x')")
+
+    expect(formula.kind).toBe('quantifier')
+    if (formula.kind !== 'quantifier' || formula.body.kind !== 'atom') {
+      throw new Error('expected quantified atom')
+    }
+    const operand = formula.body.args[0]
+    expect(operand?.kind).toBe('term')
+    if (operand?.kind !== 'term') throw new Error('expected term operand')
+    expect(operand.parsed.term).toEqual(parseTerm('\\x. x').term)
+    expect(operand.parsed.freeIdentifiers).toEqual([])
+  })
+
+  it('requires every term free identifier to resolve to an enclosing individual binding', () => {
+    expect(() => parseFormula('forall P : i -> o. P(λx. x missing)'))
+      .toThrow(/unbound term identifier 'missing'/i)
+    expect(() => parseFormula('forall P : i -> o. forall Q : i -> o. P(λx. x Q)'))
+      .toThrow(/term identifier 'Q' must have signature i/i)
   })
 
   it('parses chained equality into one immutable operand list', () => {

@@ -13,6 +13,9 @@ import {
   startTrack,
   undoTrack,
 } from '../../src/app/session'
+import { proofTermSpawnStep } from '../../src/app/interact/proof-spawn'
+import { convertToNormal } from '../../src/app/tactics'
+import { parseTerm } from '../../src/kernel/term/parse'
 import { tinyTheory } from '../fixtures/zero-signature'
 
 function emptyOrigin() {
@@ -43,5 +46,33 @@ describe('proof sessions over structural graphs', () => {
     const session = startSession(origin, origin, verifyTheory(tinyTheory()))
     expect(session.forward.cursor).toBe(0)
     expect(session.backward.cursor).toBe(0)
+  })
+
+  it('undoes and redoes Lambda spawning and normalization as exact proof actions', () => {
+    const builder = new DiagramBuilder()
+    const region = builder.cut(builder.root)
+    const origin = mkDiagramWithBoundary(builder.build(), [])
+    const ctx = verifyTheory(tinyTheory())
+    let track = applyTrack(startTrack(origin, 'forward', ctx), singleStepAction(
+      'Lambda expression',
+      proofTermSpawnStep(parseTerm('(\\x. x) a'), region),
+      [{ introducedNode: 0, x: 60, y: 90 }],
+    ))
+    const spawned = currentTrack(track)
+    const entry = Object.entries(spawned.nodes).find(([, node]) => node.kind === 'term')
+    if (entry === undefined) throw new Error('Lambda session fixture has no term node')
+    track = applyTrack(track, singleStepAction(
+      'Normalize Lambda term',
+      convertToNormal(spawned, entry[0], 64).step,
+    ))
+
+    const normalized = currentTrack(track)
+    const undone = undoTrack(track)
+    const redone = redoTrack(undone)
+    expect(track.timeline.actions.map((action) => action.steps.map((step) => step.rule)))
+      .toEqual([['lambdaTermSpawn'], ['lambdaConversion']])
+    expect(currentTrack(undone)).toBe(spawned)
+    expect(currentTrack(redone)).toBe(normalized)
+    expect(declareTrack(redone, 'LambdaHistory').actions).toHaveLength(2)
   })
 })

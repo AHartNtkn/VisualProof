@@ -614,7 +614,7 @@ def exposureDescriptionWithHost
     (pattern : OpenDiagram arguments)
     (hostLocals : List Sig) (hostItems : ItemSeq (outer ++ hostLocals))
     (ports : Vars (outer ++ hostLocals) arguments) :
-    Rule.Erasure.Description outer where
+    Rule.UncappedErasure.Description outer where
   materialWires := arguments
   hostLocals := hostLocals
   hostItems := hostItems
@@ -630,7 +630,7 @@ theorem exposureDescriptionWithHost_source
       Region.adjoinAt hostLocals hostItems
         (VisualProof.Rule.Comprehension.Instantiation.instantiate
           pattern ports) := by
-  simp only [Rule.Erasure.Description.source,
+  simp only [Rule.UncappedErasure.Description.source,
     exposureDescriptionWithHost, Region.spliceAt]
   rw [instantiate_renameWires, formalPorts_map_substitution]
 
@@ -829,6 +829,10 @@ mutual
         ⟨Region.singleton (.identity signature arity ports),
           VisualProof.Rule.Comprehension.Instantiation.ItemResult.identity
             signature arity ports⟩
+    | .term output freeArity ports term =>
+        ⟨Region.singleton (.term output freeArity ports term),
+          VisualProof.Rule.Comprehension.Instantiation.ItemResult.term
+            output freeArity ports term⟩
     | .cut childSites =>
         let childOutput := normalizedRegion pattern _ childSites
         ⟨Region.singleton (.cut childOutput.1),
@@ -886,6 +890,7 @@ mutual
     | .atom _ _ => false
     | .selectedAtom _ _ => true
     | .identity _ _ _ => false
+    | .term _ _ _ _ => false
     | .cut childSites => regionHasSelection childSites
   termination_by structural sites
 end
@@ -969,6 +974,7 @@ mutual
     | .selectedAtom _ _ => by
         simp only [itemHasSelection, Bool.true_eq_false] at none
     | .identity _ _ _ => rfl
+    | .term _ _ _ _ => rfl
     | @ItemSites.cut _ _ _ _ _ _ _ _ body childResult childEvidence
         childSites => by
         change Region.singleton
@@ -1131,6 +1137,15 @@ mutual
         change ScopePreservation
           (Region.singleton (.identity signature arity ports))
           (Region.singleton (.identity signature arity ports))
+        exact {
+          canonical := fun canonical => canonical
+          incidenceNonempty := fun _ => Iff.rfl
+          rootedTwo := fun _ rooted => rooted
+        }
+    | .term output freeArity ports term => by
+        change ScopePreservation
+          (Region.singleton (.term output freeArity ports term))
+          (Region.singleton (.term output freeArity ports term))
         exact {
           canonical := fun canonical => canonical
           incidenceNonempty := fun _ => Iff.rfl

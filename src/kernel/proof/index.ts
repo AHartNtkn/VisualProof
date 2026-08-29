@@ -12,6 +12,7 @@ export {
   replayProof,
   transportBoundary,
 } from './step'
+export { deiterationStep, erasureStep } from './selection-step'
 export {
   EMPTY_PROOF_CONTEXT, assertProofContext, extendRelations, registerTheorem, verifyTheory,
 } from './context'

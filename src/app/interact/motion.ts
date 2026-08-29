@@ -1,6 +1,22 @@
-import type { Engine } from '../../view/engine'
-import type { Shape, Theme } from '../../view/paint'
+import { ascaleOf, type Engine } from '../../view/engine'
+import type { ProofAction } from '../../kernel/proof/action'
+import {
+  sampleBetaMotion,
+  type LambdaMotionPlan,
+  type LambdaStrokeFrame,
+} from '../../view/lambda-motion'
+import {
+  paint as paintDiagram,
+  paintWires,
+  type LambdaPaintTransform,
+  type Shape,
+  type Theme,
+} from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
+import {
+  lambdaMotionFromAction,
+  type LambdaMotionTransition,
+} from '../../view/lambda-transition'
 
 export type MotionPreferences = {
   speed: number
@@ -36,13 +52,28 @@ export type MotionDebugState = {
   readonly ghosts: number
   readonly pulses: number
   readonly hover: number
+  readonly beta: null | {
+    readonly node: string | null
+  }
 }
 
 type Ghost = { readonly pos: Vec2; readonly discR: number; readonly start: number }
 type Pulse = { readonly id: string; readonly start: number }
+type ActiveBeta = {
+  readonly plan: LambdaMotionPlan
+  readonly baseColor: string
+  readonly node: string | null
+  readonly direction: 'forward' | 'reverse'
+  readonly sourceEngine: Engine | null
+  readonly targetEngine: Engine | null
+  frame: LambdaStrokeFrame
+  semanticProgress: number
+  startedAt: number | null
+}
 
 const GHOST_MS = 320
 const PULSE_MS = 450
+const BETA_MS = 1000 / 0.48
 
 const withAlpha = (color: string, alpha: number): string => {
   const byte = Math.max(0, Math.min(255, Math.round(alpha * 255))).toString(16).padStart(2, '0')
@@ -50,9 +81,10 @@ const withAlpha = (color: string, alpha: number): string => {
 }
 
 /**
- * Paint-only motion for whole-diagram replacements. Proof actions commit
- * synchronously; this coordinator only remembers outgoing ghosts, incoming
- * pulses, and hover easing.
+ * Paint-only motion for synchronously committed proof actions. Generic swaps
+ * retain outgoing ghosts and incoming pulses; an exact one-step beta
+ * conversion additionally owns the structural frame sampled by the live 2D
+ * painter until cancellation or settlement.
  */
 export class MotionCoordinator {
   readonly #options: MotionCoordinatorOptions
@@ -60,22 +92,38 @@ export class MotionCoordinator {
   #pulses: Pulse[] = []
   #hoverKey: string | null = null
   #hoverSince = 0
+  #beta: ActiveBeta | null = null
   #disposed = false
 
   constructor(options: MotionCoordinatorOptions) {
     this.#options = options
   }
 
-  observeSwap(before: Engine, after: Engine, now: number): void {
-    if (!this.#options.preferences().transitionGhosts || this.#disposed) return
-    for (const [id, body] of before.bodies) {
-      if (!after.bodies.has(id)) {
-        this.#ghosts.push({ pos: { ...body.pos }, discR: body.discR * before.scale, start: now })
+  observeSwap(
+    before: Engine,
+    after: Engine,
+    now: number,
+    action?: ProofAction,
+    direction: 'forward' | 'reverse' = 'forward',
+  ): LambdaMotionTransition | null {
+    if (this.#disposed) return null
+    if (this.#options.preferences().transitionGhosts) {
+      for (const [id, body] of before.bodies) {
+        if (!after.bodies.has(id)) {
+          this.#ghosts.push({ pos: { ...body.pos }, discR: body.discR * before.scale, start: now })
+        }
+      }
+      for (const id of after.bodies.keys()) {
+        if (!before.bodies.has(id)) this.#pulses.push({ id, start: now })
       }
     }
-    for (const id of after.bodies.keys()) {
-      if (!before.bodies.has(id)) this.#pulses.push({ id, start: now })
-    }
+    const transition = action === undefined
+      ? null
+      : lambdaMotionFromAction(before.d, after.d, action, direction)
+    this.#beta = transition === null
+      ? null
+      : this.#betaFromTransition(before, after, transition, now)
+    return transition
   }
 
   overlays(now: number): readonly Shape[] {
@@ -130,11 +178,59 @@ export class MotionCoordinator {
     return duration === 0 ? 1 : Math.max(0, Math.min(1, (now - this.#hoverSince) / duration))
   }
 
+  #sampleBeta(progress: number): LambdaStrokeFrame | null {
+    if (this.#beta === null) return null
+    this.#beta.startedAt = null
+    this.#beta.semanticProgress = this.#semanticProgress(
+      this.#beta.direction,
+      progress,
+    )
+    this.#beta.frame = this.#frameAt(
+      this.#beta.plan,
+      this.#beta.baseColor,
+      this.#beta.direction,
+      progress,
+    )
+    return this.#beta.frame
+  }
+
+  /** Pointer-driven timeline sampling uses the active structural plan verbatim. */
+  scrubBeta(progress: number): LambdaStrokeFrame | null {
+    return this.#sampleBeta(progress)
+  }
+
+  /** The live 2D render path replaces the active term's static anatomy. */
+  paint(now = performance.now()): Shape[] {
+    this.#advanceBeta(now)
+    const active = this.#beta
+    const frames = active?.node === null || active === null
+      ? new Map<string, LambdaStrokeFrame>()
+      : new Map([[active.node, active.frame]])
+    const transform = active === null ? null : this.#paintTransform(active)
+    const transforms = active?.node === null || active === null || transform === null
+      ? new Map<string, LambdaPaintTransform>()
+      : new Map([[active.node, transform]])
+    return paintDiagram(
+      this.#options.engine(),
+      this.#options.theme(),
+      paintWires,
+      frames,
+      transforms,
+    )
+  }
+
+  #settleBeta(): void {
+    this.#beta = null
+  }
+
   debugState(now: number): MotionDebugState {
     return {
       ghosts: this.#ghosts.length,
       pulses: this.#pulses.length,
       hover: this.hoverFraction(now),
+      beta: this.#beta === null
+        ? null
+        : { node: this.#beta.node },
     }
   }
 
@@ -142,10 +238,101 @@ export class MotionCoordinator {
     this.#ghosts = []
     this.#pulses = []
     this.#hoverKey = null
+    this.#beta = null
   }
 
   dispose(): void {
     this.cancel()
     this.#disposed = true
+  }
+
+  #advanceBeta(now: number): void {
+    const active = this.#beta
+    if (active === null || active.startedAt === null) return
+    const elapsed = Math.max(0, now - active.startedAt)
+    const progress = Math.min(
+      1,
+      elapsed / (BETA_MS / this.#options.preferences().speed),
+    )
+    active.frame = this.#frameAt(
+      active.plan,
+      active.baseColor,
+      active.direction,
+      progress,
+    )
+    active.semanticProgress = this.#semanticProgress(active.direction, progress)
+    if (progress >= 1) this.#settleBeta()
+  }
+
+  #betaFromTransition(
+    before: Engine,
+    after: Engine,
+    transition: LambdaMotionTransition,
+    now: number,
+  ): ActiveBeta {
+    const { direction, node, plan } = transition
+    const sourceEngine = direction === 'forward' ? before : after
+    const targetEngine = direction === 'forward' ? after : before
+    return {
+      plan,
+      baseColor: this.#options.theme().wire,
+      node,
+      direction,
+      sourceEngine,
+      targetEngine,
+      frame: this.#frameAt(
+        plan,
+        this.#options.theme().wire,
+        direction,
+        0,
+      ),
+      semanticProgress: direction === 'forward' ? 0 : 1,
+      startedAt: now,
+    }
+  }
+
+  #frameAt(
+    plan: LambdaMotionPlan,
+    baseColor: string,
+    direction: 'forward' | 'reverse',
+    presentationProgress: number,
+  ): LambdaStrokeFrame {
+    const semanticProgress = this.#semanticProgress(direction, presentationProgress)
+    return sampleBetaMotion(plan, semanticProgress, baseColor)
+  }
+
+  #semanticProgress(
+    direction: 'forward' | 'reverse',
+    presentationProgress: number,
+  ): number {
+    return direction === 'forward' ? presentationProgress : 1 - presentationProgress
+  }
+
+  #paintTransform(active: ActiveBeta): LambdaPaintTransform | null {
+    if (active.node === null || active.sourceEngine === null || active.targetEngine === null) return null
+    const source = active.sourceEngine.bodies.get(active.node)
+    const target = active.targetEngine.bodies.get(active.node)
+    if (source?.kind !== 'term' || target?.kind !== 'term') return null
+    const start = active.plan.times.liftEnd
+    const end = active.plan.times.spaceEnd
+    const reflow = end === start
+      ? 1
+      : smoothstep((active.semanticProgress - start) / (end - start))
+    const angleDelta = Math.atan2(
+      Math.sin(target.theta - source.theta),
+      Math.cos(target.theta - source.theta),
+    )
+    const mix = (from: number, to: number): number => from + (to - from) * reflow
+    return {
+      center: {
+        x: mix(source.pos.x, target.pos.x),
+        y: mix(source.pos.y, target.pos.y),
+      },
+      theta: source.theta + angleDelta * reflow,
+      scale: mix(
+        ascaleOf(source.kind) * active.sourceEngine.scale,
+        ascaleOf(target.kind) * active.targetEngine.scale,
+      ),
+    }
   }
 }

@@ -1,9 +1,11 @@
 import { IOTA, relSig, sigEquals, type Sig } from '../kernel/diagram/sig'
+import { ParseError, parseTerm, type ParsedTerm } from '../kernel/term'
 import {
   FORMULA_UNICODE_SYMBOLS,
   FormulaError,
   type Formula,
   type FormulaBinder,
+  type FormulaOperand,
   type FormulaUnicodeTokenKind,
   type SourceSpan,
 } from './syntax'
@@ -30,7 +32,7 @@ function tokenize(source: string): readonly Token[] {
 
     if (/[A-Za-z_]/u.test(character)) {
       index += 1
-      while (index < source.length && /[A-Za-z0-9_]/u.test(source[index]!)) index += 1
+      while (index < source.length && /[A-Za-z0-9_']/u.test(source[index]!)) index += 1
       const text = source.slice(start, index)
       tokens.push({ kind: text === 'forall' ? 'forall' : text === 'exists' ? 'exists' : 'identifier', text, start, end: index })
       continue
@@ -43,6 +45,12 @@ function tokenize(source: string): readonly Token[] {
       continue
     }
 
+    if (character === 'λ') {
+      index += 1
+      tokens.push({ kind: 'lambda', text: character, start, end: index })
+      continue
+    }
+
     const unicode = FORMULA_UNICODE_SYMBOLS.find(({ symbol }) => symbol === character)
     if (unicode !== undefined) {
       index += 1
@@ -52,6 +60,7 @@ function tokenize(source: string): readonly Token[] {
 
     const oneCharacterTokens: Readonly<Record<string, TokenKind>> = {
       '&': 'and',
+      '\\': 'lambda',
       '(': '(',
       ')': ')',
       ',': ',',
@@ -77,16 +86,16 @@ function frozenSpan(start: number, end: number): SourceSpan {
   return Object.freeze({ start, end })
 }
 
-function frozenAtom(name: string, args: readonly string[], start: number, end: number): Formula {
+function frozenAtom(name: string, args: readonly FormulaOperand[], start: number, end: number): Formula {
   return Object.freeze({ kind: 'atom', name, args: Object.freeze([...args]), span: frozenSpan(start, end) })
 }
 
 function frozenEquality(
-  operands: readonly [string, string, ...string[]],
+  operands: readonly [FormulaOperand, FormulaOperand, ...FormulaOperand[]],
   start: number,
   end: number,
 ): Formula {
-  const frozenOperands: readonly [string, string, ...string[]] = Object.freeze([
+  const frozenOperands: readonly [FormulaOperand, FormulaOperand, ...FormulaOperand[]] = Object.freeze([
     operands[0],
     operands[1],
     ...operands.slice(2),
@@ -180,6 +189,7 @@ export function parseFormula(source: string): Formula {
   function parsePrimary(): Formula {
     const token = peek()
     if (token.kind === 'forall' || token.kind === 'exists') return parseQuantifier()
+    if (hasTopLevelEquality()) return parseEquality()
     if (token.kind === '(') {
       take()
       const formula = parseBiconditional()
@@ -189,27 +199,13 @@ export function parseFormula(source: string): Formula {
     if (token.kind !== 'identifier') throw new FormulaError(source, token.start, 'expected a formula')
 
     const head = take()
-    if (peek().kind === '=') {
-      take()
-      const right = expect('identifier', 'an equality operand')
-      const operands: [string, string, ...string[]] = [head.text, right.text]
-      let end = right.end
-      while (peek().kind === '=') {
-        take()
-        const operand = expect('identifier', 'an equality operand')
-        operands.push(operand.text)
-        end = operand.end
-      }
-      return frozenEquality(operands, head.start, end)
-    }
-    const args: string[] = []
+    const args: FormulaOperand[] = []
     let end = head.end
     if (peek().kind === '(') {
       take()
       if (peek().kind !== ')') {
         do {
-          const argument = expect('identifier', 'an argument name')
-          args.push(argument.text)
+          args.push(parseOperand(new Set([',', ')'])))
           if (peek().kind !== ',') break
           take()
         } while (true)
@@ -217,6 +213,74 @@ export function parseFormula(source: string): Formula {
       end = expect(')', "')'").end
     }
     return frozenAtom(head.text, args, head.start, end)
+  }
+
+  function hasTopLevelEquality(): boolean {
+    let depth = 0
+    for (let index = current; index < tokens.length; index += 1) {
+      const kind = tokens[index]!.kind
+      if (kind === '(') depth += 1
+      else if (kind === ')') {
+        if (depth === 0) return false
+        depth -= 1
+      } else if (depth === 0) {
+        if (kind === '=') return true
+        if (kind === 'and' || kind === 'or' || kind === 'implies' || kind === 'iff' || kind === 'eof') return false
+      }
+    }
+    return false
+  }
+
+  function parseEquality(): Formula {
+    const stops = new Set<TokenKind>(['=', 'and', 'or', 'implies', 'iff', ')', 'eof'])
+    const first = parseOperand(stops)
+    expect('=', "'='")
+    const second = parseOperand(stops)
+    const operands: [FormulaOperand, FormulaOperand, ...FormulaOperand[]] = [first, second]
+    while (peek().kind === '=') {
+      take()
+      operands.push(parseOperand(stops))
+    }
+    return frozenEquality(operands, first.span.start, operands[operands.length - 1]!.span.end)
+  }
+
+  function parseOperand(stops: ReadonlySet<TokenKind>): FormulaOperand {
+    const first = peek()
+    if (stops.has(first.kind)) throw new FormulaError(source, first.start, 'expected an operand')
+    let depth = 0
+    let last: Token | undefined
+    while (true) {
+      const token = peek()
+      if (depth === 0 && stops.has(token.kind)) break
+      if (token.kind === 'eof') throw new FormulaError(source, token.start, "expected ')'")
+      if (token.kind === '(') depth += 1
+      if (token.kind === ')') {
+        if (depth === 0) break
+        depth -= 1
+      }
+      last = take()
+    }
+    if (depth !== 0) throw new FormulaError(source, peek().start, "expected ')'")
+    if (last === undefined) throw new FormulaError(source, first.start, 'expected an operand')
+    const span = frozenSpan(first.start, last.end)
+    if (first === last && first.kind === 'identifier') {
+      return Object.freeze({ kind: 'reference', name: first.text, span })
+    }
+    const termSource = source.slice(first.start, last.end).replaceAll('λ', '\\')
+    let parsed: ParsedTerm
+    try {
+      const value = parseTerm(termSource)
+      parsed = Object.freeze({
+        term: value.term,
+        freeIdentifiers: Object.freeze([...value.freeIdentifiers]),
+      })
+    } catch (caught) {
+      if (caught instanceof ParseError) {
+        throw new FormulaError(source, first.start + caught.position, caught.message.replace(/ at position \d+$/u, ''))
+      }
+      throw caught
+    }
+    return Object.freeze({ kind: 'term', parsed, span })
   }
 
   function parseQuantifier(): Formula {
@@ -292,16 +356,10 @@ export function parseFormula(source: string): Formula {
         return
       }
       case 'equality': {
-        const [firstName, ...remainingNames] = formula.operands
-        const first = environment.get(firstName)
-        if (first === undefined) {
-          throw new FormulaError(source, formula.span.start, `unbound equality operand '${firstName}'`)
-        }
-        for (const name of remainingNames) {
-          const candidate = environment.get(name)
-          if (candidate === undefined) {
-            throw new FormulaError(source, formula.span.start, `unbound equality operand '${name}'`)
-          }
+        const [firstOperand, ...remainingOperands] = formula.operands
+        const first = validateOperand(firstOperand, environment, 'equality operand')
+        for (const operand of remainingOperands) {
+          const candidate = validateOperand(operand, environment, 'equality operand')
           if (!sigEquals(first, candidate)) {
             throw new FormulaError(source, formula.span.start, 'equality operands must have the same signature')
           }
@@ -316,15 +374,39 @@ export function parseFormula(source: string): Formula {
           throw new FormulaError(source, formula.span.start, `application '${formula.name}' has arity ${formula.args.length}, expected ${head.args.length}`)
         }
         for (let index = 0; index < formula.args.length; index += 1) {
-          const argumentName = formula.args[index]!
-          const argument = environment.get(argumentName)
-          if (argument === undefined) throw new FormulaError(source, formula.span.start, `unbound argument name '${argumentName}'`)
+          const operand = formula.args[index]!
+          const argument = validateOperand(operand, environment, 'argument name')
           if (!sigEquals(argument, head.args[index]!)) {
-            throw new FormulaError(source, formula.span.start, `argument '${argumentName}' does not match the expected signature`)
+            const label = operand.kind === 'reference' ? `'${operand.name}'` : 'term'
+            throw new FormulaError(source, operand.span.start, `argument ${label} does not match the expected signature`)
           }
         }
       }
     }
+  }
+
+  function validateOperand(
+    operand: FormulaOperand,
+    environment: ReadonlyMap<string, Sig>,
+    role: 'argument name' | 'equality operand',
+  ): Sig {
+    if (operand.kind === 'reference') {
+      const signature = environment.get(operand.name)
+      if (signature === undefined) {
+        throw new FormulaError(source, operand.span.start, `unbound ${role} '${operand.name}'`)
+      }
+      return signature
+    }
+    for (const identifier of operand.parsed.freeIdentifiers) {
+      const signature = environment.get(identifier)
+      if (signature === undefined) {
+        throw new FormulaError(source, operand.span.start, `unbound term identifier '${identifier}'`)
+      }
+      if (!sigEquals(signature, IOTA)) {
+        throw new FormulaError(source, operand.span.start, `term identifier '${identifier}' must have signature i`)
+      }
+    }
+    return IOTA
   }
 
   const formula = parseBiconditional()

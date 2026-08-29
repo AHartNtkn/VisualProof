@@ -217,6 +217,11 @@ mutual
         (signature : Sig) (arity : Nat)
         (ports : Fin arity → Var common signature) :
         ItemGuard polarity frame (.identity signature arity ports)
+    | term
+        (output : Var common .iota) (freeArity : Nat)
+        (ports : Fin freeArity → Var common .iota)
+        (term : Lambda.Term 0 (Fin freeArity)) :
+        ItemGuard polarity frame (.term output freeArity ports term)
     | cut
         (bodyEdit : Transform.RegionEdit (operation arguments)
           frame PUnit.unit body)
@@ -268,6 +273,8 @@ mutual
         | .negative => none
     | .selectedPin ports selected => some (.selectedPin ports selected)
     | .identity signature arity ports => some (.identity signature arity ports)
+    | .term output freeArity ports term =>
+        some (.term output freeArity ports term)
     | .cut bodyEdit =>
         match RegionGuard.build (flip polarity) bodyEdit with
         | some bodyGuard => some (.cut bodyEdit bodyGuard)
