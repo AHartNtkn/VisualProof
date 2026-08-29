@@ -19,6 +19,8 @@ export type WorldInput = {
   sample(): CameraMotion
   engage(): Promise<void>
   release(): void
+  suspend(): void
+  resume(): void
   dispose(): void
 }
 
@@ -51,11 +53,13 @@ export function attachWorldInput(
   environment: { readonly window: Window; readonly document: Document } = { window, document },
 ): WorldInput {
   const held = new Set<string>()
+  const blockedUntilUp = new Set<string>()
   const disposers: Array<() => void> = []
   let lookX = 0
   let lookY = 0
   let gestureActive = false
   let gestureRelativeDistance = 0
+  let suspended = false
 
   const clear = (): void => {
     held.clear()
@@ -90,9 +94,17 @@ export function attachWorldInput(
       void requestWorldEngagement(target).catch(() => actions.engagementChanged(false))
       return
     }
+    if (suspended) {
+      blockedUntilUp.add(event.code)
+      return
+    }
+    if (blockedUntilUp.has(event.code)) return
     held.add(event.code)
   }) as EventListener
-  const up = ((event: KeyboardEvent): void => { held.delete(event.code) }) as EventListener
+  const up = ((event: KeyboardEvent): void => {
+    held.delete(event.code)
+    blockedUntilUp.delete(event.code)
+  }) as EventListener
   const mouseMove = ((event: MouseEvent): void => {
     if (environment.document.pointerLockElement === target) {
       lookX += event.movementX
@@ -168,9 +180,22 @@ export function attachWorldInput(
     release: () => {
       if (environment.document.pointerLockElement === target) environment.document.exitPointerLock()
     },
-    dispose: () => {
+    suspend: () => {
+      suspended = true
+      for (const code of held) blockedUntilUp.add(code)
       abortPointer()
       clear()
+      if (environment.document.pointerLockElement === target) environment.document.exitPointerLock()
+    },
+    resume: () => {
+      clear()
+      suspended = false
+    },
+    dispose: () => {
+      suspended = true
+      abortPointer()
+      clear()
+      blockedUntilUp.clear()
       for (const dispose of disposers.splice(0)) dispose()
     },
   }

@@ -53,6 +53,22 @@ function treeValues(trees: ReadonlyMap<string, GameTree>): readonly {
 }
 
 describe('game tool session', () => {
+  it('rejects deriving a deliverable proposition from a cutting whose tree has changed', () => {
+    // Catches delivery citing the tree snapshot captured by a stale cutting.
+    const session = gameSession(worldWithTree('large', largeDiagram).trees)
+    const source = session.trees.get('large')!
+    const cutting = completeBranchCutting(source, source.snapshot.diagram.root)
+    const changed = session.planDoubleCut({
+      treeId: 'large',
+      entity: { kind: 'branch', key: 'root', region: source.snapshot.diagram.root, polarity: 0, pts: [] },
+      distance: 12,
+    })
+    session.commit(session.prepare(changed))
+
+    expect(() => session.propositionForDelivery(cutting)).toThrow(/changed since cutting was taken/)
+    expect(session.trees.get('large')).toBe(changed.after)
+  })
+
   it('plans a complete tree mutation without publishing it', () => {
     const session = gameSession(worldWithTree('large', largeDiagram).trees)
     const before = session.trees.get('large')!

@@ -32,7 +32,6 @@ import { SaveWriter } from '../src/game/save-writer'
 import { gameSession, publishTreeChange, ToolError, type GameSession, type TreeChange } from '../src/game/session'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
 import { completeBranchCutting, ToolState } from '../src/game/tools'
-import { libraryProposition } from '../src/kernel/proof/library'
 import {
   mountCatalog,
   renderEquippedItem,
@@ -171,6 +170,7 @@ function closeCatalog(requestEngagement: boolean): void {
   catalog?.hide()
   catalogView = null
   mirrorCatalog()
+  input?.resume()
   if (!requestEngagement || input === null) return
   void input.engage().catch(() => {
     freeActive = false
@@ -401,10 +401,7 @@ function applySecondaryAction(clientX: number, clientY: number): void {
     if (target === null) throw new ToolError('Iteration requires a branch, ground, or pot within reach.')
     if (target.kind === 'pot') {
       if (cutting.kind !== 'whole') throw new ToolError('delivery requires a whole tree cutting')
-      const mutation = activeOrders.planDelivery(
-        target.orderId,
-        libraryProposition(cutting.sourceTree.id, cutting.sourceTree.snapshot.diagram),
-      )
+      const mutation = activeOrders.planDelivery(target.orderId, activeSession.propositionForDelivery(cutting))
       publishOrderMutation(
         activeOrders,
         mutation,
@@ -579,7 +576,7 @@ async function startWorld(world: GameWorld): Promise<void> {
           return
         }
         catalogView = displayCameraPose(activeCamera)
-        activeInput.release()
+        activeInput.suspend()
         freeActive = false
         activeCatalog.show(activeOrders.progress, catalogView)
         mirrorCatalog()

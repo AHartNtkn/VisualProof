@@ -3,6 +3,7 @@ import { citeLibraryProposition, type LibraryProposition } from '../../kernel/pr
 import { DiagramBuilder } from '../../kernel/diagram/builder'
 import {
   ORDER_CATALOG,
+  MAX_REPUTATION,
   type OrderDefinition,
   type OrderProgress,
   type OrderState,
@@ -157,6 +158,9 @@ export class OrderSession {
     definitionFor(orderId)
     const state = stateFor(this.progress, orderId)
     if (state.kind !== 'pending') throw new OrderError(`order '${orderId}' must be pending to accept`)
+    if (![pot.x, pot.z, pot.yaw].every(Number.isFinite)) {
+      throw new OrderError('order pot placement must use finite coordinates')
+    }
     return {
       kind: 'accept',
       orderId,
@@ -187,6 +191,9 @@ export class OrderSession {
     const delivered = citeLibraryProposition(blank, source, blank.root)
     if (!sameDiagram(delivered, definition.goal.diagram)) {
       throw new OrderError(`delivered proposition does not match order '${orderId}'`)
+    }
+    if (this.progress.reputation > MAX_REPUTATION - definition.reward) {
+      throw new OrderError('order reward would exceed the maximum reputation')
     }
     return {
       kind: 'complete',

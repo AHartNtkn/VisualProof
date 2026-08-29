@@ -117,6 +117,12 @@ export class GameSession {
     return { kind: 'insert', treeId, after }
   }
 
+  public propositionForDelivery(cutting: IterationCutting) {
+    this.requireCurrentCutting(cutting)
+    if (cutting.kind !== 'whole') throw new ToolError('delivery requires a whole tree cutting')
+    return libraryProposition(cutting.sourceTree.id, cutting.sourceTree.snapshot.diagram)
+  }
+
   public prepare(change: TreeChange): PreparedSessionCommit {
     if (this.prepared !== null) throw new ToolError('tree change publication is already prepared')
     if (change.treeId !== change.after.id) {

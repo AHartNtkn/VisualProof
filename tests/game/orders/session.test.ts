@@ -3,6 +3,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { libraryProposition } from '../../../src/kernel/proof/library'
 import {
+  MAX_REPUTATION,
   ORDER_CATALOG,
   STARTER_ORDER_ID,
 } from '../../../src/game/orders/catalog'
@@ -38,6 +39,43 @@ describe('starter order catalog', () => {
 })
 
 describe('order session lifecycle', () => {
+  it('rejects non-finite pot placement before planning any live acceptance', () => {
+    // Catches invalid placement values entering live order state before the save boundary rejects them.
+    const session = freshSession()
+    for (const pot of [
+      { x: Number.NaN, z: 0, yaw: 0 },
+      { x: 0, z: Number.POSITIVE_INFINITY, yaw: 0 },
+      { x: 0, z: 0, yaw: Number.NEGATIVE_INFINITY },
+    ]) {
+      expect(() => session.planAccept(STARTER_ORDER_ID, pot)).toThrow(/finite/i)
+      expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'pending' })
+    }
+  })
+
+  it('rejects a completion that would exceed the wire reputation range before publication', () => {
+    // Catches live completion and durable enqueue occurring for a reputation the wire cannot represent.
+    const progress = initialOrderProgress(ORDER_CATALOG)
+    const session = orderSession({ ...progress, reputation: MAX_REPUTATION })
+    const accepted = session.planAccept(STARTER_ORDER_ID, acceptedPot)
+    session.commit(session.prepare(accepted))
+    const effects: string[] = []
+
+    expect(() => {
+      const completion = session.planDelivery(
+        STARTER_ORDER_ID,
+        libraryProposition('source', starter.goal.diagram),
+      )
+      publishOrderMutation(session, completion, {
+        prepareOrderChange() { effects.push('renderer-prepare'); return {} },
+        commitOrderChange() { effects.push('renderer-commit') },
+        discardOrderChange() { effects.push('renderer-discard') },
+      }, () => { effects.push('save-accept') })
+    }).toThrow(/reputation/i)
+    expect(effects).toEqual([])
+    expect(session.progress.reputation).toBe(MAX_REPUTATION)
+    expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'accepted', pot: acceptedPot })
+  })
+
   it('accepts the pending starter order at the chosen pot placement', () => {
     // Catches acceptance that mutates before commit or loses the placement.
     const session = freshSession()

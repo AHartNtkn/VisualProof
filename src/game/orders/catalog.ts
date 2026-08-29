@@ -35,6 +35,7 @@ const starterGoal = snapshotFromDiagram(applyDoubleCutIntro(blank, {
 }))
 
 export const STARTER_ORDER_ID = 'starter-double-cut'
+export const MAX_REPUTATION = Number.MAX_SAFE_INTEGER
 
 export const ORDER_CATALOG: readonly OrderDefinition[] = Object.freeze([Object.freeze({
   id: STARTER_ORDER_ID,

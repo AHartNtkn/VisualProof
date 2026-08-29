@@ -91,6 +91,32 @@ function createHarness(): {
 }
 
 describe('world input sampling', () => {
+  it('suspends orbit movement while the catalog is open and clears held keys again on resume', () => {
+    // Catches orbit-mode catalog interaction leaving movement active behind the catalog,
+    // or replaying a key held while the catalog was open after it closes.
+    const { windowTarget, input } = createHarness()
+    windowTarget.dispatchEvent(event('keydown', { code: 'KeyW' }))
+    input.suspend()
+    expect(input.sample()).toEqual({
+      forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
+    })
+
+    windowTarget.dispatchEvent(event('keydown', { code: 'KeyD' }))
+    input.resume()
+    windowTarget.dispatchEvent(event('keydown', { code: 'KeyW', repeat: true }))
+    windowTarget.dispatchEvent(event('keydown', { code: 'KeyD', repeat: true }))
+    expect(input.sample()).toEqual({
+      forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
+    })
+
+    windowTarget.dispatchEvent(event('keyup', { code: 'KeyW' }))
+    windowTarget.dispatchEvent(event('keyup', { code: 'KeyD' }))
+    windowTarget.dispatchEvent(event('keydown', { code: 'KeyA' }))
+    expect(input.sample()).toEqual({
+      forward: 0, strafe: -1, vertical: 0, sprint: false, lookX: 0, lookY: 0,
+    })
+  })
+
   it('does not apply a secondary action after relative drag at fixed client coordinates', () => {
     // Catches composition deciding stationarity from client displacement alone.
     let secondaryActions = 0

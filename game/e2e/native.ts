@@ -1,6 +1,7 @@
 import { $, browser, expect } from '@wdio/globals'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import { validateNativeSlotId } from './slot-id'
 
 export type DisplayPose = {
   readonly eye: { readonly x: number; readonly y: number; readonly z: number }
@@ -137,10 +138,11 @@ export async function clickWorld(x = 0, y = 0): Promise<void> {
 }
 
 function storedDatabase(slotId: string): DatabaseSync {
+  const validatedSlotId = validateNativeSlotId(slotId)
   const dataRoot = process.env['GAME_E2E_DATA_ROOT']
   if (dataRoot === undefined) throw new Error('GAME_E2E_DATA_ROOT is required for save inspection')
   return new DatabaseSync(
-    join(dataRoot, 'com.visualproofassistant.orchard', 'saves', `${slotId}.sqlite3`),
+    join(dataRoot, 'com.visualproofassistant.orchard', 'saves', `${validatedSlotId}.sqlite3`),
     { readOnly: true },
   )
 }

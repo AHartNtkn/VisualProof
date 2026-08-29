@@ -1,6 +1,6 @@
 import type { DiagramSnapshot } from './diagram-snapshot'
 import { snapshotFromJson } from './diagram-snapshot'
-import { ORDER_CATALOG, type OrderProgress, type OrderState } from './orders/catalog'
+import { MAX_REPUTATION, ORDER_CATALOG, type OrderProgress, type OrderState } from './orders/catalog'
 
 export type CameraPose = {
   readonly position: { readonly x: number; readonly y: number; readonly z: number }
@@ -68,7 +68,7 @@ function array(value: unknown, what: string): readonly unknown[] {
 }
 
 function nonnegativeSafeInteger(value: unknown, what: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > MAX_REPUTATION) {
     throw new Error(`${what} must be a nonnegative safe integer`)
   }
   return value

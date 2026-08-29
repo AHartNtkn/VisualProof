@@ -45,6 +45,8 @@ CREATE TABLE orders (
 );
 ";
 
+const MAX_REPUTATION: i64 = 9_007_199_254_740_991;
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CameraRecord {
@@ -332,7 +334,9 @@ impl SaveStore {
                 |row| row.get(0),
             )
             .map_err(|_| SaveStoreError::InvalidStructure)?;
-        if table_row_count(&connection, "progress")? != 1 || reputation < 0 {
+        if table_row_count(&connection, "progress")? != 1
+            || !(0..=MAX_REPUTATION).contains(&reputation)
+        {
             return Err(SaveStoreError::InvalidStructure);
         }
         let orders = query_orders(&connection)?;
@@ -500,7 +504,7 @@ impl SaveStore {
             [order_id],
         )?;
         if changed == 1 {
-            let reward_limit = i64::MAX - reward;
+            let reward_limit = MAX_REPUTATION - reward;
             if transaction.execute(
                 "UPDATE progress SET reputation = reputation + ?1
                  WHERE singleton = 1 AND reputation <= ?2",
@@ -695,7 +699,7 @@ fn query_reputation(connection: &Connection) -> Result<i64> {
             |row| row.get(0),
         )
         .map_err(|_| SaveStoreError::InvalidStructure)?;
-    if reputation < 0 {
+    if !(0..=MAX_REPUTATION).contains(&reputation) {
         Err(SaveStoreError::InvalidStructure)
     } else {
         Ok(reputation)
@@ -734,7 +738,7 @@ fn validate_input(input: &CreateSlotInput) -> Result<()> {
     for tree in &input.trees {
         validate_tree_numbers(tree.x, tree.z, tree.yaw)?;
     }
-    if input.reputation < 0 {
+    if !(0..=MAX_REPUTATION).contains(&input.reputation) {
         return Err(SaveStoreError::InvalidStructure);
     }
     let mut order_ids = std::collections::HashSet::new();
@@ -1502,6 +1506,61 @@ mod tests {
             Err(SaveStoreError::TimestampOverflow)
         ));
         assert_eq!(store.load(&slot_id).unwrap(), before);
+    }
+
+    // This catches reputation bounds that use Rust's integer range instead of the JSON safe range.
+    #[test]
+    fn completion_rejects_javascript_unsafe_reputation_and_rolls_back_the_order() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = SaveStore::new(temp.path().to_path_buf());
+        let slot_id = store.create(basic_input()).unwrap().slot_id;
+        store
+            .accept_order(
+                &slot_id,
+                "starter-double-cut",
+                PotPlacementRecord {
+                    x: 3.0,
+                    z: -6.0,
+                    yaw: 0.5,
+                },
+            )
+            .unwrap();
+        let path = temp.path().join(format!("{slot_id}.sqlite3"));
+        Connection::open(path)
+            .unwrap()
+            .execute(
+                "UPDATE progress SET reputation = ?1 WHERE singleton = 1",
+                [9_007_199_254_740_991_i64],
+            )
+            .unwrap();
+        let before = store.load(&slot_id).unwrap();
+
+        assert!(matches!(
+            store.complete_order(&slot_id, "starter-double-cut", 1),
+            Err(SaveStoreError::ReputationOverflow)
+        ));
+        assert_eq!(store.load(&slot_id).unwrap(), before);
+    }
+
+    // This catches i64::MAX reaching the wire through an existing save or an idempotent completion.
+    #[test]
+    fn rejects_direct_i64_max_reputation_on_load() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = SaveStore::new(temp.path().to_path_buf());
+        let slot_id = store.create(basic_input()).unwrap().slot_id;
+        let path = temp.path().join(format!("{slot_id}.sqlite3"));
+        Connection::open(path)
+            .unwrap()
+            .execute(
+                "UPDATE progress SET reputation = ?1 WHERE singleton = 1",
+                [i64::MAX],
+            )
+            .unwrap();
+
+        assert!(matches!(
+            store.load(&slot_id),
+            Err(SaveStoreError::InvalidStructure)
+        ));
     }
 
     #[test]

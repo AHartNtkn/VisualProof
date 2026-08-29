@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { decodeLoadedSlot } from './model'
 import type { GameWorld } from './model'
 import type { GameTree } from './model'
-import { ORDER_CATALOG, type OrderProgress, type PotPlacement } from './orders/catalog'
+import { MAX_REPUTATION, ORDER_CATALOG, type OrderProgress, type PotPlacement } from './orders/catalog'
 
 export type { PotPlacement } from './orders/catalog'
 
@@ -165,7 +165,7 @@ function assertCatalogOrderIds(orderIds: Iterable<string>, what: string): void {
 }
 
 function nonnegativeSafeInteger(value: unknown, what: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > MAX_REPUTATION) {
     throw new Error(`${what} must be a nonnegative safe integer`)
   }
   return value
