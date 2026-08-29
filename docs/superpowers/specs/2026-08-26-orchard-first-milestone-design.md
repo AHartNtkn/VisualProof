@@ -163,26 +163,35 @@ LOD and residency.
 
 ## Camera and Input
 
-Loading initializes one tagged camera state from the saved free-flight pose.
-Free flight begins disengaged with a centered “Click to play” prompt. A world
-click requests Pointer Lock and consumes that click without moving the camera.
-While engaged, a center reticle replaces the pointer; mouse motion changes yaw
-and pitch, `W`/`S` move horizontally forward and back, `A`/`D` strafe,
-`Space`/`Control` move vertically, and `Shift` triples free-flight speed.
+Loading initializes navigation from the saved free-flight pose. Free flight
+begins inactive with a centered “Click to play” prompt. Successful engagement
+activates mouse look and the movement keys: `W`/`S` move horizontally forward
+and back, `A`/`D` strafe, `Space`/`Control` move vertically, and `Shift` triples
+speed. Losing engagement, focus, or visibility deactivates free flight and
+clears transient input without changing the saved pose or loaded world.
 
-An engaged primary click targets the center of the view and enters orbit on a
-tree hit. Orbit stores the exact initiating free pose, releases Pointer Lock,
-shows the ordinary pointer, ignores mouse motion, and maps `A`/`D`, `W`/`S`, and
-`Space`/`Control` to rotation, distance, and height. `Escape` restores the exact
-stored free pose and leaves input disengaged. Secondary click has no camera or
-tree effect.
+An active primary click targets the center of the view and selects a hit tree.
+Selection stores the exact initiating free pose and enters the same 3D
+proof-tree interaction used by the assistant. That shared interaction owns
+orbit, pan, zoom, component focus, click classification, and focus glide. A
+stationary secondary release applies the orchard proof action to the selected
+branch without changing the camera or navigation mode; secondary movement
+remains the shared pan gesture.
 
-The camera module is the only camera-mode, pose, and save-pose authority. The
-renderer owns targeting and presentation only. The input adapter owns browser
-listeners, held keys, accumulated relative deltas, and Pointer Lock delegation
-only. The composition root owns one instance of each, samples input once per
-frame, advances the pure camera state, renders its display pose, and persists
-its free pose even while orbiting. Pointer Lock is not camera state or persisted
+`Escape` in the shared tree interaction restores the exact stored free pose and
+requests free-flight engagement during that same physical key event. Successful
+engagement permits immediate movement and look without another interaction;
+rejection leaves inactive free flight and shows the ordinary engagement prompt.
+`Escape` in free flight remains available to the browser's engagement-release
+behavior.
+
+Game camera state owns free/selected mode and the exact free-flight save pose.
+The shared interaction owns the selected-tree display pose. The renderer owns
+targeting and presentation only. The input adapter owns browser listeners, held
+keys, accumulated relative deltas, and relative-input engagement requests only.
+The composition root owns one instance of each, samples input once per frame,
+advances free flight, renders the current display pose, and persists the free
+pose while a tree is selected. Browser engagement is not camera or persisted
 state. Rejection or loss preserves the loaded world and camera, clears transient
 input, and provides no fallback gesture or control mode.
 
@@ -258,9 +267,10 @@ The native application is built and driven on an isolated desktop display
 through the start menu. Tests:
 
 - reject blank orchard names and report unreadable saves;
-- load the one-large-tree save, engage free flight, move and look, enter and
-  control orbit, ignore secondary click, restore the exact free pose with
-  `Escape`, and persist the later free pose without changing the tree;
+- load the one-large-tree save, engage free flight, move and look, select a
+  tree, exercise the shared interaction, apply the secondary proof action
+  without changing the camera, restore the exact free pose with `Escape`, move
+  immediately without another interaction, and persist the later free pose;
 - load each stress-count save through the normal menu and wait for
   representation residency and settled frame sampling; compare Game and Raw
   telemetry only at the representative 10- and 2,000-tree endpoints;

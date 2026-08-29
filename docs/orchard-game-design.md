@@ -30,22 +30,32 @@ Loading an orchard restores its saved free-flight pose and waits for a world
 click before accepting movement. That click engages cursorless relative input;
 while engaged, mouse motion changes yaw and pitch, `W`/`S` move forward and
 back, `A`/`D` strafe, `Space`/`Control` move vertically, and `Shift` sprints. A
-small center reticle is the aim point. When free flight is disengaged, the world
+small center reticle is the aim point. When free flight is inactive, the world
 shows only “Click to play.”
 
-A primary click while engaged orbits the tree under the reticle. Orbit restores
-the ordinary pointer, ignores mouse motion, uses `A`/`D` to rotate, `W`/`S` to
-change distance, and `Space`/`Control` to change height. `Escape` restores the
-exact pre-orbit free pose and leaves free flight disengaged. Secondary click has
-no camera or tree effect.
+A primary click while free flight is active selects the tree under the reticle
+and enters the same 3D proof-tree interaction used by the assistant. The
+orchard supplies the selected tree and its world placement; it defines no
+separate orbit, pan, zoom, component-focus, click-threshold, or focus-glide
+rules. `Escape` restores the exact pre-selection free-flight pose and requests
+free-flight input again during that same key interaction, so play resumes
+without another click when engagement succeeds.
 
-The pure camera state is the sole free/orbit and persisted-pose authority. The
-renderer owns tree targeting and display only, the input adapter owns browser
-listeners and transient motion only, and the composition root samples input
-once per frame. Saves always receive the stored free-flight pose, including
-while orbiting. Pointer Lock is only the relative-input transport: rejection or
-loss leaves the loaded world and camera state unchanged, clears transient input,
-and exposes no fallback control path.
+The secondary proof action is orchard application behavior composed beside the
+shared 3D interaction. A stationary secondary release applies the proof move to
+the selected branch; secondary movement remains the shared interaction's pan.
+The proof action does not change the camera or navigation mode. A successful
+move publishes one complete tree value to the live session and renderer and
+queues that same value for saving.
+
+Game camera state owns free/selected mode and the exact free-flight pose. The
+shared 3D interaction owns the selected-tree camera pose. The renderer owns
+targeting and render projections, the input adapter owns browser listeners and
+transient samples, and the composition root samples input once per frame.
+Saves always receive the stored free-flight pose while a tree is selected.
+Relative-input engagement is transport only: rejection or loss leaves the
+loaded world and camera state unchanged, clears transient input, and exposes no
+parallel control path.
 
 ## Progression and economy
 
@@ -66,10 +76,10 @@ No runtime puzzle generation, ever — it has been investigated repeatedly and d
 
 ## Tech
 
-- **Codebase:** an isolated branch of the VisualProofAssistant repo, sharing `src/kernel` and `src/view3d`, merged-into as those improve; full separation into its own repo later. The proof assistant itself is an investigation platform with no maintenance obligation.
+- **Codebase:** an isolated branch of the VisualProofAssistant repo that directly consumes the shared `src/kernel` and `src/view3d` authorities; full separation into its own repo later. The proof assistant itself is an investigation platform with no maintenance obligation.
 - **Shell:** a standalone Tauri app, scaffolded from the start of implementation (save-file I/O, window/input behavior, and packaging proven in the real shell throughout). Web tech inside: Vite + three.js, unchanged.
 - **Saves:** unlimited named save slots backed by files, Skyrim-style. The save format always has one exact current shape: no format versions, version checks, migrations, legacy readers, or fallback parsing. Runtime worlds are constructed only by loading ordinary saves; developer and stress fixtures use the same persistence authority.
-- **Scale:** the existing `src/view3d/transition.ts` tween machinery suffices for growth animation. Each changing tree owns its short tween independently, so several trees may animate concurrently. The established stress workload has proven static rendering, LOD, and culling to 2000 trees; generated game saves preserve that workload against the production renderer. Every tree uses the same kernel-backed model and can take the temporary per-frame render role when it changes.
+- **Scale:** the shared `src/view3d/transition.ts` track owns growth timing, interruption, and sampling. Each changing tree owns one track independently, so several trees may animate concurrently. The established stress workload has proven static rendering, LOD, and culling to 2000 trees; generated game saves preserve that workload against the production renderer. Every tree uses the same kernel-backed model and can take the temporary per-frame render role when it changes.
 - **Renderer authority:** `game/` is the sole 3D world frontend. Performance workloads are ordinary generated game saves, and stress tests exercise the same production renderer used by play.
 
 ## Deferred to implementation, by design

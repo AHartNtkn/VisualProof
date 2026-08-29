@@ -177,6 +177,7 @@ git commit -m "refactor(game): centralize tree placement"
 
 **Interfaces:**
 - Produces: `DiagramSnapshot`, `snapshotFromDiagram(diagram)`, and `snapshotFromJson(json)`.
+- `DiagramSnapshot` is a nominal class with a private constructor; only its factories can construct a value.
 - Changes: `GameTree.snapshot` replaces independently supplied `diagram` and `diagramJson`.
 - Changes: `TreeRenderAssetCache.get(snapshot: DiagramSnapshot)`.
 
@@ -199,17 +200,24 @@ npm test -- --run tests/game/model.test.ts tests/game/session.test.ts tests/game
 - [ ] **Step 3: Implement canonical construction**
 
 ```ts
-export type DiagramSnapshot = {
-  readonly diagram: Diagram
-  readonly json: string
-}
+export class DiagramSnapshot {
+  readonly #brand = true
 
-export function snapshotFromDiagram(diagram: Diagram): DiagramSnapshot {
-  return { diagram, json: JSON.stringify(diagramToJson(diagram)) }
-}
+  private constructor(
+    public readonly diagram: Diagram,
+    public readonly json: string,
+  ) {
+    void this.#brand
+    Object.freeze(this)
+  }
 
-export function snapshotFromJson(json: string): DiagramSnapshot {
-  return snapshotFromDiagram(diagramFromJson(JSON.parse(json)))
+  static fromDiagram(diagram: Diagram): DiagramSnapshot {
+    return new DiagramSnapshot(diagram, JSON.stringify(diagramToJson(diagram)))
+  }
+
+  static fromJson(json: string): DiagramSnapshot {
+    return DiagramSnapshot.fromDiagram(diagramFromJson(JSON.parse(json)))
+  }
 }
 ```
 
@@ -290,8 +298,8 @@ git commit -m "refactor(view3d): share scene tween lifecycle"
 
 **Interfaces:**
 - Produces: `GameSession.planDoubleCut(pointed): TreeMutation` without mutation.
-- Produces: checked `GameSession.commit(mutation): void`.
-- Produces: `GameWorldRenderer.prepareTreeUpdate(mutation): PreparedTreeUpdate` and non-throwing `commitTreeUpdate(prepared): void`.
+- Produces: checked `GameSession.prepare(mutation): PreparedSessionCommit`, non-throwing `commit(prepared): void`, and cleanup-only `discard(prepared): void`.
+- Produces: `GameWorldRenderer.prepareTreeUpdate(mutation): PreparedTreeUpdate`, non-throwing `commitTreeUpdate(prepared): void`, and cleanup-only `discardTreeUpdate(prepared): void`.
 - Changes: `TreeMutation` contains complete `before: GameTree` and `after: GameTree`.
 
 - [ ] **Step 1: Write failure-atomicity and fresh-target tests**
@@ -315,16 +323,18 @@ Expected: planning mutates live state and logical targeting stays on old bounds.
 
 - [ ] **Step 3: Implement prepare/enqueue/commit ordering**
 
-Renderer preparation resolves after asset, render record, world target, and tween inputs without mutating live maps. `SaveWriter.tree` synchronously accepts the complete after-tree DTO. Renderer commit installs `renderTreesById`, `logicalTreeTargets`, dynamic/runtime state, and bounds without parsing or asset construction. Session commit publishes the same after tree with a before-identity guard.
+Session preparation first checks the before-tree identity and prepares its next map without publishing it. Renderer preparation resolves the after asset, render record, world target, and tween inputs without mutating live maps. `SaveWriter.tree` synchronously accepts the complete after-tree DTO. Session commit then publishes its prepared map, and renderer commit installs `renderTreesById`, `logicalTreeTargets`, dynamic/runtime state, and bounds without parsing or asset construction. If renderer preparation fails, discard the prepared session state. If save acceptance fails, discard both the prepared session state and the renderer's unpublished resources. Replacing the renderer's complete tree set invalidates and disposes any unpublished renderer preparations.
 
 Use:
 
 ```ts
 const mutation = activeSession.planDoubleCut(pointed)
-const prepared = activeRenderer.prepareTreeUpdate(mutation)
-activeWriter.tree(treeUpdateOf(mutation.after))
-activeRenderer.commitTreeUpdate(prepared)
-activeSession.commit(mutation)
+publishTreeMutation(
+  activeSession,
+  mutation,
+  activeRenderer,
+  (tree) => activeWriter.tree(treeUpdateFromGameTree(tree)),
+)
 ```
 
 A later asynchronous save failure remains retryable lag and does not roll back gameplay.
@@ -358,7 +368,7 @@ git commit -m "fix(game): publish tree mutations coherently"
 - [ ] **Step 1: Capture existing behavior at the new boundary**
 
 ```ts
-const orbit = new OrbitInteraction(initialPose, 0)
+const orbit = new OrbitInteraction(initialPose)
 orbit.pointerDown(0, 100, 100)
 expect(orbit.pointerUp(102, 101)).toEqual({
   kind: 'stationary-release', button: 0, clientX: 102, clientY: 101,
@@ -435,9 +445,9 @@ Seed the interaction from the exact free eye and selected target using the full 
 Add:
 
 ```ts
-pickTreeEntity(ndcX: number, ndcY: number, treeId: string): {
+pickTreeFocus(ndcX: number, ndcY: number, treeId: string): {
   readonly treeId: string
-  readonly entity: Entity
+  readonly entity: Entity | null
   readonly worldFocus: Vec3
 } | null
 ```
@@ -448,7 +458,7 @@ The renderer identifies the entity through orchard hit testing, obtains local se
 
 Add `engagementChanged(active: boolean)` to input actions. Emit it from `pointerlockchange`; blur and hidden visibility clear samples and report inactive. Main updates navigation from this event rather than branching on `input.engaged()`.
 
-Escape returns `true` only when leaving orbit. For handled Escape, prevent the default and request engagement during that physical key event. Success activates free flight; rejection or a subsequent inactive event deactivates it. Free-mode Escape remains browser-owned.
+Escape returns `true` only when leaving orbit. For handled Escape, prevent the default and request engagement during that physical key event. The engagement event activates free flight; rejection or a subsequent inactive event leaves it inactive. Free-mode Escape remains browser-owned.
 
 Route orbit pointer and wheel events through `OrbitInteraction`. A stationary secondary release invokes the existing proof action; a secondary drag retains shared pan behavior without firing the tool.
 
@@ -485,7 +495,18 @@ State that selecting a tree enters the existing shared 3D proof-tree interaction
 
 - [ ] **Step 2: Add a behavioral ownership test**
 
-Instantiate shared primitives rather than checking source strings. Prove both renderer palettes call `entityColor`, both consumers use `SceneTweenTrack`, orchard placement queries agree, and orchard navigation accepts an `OrbitInteraction` without another orbit representation.
+Append behavioral architecture scenarios that instantiate shared primitives
+rather than inspecting production source. Prove orchard materials agree with
+`entityColor`, orchard dynamic transitions sample identically to
+`SceneTweenTrack`, orchard placement consumers agree, and coherent tree
+publication leaves its independently owned `OrbitInteraction` navigation
+unchanged. `tests/view3d/index-transition.test.ts` drives
+`mountView3.update` with controlled animation frames and proves that an
+interrupted assistant diagram update renders the samples produced by
+`SceneTweenTrack` from the displayed scene. Existing assistant unit and
+Playwright behavior prove assistant consumption of the shared color and
+interaction authorities. The native orchard E2E proves that the actual
+secondary proof action leaves the camera unchanged.
 
 - [ ] **Step 3: Run complete automated validation**
 

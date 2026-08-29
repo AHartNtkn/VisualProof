@@ -6,8 +6,7 @@ Make the orchard consume the proof assistant's existing 3D interaction and
 semantic authorities, while retaining only the world-scale rendering,
 persistence, and free-flight responsibilities that are specific to the game.
 
-This design also closes the state splits found during the orbit audit. The
-work is intentionally not a renderer rewrite: the orchard keeps its LOD,
+The orchard keeps its LOD,
 batching, spatial index, fog, terrain, glow, and multi-tree scheduling.
 
 ## Authority Map
@@ -16,9 +15,9 @@ The final system has these owners:
 
 - `src/view3d/scene.ts` owns typed 3D proof entities and their kernel identity.
 - `src/view3d/entity-style.ts` owns the semantic entity-to-authored-color rule.
-- `src/view3d/camera.ts` and the interaction extracted from
-  `src/view3d/index.ts` own orbit pose, drag, pan, zoom, semantic focus, and
-  focus glide.
+- `src/view3d/camera.ts` owns orbit camera operations, and
+  `src/view3d/orbit-interaction.ts` owns orbit pose, drag, pan, zoom, semantic
+  focus, and focus glide.
 - `src/view3d/transition.ts` owns proof-tree transition timing, interruption,
   and sampling.
 - `src/game/render/placement.ts` owns every orchard local/world transform.
@@ -67,30 +66,45 @@ orbit focus all consume these operations.
 
 ## Diagram and Tree State
 
-A diagram and its canonical JSON are one validated value:
+A diagram and its canonical JSON are one nominal validated value. It is a
+class with a private constructor and can be created only through its factories:
 
 ```ts
-type DiagramSnapshot = {
-  readonly diagram: Diagram
-  readonly json: string
+class DiagramSnapshot {
+  readonly #brand = true
+
+  private constructor(
+    readonly diagram: Diagram,
+    readonly json: string,
+  ) {
+    void this.#brand
+    Object.freeze(this)
+  }
+
+  static fromDiagram(diagram: Diagram): DiagramSnapshot
+  static fromJson(json: string): DiagramSnapshot
 }
 ```
 
 Construction either derives JSON from a diagram or parses and validates JSON.
-Callers cannot independently supply a mismatched pair. `GameTree` contains one
-`snapshot` instead of parallel `diagram` and `diagramJson` fields.
+The private `#brand` makes the value nominal, so a structurally matching object
+cannot be supplied as a snapshot. The private constructor restricts creation
+to the validating factories. `GameTree` contains one `snapshot` value.
 
 Tree mutation is planned before it becomes live. A double cut produces one
 immutable `TreeMutation` containing complete before and after `GameTree`
-values. The renderer prepares all derived assets and target bounds without
-changing live state. The save writer accepts the complete update, the renderer
-commits its prepared projection, and the session publishes the same after
-tree. Renderer commit after successful preparation is non-throwing.
+values. The session first validates the before value and prepares its next tree
+map. The renderer then prepares all derived assets and target bounds without
+changing live state. Once the save writer accepts the complete update, the
+session publishes the after tree and the renderer performs its non-throwing
+prepared commit.
 
-If planning, renderer preparation, or save enqueue fails, the live session and
-renderer remain on the before tree. A later asynchronous save failure leaves
-one live tree and one queued durable update; the existing retry state owns that
-lag. It does not roll back gameplay.
+If planning, session validation, renderer preparation, or save enqueue fails,
+the live session and renderer remain on the before tree. The session discards
+its unpublished prepared map, and the renderer disposes its unpublished
+prepared resources. A later asynchronous save failure leaves one live tree and
+one queued durable update; the existing retry state owns that lag. It does not
+roll back gameplay.
 
 Every committed tree update refreshes render geometry, runtime state, and
 logical target bounds from the same prepared asset. `pickTree` therefore
@@ -108,10 +122,10 @@ implements transition restart or timing rules separately.
 
 ## Shared Orbit Interaction
 
-The existing assistant interaction in `src/view3d/index.ts` is extracted intact
-behind a reusable controller. It continues to use the existing `CamPose`,
-camera operations, semantic `focusPoint`, click threshold, and focus glide.
-Both the assistant view and orchard instantiate that controller.
+`src/view3d/orbit-interaction.ts` is the reusable interaction controller. It
+uses the shared `CamPose`, camera operations, semantic `focusPoint`, click
+threshold, and focus glide. Both the assistant view and orchard instantiate
+that controller.
 
 The orchard supplies its current tree entities in local coordinates and the
 placement authority converts the selected semantic focus into world
@@ -146,11 +160,14 @@ release behavior.
 
 ## Durable Documentation
 
-`docs/orchard-game-design.md` is updated to name the shared assistant orbit
-interaction rather than specify a separate keyboard orbit. The previous
-controls implementation plan is replaced by the implementation plan for this
-design. No current document or test may retain the displaced orbit or inactive
-Escape model.
+`docs/orchard-game-design.md` is the durable product contract for orchard
+navigation. It names the shared assistant orbit interaction, the game-owned
+free-flight state, same-interaction Escape recovery, and the secondary proof
+action composed beside orbit navigation.
+
+This design document records the ownership boundaries. Its implementation
+plan records delivery and validation steps. Behavioral tests enforce the
+contracts at their consumer boundaries.
 
 ## Validation
 
@@ -164,7 +181,7 @@ Behavior evidence must prove:
 - failed mutation preparation or enqueue leaves session and renderer unchanged;
 - committed mutation refreshes geometry and logical target bounds together;
 - interrupted assistant and orchard transitions sample the same shared track;
-- the assistant retains its existing orbit interaction after extraction;
+- the assistant and orchard exhibit the shared controller's orbit behavior;
 - orchard orbit uses the same controller and semantic focus;
 - Escape resumes free movement without another interaction;
 - a proof action changes the tree and persistence while leaving orbit camera
