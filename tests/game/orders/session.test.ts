@@ -10,6 +10,7 @@ import {
   initialOrderProgress,
   orderSession,
   publishOrderMutation,
+  type OrderMutation,
 } from '../../../src/game/orders/session'
 
 const starter = ORDER_CATALOG[0]!
@@ -131,6 +132,43 @@ describe('order session lifecycle', () => {
 
     expect(() => session.prepare(stale)).toThrow(/changed since mutation was planned/i)
     expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'accepted', pot: acceptedPot })
+  })
+
+  it('rejects a forged completion that changes reward and removes order state', () => {
+    // Catches prepare trusting public mutation.after instead of validating the catalog reward and order map.
+    const session = acceptStarter()
+    const before = session.progress
+    const forged: OrderMutation = {
+      kind: 'complete',
+      orderId: STARTER_ORDER_ID,
+      reward: 999,
+      before,
+      after: { reputation: 999, orders: new Map() },
+    }
+
+    expect(() => session.prepare(forged)).toThrow(/invalid order mutation/i)
+    expect(session.progress).toBe(before)
+    const abandonment = session.planAbandon(STARTER_ORDER_ID)
+    session.commit(session.prepare(abandonment))
+    expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'pending' })
+  })
+
+  it('rejects a forged acceptance whose resulting pot differs from its mutation payload', () => {
+    // Catches prepare accepting a state transition whose externally supplied after-state disagrees with it.
+    const session = freshSession()
+    const before = session.progress
+    const orders = new Map(before.orders)
+    orders.set(STARTER_ORDER_ID, { kind: 'accepted', pot: { x: 9, z: 1, yaw: 2 } })
+    const forged: OrderMutation = {
+      kind: 'accept',
+      orderId: STARTER_ORDER_ID,
+      pot: acceptedPot,
+      before,
+      after: { reputation: 0, orders },
+    }
+
+    expect(() => session.prepare(forged)).toThrow(/invalid order mutation/i)
+    expect(session.progress).toBe(before)
   })
 
   it('publishes a completed order only after save acceptance and before renderer commit', () => {

@@ -68,6 +68,72 @@ function withOrder(progress: OrderProgress, orderId: string, state: OrderState, 
   return { reputation, orders }
 }
 
+function samePot(a: PotPlacement, b: PotPlacement): boolean {
+  return Object.is(a.x, b.x) && Object.is(a.z, b.z) && Object.is(a.yaw, b.yaw)
+}
+
+function sameOrderState(a: OrderState | undefined, b: OrderState): boolean {
+  if (a === undefined || a.kind !== b.kind) return false
+  switch (a.kind) {
+    case 'pending': return true
+    case 'completed': return true
+    case 'accepted': return b.kind === 'accepted' && samePot(a.pot, b.pot)
+  }
+}
+
+function preservesOtherOrders(
+  before: OrderProgress,
+  after: OrderProgress,
+  orderId: string,
+  nextState: OrderState,
+  reputation: number,
+): boolean {
+  if (after.reputation !== reputation || after.orders.size !== before.orders.size) return false
+  for (const [id, state] of before.orders) {
+    if (id === orderId) {
+      if (!sameOrderState(after.orders.get(id), nextState)) return false
+    } else if (after.orders.get(id) !== state) {
+      return false
+    }
+  }
+  return true
+}
+
+function isValidMutation(mutation: OrderMutation): boolean {
+  const definition = definitionFor(mutation.orderId)
+  const state = stateFor(mutation.before, mutation.orderId)
+  switch (mutation.kind) {
+    case 'accept':
+      return state.kind === 'pending'
+        && preservesOtherOrders(
+          mutation.before,
+          mutation.after,
+          mutation.orderId,
+          { kind: 'accepted', pot: mutation.pot },
+          mutation.before.reputation,
+        )
+    case 'abandon':
+      return state.kind === 'accepted'
+        && preservesOtherOrders(
+          mutation.before,
+          mutation.after,
+          mutation.orderId,
+          { kind: 'pending' },
+          mutation.before.reputation,
+        )
+    case 'complete':
+      return state.kind === 'accepted'
+        && mutation.reward === definition.reward
+        && preservesOtherOrders(
+          mutation.before,
+          mutation.after,
+          mutation.orderId,
+          { kind: 'completed' },
+          mutation.before.reputation + definition.reward,
+        )
+  }
+}
+
 export function initialOrderProgress(catalog: readonly OrderDefinition[]): OrderProgress {
   const orders = new Map<string, OrderState>()
   for (const order of catalog) {
@@ -136,6 +202,7 @@ export class OrderSession {
     if (this.progress !== mutation.before) {
       throw new OrderError(`order '${mutation.orderId}' changed since mutation was planned`)
     }
+    if (!isValidMutation(mutation)) throw new OrderError('invalid order mutation')
     const prepared: PreparedOrderCommit = { [preparedOrderCommit]: true }
     this.prepared = prepared
     this.preparedProgress.set(prepared, mutation.after)
