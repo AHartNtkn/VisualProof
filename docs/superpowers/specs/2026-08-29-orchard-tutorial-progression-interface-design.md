@@ -163,12 +163,13 @@ prerequisite IDs, reward, and optional formula input, and it displays the
 authoritative diagram preview. It also contains a Delete action. Order-ID
 renaming is not part of this feature.
 
-The new-order editor accepts the new stable ID and the same editable content as
-an existing order. Creating or deleting an order updates the checked-in catalog
-and running game immediately. Creation adds its lifecycle entry to the current
-save. Deletion removes its lifecycle entry and any active pot. A create or
-delete that would leave an invalid prerequisite graph fails without changing
-the catalog or save.
+The new-order editor starts with the blank diagram—the empty sheet or true
+tree—as its authoritative goal and with blank formula input. It accepts the new
+stable ID and the same editable content as an existing order. Creating or
+deleting an order updates the checked-in catalog and running game immediately.
+Creation adds its lifecycle entry to the current save. Deletion removes its
+lifecycle entry and any active pot. A create or delete that would leave an
+invalid prerequisite graph fails without changing the catalog or save.
 
 An order without remembered formula text opens with a blank formula field. An
 order with remembered text shows it. Submitting formula text parses it, creates
