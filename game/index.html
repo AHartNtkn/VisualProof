@@ -67,6 +67,25 @@
         <div class="catalog-orders" data-catalog-orders></div>
       </section>
 
+      <section
+        class="pause"
+        data-pause
+        hidden
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pause-title"
+      >
+        <p class="eyebrow">Orchard</p>
+        <h2 id="pause-title">Paused</h2>
+        <p class="pause-world" data-pause-world-name></p>
+        <div class="pause-actions">
+          <button type="button" data-pause-resume>Resume</button>
+          <button type="button" data-pause-main-menu>Main Menu</button>
+          <button type="button" data-pause-quit>Quit Game</button>
+        </div>
+        <p class="pause-error" data-pause-error role="alert"></p>
+      </section>
+
     </main>
     <script type="module" src="/main.ts"></script>
   </body>

@@ -9,7 +9,7 @@ export type WorldInputActions = {
     relativeDistance: number,
   ) => void
   readonly pointerCancel: () => void
-  readonly escape: () => boolean
+  readonly escape: () => 'unhandled' | 'handled' | 'resume-engagement'
   readonly swapTool: () => void
   readonly toggleCatalog: () => void
   readonly engagementChanged: (active: boolean) => void
@@ -88,10 +88,13 @@ export function attachWorldInput(
       return
     }
     if (event.code === 'Escape') {
-      if (!actions.escape()) return
+      const result = actions.escape()
+      if (result === 'unhandled') return
       event.preventDefault()
       clear()
-      void requestWorldEngagement(target).catch(() => actions.engagementChanged(false))
+      if (result === 'resume-engagement') {
+        void requestWorldEngagement(target).catch(() => actions.engagementChanged(false))
+      }
       return
     }
     if (suspended) {

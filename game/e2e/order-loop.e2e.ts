@@ -201,7 +201,7 @@ describe('orchard first order loop', () => {
       await expect($('[data-catalog-orders] strong')).toHaveText('Double Cut')
       await expect($('[data-catalog-reputation]')).toHaveText('Reputation: 1')
       await browser.keys('Escape')
-      await expectPlaying({ catalog: false, mode: 'free', order: 'completed', reputation: 1 })
+      await expectPlaying({ catalog: false, mode: 'free', engaged: true, order: 'completed', reputation: 1 })
       await expect(game()).toHaveAttribute('data-logical-count', '2')
       expect(await attribute('errors')).toBe('')
       return
@@ -357,7 +357,7 @@ describe('orchard first order loop', () => {
     await expect($('[data-catalog-orders] strong')).toHaveText('Double Cut')
     await expect($('[data-catalog-reputation]')).toHaveText('Reputation: 1')
     await browser.keys('Escape')
-    await expectPlaying({ catalog: false, mode: 'free', order: 'completed', reputation: 1 })
+    await expectPlaying({ catalog: false, mode: 'free', engaged: true, order: 'completed', reputation: 1 })
 
     expect(await attribute('errors')).toBe('')
   })

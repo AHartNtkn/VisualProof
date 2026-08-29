@@ -39,6 +39,13 @@ export class StartLifecycle {
     return this.finishStart(generation, operation)
   }
 
+  public returnToMenu(): void {
+    if (this.phase !== 'started') throw new Error('only a started world can return to the menu')
+    this.phase = 'idle'
+    this.generation++
+    this.syncControls()
+  }
+
   public dispose(): void {
     if (this.phase === 'disposed') return
     this.phase = 'disposed'

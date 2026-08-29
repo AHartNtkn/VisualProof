@@ -44,6 +44,8 @@ import {
   requestWorldEngagement,
   type WorldInput,
 } from './input'
+import { mountPauseMenu, type PauseMenuController } from './pause'
+import { quitApplication } from './quit'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
 const worldHost = document.querySelector<HTMLElement>('[data-world]')!
@@ -61,6 +63,7 @@ const feedback = document.querySelector<HTMLElement>('[data-feedback]')!
 const reticle = document.querySelector<HTMLElement>('[data-reticle]')!
 const engage = document.querySelector<HTMLElement>('[data-engage]')!
 const catalogRoot = document.querySelector<HTMLElement>('[data-catalog]')!
+const pauseRoot = document.querySelector<HTMLElement>('[data-pause]')!
 
 const blankDiagram = new DiagramBuilder().build()
 const blankDiagramJson = JSON.stringify(diagramToJson(blankDiagram))
@@ -86,10 +89,13 @@ let writer: SaveWriter | null = null
 let renderer: GameWorldRenderer | null = null
 let catalog: CatalogController | null = null
 let catalogView: CatalogView | null = null
+let pauseMenu: PauseMenuController | null = null
 let animationFrame = 0
 let previousFrame = performance.now()
 let disposed = false
 let freeActive = false
+let paused = false
+let releaseWriterStatus = (): void => {}
 
 function authoredGoalForOrder(orderId: string) {
   return ORDER_CATALOG.find((entry) => entry.id === orderId)?.goal
@@ -274,8 +280,9 @@ function mirrorControls(): void {
   root.dataset['orbitTarget'] = camera.mode === 'orbit' ? camera.treeId : ''
   root.dataset['displayedEye'] = JSON.stringify(display.eye)
   root.dataset['displayedDirection'] = JSON.stringify(display.forward)
-  reticle.hidden = camera.mode !== 'free' || !freeActive
-  engage.hidden = camera.mode !== 'free' || freeActive
+  root.dataset['paused'] = String(paused)
+  reticle.hidden = paused || camera.mode !== 'free' || !freeActive
+  engage.hidden = paused || camera.mode !== 'free' || freeActive
 }
 
 function resize(): void {
@@ -289,6 +296,7 @@ function animate(now: number): void {
   const currentCamera = camera
   if (
     disposed
+    || paused
     || currentCamera === null
     || activeInput === null
     || activeWriter === null
@@ -332,6 +340,96 @@ function animate(now: number): void {
   if (rendered.error !== null) setError(`Renderer: ${rendered.error}`)
   mirrorControls()
   animationFrame = requestAnimationFrame(animate)
+}
+
+function openPause(): void {
+  if (paused || camera === null || input === null || pauseMenu === null) return
+  paused = true
+  freeActive = false
+  input.suspend()
+  cancelAnimationFrame(animationFrame)
+  animationFrame = 0
+  pauseMenu.show(worldName.textContent ?? 'Orchard')
+  mirrorControls()
+}
+
+function resumePause(): void {
+  const activeInput = input
+  const activeCamera = camera
+  if (!paused || activeInput === null || activeCamera === null) return
+  pauseMenu?.hide()
+  paused = false
+  activeInput.resume()
+  previousFrame = performance.now()
+  animationFrame = requestAnimationFrame(animate)
+  if (activeCamera.mode === 'free') {
+    void activeInput.engage().catch(() => {
+      freeActive = false
+      mirrorControls()
+    })
+  }
+  mirrorControls()
+}
+
+async function refreshSlots(): Promise<void> {
+  slotLoading.textContent = 'Reading save slots…'
+  slotLoading.hidden = false
+  try {
+    const slots = await saveClient.list()
+    if (disposed) return
+    slotLoading.hidden = true
+    renderSlots(slots)
+  } catch (error) {
+    if (disposed) return
+    slotLoading.textContent = `Could not list saves: ${message(error)}`
+    menuError.textContent = slotLoading.textContent
+    root.dataset['errors'] = slotLoading.textContent
+  }
+}
+
+async function returnToMainMenu(): Promise<void> {
+  const activeWriter = writer
+  if (!paused || activeWriter === null) return
+  await activeWriter.dispose()
+  cancelAnimationFrame(animationFrame)
+  animationFrame = 0
+  releaseWriterStatus()
+  releaseWriterStatus = (): void => {}
+  input?.dispose()
+  catalog?.dispose()
+  renderer?.dispose()
+  input = null
+  catalog = null
+  catalogView = null
+  renderer = null
+  camera = null
+  session = null
+  orders = null
+  tools = null
+  writer = null
+  freeActive = false
+  paused = false
+  pauseMenu?.hide()
+  startLifecycle.returnToMenu()
+  start.hidden = false
+  hud.hidden = true
+  root.dataset['ready'] = 'false'
+  root.dataset['loadedSlot'] = ''
+  root.dataset['cameraMode'] = 'menu'
+  root.dataset['inputEngaged'] = 'false'
+  root.dataset['orbitTarget'] = ''
+  root.dataset['paused'] = 'false'
+  reticle.hidden = true
+  engage.hidden = true
+  clearError()
+  await refreshSlots()
+}
+
+async function quitFromPause(): Promise<void> {
+  const activeWriter = writer
+  if (!paused || activeWriter === null) return
+  await activeWriter.flushChecked()
+  await quitApplication()
 }
 
 function publishPlannedTreeChange(
@@ -444,7 +542,7 @@ async function startWorld(world: GameWorld): Promise<void> {
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
   let nextCatalog: CatalogController | null = null
   let nextInput: WorldInput | null = null
-  let releaseWriterStatus = (): void => {}
+  let nextReleaseWriterStatus = (): void => {}
   let freeSecondaryPress: { readonly x: number; readonly y: number } | null = null
   try {
     nextCatalog = mountCatalog(catalogRoot, ORDER_CATALOG, {
@@ -459,7 +557,7 @@ async function startWorld(world: GameWorld): Promise<void> {
     }))
     nextRenderer.resize(worldHost.clientWidth, worldHost.clientHeight)
     nextRenderer.setCamera(displayCameraPose(nextCamera))
-    releaseWriterStatus = nextWriter.subscribe((status) => {
+    nextReleaseWriterStatus = nextWriter.subscribe((status) => {
       saveStatus.textContent = status.state === 'idle'
         ? 'Saved'
         : status.state === 'saving' ? 'Saving…' : `Save error: ${status.message ?? 'unknown error'}`
@@ -535,6 +633,7 @@ async function startWorld(world: GameWorld): Promise<void> {
       escape() {
         const activeTools = tools
         let handled = false
+        let resumeEngagement = false
         if (activeTools !== null && activeTools.cutting !== null) {
           activeTools.cancel()
           mirrorToolState(activeTools)
@@ -543,19 +642,22 @@ async function startWorld(world: GameWorld): Promise<void> {
         }
         if (!catalogRoot.hidden) {
           closeCatalog(false)
-          return true
+          return 'resume-engagement'
         }
         if (camera?.mode === 'orbit') {
           camera = exitOrbit(camera)
           freeActive = false
           handled = true
+          resumeEngagement = true
         }
         mirrorControls()
-        return handled
+        if (handled) return resumeEngagement ? 'resume-engagement' : 'handled'
+        openPause()
+        return 'handled'
       },
       swapTool() {
         const activeTools = tools
-        if (activeTools === null || !catalogRoot.hidden) return
+        if (paused || activeTools === null || !catalogRoot.hidden) return
         activeTools.swap()
         mirrorToolState(activeTools)
         setFeedback(`Equipped ${activeTools.item === 'double-cut' ? 'Double Cut' : 'Iteration'}.`)
@@ -566,7 +668,8 @@ async function startWorld(world: GameWorld): Promise<void> {
         const activeCamera = camera
         const activeInput = input
         if (
-          activeCatalog === null
+          paused
+          || activeCatalog === null
           || activeOrders === null
           || activeCamera === null
           || activeInput === null
@@ -594,6 +697,7 @@ async function startWorld(world: GameWorld): Promise<void> {
     orders = nextOrders
     tools = nextTools
     writer = nextWriter
+    releaseWriterStatus = nextReleaseWriterStatus
     catalog = nextCatalog
     catalogView = null
     nextCatalog.hide()
@@ -601,6 +705,7 @@ async function startWorld(world: GameWorld): Promise<void> {
     hud.hidden = false
     worldName.textContent = world.slot.name
     root.dataset['ready'] = 'true'
+    root.dataset['paused'] = 'false'
     root.dataset['loadedSlot'] = world.slot.id
     maxRepresentationOperations = 0
     root.dataset['renderMode'] = 'game'
@@ -614,7 +719,7 @@ async function startWorld(world: GameWorld): Promise<void> {
   } catch (error) {
     nextCatalog?.dispose()
     nextInput?.dispose()
-    releaseWriterStatus()
+    nextReleaseWriterStatus()
     await nextWriter.dispose().catch(() => {})
     nextRenderer.dispose()
     start.hidden = false
@@ -635,6 +740,11 @@ function showStartFailure(failure: StartFailure): void {
 const startLifecycle = new StartLifecycle({ open: startWorld, fail: showStartFailure })
 startLifecycle.registerControl(nameInput)
 for (const button of createForm.querySelectorAll<HTMLButtonElement>('button')) startLifecycle.registerControl(button)
+pauseMenu = mountPauseMenu(pauseRoot, {
+  resume: resumePause,
+  mainMenu: returnToMainMenu,
+  quit: quitFromPause,
+})
 
 function startOpening(operation: () => Promise<GameWorld>): void {
   void requestWorldEngagement(worldHost).catch((error: unknown) => {
@@ -679,18 +789,13 @@ window.addEventListener('pagehide', () => {
   session = null
   orders = null
   tools = null
+  pauseMenu?.dispose()
+  pauseMenu = null
+  releaseWriterStatus()
+  releaseWriterStatus = (): void => {}
   void writer?.dispose().catch((error: unknown) => setError(`Save shutdown failed: ${message(error)}`))
   renderer?.dispose()
   renderer = null
 })
 
-void saveClient.list().then((slots) => {
-  if (disposed) return
-  slotLoading.hidden = true
-  renderSlots(slots)
-}).catch((error: unknown) => {
-  if (disposed) return
-  slotLoading.textContent = `Could not list saves: ${message(error)}`
-  menuError.textContent = slotLoading.textContent
-  root.dataset['errors'] = slotLoading.textContent
-})
+void refreshSlots()

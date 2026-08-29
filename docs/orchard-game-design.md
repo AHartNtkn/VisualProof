@@ -63,6 +63,15 @@ focus glide. `Escape` restores the exact pre-selection free-flight pose and
 requests free-flight input again during that same key interaction, so play
 resumes without another click when engagement succeeds.
 
+In ordinary free flight, `Escape` opens the pause menu instead of leaving the
+player at an input-engagement prompt. Pausing suspends world input and frame
+updates without changing the camera, selected tool, or orchard state. Resume
+returns to the same play state and requests free-flight input again. Main Menu
+finishes pending saves before closing the world and refreshes the saved-orchard
+list in the same application session; a save failure leaves the pause menu open.
+Quit Game likewise requires pending saves to finish before closing the native
+application.
+
 The player carries exactly two tools in the current loop: Double Cut and
 Iteration. Pressing `1` swaps them, updates the HUD, and clears any held
 cutting. Double Cut applies its proof move with one stationary secondary

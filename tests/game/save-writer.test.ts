@@ -118,6 +118,16 @@ class FakeClock implements SaveWriterClock {
 }
 
 describe('ordered save writer', () => {
+  it('reports a blocked save when a caller requires a completed save barrier', async () => {
+    const writer = new SaveWriter('slot-a', withLifecycleMethods({
+      updateTree: async () => { throw new Error('disk unavailable') },
+      updateCamera: async () => {},
+    }))
+    writer.tree(update('tree-a', 'one'))
+
+    await expect(writer.flushChecked()).rejects.toThrow('disk unavailable')
+  })
+
   it('persists a new tree insertion before its later update', async () => {
     const calls: [string, string, string][] = []
     const port: LifecycleSavePort = {

@@ -133,6 +133,13 @@ export class SaveWriter {
     while (this.activeDrain !== null) await this.activeDrain
   }
 
+  public async flushChecked(): Promise<void> {
+    await this.flush()
+    if (this.status.state === 'error') {
+      throw new Error(this.status.message ?? 'save failed')
+    }
+  }
+
   public retry(): void {
     if (this.disposed || this.closing || !this.blocked) return
     this.blocked = false

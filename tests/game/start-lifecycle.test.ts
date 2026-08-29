@@ -76,6 +76,20 @@ describe('game start lifecycle', () => {
     expect(attempts).toBe(2)
   })
 
+  it('returns a started lifecycle to the menu so another world can be opened', async () => {
+    const opened: GameWorld[] = []
+    const lifecycle = new StartLifecycle({
+      open: (loaded) => { opened.push(loaded) },
+      fail: () => {},
+    })
+
+    await lifecycle.start(async () => world)
+    lifecycle.returnToMenu()
+    await lifecycle.start(async () => ({ ...world, slot: { ...world.slot, id: 'slot-b' } }))
+
+    expect(opened.map(({ slot }) => slot.id)).toEqual(['slot-a', 'slot-b'])
+  })
+
   it('keeps structurally invalid decoded data out of the world opener', async () => {
     const opened: GameWorld[] = []
     const failures: StartFailure[] = []

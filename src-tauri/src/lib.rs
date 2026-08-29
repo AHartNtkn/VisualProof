@@ -11,6 +11,7 @@ pub fn run() {
         .plugin(tauri_plugin_wdio_webdriver::init());
     builder
         .invoke_handler(tauri::generate_handler![
+            commands::quit_game,
             commands::list_slots,
             commands::create_slot,
             commands::load_slot,

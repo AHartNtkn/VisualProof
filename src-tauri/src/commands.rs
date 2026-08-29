@@ -4,6 +4,11 @@ use crate::save_store::{
 };
 use tauri::Manager;
 
+#[tauri::command]
+pub fn quit_game(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
 fn store(app: &tauri::AppHandle) -> Result<SaveStore, String> {
     let root = app
         .path()
