@@ -627,8 +627,9 @@ export function mountGameWorld(
       return prepared
     },
     commitOrderChange(prepared) {
+      if (disposed) throw new Error('stale prepared order change')
       const payload = preparedOrderPayloads.get(prepared)
-      if (payload === undefined || disposed) return
+      if (payload === undefined) return
       preparedOrderPayloads.delete(prepared)
       outstandingPreparedOrders.delete(prepared)
       if (preparedByOrderId.get(payload.orderId) === prepared) preparedByOrderId.delete(payload.orderId)
@@ -643,6 +644,7 @@ export function mountGameWorld(
       }
     },
     discardOrderChange(prepared) {
+      if (disposed) throw new Error('stale prepared order change')
       const payload = preparedOrderPayloads.get(prepared)
       if (payload === undefined) return
       preparedOrderPayloads.delete(prepared)

@@ -310,32 +310,32 @@ function latestPot(): PotObject {
   return object as PotObject
 }
 
-function potResourceSpies(object: PotObject): readonly { readonly geometry: ReturnType<typeof vi.spyOn>; readonly material: ReturnType<typeof vi.spyOn> }[] {
-  const body = object.group.getObjectByName('pot-body') as THREE.Mesh
-  const rim = object.group.getObjectByName('pot-rim') as THREE.Mesh
-  const hologram = object.group.getObjectByName('goal-hologram')!
-  let hologramRenderable: THREE.Object3D | null = null
-  hologram.traverse((candidate) => {
-    if (hologramRenderable === null && 'geometry' in candidate && 'material' in candidate) {
-      hologramRenderable = candidate
+function potResourceSpies(object: PotObject) {
+  const geometries = new Set<THREE.BufferGeometry>()
+  const materials = new Set<THREE.Material>()
+  object.group.traverse((candidate) => {
+    if ('geometry' in candidate) {
+      const geometry = (candidate as THREE.Mesh).geometry
+      if (geometry instanceof THREE.BufferGeometry) geometries.add(geometry)
+    }
+    if (candidate.userData['ownsMaterial'] === true && 'material' in candidate) {
+      const material = (candidate as THREE.Mesh).material
+      for (const entry of Array.isArray(material) ? material : [material]) {
+        if (entry instanceof THREE.Material) materials.add(entry)
+      }
     }
   })
-  if (hologramRenderable === null) throw new Error('expected hologram render resource')
-  return [body, rim, hologramRenderable].map((resource) => {
-    const renderable = resource as THREE.Mesh
-    const material = Array.isArray(renderable.material) ? renderable.material[0]! : renderable.material
-    return {
-      geometry: vi.spyOn(renderable.geometry, 'dispose'),
-      material: vi.spyOn(material, 'dispose'),
-    }
-  })
+  return {
+    geometries: [...geometries].map((geometry) => vi.spyOn(geometry, 'dispose')),
+    materials: [...materials].map((material) => vi.spyOn(material, 'dispose')),
+  }
 }
 
-function expectResourcesDisposedOnce(resources: readonly { readonly geometry: ReturnType<typeof vi.spyOn>; readonly material: ReturnType<typeof vi.spyOn> }[]): void {
-  for (const resource of resources) {
-    expect(resource.geometry).toHaveBeenCalledTimes(1)
-    expect(resource.material).toHaveBeenCalledTimes(1)
-  }
+function expectResourcesDisposedOnce(resources: ReturnType<typeof potResourceSpies>): void {
+  expect(resources.geometries.length).toBeGreaterThan(2)
+  expect(resources.materials.length).toBeGreaterThan(2)
+  for (const resource of resources.geometries) expect(resource).toHaveBeenCalledTimes(1)
+  for (const resource of resources.materials) expect(resource).toHaveBeenCalledTimes(1)
 }
 
 describe('production game world', () => {
@@ -943,10 +943,14 @@ describe('production game world', () => {
     const world = mountOrderWorld()
     const accept = orderSession(pendingStarterOrder()).planAccept(STARTER_ORDER_ID, { x: 0, z: -20, yaw: 0 })
     const prepared = world.prepareOrderChange(accept)
+    const incoming = latestPot()
 
     world.dispose()
 
-    expect(() => world.commitOrderChange(prepared)).not.toThrow()
+    expect(incoming.group.parent).toBeNull()
+    expect(() => world.commitOrderChange(prepared)).toThrow(/stale prepared order change/i)
+    expect(() => world.discardOrderChange(prepared)).toThrow(/stale prepared order change/i)
+    expect(incoming.group.parent).toBeNull()
   })
 
   it('points a branch through the same rotated placement used for rendering', () => {
