@@ -175,8 +175,8 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { applyDoubleCutIntro } from '../../../src/kernel/rules/doublecut'
 import { scene3 } from '../../../src/view3d/scene'
 import { focusPoint } from '../../../src/view3d/pick'
-import type { TreeMutation } from '../../../src/game/session'
-import { gameSession, publishTreeMutation } from '../../../src/game/session'
+import type { TreeChange } from '../../../src/game/session'
+import { gameSession, publishTreeChange } from '../../../src/game/session'
 import { SaveWriter } from '../../../src/game/save-writer'
 import { treeUpdateFromGameTree } from '../../../src/game/save-client'
 
@@ -268,11 +268,11 @@ describe('production game world', () => {
     const after = { ...stale, snapshot: snapshotFromDiagram(applyDoubleCutIntro(stale.snapshot.diagram, {
       region: stale.snapshot.diagram.root, regions: [], nodes: [], wires: [],
     })) }
-    const mutation: TreeMutation = { treeId: current.id, before: stale, after }
+    const mutation: TreeChange = { kind: 'update', treeId: current.id, before: stale, after }
     const world = mountGameWorld(container(), [current])
     world.setCamera({ eye: { x: 14, y: 2, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
 
-    expect(() => world.prepareTreeUpdate(mutation)).toThrow(/stale tree mutation/)
+    expect(() => world.prepareTreeChange(mutation)).toThrow(/stale tree change/)
     expect(world.pickTree(0, 0)).toEqual({
       treeId: 'tree', center: { x: 14, y: 2, z: -23 }, radius: 5,
     })
@@ -293,11 +293,11 @@ describe('production game world', () => {
     host.snapshotBounds.set(after.snapshot.json, {
       center: { x: 8, y: 2, z: 4 }, radius: 1,
     })
-    const mutation: TreeMutation = { treeId: before.id, before, after }
+    const mutation: TreeChange = { kind: 'update', treeId: before.id, before, after }
     const world = mountGameWorld(container(), [before], () => 0)
 
-    const prepared = world.prepareTreeUpdate(mutation)
-    world.commitTreeUpdate(prepared)
+    const prepared = world.prepareTreeChange(mutation)
+    world.commitTreeChange(prepared)
     world.setCamera({ eye: { x: 8, y: 2, z: 4 }, forward: { x: 0, y: 0, z: -1 } })
     expect(world.pickTree(0, 0)).toEqual({
       treeId: 'tree', center: { x: 8, y: 2, z: -16 }, radius: 1,
@@ -322,12 +322,12 @@ describe('production game world', () => {
     }
     const world = mountGameWorld(container(), [before])
     const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose')
-    const prepared = world.prepareTreeUpdate({ treeId: before.id, before, after })
+    const prepared = world.prepareTreeChange({ kind: 'update', treeId: before.id, before, after })
     const beforeCommit = disposeGeometry.mock.calls.length
 
-    world.commitTreeUpdate(prepared)
+    world.commitTreeChange(prepared)
     const afterFirstCommit = disposeGeometry.mock.calls.length
-    world.commitTreeUpdate(prepared)
+    world.commitTreeChange(prepared)
 
     expect(afterFirstCommit).toBeGreaterThanOrEqual(beforeCommit)
     expect(disposeGeometry.mock.calls).toHaveLength(afterFirstCommit)
@@ -345,11 +345,11 @@ describe('production game world', () => {
     const replacement = targetTree('replacement', 10, -20, Math.PI / 2)
     const world = mountGameWorld(container(), [before])
     const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose')
-    const prepared = world.prepareTreeUpdate({ treeId: before.id, before, after })
+    const prepared = world.prepareTreeChange({ kind: 'update', treeId: before.id, before, after })
     const beforeReplacement = disposeGeometry.mock.calls.length
 
     world.setTrees([replacement])
-    world.commitTreeUpdate(prepared)
+    world.commitTreeChange(prepared)
 
     expect(disposeGeometry.mock.calls.length).toBeGreaterThan(beforeReplacement)
     world.setCamera({ eye: { x: 14, y: 2, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
@@ -367,13 +367,13 @@ describe('production game world', () => {
     }
     const world = mountGameWorld(container(), [before])
     const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose')
-    const prepared = world.prepareTreeUpdate({ treeId: before.id, before, after })
+    const prepared = world.prepareTreeChange({ kind: 'update', treeId: before.id, before, after })
     const beforeDispose = disposeGeometry.mock.calls.length
 
     world.dispose()
 
     expect(disposeGeometry.mock.calls.length).toBeGreaterThan(beforeDispose)
-    expect(() => world.commitTreeUpdate(prepared)).not.toThrow()
+    expect(() => world.commitTreeChange(prepared)).not.toThrow()
   })
 
   it('rejects a sibling preparation for the same live tree', () => {
@@ -385,12 +385,65 @@ describe('production game world', () => {
       })),
     }
     const world = mountGameWorld(container(), [before])
-    const first = world.prepareTreeUpdate({ treeId: before.id, before, after })
+    const first = world.prepareTreeChange({ kind: 'update', treeId: before.id, before, after })
 
-    expect(() => world.prepareTreeUpdate({ treeId: before.id, before, after }))
+    expect(() => world.prepareTreeChange({ kind: 'update', treeId: before.id, before, after }))
       .toThrow(/already prepared/)
 
-    world.commitTreeUpdate(first)
+    world.commitTreeChange(first)
+    world.dispose()
+  })
+
+  it('publishes an inserted tree as a target at commit and settles it into the runtime', () => {
+    const inserted = targetTree('inserted', 0, -20, 0)
+    const world = mountGameWorld(container(), [], () => 0)
+    world.setRenderMode('raw')
+    world.setCamera({ eye: { x: 3, y: 2, z: 4 }, forward: { x: 0, y: 0, z: -1 } })
+
+    const prepared = world.prepareTreeChange({
+      kind: 'insert', treeId: inserted.id, after: inserted,
+    })
+    expect(world.pickTree(0, 0)).toBeNull()
+
+    world.commitTreeChange(prepared)
+    expect(world.pickTree(0, 0)).toMatchObject({ treeId: inserted.id })
+    expect(world.render(350)).toMatchObject({ logical: 1, resident: 1 })
+    expect(world.pickTree(0, 0)).toMatchObject({ treeId: inserted.id })
+    world.dispose()
+  })
+
+  it('discards an inserted tree without making it targetable or represented', () => {
+    const inserted = targetTree('discarded', 0, -20, 0)
+    const world = mountGameWorld(container(), [], () => 0)
+    world.setRenderMode('raw')
+    world.setCamera({ eye: { x: 3, y: 2, z: 4 }, forward: { x: 0, y: 0, z: -1 } })
+
+    const prepared = world.prepareTreeChange({
+      kind: 'insert', treeId: inserted.id, after: inserted,
+    })
+    world.discardTreeChange(prepared)
+    world.commitTreeChange(prepared)
+
+    expect(world.pickTree(0, 0)).toBeNull()
+    expect(world.render(350)).toMatchObject({ logical: 0, resident: 0 })
+    world.dispose()
+  })
+
+  it('rejects insertion when the tree identity is already live or prepared', () => {
+    const existing = blankTree('duplicate')
+    const inserted = targetTree(existing.id, 0, -20, 0)
+    const world = mountGameWorld(container(), [existing])
+
+    expect(() => world.prepareTreeChange({
+      kind: 'insert', treeId: inserted.id, after: inserted,
+    })).toThrow(/already exists/)
+
+    const fresh = { ...inserted, id: 'fresh' }
+    const first = world.prepareTreeChange({ kind: 'insert', treeId: fresh.id, after: fresh })
+    expect(() => world.prepareTreeChange({
+      kind: 'insert', treeId: fresh.id, after: fresh,
+    })).toThrow(/already prepared/)
+    world.discardTreeChange(first)
     world.dispose()
   })
 
@@ -415,7 +468,7 @@ describe('production game world', () => {
       completeOrder: async () => 1,
     })
     await writer.dispose()
-    expect(() => publishTreeMutation(
+    expect(() => publishTreeChange(
       session,
       mutation,
       world,
@@ -468,8 +521,8 @@ describe('production game world', () => {
     world.setRenderMode('raw')
     world.render(0)
     const afterTree = { ...tree, snapshot: snapshotFromDiagram(after) }
-    const prepared = world.prepareTreeUpdate({ treeId: tree.id, before: tree, after: afterTree })
-    world.commitTreeUpdate(prepared)
+    const prepared = world.prepareTreeChange({ kind: 'update', treeId: tree.id, before: tree, after: afterTree })
+    world.commitTreeChange(prepared)
 
     world.setTrees([])
 
@@ -494,10 +547,10 @@ describe('production game world', () => {
     world.setRenderMode('raw')
     world.render(0)
     const staleTree = { ...original, snapshot: snapshotFromDiagram(staleTarget) }
-    const prepared = world.prepareTreeUpdate({
-      treeId: original.id, before: original, after: staleTree,
+    const prepared = world.prepareTreeChange({
+      kind: 'update', treeId: original.id, before: original, after: staleTree,
     })
-    world.commitTreeUpdate(prepared)
+    world.commitTreeChange(prepared)
 
     world.setTrees([replacement])
     const rendered = world.render(350)
@@ -644,12 +697,13 @@ describe('production game world', () => {
       eye: { x: localFocus.x, y: localFocus.y, z: localFocus.z },
       forward: { x: 0, y: 0, z: -1 },
     })
-    const prepared = world.prepareTreeUpdate({
+    const prepared = world.prepareTreeChange({
+      kind: 'update',
       treeId: before.id,
       before,
       after,
     })
-    world.commitTreeUpdate(prepared)
+    world.commitTreeChange(prepared)
 
     expect(world.pointAtBranch(0, 0, before.id)).toMatchObject({
       entity: { key: outgoing.key },

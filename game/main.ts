@@ -19,7 +19,7 @@ import { SettledFrameTelemetry, frameTiming, percentile } from '../src/game/rend
 import { mountGameWorld, type GameWorldRenderer } from '../src/game/render/world'
 import { orderRecordsFromProgress, saveClient, treeUpdateFromGameTree, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
 import { SaveWriter } from '../src/game/save-writer'
-import { gameSession, publishTreeMutation, type GameSession } from '../src/game/session'
+import { gameSession, publishTreeChange, type GameSession } from '../src/game/session'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
 import { attachWorldInput, requestWorldEngagement, type WorldInput } from './input'
 
@@ -228,15 +228,15 @@ function applyDoubleCut(clientX: number, clientY: number): void {
     return
   }
   try {
-    const mutation = activeSession.planDoubleCut(pointed)
-    publishTreeMutation(
+    const change = activeSession.planDoubleCut(pointed)
+    publishTreeChange(
       activeSession,
-      mutation,
+      change,
       activeRenderer,
       (tree) => activeWriter.tree(treeUpdateFromGameTree(tree)),
     )
     setError('')
-    feedback.textContent = `Double cut applied to ${mutation.treeId}.`
+    feedback.textContent = `Double cut applied to ${change.treeId}.`
   } catch (error) {
     setError(`Double cut failed: ${message(error)}`)
   }

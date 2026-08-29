@@ -6,7 +6,9 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import type { GameTree, TreeTarget } from '../model'
-import type { PointedTreePart, TreeMutation } from '../session'
+import { snapshotFromDiagram } from '../diagram-snapshot'
+import type { PointedTreePart, TreeChange } from '../session'
+import { DiagramBuilder } from '../../kernel/diagram/builder'
 import { DARK } from '../../view/paint'
 import { TreeRenderAssetCache } from './assets'
 import { mountGlowRenderer } from './glow-render'
@@ -57,21 +59,21 @@ export type GameWorldRenderer = {
   } | null
   pointAtBranch(ndcX: number, ndcY: number, orbitTarget: string | null): PointedTreePart | null
   setRenderMode(mode: RenderMode): void
-  prepareTreeUpdate(mutation: TreeMutation): PreparedTreeUpdate
-  commitTreeUpdate(prepared: PreparedTreeUpdate): void
-  discardTreeUpdate(prepared: PreparedTreeUpdate): void
+  prepareTreeChange(change: TreeChange): PreparedTreeChange
+  commitTreeChange(prepared: PreparedTreeChange): void
+  discardTreeChange(prepared: PreparedTreeChange): void
   resize(width: number, height: number): void
   render(now: number): GameFrameStats
   dispose(): void
 }
 
-const preparedTreeUpdate: unique symbol = Symbol('prepared tree update')
+const preparedTreeChange: unique symbol = Symbol('prepared tree change')
 
-export type PreparedTreeUpdate = {
-  readonly [preparedTreeUpdate]: true
+export type PreparedTreeChange = {
+  readonly [preparedTreeChange]: true
 }
 
-type PreparedTreeUpdatePayload = {
+type PreparedTreeChangePayload = {
   readonly treeId: string
   readonly before: RenderTree
   readonly after: RenderTree
@@ -80,6 +82,8 @@ type PreparedTreeUpdatePayload = {
   readonly afterAsset: TreeRenderAsset
   readonly dynamic: ReturnType<DynamicTreeObjects['prepare']>
 }
+
+const blankTreeSnapshot = snapshotFromDiagram(new DiagramBuilder().build())
 
 export function mountGameWorld(
   container: HTMLElement,
@@ -160,9 +164,9 @@ export function mountGameWorld(
   )
   const renderTreesById = new Map<string, RenderTree>()
   const logicalTreeTargets = new Map<string, { readonly target: TreeTarget; readonly sphere: THREE.Sphere }>()
-  const preparedPayloads = new WeakMap<PreparedTreeUpdate, PreparedTreeUpdatePayload>()
-  const outstandingPrepared = new Set<PreparedTreeUpdate>()
-  const preparedByTreeId = new Map<string, PreparedTreeUpdate>()
+  const preparedPayloads = new WeakMap<PreparedTreeChange, PreparedTreeChangePayload>()
+  const outstandingPrepared = new Set<PreparedTreeChange>()
+  const preparedByTreeId = new Map<string, PreparedTreeChange>()
   let disposed = false
   const treeRaycaster = new THREE.Raycaster()
   const treeHitPoint = new THREE.Vector3()
@@ -368,28 +372,52 @@ export function mountGameWorld(
     setRenderMode(mode) {
       runtime.setMode(mode)
     },
-    prepareTreeUpdate(mutation) {
+    prepareTreeChange(change) {
       if (disposed) throw new Error('game world renderer is disposed')
-      if (
-        mutation.treeId !== mutation.before.id
-        || mutation.treeId !== mutation.after.id
-      ) throw new Error('tree mutation identity is inconsistent')
-      const current = renderTreesById.get(mutation.treeId)
-      if (current === undefined || !matchesTree(current, mutation.before)) {
-        throw new Error(`stale tree mutation for '${mutation.treeId}'`)
+      if (change.treeId !== change.after.id) throw new Error('tree change identity is inconsistent')
+      if (preparedByTreeId.has(change.treeId)) {
+        throw new Error(`tree change for '${change.treeId}' is already prepared`)
       }
-      if (preparedByTreeId.has(mutation.treeId)) {
-        throw new Error(`tree update for '${mutation.treeId}' is already prepared`)
+      let current: RenderTree
+      let beforeAsset: TreeRenderAsset
+      if (change.kind === 'update') {
+        if (change.treeId !== change.before.id) throw new Error('tree change identity is inconsistent')
+        const live = renderTreesById.get(change.treeId)
+        if (live === undefined || !matchesTree(live, change.before)) {
+          throw new Error(`stale tree change for '${change.treeId}'`)
+        }
+        current = live
+        beforeAsset = assetCache.get(change.before.snapshot)
+      } else {
+        if (renderTreesById.has(change.treeId)) {
+          throw new Error(`tree '${change.treeId}' already exists`)
+        }
+        const indices = [
+          ...[...renderTreesById.values()].map(({ placement }) => placement.index),
+          ...[...outstandingPrepared].flatMap((prepared) => {
+            const payload = preparedPayloads.get(prepared)
+            return payload === undefined ? [] : [payload.after.placement.index]
+          }),
+        ]
+        current = {
+          id: change.treeId,
+          diagramJson: blankTreeSnapshot.json,
+          placement: {
+            id: change.treeId,
+            index: indices.length === 0 ? 0 : Math.max(...indices) + 1,
+            ...change.after.placement,
+          },
+        }
+        beforeAsset = assetCache.get(blankTreeSnapshot)
       }
-      const beforeAsset = assetCache.get(mutation.before.snapshot)
-      const afterAsset = assetCache.get(mutation.after.snapshot)
+      const afterAsset = assetCache.get(change.after.snapshot)
       const after: RenderTree = {
-        id: mutation.after.id,
-        diagramJson: mutation.after.snapshot.json,
+        id: change.after.id,
+        diagramJson: change.after.snapshot.json,
         placement: {
-          id: mutation.after.id,
+          id: change.after.id,
           index: current.placement.index,
-          ...mutation.after.placement,
+          ...change.after.placement,
         },
       }
       const center = localPointToWorld(afterAsset.bounds.center, after.placement)
@@ -408,8 +436,8 @@ export function mountGameWorld(
           materialsFor(afterAsset),
         ),
       )
-      const payload: PreparedTreeUpdatePayload = {
-        treeId: mutation.treeId,
+      const payload: PreparedTreeChangePayload = {
+        treeId: change.treeId,
         before: current,
         after,
         target,
@@ -417,13 +445,13 @@ export function mountGameWorld(
         afterAsset,
         dynamic,
       }
-      const prepared: PreparedTreeUpdate = { [preparedTreeUpdate]: true }
+      const prepared: PreparedTreeChange = { [preparedTreeChange]: true }
       preparedPayloads.set(prepared, payload)
       outstandingPrepared.add(prepared)
-      preparedByTreeId.set(mutation.treeId, prepared)
+      preparedByTreeId.set(change.treeId, prepared)
       return prepared
     },
-    commitTreeUpdate(prepared) {
+    commitTreeChange(prepared) {
       const payload = preparedPayloads.get(prepared)
       if (payload === undefined || disposed) return
       preparedPayloads.delete(prepared)
@@ -437,7 +465,7 @@ export function mountGameWorld(
       // the dynamic tween is presentation of that already-committed state.
       logicalTreeTargets.set(payload.treeId, payload.target)
     },
-    discardTreeUpdate(prepared) {
+    discardTreeChange(prepared) {
       const payload = preparedPayloads.get(prepared)
       if (payload === undefined) return
       preparedPayloads.delete(prepared)
