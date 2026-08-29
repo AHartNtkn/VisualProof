@@ -61,6 +61,9 @@ case "$mode" in
     npm run build:game:e2e
     new_data_root
     run_scenario controls controls "$current_data_root"
+    new_data_root
+    run_scenario order-loop play "$current_data_root"
+    run_scenario order-loop reload "$current_data_root"
     ;;
   stress)
     npm run build:game:e2e

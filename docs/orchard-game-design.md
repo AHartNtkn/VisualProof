@@ -1,6 +1,10 @@
 # Orchard (working title) — ratified demo design
 
-Ratified 2026-08-26 in a grilling session. This document records every decision the session settled for the first releasable demo, and lists what was deliberately deferred to implementation time. The demo is "conceptually complete": every core mechanic present and exercised by real puzzles, so that anything added later is enhancement, not core.
+Ratified 2026-08-26 in a grilling session. This document records the first
+releasable demo design and the current playable order-loop contract. The demo
+is "conceptually complete" when every core mechanic is present and exercised
+by real puzzles, so anything added later is an enhancement rather than a
+missing foundation.
 
 ## Identity
 
@@ -10,9 +14,17 @@ A legitimate standalone game — not educational software — that gamifies math
 
 The orchard is one sheet of assertion. Each tree is an isolated top-level subgraph of that sheet; the whole orchard stands for one giant conjunction of theorems. Trees are diagrams as rendered by the existing 3D tree representation (`src/view3d/`) — nothing of the 2D Peirce notation appears anywhere in the game; cuts are branch banding, not circles.
 
-- **Seedlings.** A seedling is a blank-sheet spawn — semantically ⊤, rendered as a small white stick. Spawning is free and unlimited.
+- **Seedlings.** A seedling is a blank sheet — semantically ⊤, rendered as a
+  small white stick. The current orchard begins with one seedling. Whole-tree
+  iteration onto the ground duplicates a standing tree for free, gives the
+  duplicate a fresh identity, and leaves the source standing.
 - **Forward reasoning only.** Everything standing in the orchard is honestly proven at all times. Backward reasoning is parked, not rejected (a possible later tool at the pot).
-- **Citation = iteration.** Iterating one tree into another is theorem citation; the orchard is the player's library. This is the calculus's own iteration rule, not a separate mechanic.
+- **Iteration and citation.** Ordinary iteration copies a proper subtree only
+  within that same tree. A whole-tree cutting is a trusted library entry and
+  may be cited into another tree at a permitted polarity. Citation checks the
+  requested rewrite but does not replay a proof of the source theorem. Loading
+  an orchard trusts its standing library; it does not re-verify trees or load
+  proof histories.
 - **No player-defined relations.** The game is perfect-information throughout. Where content involves "definitions" (the Boolean capstone), the player proves the *existence* of a relation once and thereafter duplicates that existence proof by cutting — no minting, no naming UI.
 - **Progress is never forcibly lost.** Pots are not editable, delivery does not consume trees, and deletion is only ever the player's explicit choice.
 
@@ -20,8 +32,15 @@ The orchard is one sheet of assertion. Each tree is an isolated top-level subgra
 
 Accept orders from a catalog; grow the ordered tree; deliver it by iterating a copy into the order's pot.
 
-- **Catalog.** Pending and completed orders live in separate tabs. The player may accept as many orders as they want. Orders can be abandoned freely from the same interface — pot vanishes, order returns to the catalog, no penalty. Orders never expire.
-- **Pot.** Accepting an order produces a pot displaying a hologram of the goal diagram. A goal is always exactly one tree (a conjunction is one tree that branches immediately). The pot is a submission-only region — never editable, so the player cannot lose work into it.
+- **Catalog.** `Tab` opens the catalog and releases world input. Pending and
+  completed orders live in separate tabs. The current catalog contains one
+  starter order. It can be accepted or abandoned freely; abandonment removes
+  its pot and returns it to Pending with no penalty.
+- **Pot.** Opening the catalog captures the player's displayed position and
+  horizontal facing. Accepting places the pot six world units ahead of that
+  chosen view and displays a hologram of the goal diagram. A goal is always
+  exactly one tree (a conjunction is one tree that branches immediately). The
+  pot is a submission-only region and is never editable.
 - **Delivery.** Submission is literally the iteration move targeting the pot: the player takes a cutting of a tree and inserts it. If the cutting is not an exact match (isomorphism) of the goal, the iteration simply fails — sound cue and a short message, nothing lost, nothing to clean up. On an exact match the pot accepts: it departs with the copy, the order moves to the completed tab, reputation is awarded, and the source tree remains standing. Pots do not persist as trophies.
 
 ## Interaction
@@ -44,12 +63,30 @@ focus glide. `Escape` restores the exact pre-selection free-flight pose and
 requests free-flight input again during that same key interaction, so play
 resumes without another click when engagement succeeds.
 
-The secondary proof action is orchard application behavior composed beside the
-shared 3D interaction. A stationary secondary release applies the proof move to
-the selected branch. A dragged mouse does not move the camera or fire either
-click action. The proof action does not change the camera or navigation mode. A
-successful move publishes one complete tree value to the live session and
-renderer and queues that same value for saving.
+The player carries exactly two tools in the current loop: Double Cut and
+Iteration. Pressing `1` swaps them, updates the HUD, and clears any held
+cutting. Double Cut applies its proof move with one stationary secondary
+release on the targeted branch.
+
+Iteration is a two-stage stationary secondary gesture. The first release takes
+either the whole targeted tree or a targeted proper subtree. The second release
+chooses its destination:
+
+- a whole tree onto ground creates a free, independent duplicate;
+- a proper subtree onto its source tree performs ordinary iteration;
+- a whole tree onto another tree performs trusted library citation when the
+  target polarity permits it; and
+- a whole tree onto the accepted order's pot attempts delivery.
+
+A proper subtree cannot target a different tree. Invalid destinations explain
+the refusal and keep the cutting held so the player can try again. `Escape`
+clears a held cutting before applying its existing orbit-exit behavior.
+Deiteration is not part of Iteration; it remains a future, separate tool.
+
+A dragged mouse does not move the camera or fire a proof action. Proof actions
+do not change the camera or navigation mode. A successful change publishes one
+complete tree value to the live session and renderer and queues that same value
+for saving.
 
 Game camera state owns free/selected mode and the exact free-flight pose. The
 shared 3D interaction owns the selected-tree camera pose. The renderer owns

@@ -104,10 +104,16 @@ export function expectDoubleCut(
   expect(inner).toBeDefined()
 }
 
-export async function waitForVisibleTreeTween(): Promise<void> {
+export async function canvasScreenshot(): Promise<string> {
   const worldCanvas = await canvas()
   const elementId = await worldCanvas.elementId
-  const during = await browser.takeElementScreenshot(elementId)
+  return browser.takeElementScreenshot(elementId)
+}
+
+export async function waitForVisibleTreeTween(before?: string): Promise<void> {
+  const worldCanvas = await canvas()
+  const elementId = await worldCanvas.elementId
+  const during = before ?? await browser.takeElementScreenshot(elementId)
   let previous = ''
   let settled = ''
   let stableSamples = 0
@@ -130,13 +136,89 @@ export async function clickWorld(x = 0, y = 0): Promise<void> {
     .perform()
 }
 
-export function storedTreeDiagram(slotId: string, treeId: string): StoredDiagram {
+function storedDatabase(slotId: string): DatabaseSync {
   const dataRoot = process.env['GAME_E2E_DATA_ROOT']
   if (dataRoot === undefined) throw new Error('GAME_E2E_DATA_ROOT is required for save inspection')
-  const database = new DatabaseSync(
+  return new DatabaseSync(
     join(dataRoot, 'com.visualproofassistant.orchard', 'saves', `${slotId}.sqlite3`),
     { readOnly: true },
   )
+}
+
+export function storedTreeIds(slotId: string): readonly string[] {
+  const database = storedDatabase(slotId)
+  try {
+    const rows = database.prepare('SELECT tree_id FROM trees ORDER BY tree_id').all() as readonly {
+      readonly tree_id?: unknown
+    }[]
+    return rows.map(({ tree_id: treeId }) => {
+      if (typeof treeId !== 'string') throw new Error(`save '${slotId}' contains an invalid tree ID`)
+      return treeId
+    })
+  } finally {
+    database.close()
+  }
+}
+
+export function storedOrder(
+  slotId: string,
+  orderId: string,
+): {
+  readonly state: 'pending' | 'accepted' | 'completed'
+  readonly pot: { readonly x: number; readonly z: number; readonly yaw: number } | null
+} {
+  const database = storedDatabase(slotId)
+  try {
+    const row = database.prepare(`
+      SELECT state, pot_x, pot_z, pot_yaw
+      FROM orders
+      WHERE order_id = ?
+    `).get(orderId) as {
+      readonly state?: unknown
+      readonly pot_x?: unknown
+      readonly pot_z?: unknown
+      readonly pot_yaw?: unknown
+    } | undefined
+    if (row === undefined || !['pending', 'accepted', 'completed'].includes(String(row.state))) {
+      throw new Error(`order '${orderId}' is missing from save '${slotId}'`)
+    }
+    const state = row.state as 'pending' | 'accepted' | 'completed'
+    if (state !== 'accepted') {
+      if (row.pot_x !== null || row.pot_z !== null || row.pot_yaw !== null) {
+        throw new Error(`order '${orderId}' has a pot outside accepted state`)
+      }
+      return { state, pot: null }
+    }
+    if (
+      typeof row.pot_x !== 'number'
+      || typeof row.pot_z !== 'number'
+      || typeof row.pot_yaw !== 'number'
+    ) throw new Error(`order '${orderId}' has an invalid accepted pot`)
+    return { state, pot: { x: row.pot_x, z: row.pot_z, yaw: row.pot_yaw } }
+  } finally {
+    database.close()
+  }
+}
+
+export function storedReputation(slotId: string): number {
+  const database = storedDatabase(slotId)
+  try {
+    const row = database.prepare(`
+      SELECT reputation
+      FROM progress
+      WHERE singleton = 1
+    `).get() as { readonly reputation?: unknown } | undefined
+    if (typeof row?.reputation !== 'number' || !Number.isSafeInteger(row.reputation)) {
+      throw new Error(`reputation is missing from save '${slotId}'`)
+    }
+    return row.reputation
+  } finally {
+    database.close()
+  }
+}
+
+export function storedTreeDiagram(slotId: string, treeId: string): StoredDiagram {
+  const database = storedDatabase(slotId)
   try {
     const row = database.prepare(`
       SELECT diagrams.diagram_json AS diagram_json
@@ -152,12 +234,7 @@ export function storedTreeDiagram(slotId: string, treeId: string): StoredDiagram
 }
 
 export function storedCameraPose(slotId: string): DisplayPose {
-  const dataRoot = process.env['GAME_E2E_DATA_ROOT']
-  if (dataRoot === undefined) throw new Error('GAME_E2E_DATA_ROOT is required for save inspection')
-  const database = new DatabaseSync(
-    join(dataRoot, 'com.visualproofassistant.orchard', 'saves', `${slotId}.sqlite3`),
-    { readOnly: true },
-  )
+  const database = storedDatabase(slotId)
   try {
     const row = database.prepare(`
       SELECT x, y, z, yaw, pitch
