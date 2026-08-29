@@ -1,4 +1,4 @@
-import type { Diagram, NodeId, WireId } from '../kernel/diagram/diagram'
+import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import { diagramSpec } from './spec'
 import { CLEARANCE, UNIT, layoutTree, type TreeLayout } from './layout'
 import { steinerNet } from './steiner'
@@ -12,7 +12,7 @@ export type Entity =
       stroke by polarity — sheet-parity lines keep the strong color, odd
       (cut) lines go gray (USER ruling 2026-08-16) — so every cut boundary
       is visible as a color change and needs no marker dot. */
-  | { kind: 'branch'; key: string; polarity: 0 | 1; pts: Vec3[] }
+  | { kind: 'branch'; key: string; region: RegionId; polarity: 0 | 1; pts: Vec3[] }
   /** An identity node's marker on its line (USER law 2026-08-15: identity
       nodes draw small pips over the branches). `ownerWire`: the first wire
       bound there — the 2D bodyStroke hue rule. */
@@ -155,7 +155,13 @@ export function scene3(d: Diagram): Scene3 {
     return depth
   }
   for (const pr of tl.regions.values()) {
-    entities.push({ kind: 'branch', key: `b:${pr.region}`, polarity: (depthOf(pr.region) % 2) as 0 | 1, pts: [pr.base, pr.tip] })
+    entities.push({
+      kind: 'branch',
+      key: `b:${pr.region}`,
+      region: pr.region,
+      polarity: (depthOf(pr.region) % 2) as 0 | 1,
+      pts: [pr.base, pr.tip],
+    })
   }
   const ownerWireOf = new Map<NodeId, WireId>()
   for (const w of spec.wires) {

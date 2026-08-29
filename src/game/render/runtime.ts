@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import type { WireId } from '../../kernel/diagram/diagram'
 import type { Entity } from '../../view3d/scene'
+import { entityColor } from '../../view3d/entity-style'
 import { GlowTilePlan, type DirtyGlowTile } from './glow-tiles'
 import { projectedDiameterPx, selectLod, type LodLevel } from './lod-policy'
 import { SpatialIndex } from './spatial-index'
@@ -768,13 +769,11 @@ export function makeTreeMaterialSource(
   const lines = new Map<string, LineMaterial>()
   const sprites = new Map<string, THREE.SpriteMaterial>()
   const hues = new Map<WireId, string>(asset.hues)
-  const colorFor = (entity: Entity): string => {
-    if (entity.kind === 'branch') return entity.polarity === 0 ? asset.palette.branch : asset.palette.cutBranch
-    if (entity.kind === 'strand') return hues.get(entity.wire) ?? asset.palette.baseWire
-    if (entity.kind === 'ring' && entity.headWire !== null) return hues.get(entity.headWire) ?? asset.palette.baseWire
-    if (entity.kind === 'pip' && entity.ownerWire !== null) return hues.get(entity.ownerWire) ?? asset.palette.baseWire
-    return asset.palette.branch
-  }
+  const colorFor = (entity: Entity): string => entityColor(entity, hues, {
+    line: asset.palette.branch,
+    lineAlt: asset.palette.cutBranch,
+    baseWire: asset.palette.baseWire,
+  })
   const line = (
     entity: Extract<Entity, { kind: 'branch' | 'ring' | 'strand' }>,
     width: number,

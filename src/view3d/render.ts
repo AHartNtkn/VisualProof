@@ -7,6 +7,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Entity } from './scene'
+import { entityColor } from './entity-style'
 import type { FadedEntity } from './transition'
 import { FOV_DEG, eyeOf, type CamPose } from './camera'
 
@@ -134,16 +135,7 @@ export function mountRender(container: HTMLElement, theme: RenderTheme): Rendere
   }
   applyBackground()
 
-  // Strands stroke in their wire's order hue; an atom's ring strokes in its
-  // HEAD wire's hue (matching the 2D painter's bodyStroke); refs (null
-  // headWire) and structural entities keep the line color.
-  const colorOf = (e: Entity): string => {
-    if (e.kind === 'strand') return th.hues.get(e.wire) ?? th.baseWire
-    if (e.kind === 'ring' && e.headWire !== null) return th.hues.get(e.headWire) ?? th.baseWire
-    if (e.kind === 'pip' && e.ownerWire !== null) return th.hues.get(e.ownerWire) ?? th.baseWire
-    if (e.kind === 'branch' && e.polarity === 1) return th.lineAlt
-    return th.line
-  }
+  const colorOf = (entity: Entity): string => entityColor(entity, th.hues, th)
 
   const disposeLine = (r: LineRec): void => {
     group.remove(r.obj)

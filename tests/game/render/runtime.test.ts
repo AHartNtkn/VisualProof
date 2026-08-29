@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import {
   GameTreeRuntime,
+  makeTreeMaterialSource,
   type RenderTree,
   type TreeObjectBuilder,
 } from '../../../src/game/render/runtime'
@@ -11,6 +12,7 @@ function asset(center = { x: 0, y: 2, z: 0 }, entityCount = 4, radius = 5): Tree
   const entities = Array.from({ length: entityCount }, (_, index) => ({
     kind: 'branch' as const,
     key: `branch-${index}`,
+    region: `region-${index}`,
     polarity: 0 as const,
     pts: [{ x: 0, y: index, z: 0 }, { x: 0, y: index + 1, z: 0 }],
   }))
@@ -64,6 +66,37 @@ function cameraAt(x = 0, z = 0, lookZ = -1): THREE.PerspectiveCamera {
 }
 
 describe('game tree runtime', () => {
+  it('authors material colors from shared branch polarity and wire-hue semantics', () => {
+    const renderAsset: TreeRenderAsset = {
+      ...asset(),
+      hues: [['wire-a', '#12569a']],
+      palette: { branch: '#2468ac', cutBranch: '#864220', baseWire: '#abcdef' },
+    }
+    const source = makeTreeMaterialSource(
+      renderAsset,
+      new Set(),
+      new Set(),
+      new Set(),
+      () => ({ width: 800, height: 600 }),
+    )
+    const even = source.line({
+      kind: 'branch', key: 'even-drawing', region: 'even', polarity: 0, pts: [],
+    }, 0.1)
+    const odd = source.line({
+      kind: 'branch', key: 'odd-drawing', region: 'odd', polarity: 1, pts: [],
+    }, 0.1)
+    const strand = source.line({
+      kind: 'strand', key: 'strand-drawing', wire: 'wire-a', pts: [],
+    }, 0.05)
+    const radiance = (color: string): string => new THREE.Color(color)
+      .multiplyScalar(1 + renderAsset.glow.bloom)
+      .getHexString()
+
+    expect(even.color.getHexString()).toBe(radiance(renderAsset.palette.branch))
+    expect(odd.color.getHexString()).toBe(radiance(renderAsset.palette.cutBranch))
+    expect(strand.color.getHexString()).toBe(radiance('#12569a'))
+  })
+
   it('renders the latest placement and diagram for a stable tree ID', () => {
     const runtime = new GameTreeRuntime(
       resolve({ a: asset(), b: asset({ x: 1, y: 2, z: 0 }, 6) }),

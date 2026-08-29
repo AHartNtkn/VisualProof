@@ -3,10 +3,11 @@ import { diagramToJson } from '../kernel/diagram'
 import { applyDoubleCutIntro } from '../kernel/rules/doublecut'
 import type { GameTree } from './model'
 import type { TreeUpdate } from './save-client'
+import type { Entity } from '../view3d/scene'
 
 export type PointedTreePart = {
   readonly treeId: string
-  readonly entityKey: string
+  readonly entity: Entity
   readonly distance: number
 }
 
@@ -25,19 +26,15 @@ export class ToolError extends Error {
   }
 }
 
-function branchRegion(key: string): string {
-  if (!key.startsWith('b:') || key.length === 2) throw new ToolError('double cut requires a branch')
-  return key.slice(2)
-}
-
 export class GameSession {
   public constructor(public trees: ReadonlyMap<string, GameTree>) {}
 
   public applyDoubleCut(pointedPart: PointedTreePart): TreeMutation {
     const tree = this.trees.get(pointedPart.treeId)
     if (tree === undefined) throw new ToolError(`unknown tree '${pointedPart.treeId}'`)
+    if (pointedPart.entity.kind !== 'branch') throw new ToolError('double cut requires a branch')
     const after = applyDoubleCutIntro(tree.diagram, {
-      region: branchRegion(pointedPart.entityKey),
+      region: pointedPart.entity.region,
       regions: [],
       nodes: [],
       wires: [],

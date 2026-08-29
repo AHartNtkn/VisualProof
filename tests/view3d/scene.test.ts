@@ -29,6 +29,8 @@ describe('scene3', () => {
     // Polarity replaces marker dots (USER ruling 2026-08-16): the sheet's
     // line is even, the cut's line odd — the crossing is a color change.
     const branchOf = (key: string) => byKind('branch').find((e) => e.key === key) as Extract<Entity, { kind: 'branch' }>
+    expect(branchOf('b:r0').region).toBe(d.root)
+    expect(branchOf(`b:${c1}`).region).toBe(c1)
     expect(branchOf('b:r0').polarity).toBe(0)
     expect(branchOf(`b:${c1}`).polarity).toBe(1)
     expect(byKind('ring').map((e) => e.key).sort()).toEqual([`r:${P}`, `r:${Q}`, `r:${R}`].sort())

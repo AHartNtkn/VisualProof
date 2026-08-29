@@ -370,7 +370,7 @@ describe('production game world', () => {
 
     expect(world.pointAtBranch(0, 0, 'orbit')).toMatchObject({
       treeId: 'orbit',
-      entityKey: 'b:r0',
+      entity: { kind: 'branch', key: 'b:r0', region: 'r0' },
     })
     world.dispose()
   })

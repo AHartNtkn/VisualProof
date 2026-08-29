@@ -22,7 +22,7 @@ export type TreeMaterialSource = {
 }
 
 export type EntitySegmentRange = {
-  readonly entityKey: string
+  readonly entity: LineEntity
   readonly startSegment: number
   readonly endSegment: number
 }
@@ -33,18 +33,18 @@ export type TreeAssetPointCandidate = {
   readonly asset: TreeRenderAsset
 }
 
-export type EntityKeyFilter = (entityKey: string) => boolean
+export type EntityFilter = (entity: Entity) => boolean
 
-function entityKeyAt(intersection: THREE.Intersection): string | null {
-  const direct = intersection.object.userData['entityKey']
-  if (typeof direct === 'string') return direct
+function entityAt(intersection: THREE.Intersection): Entity | null {
+  const direct = intersection.object.userData['entity']
+  if (direct !== undefined) return direct as Entity
   if (!(intersection.object instanceof LineSegments2)) return null
   const segment = intersection.faceIndex
   const ranges = intersection.object.userData['entityRanges'] as readonly EntitySegmentRange[] | undefined
   if (segment === undefined || segment === null || ranges === undefined) return null
   return ranges.find(({ startSegment, endSegment }) =>
     segment >= startSegment && segment < endSegment,
-  )?.entityKey ?? null
+  )?.entity ?? null
 }
 
 export function pointAtVisibleParts(
@@ -52,7 +52,7 @@ export function pointAtVisibleParts(
   objects: readonly THREE.Object3D[],
   reach: number,
   orbitTarget: string | null,
-  accepts: EntityKeyFilter = () => true,
+  accepts: EntityFilter = () => true,
 ): PointedTreePart | null {
   const candidates = orbitTarget === null
     ? objects
@@ -61,9 +61,9 @@ export function pointAtVisibleParts(
   for (const intersection of intersections) {
     if (!Number.isFinite(intersection.distance) || intersection.distance > reach) continue
     const treeId = intersection.object.userData['treeId']
-    const entityKey = entityKeyAt(intersection)
-    if (typeof treeId === 'string' && entityKey !== null && accepts(entityKey)) {
-      return { treeId, entityKey, distance: intersection.distance }
+    const entity = entityAt(intersection)
+    if (typeof treeId === 'string' && entity !== null && accepts(entity)) {
+      return { treeId, entity, distance: intersection.distance }
     }
   }
   return null
@@ -74,7 +74,7 @@ export function pointAtTreeAssets(
   candidates: readonly TreeAssetPointCandidate[],
   reach: number,
   orbitTarget: string | null,
-  accepts: EntityKeyFilter = () => true,
+  accepts: EntityFilter = () => true,
 ): PointedTreePart | null {
   const localRay = new THREE.Ray(new THREE.Vector3(), new THREE.Vector3())
   const localStart = new THREE.Vector3()
@@ -83,9 +83,9 @@ export function pointAtTreeAssets(
   const onPart = new THREE.Vector3()
   const boundsPoint = new THREE.Vector3()
   let pointed: PointedTreePart | null = null
-  const consider = (treeId: string, entityKey: string, distance: number): void => {
+  const consider = (treeId: string, entity: Entity, distance: number): void => {
     if (!Number.isFinite(distance) || distance > reach) return
-    if (pointed === null || distance < pointed.distance) pointed = { treeId, entityKey, distance }
+    if (pointed === null || distance < pointed.distance) pointed = { treeId, entity, distance }
   }
 
   for (const { treeId, placement, asset } of candidates) {
@@ -109,7 +109,7 @@ export function pointAtTreeAssets(
     if (onRay.distanceToSquared(boundsPoint) > asset.bounds.radius * asset.bounds.radius) continue
     if (localRay.origin.distanceTo(onRay) - asset.bounds.radius > reach) continue
     for (const entity of asset.lods.full.entities) {
-      if (!accepts(entity.key)) continue
+      if (!accepts(entity)) continue
       if ('pts' in entity) {
         const radius = (entity.kind === 'branch' ? asset.widths.branch : asset.widths.curve) / 2
         for (let index = 1; index < entity.pts.length; index++) {
@@ -118,7 +118,7 @@ export function pointAtTreeAssets(
           localStart.set(start.x, start.y, start.z)
           localEnd.set(end.x, end.y, end.z)
           if (localRay.distanceSqToSegment(localStart, localEnd, onRay, onPart) <= radius * radius) {
-            consider(treeId, entity.key, localRay.origin.distanceTo(onRay))
+            consider(treeId, entity, localRay.origin.distanceTo(onRay))
           }
         }
         continue
@@ -127,7 +127,7 @@ export function pointAtTreeAssets(
       localRay.closestPointToPoint(localStart, onRay)
       const radius = entity.kind === 'pip' ? 0.09 : 0.35
       if (onRay.distanceToSquared(localStart) <= radius * radius) {
-        consider(treeId, entity.key, localRay.origin.distanceTo(onRay))
+        consider(treeId, entity, localRay.origin.distanceTo(onRay))
       }
     }
   }
@@ -188,6 +188,7 @@ export function makeDynamicTreeObject(
       const line = new Line2(geometry, material)
       line.computeLineDistances()
       line.userData['entityKey'] = entity.key
+      line.userData['entity'] = entity
       line.userData['entityKind'] = entity.kind
       line.userData['treeId'] = placement.id
       line.userData['treeIndex'] = placement.index
@@ -212,6 +213,7 @@ function spriteObject(entity: SpriteEntity, placement: TreePlacement, materials:
     : 1
   sprite.scale.set(height * aspect, height, 1)
   sprite.userData['entityKey'] = entity.key
+  sprite.userData['entity'] = entity
   sprite.userData['entityKind'] = entity.kind
   sprite.userData['treeId'] = placement.id
   sprite.userData['treeIndex'] = placement.index
@@ -235,6 +237,7 @@ export function makeRawTreeObject(
       line.computeLineDistances()
       object = line
       object.userData['entityKey'] = entity.key
+      object.userData['entity'] = entity
       object.userData['entityKind'] = entity.kind
       object.userData['treeId'] = placement.id
       object.userData['treeIndex'] = placement.index
@@ -286,7 +289,7 @@ export function makeBatchedTreeObject(
     }
     batch.entityKeys.push(entity.key)
     batch.entityRanges.push({
-      entityKey: entity.key,
+      entity,
       startSegment,
       endSegment: batch.positions.length / 6,
     })

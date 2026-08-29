@@ -50,7 +50,12 @@ describe('game tool session', () => {
   it('spawns a real empty double cut on the pointed branch of any generic tree', () => {
     const session = gameSession(worldWithTree('large', largeDiagram).trees)
     const mutation = session.applyDoubleCut({
-      treeId: 'large', entityKey: `b:${nestedRegion}`, distance: 12,
+      treeId: 'large',
+      entity: {
+        kind: 'branch', key: 'drawing-key-unrelated-to-region', region: nestedRegion,
+        polarity: 0, pts: [],
+      },
+      distance: 12,
     })
 
     expect(Object.keys(mutation.after.regions)).toHaveLength(
@@ -77,10 +82,14 @@ describe('game tool session', () => {
     const session = gameSession(worldWithTree('tree-a', blankDiagram).trees)
     const beforeTrees = treeValues(session.trees)
     expect(() => session.applyDoubleCut({
-      treeId: 'tree-a', entityKey: 'r:n0', distance: 5,
+      treeId: 'tree-a',
+      entity: { kind: 'ring', key: 'r:n0', node: 'n0', headWire: null, pts: [] },
+      distance: 5,
     })).toThrow(/branch/)
     expect(() => session.applyDoubleCut({
-      treeId: 'missing', entityKey: 'b:r0', distance: 5,
+      treeId: 'missing',
+      entity: { kind: 'branch', key: 'anything', region: 'r0', polarity: 0, pts: [] },
+      distance: 5,
     })).toThrow(/unknown tree/)
     expect(treeValues(session.trees)).toEqual(beforeTrees)
   })

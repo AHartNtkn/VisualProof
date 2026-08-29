@@ -5,7 +5,7 @@ import type { Scene3 } from '../../../src/view3d/scene'
 const full: Scene3 = {
   center: { x: 0, y: 5, z: 0 }, radius: 6,
   entities: [
-    { kind: 'branch', key: 'b:0', polarity: 0, pts: [{ x: 0, y: 0, z: 0 }, { x: 0, y: 10, z: 0 }] },
+    { kind: 'branch', key: 'b:0', region: '0', polarity: 0, pts: [{ x: 0, y: 0, z: 0 }, { x: 0, y: 10, z: 0 }] },
     { kind: 'strand', key: 's:w:0', wire: 'w', pts: [{ x: 0, y: 2, z: 0 }, { x: 2, y: 4, z: 0 }] },
     { kind: 'pip', key: 'p:n', node: 'n', ownerWire: 'w', pos: { x: 0, y: 2, z: 0 } },
   ],

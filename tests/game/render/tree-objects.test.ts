@@ -10,6 +10,7 @@ import {
   makeDynamicTreeObject,
   makeMarkerObject,
   makeRawTreeObject,
+  pointAtTreeAssets,
   type TreeMaterialSource,
 } from '../../../src/game/render/tree-objects'
 import type { TreePlacement } from '../../../src/game/render/placement'
@@ -24,7 +25,7 @@ const asset: TreeRenderAsset = {
       radius: 4,
       entities: [
         {
-          kind: 'branch', key: 'b:root', polarity: 0,
+          kind: 'branch', key: 'b:root', region: 'root', polarity: 0,
           pts: [{ x: 0, y: 0, z: 0 }, { x: 0, y: 2, z: 0 }],
         },
         {
@@ -39,7 +40,7 @@ const asset: TreeRenderAsset = {
       center: { x: 0, y: 2, z: 0 },
       radius: 4,
       entities: [{
-        kind: 'branch', key: 'b:reduced', polarity: 0,
+        kind: 'branch', key: 'b:reduced', region: 'reduced', polarity: 0,
         pts: [{ x: 0, y: 0, z: 0 }, { x: 0, y: 3, z: 0 }],
       }],
     },
@@ -121,6 +122,41 @@ function visibleColors(group: THREE.Object3D): Set<string> {
 }
 
 describe('game tree representations', () => {
+  it('points a typed branch whose drawing key does not encode its semantic region', () => {
+    const semanticBranch = {
+      kind: 'branch' as const,
+      key: 'drawing-only-key',
+      region: 'semantic-region',
+      polarity: 0 as const,
+      pts: [{ x: 0, y: 0, z: 0 }, { x: 0, y: 2, z: 0 }],
+    }
+    const semanticAsset: TreeRenderAsset = {
+      ...asset,
+      bounds: { center: { x: 0, y: 1, z: 0 }, radius: 2 },
+      lods: {
+        ...asset.lods,
+        full: { center: { x: 0, y: 1, z: 0 }, radius: 2, entities: [semanticBranch] },
+      },
+    }
+
+    const pointed = pointAtTreeAssets(
+      new THREE.Ray(new THREE.Vector3(0, 1, 5), new THREE.Vector3(0, 0, -1)),
+      [{
+        treeId: 'semantic-tree',
+        placement: { id: 'semantic-tree', index: 0, x: 0, z: 0, yaw: 0 },
+        asset: semanticAsset,
+      }],
+      100,
+      null,
+      (entity) => entity.kind === 'branch',
+    )
+
+    expect(pointed).toMatchObject({
+      treeId: 'semantic-tree',
+      entity: { key: 'drawing-only-key', region: 'semantic-region' },
+    })
+  })
+
   it('renders tween entities at their requested visible opacity', () => {
     const group = makeDynamicTreeObject({
       ...asset.lods.full,
