@@ -163,10 +163,11 @@ LOD and residency.
 
 ## Camera and Input
 
-Loading initializes navigation from the saved free-flight pose. Free flight
-begins inactive with a centered “Click to play” prompt. Successful engagement
-activates mouse look and the movement keys: `W`/`S` move horizontally forward
-and back, `A`/`D` strafe, `Space`/`Control` move vertically, and `Shift` triples
+Loading initializes navigation from the saved free-flight pose and uses the
+Load interaction to engage free flight. Creating an orchard uses its Create
+interaction the same way. Successful engagement activates mouse look and the
+movement keys without another click: `W`/`S` move horizontally forward and
+back, `A`/`D` strafe, `Space`/`Control` move vertically, and `Shift` triples
 speed. Losing engagement, focus, or visibility deactivates free flight and
 clears transient input without changing the saved pose or loaded world.
 

@@ -26,9 +26,9 @@ Accept orders from a catalog; grow the ordered tree; deliver it by iterating a c
 
 ## Interaction
 
-Loading an orchard restores its saved free-flight pose and waits for a world
-click before accepting movement. That click engages cursorless relative input;
-while engaged, mouse motion changes yaw and pitch, `W`/`S` move forward and
+Loading or creating an orchard uses that same interaction to engage free
+flight, so the world accepts movement without another click. While engaged,
+mouse motion changes yaw and pitch, `W`/`S` move forward and
 back, `A`/`D` strafe, `Space`/`Control` move vertically, and `Shift` sprints. A
 small center reticle is the aim point. When free flight is inactive, the world
 shows only “Click to play.”

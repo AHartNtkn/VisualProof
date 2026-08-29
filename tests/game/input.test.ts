@@ -3,7 +3,6 @@ import { attachWorldInput, type WorldInputActions } from '../../game/input'
 
 class TestWorldTarget extends EventTarget {
   requestPointerLockCalls = 0
-  captured = new Set<number>()
   rejectEngagement = false
   throwEngagement = false
 
@@ -13,9 +12,6 @@ class TestWorldTarget extends EventTarget {
     return this.rejectEngagement ? Promise.reject(new Error('denied')) : Promise.resolve()
   }
 
-  setPointerCapture(pointerId: number): void { this.captured.add(pointerId) }
-  releasePointerCapture(pointerId: number): void { this.captured.delete(pointerId) }
-  hasPointerCapture(pointerId: number): boolean { return this.captured.has(pointerId) }
 }
 
 class TestDocumentTarget extends EventTarget {
@@ -93,16 +89,16 @@ describe('world input sampling', () => {
   })
 
   it('consumes accumulated pointer motion only while the world is engaged', () => {
-    const { target, documentTarget, input } = createHarness()
+    const { target, windowTarget, documentTarget, input } = createHarness()
 
-    target.dispatchEvent(event('mousemove', { movementX: 3, movementY: -4 }))
+    windowTarget.dispatchEvent(event('mousemove', { movementX: 3, movementY: -4 }))
     expect(input.sample()).toEqual({
       forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
     })
 
     documentTarget.pointerLockElement = target as unknown as Element
-    target.dispatchEvent(event('mousemove', { movementX: 3, movementY: -4 }))
-    target.dispatchEvent(event('mousemove', { movementX: -1, movementY: 7 }))
+    windowTarget.dispatchEvent(event('mousemove', { movementX: 3, movementY: -4 }))
+    windowTarget.dispatchEvent(event('mousemove', { movementX: -1, movementY: 7 }))
     expect(input.sample()).toEqual({
       forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 2, lookY: 3,
     })
@@ -144,11 +140,10 @@ describe('world input sampling', () => {
   })
 
   it('delivers raw pointer and wheel lifecycle while preventing native scrolling and menus', () => {
-    const { target, pointers, escapes } = createHarness()
-    target.dispatchEvent(event('pointerdown', { button: 2, clientX: 70, clientY: 80, pointerId: 4 }))
+    const { target, windowTarget, pointers, escapes } = createHarness()
     target.dispatchEvent(event('mousedown', { button: 2, clientX: 70, clientY: 80 }))
-    target.dispatchEvent(event('mousemove', { clientX: 74, clientY: 83 }))
-    target.dispatchEvent(event('mouseup', { button: 2, clientX: 74, clientY: 83 }))
+    windowTarget.dispatchEvent(event('mousemove', { clientX: 74, clientY: 83 }))
+    windowTarget.dispatchEvent(event('mouseup', { button: 2, clientX: 74, clientY: 83 }))
     const wheel = event('wheel', { deltaY: -120 }, true)
     target.dispatchEvent(wheel)
     const contextMenu = new Event('contextmenu', { cancelable: true })
@@ -160,6 +155,25 @@ describe('world input sampling', () => {
       'down:2:70:80', 'move:74:83', 'up:2:74:83', 'wheel:-120',
     ])
     expect(escapes.count).toBe(0)
+  })
+
+  it('delivers one complete mouse gesture when compatibility pointer events surround it', () => {
+    const { target, windowTarget, pointers } = createHarness()
+
+    target.dispatchEvent(event('pointerdown', {
+      button: 0, clientX: 70, clientY: 80, pointerId: 4,
+    }))
+    target.dispatchEvent(event('mousedown', { button: 0, clientX: 70, clientY: 80 }))
+    windowTarget.dispatchEvent(event('mousemove', { clientX: 74, clientY: 83 }))
+    target.dispatchEvent(event('pointerup', {
+      button: 0, clientX: 74, clientY: 83, pointerId: 4,
+    }))
+    target.dispatchEvent(event('lostpointercapture', { pointerId: 4 }))
+    windowTarget.dispatchEvent(event('mouseup', { button: 0, clientX: 74, clientY: 83 }))
+
+    expect(pointers).toEqual([
+      'down:0:70:80', 'move:74:83', 'up:0:74:83',
+    ])
   })
 
   it('handles orbit Escape by requesting engagement synchronously in the key event', () => {
@@ -191,17 +205,14 @@ describe('world input interruption and lifecycle', () => {
     const harness = createHarness()
     harness.documentTarget.pointerLockElement = harness.target as unknown as Element
     harness.windowTarget.dispatchEvent(event('keydown', { code: 'KeyW' }))
-    harness.target.dispatchEvent(event('mousemove', { movementX: 3, movementY: -4 }))
-    harness.target.dispatchEvent(event('pointerdown', {
-      button: 0, clientX: 10, clientY: 20, pointerId: 3,
-    }))
+    harness.windowTarget.dispatchEvent(event('mousemove', { movementX: 3, movementY: -4 }))
     harness.target.dispatchEvent(event('mousedown', { button: 0, clientX: 10, clientY: 20 }))
 
     interrupt(harness)
-    harness.target.dispatchEvent(event('mousemove', {
+    harness.windowTarget.dispatchEvent(event('mousemove', {
       clientX: 30, clientY: 40, movementX: 0, movementY: 0,
     }))
-    harness.target.dispatchEvent(event('mouseup', { button: 0, clientX: 30, clientY: 40 }))
+    harness.windowTarget.dispatchEvent(event('mouseup', { button: 0, clientX: 30, clientY: 40 }))
 
     expect(harness.input.sample()).toEqual({
       forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
@@ -211,31 +222,24 @@ describe('world input interruption and lifecycle', () => {
     expect(harness.engagements.at(-1)).toBe(false)
   })
 
-  it.each(['pointercancel', 'lostpointercapture'])('%s cancels the active pointer lifecycle', (type) => {
+  it('completes a gesture when mouseup occurs outside the world element', () => {
     const harness = createHarness()
-    harness.target.dispatchEvent(event('pointerdown', {
-      button: 0, clientX: 10, clientY: 20, pointerId: 3,
-    }))
     harness.target.dispatchEvent(event('mousedown', { button: 0, clientX: 10, clientY: 20 }))
 
-    harness.target.dispatchEvent(event(type, { pointerId: 3 }))
+    harness.windowTarget.dispatchEvent(event('mouseup', { button: 0, clientX: 12, clientY: 24 }))
 
-    expect(harness.pointers).toEqual(['down:0:10:20', 'cancel'])
-    expect(harness.target.captured.size).toBe(0)
+    expect(harness.pointers).toEqual(['down:0:10:20', 'up:0:12:24'])
   })
 
   it('detaches every input effect when disposed', () => {
     const harness = createHarness()
     harness.documentTarget.pointerLockElement = harness.target as unknown as Element
-    harness.target.dispatchEvent(event('pointerdown', {
-      button: 0, clientX: 10, clientY: 20, pointerId: 3,
-    }))
     harness.target.dispatchEvent(event('mousedown', { button: 0, clientX: 10, clientY: 20 }))
     harness.input.dispose()
     harness.input.dispose()
 
     harness.windowTarget.dispatchEvent(event('keydown', { code: 'KeyW' }))
-    harness.target.dispatchEvent(event('mousemove', { movementX: 3, movementY: -4 }))
+    harness.windowTarget.dispatchEvent(event('mousemove', { movementX: 3, movementY: -4 }))
     harness.target.dispatchEvent(event('mousedown', { button: 0, clientX: 123, clientY: 456 }))
     harness.windowTarget.dispatchEvent(event('keydown', { code: 'Escape' }))
     harness.documentTarget.pointerLockElement = null
@@ -275,7 +279,7 @@ describe('world input interruption and lifecycle', () => {
     harness.windowTarget.dispatchEvent(event('keydown', { code: 'Escape' }, true))
     await Promise.resolve()
 
-    expect(harness.engagements).toEqual([true, false])
+    expect(harness.engagements).toEqual([false, true, false])
   })
 
   it('reports a synchronous handled-Escape engagement failure inactive', async () => {
@@ -288,7 +292,7 @@ describe('world input interruption and lifecycle', () => {
     )).not.toThrow()
     await Promise.resolve()
 
-    expect(harness.engagements).toEqual([false])
+    expect(harness.engagements).toEqual([false, false])
   })
 
   it('normalizes a synchronous ordinary engagement failure to a rejected promise', async () => {

@@ -19,7 +19,7 @@ import { saveClient, treeUpdateFromGameTree, type CameraRecord, type SlotListEnt
 import { SaveWriter } from '../src/game/save-writer'
 import { gameSession, publishTreeMutation, type GameSession } from '../src/game/session'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
-import { attachWorldInput, type WorldInput } from './input'
+import { attachWorldInput, requestWorldEngagement, type WorldInput } from './input'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
 const worldHost = document.querySelector<HTMLElement>('[data-world]')!
@@ -341,7 +341,6 @@ async function startWorld(world: GameWorld): Promise<void> {
     input = nextInput
     session = nextSession
     writer = nextWriter
-    freeActive = false
     start.hidden = true
     hud.hidden = false
     worldName.textContent = world.slot.name
@@ -367,6 +366,7 @@ async function startWorld(world: GameWorld): Promise<void> {
 }
 
 function showStartFailure(failure: StartFailure): void {
+  if (document.pointerLockElement === worldHost) document.exitPointerLock()
   const concrete = `Could not open orchard: ${failure.message}`
   menuError.textContent = concrete
   root.dataset['errors'] = concrete
@@ -377,6 +377,9 @@ startLifecycle.registerControl(nameInput)
 for (const button of createForm.querySelectorAll<HTMLButtonElement>('button')) startLifecycle.registerControl(button)
 
 function startOpening(operation: () => Promise<GameWorld>): void {
+  void requestWorldEngagement(worldHost).catch((error: unknown) => {
+    setError(`Could not begin play: ${message(error)}`)
+  })
   void startLifecycle.start(operation)
 }
 

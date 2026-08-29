@@ -145,8 +145,9 @@ camera.
 Input engagement is reported to game navigation as an event; querying
 `document.pointerLockElement` is not a gameplay-state decision.
 
-Loading begins in inactive free flight. Successful engagement activates free
-flight. Losing engagement, focus, or visibility deactivates free flight and
+Loading and creation request free-flight engagement during their existing user
+interaction. Successful engagement activates free flight without another
+click. Losing engagement, focus, or visibility deactivates free flight and
 clears transient input without changing the saved pose or loaded world.
 
 Escape while orbiting is handled by the game, restores the saved free pose,

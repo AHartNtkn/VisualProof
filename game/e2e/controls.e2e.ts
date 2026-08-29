@@ -35,29 +35,12 @@ describe('orchard world controls', () => {
     await expect(game()).toHaveAttribute('data-ready', 'true')
     await expect(game()).toHaveAttribute('data-loaded-slot', 'large-1')
     await expect(game()).toHaveAttribute('data-camera-mode', 'free')
-    await expect(game()).toHaveAttribute('data-input-engaged', 'false')
+    await expect(game()).toHaveAttribute('data-input-engaged', 'true')
     const engagePrompt = $('[data-engage]')
-    await expect(engagePrompt).toBeDisplayed()
-    await expect(engagePrompt).toHaveText('Click to play')
-    const [promptLocation, promptSize, canvasLocation, canvasSize] = await Promise.all([
-      engagePrompt.getLocation(),
-      engagePrompt.getSize(),
-      canvas().getLocation(),
-      canvas().getSize(),
-    ])
-    expect(promptLocation.x + promptSize.width / 2)
-      .toBeCloseTo(canvasLocation.x + canvasSize.width / 2, 0)
-    expect(promptLocation.y + promptSize.height / 2)
-      .toBeCloseTo(canvasLocation.y + canvasSize.height / 2, 0)
-    await expect($('[data-reticle]')).not.toBeDisplayed()
+    await expect(engagePrompt).not.toBeDisplayed()
+    await expect($('[data-reticle]')).toBeDisplayed()
 
     const loadedPose = await displayedPose()
-    await clickWorld()
-    await expect(game()).toHaveAttribute('data-input-engaged', 'true')
-    await expectPoseClose(await displayedPose(), loadedPose)
-    await expect($('[data-reticle]')).toBeDisplayed()
-    await expect($('[data-engage]')).not.toBeDisplayed()
-
     await clickWorld(500, 300)
     await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
     await expect(game()).toHaveAttribute('data-orbit-target', 'tree-0000')
@@ -113,7 +96,25 @@ describe('orchard world controls', () => {
     })
     const offCenterBranch = branchFocuses[0]
     if (offCenterBranch === undefined) throw new Error('fixture has no branch to focus')
-    const focusOffset = await canvasOffsetForWorldPoint(zoomedOrbitPose, offCenterBranch.focus)
+    const segment = offCenterBranch.entity.pts.slice(1).map((end, index) => ({
+      start: offCenterBranch.entity.pts[index]!,
+      end,
+    })).sort((a, b) => Math.hypot(
+      b.end.x - b.start.x,
+      b.end.y - b.start.y,
+      b.end.z - b.start.z,
+    ) - Math.hypot(
+      a.end.x - a.start.x,
+      a.end.y - a.start.y,
+      a.end.z - a.start.z,
+    ))[0]
+    if (segment === undefined) throw new Error('fixture branch has no visible segment')
+    const visibleBranchPoint = {
+      x: (segment.start.x + segment.end.x) / 2,
+      y: (segment.start.y + segment.end.y) / 2,
+      z: (segment.start.z + segment.end.z) / 2,
+    }
+    const focusOffset = await canvasOffsetForWorldPoint(zoomedOrbitPose, visibleBranchPoint)
     await clickWorld(focusOffset.x, focusOffset.y)
     await browser.pause(300)
     const focusedOrbitPose = await displayedPose()
