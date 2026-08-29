@@ -5,10 +5,8 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
-import type { Diagram } from '../../kernel/diagram'
-import { snapshotFromDiagram } from '../diagram-snapshot'
 import type { GameTree, TreeTarget } from '../model'
-import type { PointedTreePart } from '../session'
+import type { PointedTreePart, TreeMutation } from '../session'
 import { DARK } from '../../view/paint'
 import { TreeRenderAssetCache } from './assets'
 import { mountGlowRenderer } from './glow-render'
@@ -51,10 +49,28 @@ export type GameWorldRenderer = {
   pickTree(ndcX: number, ndcY: number): TreeTarget | null
   pointAtBranch(ndcX: number, ndcY: number, orbitTarget: string | null): PointedTreePart | null
   setRenderMode(mode: RenderMode): void
-  beginTreeTween(treeId: string, before: Diagram, after: Diagram): void
+  prepareTreeUpdate(mutation: TreeMutation): PreparedTreeUpdate
+  commitTreeUpdate(prepared: PreparedTreeUpdate): void
+  discardTreeUpdate(prepared: PreparedTreeUpdate): void
   resize(width: number, height: number): void
   render(now: number): GameFrameStats
   dispose(): void
+}
+
+const preparedTreeUpdate: unique symbol = Symbol('prepared tree update')
+
+export type PreparedTreeUpdate = {
+  readonly [preparedTreeUpdate]: true
+}
+
+type PreparedTreeUpdatePayload = {
+  readonly treeId: string
+  readonly before: RenderTree
+  readonly after: RenderTree
+  readonly target: { readonly target: TreeTarget; readonly sphere: THREE.Sphere }
+  readonly beforeAsset: TreeRenderAsset
+  readonly afterAsset: TreeRenderAsset
+  readonly dynamic: ReturnType<DynamicTreeObjects['prepare']>
 }
 
 export function mountGameWorld(
@@ -136,6 +152,10 @@ export function mountGameWorld(
   )
   const renderTreesById = new Map<string, RenderTree>()
   const logicalTreeTargets = new Map<string, { readonly target: TreeTarget; readonly sphere: THREE.Sphere }>()
+  const preparedPayloads = new WeakMap<PreparedTreeUpdate, PreparedTreeUpdatePayload>()
+  const outstandingPrepared = new Set<PreparedTreeUpdate>()
+  const preparedByTreeId = new Map<string, PreparedTreeUpdate>()
+  let disposed = false
   const treeRaycaster = new THREE.Raycaster()
   const treeHitPoint = new THREE.Vector3()
 
@@ -149,6 +169,7 @@ export function mountGameWorld(
   })
 
   const setTrees = (trees: readonly GameTree[]): void => {
+    discardOutstandingPrepared()
     dynamicTrees.clear()
     const rendered = renderTrees(trees)
     renderTreesById.clear()
@@ -167,6 +188,14 @@ export function mountGameWorld(
     runtime.setTrees(rendered)
   }
 
+  const matchesTree = (rendered: RenderTree, tree: GameTree): boolean => {
+    return rendered.id === tree.id
+      && rendered.diagramJson === tree.snapshot.json
+      && rendered.placement.x === tree.placement.x
+      && rendered.placement.z === tree.placement.z
+      && rendered.placement.yaw === tree.placement.yaw
+  }
+
   const dynamicTrees = new DynamicTreeObjects(
     treeObjects,
     runtime,
@@ -176,6 +205,18 @@ export function mountGameWorld(
       return makeDynamicTreeObject(snapshot, tree.placement, materialsFor(asset))
     },
   )
+  const discardOutstandingPrepared = (): void => {
+    for (const prepared of outstandingPrepared) {
+      const payload = preparedPayloads.get(prepared)
+      if (payload === undefined) continue
+      preparedPayloads.delete(prepared)
+      if (preparedByTreeId.get(payload.treeId) === prepared) {
+        preparedByTreeId.delete(payload.treeId)
+      }
+      dynamicTrees.discard(payload.dynamic)
+    }
+    outstandingPrepared.clear()
+  }
   const syncGlow = (): void => {
     const dirty = runtime.flushGlow()
     for (const record of dirty) {
@@ -199,6 +240,10 @@ export function mountGameWorld(
   }
 
   const lifecycle = new GameWorldLifecycle([
+    () => {
+      disposed = true
+      discardOutstandingPrepared()
+    },
     () => dynamicTrees.dispose(),
     () => runtime.dispose(),
     () => { for (const material of lineMaterials) material.dispose() },
@@ -290,18 +335,82 @@ export function mountGameWorld(
     setRenderMode(mode) {
       runtime.setMode(mode)
     },
-    beginTreeTween(treeId, before, after) {
-      const current = renderTreesById.get(treeId)
-      if (current === undefined) throw new Error(`unknown rendered tree '${treeId}'`)
-      const beforeSnapshot = snapshotFromDiagram(before)
-      const afterSnapshot = snapshotFromDiagram(after)
-      const beforeAsset = assetCache.get(beforeSnapshot)
-      const afterAsset = assetCache.get(afterSnapshot)
-      assetsByJson.set(beforeSnapshot.json, beforeAsset)
-      assetsByJson.set(afterSnapshot.json, afterAsset)
-      const target = { ...current, diagramJson: afterSnapshot.json }
-      renderTreesById.set(treeId, target)
-      dynamicTrees.begin(target, beforeAsset.lods.full, afterAsset.lods.full, clock())
+    prepareTreeUpdate(mutation) {
+      if (disposed) throw new Error('game world renderer is disposed')
+      if (
+        mutation.treeId !== mutation.before.id
+        || mutation.treeId !== mutation.after.id
+      ) throw new Error('tree mutation identity is inconsistent')
+      const current = renderTreesById.get(mutation.treeId)
+      if (current === undefined || !matchesTree(current, mutation.before)) {
+        throw new Error(`stale tree mutation for '${mutation.treeId}'`)
+      }
+      if (preparedByTreeId.has(mutation.treeId)) {
+        throw new Error(`tree update for '${mutation.treeId}' is already prepared`)
+      }
+      const beforeAsset = assetCache.get(mutation.before.snapshot)
+      const afterAsset = assetCache.get(mutation.after.snapshot)
+      const after: RenderTree = {
+        id: mutation.after.id,
+        diagramJson: mutation.after.snapshot.json,
+        placement: {
+          id: mutation.after.id,
+          index: current.placement.index,
+          ...mutation.after.placement,
+        },
+      }
+      const center = localPointToWorld(afterAsset.bounds.center, after.placement)
+      const target = {
+        target: { treeId: after.id, center, radius: afterAsset.bounds.radius },
+        sphere: worldSphere(afterAsset.bounds, after.placement),
+      }
+      const dynamic = dynamicTrees.prepare(
+        after,
+        beforeAsset.lods.full,
+        afterAsset.lods.full,
+        clock(),
+        (snapshot, tree) => makeDynamicTreeObject(
+          snapshot,
+          tree.placement,
+          materialsFor(afterAsset),
+        ),
+      )
+      const payload: PreparedTreeUpdatePayload = {
+        treeId: mutation.treeId,
+        before: current,
+        after,
+        target,
+        beforeAsset,
+        afterAsset,
+        dynamic,
+      }
+      const prepared: PreparedTreeUpdate = { [preparedTreeUpdate]: true }
+      preparedPayloads.set(prepared, payload)
+      outstandingPrepared.add(prepared)
+      preparedByTreeId.set(mutation.treeId, prepared)
+      return prepared
+    },
+    commitTreeUpdate(prepared) {
+      const payload = preparedPayloads.get(prepared)
+      if (payload === undefined || disposed) return
+      preparedPayloads.delete(prepared)
+      outstandingPrepared.delete(prepared)
+      if (preparedByTreeId.get(payload.treeId) === prepared) preparedByTreeId.delete(payload.treeId)
+      assetsByJson.set(payload.before.diagramJson, payload.beforeAsset)
+      assetsByJson.set(payload.after.diagramJson, payload.afterAsset)
+      dynamicTrees.commit(payload.dynamic)
+      renderTreesById.set(payload.treeId, payload.after)
+      // Logical selection follows the authoritative after-tree immediately;
+      // the dynamic tween is presentation of that already-committed state.
+      logicalTreeTargets.set(payload.treeId, payload.target)
+    },
+    discardTreeUpdate(prepared) {
+      const payload = preparedPayloads.get(prepared)
+      if (payload === undefined) return
+      preparedPayloads.delete(prepared)
+      outstandingPrepared.delete(prepared)
+      if (preparedByTreeId.get(payload.treeId) === prepared) preparedByTreeId.delete(payload.treeId)
+      dynamicTrees.discard(payload.dynamic)
     },
     resize,
     render(now) {

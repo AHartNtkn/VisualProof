@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { GameTree, GameWorld } from '../../src/game/model'
-import { gameSession, useDoubleCut } from '../../src/game/session'
+import { gameSession, publishTreeMutation } from '../../src/game/session'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { snapshotFromDiagram } from '../../src/game/diagram-snapshot'
-import { treeUpdateFromGameTree, type TreeUpdate } from '../../src/game/save-client'
 
 const blankDiagram = new DiagramBuilder().build()
 
@@ -47,38 +46,29 @@ function treeValues(trees: ReadonlyMap<string, GameTree>): readonly {
 }
 
 describe('game tool session', () => {
-  it('persists the mutated snapshot and unchanged placement as one tree update', () => {
+  it('plans a complete tree mutation without publishing it', () => {
     const session = gameSession(worldWithTree('large', largeDiagram).trees)
-    const persisted: TreeUpdate[] = []
+    const before = session.trees.get('large')!
 
-    const mutation = useDoubleCut(session, {
+    const mutation = session.planDoubleCut({
       treeId: 'large',
       entity: {
         kind: 'branch', key: 'branch', region: nestedRegion,
         polarity: 0, pts: [],
       },
       distance: 12,
-    }, {
-      beginTreeTween() {},
-      persistTree(update) { persisted.push(update) },
     })
 
-    const liveTree = session.trees.get('large')!
-    expect(persisted).toEqual([treeUpdateFromGameTree(liveTree)])
-    expect(persisted[0]!.diagramJson).toBe(liveTree.snapshot.json)
-    expect(persisted[0]).toEqual({
-      treeId: 'large',
-      diagramJson: liveTree.snapshot.json,
-      x: 0,
-      z: -20,
-      yaw: 0,
-    })
-    expect(mutation.afterJson).toBe(liveTree.snapshot.json)
+    expect(session.trees.get('large')).toBe(before)
+    expect(mutation.before).toBe(before)
+    expect(mutation.after).toMatchObject({ id: 'large', placement: before.placement })
+    expect(mutation.after.snapshot).not.toBe(before.snapshot)
   })
 
   it('spawns a real empty double cut on the pointed branch of any generic tree', () => {
     const session = gameSession(worldWithTree('large', largeDiagram).trees)
-    const mutation = session.applyDoubleCut({
+    const before = session.trees.get('large')!
+    const mutation = session.planDoubleCut({
       treeId: 'large',
       entity: {
         kind: 'branch', key: 'drawing-key-unrelated-to-region', region: nestedRegion,
@@ -87,35 +77,137 @@ describe('game tool session', () => {
       distance: 12,
     })
 
-    expect(Object.keys(mutation.after.regions)).toHaveLength(
+    expect(Object.keys(mutation.after.snapshot.diagram.regions)).toHaveLength(
       Object.keys(largeDiagram.regions).length + 2,
     )
-    const outer = newRegions(mutation.before, mutation.after).find((id) => {
-      const region = mutation.after.regions[id]!
+    const outer = newRegions(mutation.before.snapshot.diagram, mutation.after.snapshot.diagram).find((id) => {
+      const region = mutation.after.snapshot.diagram.regions[id]!
       return region.kind === 'cut' && region.parent === nestedRegion
     })!
-    const inner = newRegions(mutation.before, mutation.after).find((id) => {
-      const region = mutation.after.regions[id]!
+    const inner = newRegions(mutation.before.snapshot.diagram, mutation.after.snapshot.diagram).find((id) => {
+      const region = mutation.after.snapshot.diagram.regions[id]!
       return region.kind === 'cut' && region.parent === outer
     })!
-    expect(mutation.after.regions[inner]).toEqual({ kind: 'cut', parent: outer })
-    expect(mutation.afterJson).toBe(snapshotFromDiagram(mutation.after).json)
+    expect(mutation.after.snapshot.diagram.regions[inner]).toEqual({ kind: 'cut', parent: outer })
+    expect(mutation.after.snapshot.json).toBe(snapshotFromDiagram(mutation.after.snapshot.diagram).json)
+    expect(session.trees.get('large')).toBe(before)
+
+    session.commit(session.prepare(mutation))
     expect(treeValues(session.trees)).toEqual([{
       id: 'large',
-      diagramJson: mutation.afterJson,
+      diagramJson: mutation.after.snapshot.json,
       placement: { x: 0, z: -20, yaw: 0 },
     }])
+  })
+
+  it('rejects a stale mutation without replacing the current tree', () => {
+    const session = gameSession(worldWithTree('large', largeDiagram).trees)
+    const first = session.planDoubleCut({
+      treeId: 'large',
+      entity: { kind: 'branch', key: 'first', region: nestedRegion, polarity: 0, pts: [] },
+      distance: 12,
+    })
+    const stale = session.planDoubleCut({
+      treeId: 'large',
+      entity: { kind: 'branch', key: 'stale', region: nestedRegion, polarity: 0, pts: [] },
+      distance: 12,
+    })
+    const prepared = session.prepare(first)
+    session.commit(prepared)
+    session.commit(prepared)
+
+    expect(() => session.prepare(stale)).toThrow(/changed since mutation was planned/)
+    expect(session.trees.get('large')).toBe(first.after)
+  })
+
+  it('rejects stale publication before renderer preparation or save acceptance', () => {
+    const session = gameSession(worldWithTree('large', largeDiagram).trees)
+    const pointed = {
+      treeId: 'large',
+      entity: {
+        kind: 'branch' as const, key: 'branch', region: nestedRegion,
+        polarity: 0 as const, pts: [],
+      },
+      distance: 12,
+    }
+    const stale = session.planDoubleCut(pointed)
+    const current = session.planDoubleCut(pointed)
+    session.commit(session.prepare(current))
+    const effects: string[] = []
+
+    expect(() => publishTreeMutation(session, stale, {
+      prepareTreeUpdate() { effects.push('renderer-prepare'); return {} },
+      commitTreeUpdate() { effects.push('renderer-commit') },
+      discardTreeUpdate() { effects.push('renderer-discard') },
+    }, () => { effects.push('save-accept') })).toThrow(/changed since mutation was planned/)
+    expect(effects).toEqual([])
+    expect(session.trees.get('large')).toBe(current.after)
+  })
+
+  it('publishes the session after save acceptance and before renderer commit', () => {
+    const session = gameSession(worldWithTree('large', largeDiagram).trees)
+    const mutation = session.planDoubleCut({
+      treeId: 'large',
+      entity: {
+        kind: 'branch', key: 'branch', region: nestedRegion,
+        polarity: 0, pts: [],
+      },
+      distance: 12,
+    })
+    const effects: string[] = []
+
+    publishTreeMutation(session, mutation, {
+      prepareTreeUpdate() { effects.push('renderer-prepare'); return {} },
+      commitTreeUpdate() {
+        expect(session.trees.get('large')).toBe(mutation.after)
+        effects.push('renderer-commit')
+      },
+      discardTreeUpdate() { effects.push('renderer-discard') },
+    }, () => {
+      expect(session.trees.get('large')).toBe(mutation.before)
+      effects.push('save-accept')
+    })
+
+    expect(effects).toEqual(['renderer-prepare', 'save-accept', 'renderer-commit'])
+  })
+
+  it('preserves a save acceptance error and releases session preparation when renderer cleanup fails', () => {
+    const session = gameSession(worldWithTree('large', largeDiagram).trees)
+    const pointed = {
+      treeId: 'large',
+      entity: {
+        kind: 'branch' as const, key: 'branch', region: nestedRegion,
+        polarity: 0 as const, pts: [],
+      },
+      distance: 12,
+    }
+    const mutation = session.planDoubleCut(pointed)
+    const acceptanceError = new Error('writer disposed')
+
+    expect(() => publishTreeMutation(session, mutation, {
+      prepareTreeUpdate() { return {} },
+      commitTreeUpdate() {},
+      discardTreeUpdate() { throw new Error('renderer cleanup failed') },
+    }, () => { throw acceptanceError })).toThrow(acceptanceError)
+    expect(session.trees.get('large')).toBe(mutation.before)
+
+    expect(() => publishTreeMutation(session, mutation, {
+      prepareTreeUpdate() { return {} },
+      commitTreeUpdate() {},
+      discardTreeUpdate() {},
+    }, () => {})).not.toThrow()
+    expect(session.trees.get('large')).toBe(mutation.after)
   })
 
   it('rejects non-branches and unknown trees without mutation', () => {
     const session = gameSession(worldWithTree('tree-a', blankDiagram).trees)
     const beforeTrees = treeValues(session.trees)
-    expect(() => session.applyDoubleCut({
+    expect(() => session.planDoubleCut({
       treeId: 'tree-a',
       entity: { kind: 'ring', key: 'r:n0', node: 'n0', headWire: null, pts: [] },
       distance: 5,
     })).toThrow(/branch/)
-    expect(() => session.applyDoubleCut({
+    expect(() => session.planDoubleCut({
       treeId: 'missing',
       entity: { kind: 'branch', key: 'anything', region: 'r0', polarity: 0, pts: [] },
       distance: 5,

@@ -16,6 +16,7 @@ const host = vi.hoisted(() => {
     viewport,
     resources,
     targetSnapshotJson: new Set<string>(),
+    snapshotBounds: new Map<string, { center: { x: number; y: number; z: number }; radius: number }>(),
     trackResource() {
       const resource = { released: false }
       resources.push(resource)
@@ -147,10 +148,11 @@ vi.mock('../../../src/game/render/assets', async (importOriginal) => {
   class TestTreeRenderAssetCache extends actual.TreeRenderAssetCache {
     public override get(snapshot: import('../../../src/game/diagram-snapshot').DiagramSnapshot) {
       const asset = super.get(snapshot)
-      if (!host.targetSnapshotJson.has(snapshot.json)) return asset
+      const specified = host.snapshotBounds.get(snapshot.json)
+      if (specified === undefined && !host.targetSnapshotJson.has(snapshot.json)) return asset
 
-      const center = { x: 3, y: 2, z: 4 }
-      const radius = 5
+      const center = specified?.center ?? { x: 3, y: 2, z: 4 }
+      const radius = specified?.radius ?? 5
       return {
         ...asset,
         bounds: { center, radius },
@@ -172,6 +174,10 @@ import { mountGameWorld } from '../../../src/game/render/world'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { applyDoubleCutIntro } from '../../../src/kernel/rules/doublecut'
 import { scene3 } from '../../../src/view3d/scene'
+import type { TreeMutation } from '../../../src/game/session'
+import { gameSession, publishTreeMutation } from '../../../src/game/session'
+import { SaveWriter } from '../../../src/game/save-writer'
+import { treeUpdateFromGameTree } from '../../../src/game/save-client'
 
 beforeEach(() => {
   host.attached = false
@@ -183,6 +189,7 @@ beforeEach(() => {
   host.viewport.scaledEffect = [0, 0]
   host.resources.length = 0
   host.targetSnapshotJson.clear()
+  host.snapshotBounds.clear()
   vi.stubGlobal('window', { devicePixelRatio: 2 })
   vi.stubGlobal('document', {
     createElement: () => ({
@@ -203,6 +210,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -253,6 +261,169 @@ function pointCameraAtBranch(world: ReturnType<typeof mountGameWorld>, tree: Gam
 }
 
 describe('production game world', () => {
+  it('rejects preparation against a stale tree without changing the live target', () => {
+    const current = targetTree('tree', 10, -20, Math.PI / 2)
+    const stale = blankTree('tree', 10, -20)
+    const after = { ...stale, snapshot: snapshotFromDiagram(applyDoubleCutIntro(stale.snapshot.diagram, {
+      region: stale.snapshot.diagram.root, regions: [], nodes: [], wires: [],
+    })) }
+    const mutation: TreeMutation = { treeId: current.id, before: stale, after }
+    const world = mountGameWorld(container(), [current])
+    world.setCamera({ eye: { x: 14, y: 2, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
+
+    expect(() => world.prepareTreeUpdate(mutation)).toThrow(/stale tree mutation/)
+    expect(world.pickTree(0, 0)).toEqual({
+      treeId: 'tree', center: { x: 14, y: 2, z: -23 }, radius: 5,
+    })
+    world.dispose()
+  })
+
+  it('publishes fresh logical target bounds with a committed tree update', () => {
+    const before = blankTree('tree', 0, -20)
+    const after: GameTree = {
+      ...before,
+      snapshot: snapshotFromDiagram(applyDoubleCutIntro(before.snapshot.diagram, {
+        region: before.snapshot.diagram.root, regions: [], nodes: [], wires: [],
+      })),
+    }
+    host.snapshotBounds.set(before.snapshot.json, {
+      center: { x: -8, y: 2, z: 4 }, radius: 1,
+    })
+    host.snapshotBounds.set(after.snapshot.json, {
+      center: { x: 8, y: 2, z: 4 }, radius: 1,
+    })
+    const mutation: TreeMutation = { treeId: before.id, before, after }
+    const world = mountGameWorld(container(), [before], () => 0)
+
+    const prepared = world.prepareTreeUpdate(mutation)
+    world.commitTreeUpdate(prepared)
+    world.setCamera({ eye: { x: 8, y: 2, z: 4 }, forward: { x: 0, y: 0, z: -1 } })
+    expect(world.pickTree(0, 0)).toEqual({
+      treeId: 'tree', center: { x: 8, y: 2, z: -16 }, radius: 1,
+    })
+    world.render(350)
+    world.setCamera({ eye: { x: 8, y: 2, z: 4 }, forward: { x: 0, y: 0, z: -1 } })
+    expect(world.pickTree(0, 0)).toEqual({
+      treeId: 'tree', center: { x: 8, y: 2, z: -16 }, radius: 1,
+    })
+    world.setCamera({ eye: { x: -8, y: 2, z: 4 }, forward: { x: 0, y: 0, z: -1 } })
+    expect(world.pickTree(0, 0)).toBeNull()
+    world.dispose()
+  })
+
+  it('commits a prepared update only once', () => {
+    const before = blankTree('tree', 0, -20)
+    const after = {
+      ...before,
+      snapshot: snapshotFromDiagram(applyDoubleCutIntro(before.snapshot.diagram, {
+        region: before.snapshot.diagram.root, regions: [], nodes: [], wires: [],
+      })),
+    }
+    const world = mountGameWorld(container(), [before])
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose')
+    const prepared = world.prepareTreeUpdate({ treeId: before.id, before, after })
+    const beforeCommit = disposeGeometry.mock.calls.length
+
+    world.commitTreeUpdate(prepared)
+    const afterFirstCommit = disposeGeometry.mock.calls.length
+    world.commitTreeUpdate(prepared)
+
+    expect(afterFirstCommit).toBeGreaterThanOrEqual(beforeCommit)
+    expect(disposeGeometry.mock.calls).toHaveLength(afterFirstCommit)
+    world.dispose()
+  })
+
+  it('invalidates and disposes prepared updates before replacing all trees', () => {
+    const before = blankTree('tree', 0, -20)
+    const after = {
+      ...before,
+      snapshot: snapshotFromDiagram(applyDoubleCutIntro(before.snapshot.diagram, {
+        region: before.snapshot.diagram.root, regions: [], nodes: [], wires: [],
+      })),
+    }
+    const replacement = targetTree('replacement', 10, -20, Math.PI / 2)
+    const world = mountGameWorld(container(), [before])
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose')
+    const prepared = world.prepareTreeUpdate({ treeId: before.id, before, after })
+    const beforeReplacement = disposeGeometry.mock.calls.length
+
+    world.setTrees([replacement])
+    world.commitTreeUpdate(prepared)
+
+    expect(disposeGeometry.mock.calls.length).toBeGreaterThan(beforeReplacement)
+    world.setCamera({ eye: { x: 14, y: 2, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
+    expect(world.pickTree(0, 0)).toMatchObject({ treeId: 'replacement' })
+    world.dispose()
+  })
+
+  it('disposes an uncommitted preparation and ignores its later commit', () => {
+    const before = blankTree('tree', 0, -20)
+    const after = {
+      ...before,
+      snapshot: snapshotFromDiagram(applyDoubleCutIntro(before.snapshot.diagram, {
+        region: before.snapshot.diagram.root, regions: [], nodes: [], wires: [],
+      })),
+    }
+    const world = mountGameWorld(container(), [before])
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose')
+    const prepared = world.prepareTreeUpdate({ treeId: before.id, before, after })
+    const beforeDispose = disposeGeometry.mock.calls.length
+
+    world.dispose()
+
+    expect(disposeGeometry.mock.calls.length).toBeGreaterThan(beforeDispose)
+    expect(() => world.commitTreeUpdate(prepared)).not.toThrow()
+  })
+
+  it('rejects a sibling preparation for the same live tree', () => {
+    const before = blankTree('tree', 0, -20)
+    const after = {
+      ...before,
+      snapshot: snapshotFromDiagram(applyDoubleCutIntro(before.snapshot.diagram, {
+        region: before.snapshot.diagram.root, regions: [], nodes: [], wires: [],
+      })),
+    }
+    const world = mountGameWorld(container(), [before])
+    const first = world.prepareTreeUpdate({ treeId: before.id, before, after })
+
+    expect(() => world.prepareTreeUpdate({ treeId: before.id, before, after }))
+      .toThrow(/already prepared/)
+
+    world.commitTreeUpdate(first)
+    world.dispose()
+  })
+
+  it('discards a prepared update when save enqueue rejects without publishing live state', async () => {
+    const before = targetTree('tree', 10, -20, Math.PI / 2)
+    const session = gameSession(new Map([[before.id, before]]))
+    const mutation = session.planDoubleCut({
+      treeId: before.id,
+      entity: {
+        kind: 'branch', key: 'pointed', region: before.snapshot.diagram.root,
+        polarity: 0, pts: [],
+      },
+      distance: 5,
+    })
+    const world = mountGameWorld(container(), [before])
+    const writer = new SaveWriter('slot-a', {
+      updateTree: async () => 1,
+      updateCamera: async () => {},
+    })
+    await writer.dispose()
+    expect(() => publishTreeMutation(
+      session,
+      mutation,
+      world,
+      (tree) => writer.tree(treeUpdateFromGameTree(tree)),
+    )).toThrow('disposed')
+    expect(session.trees.get(before.id)).toBe(before)
+    world.setCamera({ eye: { x: 14, y: 2, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
+    expect(world.pickTree(0, 0)).toEqual({
+      treeId: 'tree', center: { x: 14, y: 2, z: -23 }, radius: 5,
+    })
+    world.dispose()
+  })
+
   it('mounts a generic tree, resizes its canvas, renders without representation failures, and tears down', () => {
     const world = mountGameWorld(container(), [blankTree()])
     world.setCamera({ eye: { x: 0, y: 1.7, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
@@ -291,7 +462,9 @@ describe('production game world', () => {
     })
     world.setRenderMode('raw')
     world.render(0)
-    world.beginTreeTween(tree.id, tree.snapshot.diagram, after)
+    const afterTree = { ...tree, snapshot: snapshotFromDiagram(after) }
+    const prepared = world.prepareTreeUpdate({ treeId: tree.id, before: tree, after: afterTree })
+    world.commitTreeUpdate(prepared)
 
     world.setTrees([])
 
@@ -315,7 +488,11 @@ describe('production game world', () => {
     const world = mountGameWorld(container(), [original], () => 0)
     world.setRenderMode('raw')
     world.render(0)
-    world.beginTreeTween(original.id, original.snapshot.diagram, staleTarget)
+    const staleTree = { ...original, snapshot: snapshotFromDiagram(staleTarget) }
+    const prepared = world.prepareTreeUpdate({
+      treeId: original.id, before: original, after: staleTree,
+    })
+    world.commitTreeUpdate(prepared)
 
     world.setTrees([replacement])
     const rendered = world.render(350)

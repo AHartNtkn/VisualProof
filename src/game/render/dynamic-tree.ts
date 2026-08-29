@@ -24,6 +24,20 @@ class TreeTweenTracks {
     return this
   }
 
+  public prepare(
+    treeId: string,
+    before: TreeRenderSnapshot,
+    after: TreeRenderSnapshot,
+    now: number,
+  ): SceneTweenTrack {
+    const displayed = this.tracks.get(treeId)?.sample(now) ?? before
+    return new SceneTweenTrack(displayed, after, now)
+  }
+
+  public commit(treeId: string, track: SceneTweenTrack): void {
+    this.tracks.set(treeId, track)
+  }
+
   public has(treeId: string): boolean {
     return this.tracks.has(treeId)
   }
@@ -57,6 +71,13 @@ type DynamicObjectBuilder = (
   tree: RenderTree,
 ) => THREE.Group
 
+type PreparedDynamicTreeUpdate = {
+  readonly tree: RenderTree
+  readonly track: SceneTweenTrack
+  readonly object: THREE.Group
+  readonly wasActive: boolean
+}
+
 export class DynamicTreeObjects {
   private readonly tracks = new TreeTweenTracks()
   private readonly targets = new Map<string, RenderTree>()
@@ -80,6 +101,33 @@ export class DynamicTreeObjects {
     this.targets.set(tree.id, tree)
     if (!wasActive) this.runtime.suspend(tree.id)
     this.replace(tree.id, this.tracks.at(now).get(tree.id)!, tree)
+  }
+
+  public prepare(
+    tree: RenderTree,
+    before: TreeRenderSnapshot,
+    after: TreeRenderSnapshot,
+    now: number,
+    buildObject: DynamicObjectBuilder = this.buildObject,
+  ): PreparedDynamicTreeUpdate {
+    const track = this.tracks.prepare(tree.id, before, after, now)
+    return {
+      tree,
+      track,
+      object: buildObject(track.sample(now), tree),
+      wasActive: this.tracks.has(tree.id),
+    }
+  }
+
+  public commit(prepared: PreparedDynamicTreeUpdate): void {
+    this.tracks.commit(prepared.tree.id, prepared.track)
+    this.targets.set(prepared.tree.id, prepared.tree)
+    if (!prepared.wasActive) this.runtime.suspend(prepared.tree.id)
+    this.replaceWith(prepared.tree.id, prepared.object)
+  }
+
+  public discard(prepared: PreparedDynamicTreeUpdate): void {
+    this.releaseObject(prepared.object)
   }
 
   public update(now: number): void {
@@ -118,8 +166,12 @@ export class DynamicTreeObjects {
   }
 
   private replace(treeId: string, snapshot: TreeRenderSnapshot, target: RenderTree): void {
-    this.remove(treeId)
     const group = this.buildObject(snapshot, target)
+    this.replaceWith(treeId, group)
+  }
+
+  private replaceWith(treeId: string, group: THREE.Group): void {
+    this.remove(treeId)
     group.userData['treeId'] = treeId
     this.groups.set(treeId, group)
     this.parent.add(group)

@@ -232,6 +232,18 @@ describe('ordered save writer', () => {
     expect(() => writer.camera(cameraAt(8))).toThrow('disposed')
   })
 
+  it('rejects a tree synchronously when it cannot accept the update', async () => {
+    const writes: TreeUpdate[] = []
+    const writer = new SaveWriter('slot-a', {
+      updateTree: async (_slotId, value) => { writes.push(value); return 1 },
+      updateCamera: async () => {},
+    })
+    await writer.dispose()
+
+    expect(() => writer.tree(update('a', 'not-accepted'))).toThrow('disposed')
+    expect(writes).toEqual([])
+  })
+
   it('a failed dispose reports the write error and leaves retained state retryable', async () => {
     let fail = true
     const attempts: TreeUpdate[] = []
