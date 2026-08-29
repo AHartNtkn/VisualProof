@@ -2,7 +2,12 @@ import type { CameraMotion } from '../src/game/camera'
 
 export type WorldInputActions = {
   readonly pointerDown: (button: number, clientX: number, clientY: number) => void
-  readonly pointerUp: (button: number, clientX: number, clientY: number) => void
+  readonly pointerUp: (
+    button: number,
+    clientX: number,
+    clientY: number,
+    relativeDistance: number,
+  ) => void
   readonly pointerCancel: () => void
   readonly escape: () => boolean
   readonly swapTool: () => void
@@ -15,6 +20,21 @@ export type WorldInput = {
   engage(): Promise<void>
   release(): void
   dispose(): void
+}
+
+const STATIONARY_POINTER_DISTANCE = 5
+
+export function applyStationaryPointerRelease(
+  press: { readonly x: number; readonly y: number },
+  release: { readonly x: number; readonly y: number; readonly relativeDistance: number },
+  apply: (clientX: number, clientY: number) => void,
+): boolean {
+  if (
+    Math.hypot(release.x - press.x, release.y - press.y) >= STATIONARY_POINTER_DISTANCE
+    || release.relativeDistance >= STATIONARY_POINTER_DISTANCE
+  ) return false
+  apply(release.x, release.y)
+  return true
 }
 
 export function requestWorldEngagement(target: HTMLElement): Promise<void> {
@@ -35,6 +55,7 @@ export function attachWorldInput(
   let lookX = 0
   let lookY = 0
   let gestureActive = false
+  let gestureRelativeDistance = 0
 
   const clear = (): void => {
     held.clear()
@@ -42,8 +63,12 @@ export function attachWorldInput(
     lookY = 0
   }
   const abortPointer = (): void => {
-    if (!gestureActive) return
+    if (!gestureActive) {
+      gestureRelativeDistance = 0
+      return
+    }
     gestureActive = false
+    gestureRelativeDistance = 0
     actions.pointerCancel()
   }
   const listen = (eventTarget: EventTarget, type: string, listener: EventListener): void => {
@@ -72,16 +97,20 @@ export function attachWorldInput(
     if (environment.document.pointerLockElement === target) {
       lookX += event.movementX
       lookY += event.movementY
+      if (gestureActive) gestureRelativeDistance += Math.hypot(event.movementX, event.movementY)
     }
   }) as EventListener
   const mouseDown = ((event: MouseEvent): void => {
     gestureActive = true
+    gestureRelativeDistance = 0
     actions.pointerDown(event.button, event.clientX, event.clientY)
   }) as EventListener
   const mouseUp = ((event: MouseEvent): void => {
     if (!gestureActive) return
     gestureActive = false
-    actions.pointerUp(event.button, event.clientX, event.clientY)
+    const relativeDistance = gestureRelativeDistance
+    gestureRelativeDistance = 0
+    actions.pointerUp(event.button, event.clientX, event.clientY, relativeDistance)
   }) as EventListener
   const wheel = ((event: WheelEvent): void => {
     event.preventDefault()

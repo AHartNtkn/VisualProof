@@ -39,7 +39,12 @@ import {
   type CatalogController,
   type CatalogView,
 } from './catalog'
-import { attachWorldInput, requestWorldEngagement, type WorldInput } from './input'
+import {
+  applyStationaryPointerRelease,
+  attachWorldInput,
+  requestWorldEngagement,
+  type WorldInput,
+} from './input'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
 const worldHost = document.querySelector<HTMLElement>('[data-world]')!
@@ -495,18 +500,20 @@ async function startWorld(world: GameWorld): Promise<void> {
         activeInput.release()
         mirrorControls()
       },
-      pointerUp(button, clientX, clientY) {
+      pointerUp(button, clientX, clientY, relativeDistance) {
         const activeCamera = camera
         const activeRenderer = renderer
         if (activeCamera === null || activeRenderer === null) return
         if (activeCamera.mode === 'free') {
           const press = freeSecondaryPress
           freeSecondaryPress = null
-          if (
-            button === 2
-            && press !== null
-            && Math.hypot(clientX - press.x, clientY - press.y) < 5
-          ) applySecondaryAction(clientX, clientY)
+          if (button === 2 && press !== null) {
+            applyStationaryPointerRelease(
+              press,
+              { x: clientX, y: clientY, relativeDistance },
+              applySecondaryAction,
+            )
+          }
           return
         }
         const release = activeCamera.interaction.pointerUp(clientX, clientY)

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { attachWorldInput, type WorldInputActions } from '../../game/input'
+import {
+  applyStationaryPointerRelease,
+  attachWorldInput,
+  type WorldInputActions,
+} from '../../game/input'
 
 class TestWorldTarget extends EventTarget {
   requestPointerLockCalls = 0
@@ -35,6 +39,12 @@ function createHarness(): {
   readonly windowTarget: EventTarget
   readonly documentTarget: TestDocumentTarget
   readonly pointers: string[]
+  readonly releases: Array<{
+    readonly button: number
+    readonly clientX: number
+    readonly clientY: number
+    readonly relativeDistance: number
+  }>
   readonly engagements: boolean[]
   readonly escapes: { count: number }
   readonly swaps: { count: number }
@@ -46,6 +56,12 @@ function createHarness(): {
   const windowTarget = new EventTarget()
   const documentTarget = new TestDocumentTarget()
   const pointers: string[] = []
+  const releases: Array<{
+    readonly button: number
+    readonly clientX: number
+    readonly clientY: number
+    readonly relativeDistance: number
+  }> = []
   const engagements: boolean[] = []
   const escapes = { count: 0 }
   const swaps = { count: 0 }
@@ -53,7 +69,10 @@ function createHarness(): {
   const escapeHandled = { value: false }
   const actions: WorldInputActions = {
     pointerDown: (button, clientX, clientY) => pointers.push(`down:${button}:${clientX}:${clientY}`),
-    pointerUp: (button, clientX, clientY) => pointers.push(`up:${button}:${clientX}:${clientY}`),
+    pointerUp: (button, clientX, clientY, relativeDistance) => {
+      pointers.push(`up:${button}:${clientX}:${clientY}`)
+      releases.push({ button, clientX, clientY, relativeDistance })
+    },
     pointerCancel: () => pointers.push('cancel'),
     engagementChanged: (active) => engagements.push(active),
     escape: () => { escapes.count += 1; return escapeHandled.value },
@@ -66,12 +85,26 @@ function createHarness(): {
   })
 
   return {
-    target, windowTarget, documentTarget, pointers, engagements, escapes, swaps, catalogToggles,
+    target, windowTarget, documentTarget, pointers, releases, engagements, escapes, swaps, catalogToggles,
     escapeHandled, input,
   }
 }
 
 describe('world input sampling', () => {
+  it('does not apply a secondary action after relative drag at fixed client coordinates', () => {
+    // Catches composition deciding stationarity from client displacement alone.
+    let secondaryActions = 0
+
+    const applied = applyStationaryPointerRelease(
+      { x: 70, y: 80 },
+      { x: 70, y: 80, relativeDistance: 15 },
+      () => { secondaryActions += 1 },
+    )
+
+    expect(applied).toBe(false)
+    expect(secondaryActions).toBe(0)
+  })
+
   it('transports single Digit1 and Tab presses without holding either key', () => {
     const { windowTarget, input, swaps, catalogToggles } = createHarness()
     const digit = event('keydown', { code: 'Digit1' }, true)
@@ -181,6 +214,30 @@ describe('world input sampling', () => {
       'down:2:70:80', 'up:2:74:83',
     ])
     expect(escapes.count).toBe(0)
+  })
+
+  it('reports cumulative pointer-locked relative distance when client coordinates stay fixed', () => {
+    // Catches the gesture boundary losing relative drag motion before stationarity is decided.
+    const harness = createHarness()
+    harness.documentTarget.pointerLockElement = harness.target as unknown as Element
+    harness.target.dispatchEvent(event('mousedown', { button: 2, clientX: 70, clientY: 80 }))
+    harness.windowTarget.dispatchEvent(event('mousemove', {
+      clientX: 70, clientY: 80, movementX: 3, movementY: 4,
+    }))
+    harness.windowTarget.dispatchEvent(event('mousemove', {
+      clientX: 70, clientY: 80, movementX: -6, movementY: -8,
+    }))
+
+    harness.windowTarget.dispatchEvent(event('mouseup', {
+      button: 2, clientX: 70, clientY: 80,
+    }))
+
+    expect(harness.releases).toEqual([{
+      button: 2,
+      clientX: 70,
+      clientY: 80,
+      relativeDistance: 15,
+    }])
   })
 
   it('delivers one complete mouse gesture when compatibility pointer events surround it', () => {
