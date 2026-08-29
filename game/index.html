@@ -45,7 +45,27 @@
           <button class="retry" data-save-retry type="button" hidden>Retry save</button>
         </div>
         <p class="feedback" data-feedback role="status"></p>
+        <div class="equipped-item" data-equipped-item>
+          <span class="equipped-silhouette" data-equipped-silhouette data-item="double-cut" aria-hidden="true"></span>
+          <span>Equipped: <strong data-equipped-item-label>Double Cut</strong></span>
+          <span data-held-cutting>No cutting held</span>
+        </div>
       </aside>
+
+      <section class="catalog" data-catalog hidden aria-label="Order catalog">
+        <header class="catalog-heading">
+          <div>
+            <p class="eyebrow">Orchard orders</p>
+            <h2>Catalog</h2>
+          </div>
+          <output data-catalog-reputation>Reputation: 0</output>
+        </header>
+        <div class="catalog-tabs" role="tablist" aria-label="Order status">
+          <button type="button" data-catalog-pending aria-pressed="true">Pending</button>
+          <button type="button" data-catalog-completed aria-pressed="false">Completed</button>
+        </div>
+        <div class="catalog-orders" data-catalog-orders></div>
+      </section>
 
     </main>
     <script type="module" src="/main.ts"></script>

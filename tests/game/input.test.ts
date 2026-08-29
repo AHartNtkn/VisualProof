@@ -24,7 +24,7 @@ class TestDocumentTarget extends EventTarget {
   }
 }
 
-function event(type: string, properties: Record<string, number | string> = {}, cancelable = false): Event {
+function event(type: string, properties: Record<string, number | string | boolean> = {}, cancelable = false): Event {
   return Object.defineProperties(new Event(type, { cancelable }), Object.fromEntries(
     Object.entries(properties).map(([name, value]) => [name, { value }]),
   ))
@@ -37,6 +37,8 @@ function createHarness(): {
   readonly pointers: string[]
   readonly engagements: boolean[]
   readonly escapes: { count: number }
+  readonly swaps: { count: number }
+  readonly catalogToggles: { count: number }
   readonly escapeHandled: { value: boolean }
   readonly input: ReturnType<typeof attachWorldInput>
 } {
@@ -46,6 +48,8 @@ function createHarness(): {
   const pointers: string[] = []
   const engagements: boolean[] = []
   const escapes = { count: 0 }
+  const swaps = { count: 0 }
+  const catalogToggles = { count: 0 }
   const escapeHandled = { value: false }
   const actions: WorldInputActions = {
     pointerDown: (button, clientX, clientY) => pointers.push(`down:${button}:${clientX}:${clientY}`),
@@ -53,16 +57,40 @@ function createHarness(): {
     pointerCancel: () => pointers.push('cancel'),
     engagementChanged: (active) => engagements.push(active),
     escape: () => { escapes.count += 1; return escapeHandled.value },
+    swapTool: () => { swaps.count += 1 },
+    toggleCatalog: () => { catalogToggles.count += 1 },
   }
   const input = attachWorldInput(target as unknown as HTMLElement, actions, {
     window: windowTarget as Window,
     document: documentTarget as unknown as Document,
   })
 
-  return { target, windowTarget, documentTarget, pointers, engagements, escapes, escapeHandled, input }
+  return {
+    target, windowTarget, documentTarget, pointers, engagements, escapes, swaps, catalogToggles,
+    escapeHandled, input,
+  }
 }
 
 describe('world input sampling', () => {
+  it('transports single Digit1 and Tab presses without holding either key', () => {
+    const { windowTarget, input, swaps, catalogToggles } = createHarness()
+    const digit = event('keydown', { code: 'Digit1' }, true)
+    const tab = event('keydown', { code: 'Tab' }, true)
+
+    windowTarget.dispatchEvent(digit)
+    windowTarget.dispatchEvent(tab)
+    windowTarget.dispatchEvent(event('keydown', { code: 'Digit1', repeat: true }, true))
+    windowTarget.dispatchEvent(event('keydown', { code: 'Tab', repeat: true }, true))
+
+    expect(swaps.count).toBe(1)
+    expect(catalogToggles.count).toBe(1)
+    expect(digit.defaultPrevented).toBe(true)
+    expect(tab.defaultPrevented).toBe(true)
+    expect(input.sample()).toEqual({
+      forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
+    })
+  })
+
   it('samples held movement keys and releases only the lifted key', () => {
     const { windowTarget, input } = createHarness()
 

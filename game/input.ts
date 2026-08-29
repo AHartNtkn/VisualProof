@@ -5,6 +5,8 @@ export type WorldInputActions = {
   readonly pointerUp: (button: number, clientX: number, clientY: number) => void
   readonly pointerCancel: () => void
   readonly escape: () => boolean
+  readonly swapTool: () => void
+  readonly toggleCatalog: () => void
   readonly engagementChanged: (active: boolean) => void
 }
 
@@ -49,6 +51,13 @@ export function attachWorldInput(
     disposers.push(() => eventTarget.removeEventListener(type, listener))
   }
   const down = ((event: KeyboardEvent): void => {
+    if (event.code === 'Digit1' || event.code === 'Tab') {
+      event.preventDefault()
+      if (event.repeat) return
+      if (event.code === 'Digit1') actions.swapTool()
+      else actions.toggleCatalog()
+      return
+    }
     if (event.code === 'Escape') {
       if (!actions.escape()) return
       event.preventDefault()
