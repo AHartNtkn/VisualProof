@@ -4,16 +4,14 @@ import { relationWireHues } from '../view/paint'
 import { diagramSpec, type DiagramSpec } from './spec'
 import { scene3, type Scene3 } from './scene'
 import { SCENE_TWEEN_MS, SceneTweenTrack } from './transition'
-import { escapesFraming, fitPose, orbited, panned, zoomed, type CamPose } from './camera'
-import { lerp3, type Vec3 } from './vec3'
+import { escapesFraming, fitPose, type CamPose } from './camera'
+import { lerp3 } from './vec3'
 import { expandHover, focusPoint } from './pick'
 import { mountRender, type RenderTheme } from './render'
+import { OrbitInteraction } from './orbit-interaction'
 
 export type View3State = { diagram: Diagram; theme: Theme }
 export type View3 = { update(s: View3State): void; dispose(): void }
-
-/** Glide time for click-to-focus retargeting. */
-export const FOCUS_MS = 250
 
 const renderThemeOf = (theme: Theme, diagram: Diagram): RenderTheme => ({
   mode: theme.mode,
@@ -31,13 +29,9 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
   let spec: DiagramSpec = diagramSpec(diagram)
   let scene: Scene3 = scene3(diagram)
   const aspectOf = (): number => container.clientWidth / Math.max(1, container.clientHeight)
-  let pose: CamPose = fitPose(scene.center, scene.radius, aspectOf())
+  const orbit = new OrbitInteraction(fitPose(scene.center, scene.radius, aspectOf()))
   let tween: { track: SceneTweenTrack; poseFrom: CamPose; poseTo: CamPose; start: number } | null = null
   let hoverKey: string | null = null
-  /** Click-to-focus: the orbit target glides to the clicked component
-      (USER request 2026-08-16); orbit/zoom mechanics are unchanged. A
-      click on empty space refocuses the whole scene. */
-  let glide: { from: Vec3; to: Vec3; start: number } | null = null
   container.dataset['view3Hover'] = ''
   container.dataset['view3Focus'] = ''
 
@@ -58,17 +52,11 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
   })
   const frame = (now: number): void => {
     pending = false
-    if (glide !== null) {
-      const t = Math.min(1, (now - glide.start) / FOCUS_MS)
-      const e = t * t * (3 - 2 * t)
-      pose = { ...pose, target: lerp3(glide.from, glide.to, e) }
-      if (t >= 1) glide = null
-      else schedule()
-    }
+    if (orbit.isGliding) schedule()
     if (tween !== null) {
       const t = Math.min(1, (now - tween.start) / SCENE_TWEEN_MS)
       const e = t * t * (3 - 2 * t)
-      pose = mixPose(tween.poseFrom, tween.poseTo, e)
+      orbit.replacePose(mixPose(tween.poseFrom, tween.poseTo, e))
       if (tween.track.completed(now)) {
         // The clean target list, not sceneAt's interpolated frame — that
         // still carries alpha-0 exits, which would otherwise linger in the
@@ -80,7 +68,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
         schedule()
       }
     }
-    renderer.setPose(pose)
+    renderer.setPose(orbit.poseAt(now))
     renderer.render()
   }
 
@@ -93,37 +81,26 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
     listeners.push(() => container.removeEventListener(type, h))
   }
 
-  let drag: { button: number; x: number; y: number } | null = null
-  let press: { button: number; x: number; y: number } | null = null
   listen('pointerdown', (ev) => {
-    drag = { button: ev.button, x: ev.clientX, y: ev.clientY }
-    press = { button: ev.button, x: ev.clientX, y: ev.clientY }
+    orbit.pointerDown(ev.button, ev.clientX, ev.clientY)
     container.setPointerCapture(ev.pointerId)
   })
   listen('pointerup', (ev) => {
-    drag = null
-    const wasPress = press
-    press = null
-    if (wasPress === null || wasPress.button !== 0) return
-    if (Math.hypot(ev.clientX - wasPress.x, ev.clientY - wasPress.y) >= 5) return
+    const release = orbit.pointerUp(ev.clientX, ev.clientY)
+    if (release === null || release.button !== 0) return
     const rect = container.getBoundingClientRect()
-    const ndcX = ((ev.clientX - rect.left) / rect.width) * 2 - 1
-    const ndcY = -(((ev.clientY - rect.top) / rect.height) * 2 - 1)
+    const ndcX = ((release.clientX - rect.left) / rect.width) * 2 - 1
+    const ndcY = -(((release.clientY - rect.top) / rect.height) * 2 - 1)
     const key = renderer.pickAt(ndcX, ndcY)
     const to = key === null ? scene.center : focusPoint(key, scene.entities)
     if (to === null) return
-    glide = { from: pose.target, to, start: performance.now() }
+    orbit.focus(to, performance.now())
     container.dataset['view3Focus'] = key ?? ''
     schedule()
   })
   listen('contextmenu', (ev) => ev.preventDefault())
   listen('pointermove', (ev) => {
-    if (drag !== null) {
-      const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y
-      drag = { ...drag, x: ev.clientX, y: ev.clientY }
-      // A pan takes ownership of the target; let the glide yield to it.
-      if (drag.button === 2) glide = null
-      pose = drag.button === 2 ? panned(pose, dx, dy, container.clientHeight) : orbited(pose, dx, dy)
+    if (orbit.pointerMove(ev.clientX, ev.clientY, container.clientHeight, performance.now())) {
       schedule()
       return
     }
@@ -140,7 +117,7 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
   })
   listen('wheel', (ev) => {
     ev.preventDefault()
-    pose = zoomed(pose, ev.deltaY)
+    orbit.wheel(ev.deltaY, performance.now())
     schedule()
   })
 
@@ -160,20 +137,21 @@ export function mountView3(container: HTMLElement, initial: View3State): View3 {
         diagram = s.diagram
         const nextSpec = diagramSpec(diagram)
         const nextScene = scene3(diagram)
-        const poseTo = escapesFraming(pose, nextScene.center, nextScene.radius)
-          ? { ...fitPose(nextScene.center, nextScene.radius, aspectOf()), yaw: pose.yaw, pitch: pose.pitch }
-          : pose
+        const now = performance.now()
+        const displayedPose = orbit.poseAt(now)
+        const poseTo = escapesFraming(displayedPose, nextScene.center, nextScene.radius)
+          ? { ...fitPose(nextScene.center, nextScene.radius, aspectOf()), yaw: displayedPose.yaw, pitch: displayedPose.pitch }
+          : displayedPose
         // If a tween is already in flight, the scene currently ON SCREEN is
         // the interpolated frame at its current t, not `scene` (the last
         // COMPLETED scene) — planning from `scene` would pop the display
         // back to that stale geometry for one frame before animating on.
-        const now = performance.now()
         const fromScene = tween?.track.sample(now) ?? scene
         const track = tween === null
           ? new SceneTweenTrack(fromScene, nextScene, now)
           : tween.track.begin(fromScene, nextScene, now)
-        tween = { track, poseFrom: pose, poseTo, start: now }
-        glide = null // the transition's pose tween owns the camera now
+        tween = { track, poseFrom: displayedPose, poseTo, start: now }
+        orbit.replacePose(displayedPose)
         container.dataset['view3Focus'] = ''
         spec = nextSpec
         scene = nextScene
