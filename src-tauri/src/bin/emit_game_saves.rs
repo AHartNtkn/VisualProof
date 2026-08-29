@@ -1,4 +1,4 @@
-use orchard_game::save_store::{CameraRecord, CreateSlotInput, SaveStore, TreeUpdate};
+use orchard_game::save_store::{CameraRecord, CreateSlotInput, OrderRecord, SaveStore, TreeUpdate};
 use serde::Deserialize;
 use std::error::Error;
 use std::io;
@@ -20,6 +20,8 @@ struct EmitterSave {
     updated_at_ms: i64,
     camera: CameraRecord,
     trees: Vec<EmitterTree>,
+    reputation: i64,
+    orders: Vec<OrderRecord>,
 }
 
 #[derive(Deserialize)]
@@ -72,6 +74,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 display_name: save.display_name,
                 camera: save.camera,
                 trees,
+                reputation: save.reputation,
+                orders: save.orders,
             },
         )?;
         store.load(&save.slot_id)?;

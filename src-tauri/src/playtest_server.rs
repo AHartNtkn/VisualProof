@@ -1,4 +1,6 @@
-use crate::save_store::{CameraRecord, CreateSlotInput, SaveStore, SaveStoreError, TreeUpdate};
+use crate::save_store::{
+    CameraRecord, CreateSlotInput, PotPlacementRecord, SaveStore, SaveStoreError, TreeUpdate,
+};
 use axum::{
     extract::{Request, State},
     http::{header, HeaderValue, Method, StatusCode},
@@ -39,10 +41,20 @@ pub fn router(store: SaveStore, config: PlaytestServerConfig) -> Router {
         .route("/__orchard_playtest/save/list", post(list))
         .route("/__orchard_playtest/save/create", post(create))
         .route("/__orchard_playtest/save/load", post(load))
+        .route("/__orchard_playtest/save/insert-tree", post(insert_tree))
         .route("/__orchard_playtest/save/update-tree", post(update_tree))
         .route(
             "/__orchard_playtest/save/update-camera",
             post(update_camera),
+        )
+        .route("/__orchard_playtest/save/accept-order", post(accept_order))
+        .route(
+            "/__orchard_playtest/save/abandon-order",
+            post(abandon_order),
+        )
+        .route(
+            "/__orchard_playtest/save/complete-order",
+            post(complete_order),
         )
         .with_state(state.clone())
         .layer(cors)
@@ -112,6 +124,17 @@ struct UpdateTreeRequest {
     update: TreeUpdate,
 }
 
+async fn insert_tree(
+    State(state): State<AppState>,
+    Json(input): Json<UpdateTreeRequest>,
+) -> Result<Json<i64>, StoreError> {
+    state
+        .store
+        .insert_tree(&input.slot_id, input.update)
+        .map(Json)
+        .map_err(StoreError)
+}
+
 async fn update_tree(
     State(state): State<AppState>,
     Json(input): Json<UpdateTreeRequest>,
@@ -137,6 +160,62 @@ async fn update_camera(
     state
         .store
         .update_camera(&input.slot_id, input.camera)
+        .map(Json)
+        .map_err(StoreError)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AcceptOrderRequest {
+    slot_id: String,
+    order_id: String,
+    pot: PotPlacementRecord,
+}
+
+async fn accept_order(
+    State(state): State<AppState>,
+    Json(input): Json<AcceptOrderRequest>,
+) -> Result<Json<()>, StoreError> {
+    state
+        .store
+        .accept_order(&input.slot_id, &input.order_id, input.pot)
+        .map(Json)
+        .map_err(StoreError)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OrderRequest {
+    slot_id: String,
+    order_id: String,
+}
+
+async fn abandon_order(
+    State(state): State<AppState>,
+    Json(input): Json<OrderRequest>,
+) -> Result<Json<()>, StoreError> {
+    state
+        .store
+        .abandon_order(&input.slot_id, &input.order_id)
+        .map(Json)
+        .map_err(StoreError)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CompleteOrderRequest {
+    slot_id: String,
+    order_id: String,
+    reward: i64,
+}
+
+async fn complete_order(
+    State(state): State<AppState>,
+    Json(input): Json<CompleteOrderRequest>,
+) -> Result<Json<i64>, StoreError> {
+    state
+        .store
+        .complete_order(&input.slot_id, &input.order_id, input.reward)
         .map(Json)
         .map_err(StoreError)
 }
@@ -206,6 +285,12 @@ mod tests {
                             "x": 4.0,
                             "z": 5.0,
                             "yaw": 0.75
+                        }],
+                        "reputation": 0,
+                        "orders": [{
+                            "orderId": "starter-double-cut",
+                            "state": "pending",
+                            "pot": null
                         }]
                     }),
                 ))
@@ -239,6 +324,90 @@ mod tests {
         assert_eq!(loaded["displayName"], "Browser Orchard");
         assert_eq!(loaded["camera"]["x"], 1.0);
         assert_eq!(loaded["trees"][0]["treeId"], "tree-1");
+        assert_eq!(loaded["reputation"], 0);
+        assert_eq!(loaded["orders"][0]["state"], "pending");
+
+        let inserted_tree = response_json(
+            app.clone()
+                .oneshot(request(
+                    "/__orchard_playtest/save/insert-tree",
+                    json!({
+                        "slotId": slot_id,
+                        "update": {
+                            "treeId": "tree-2",
+                            "diagramJson": "{\"regions\":[],\"nodes\":[{\"id\":\"new\"}],\"wires\":[]}",
+                            "x": 12.0,
+                            "z": -3.0,
+                            "yaw": 0.125
+                        }
+                    }),
+                ))
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert!(inserted_tree.as_i64().unwrap() > 0);
+
+        assert_eq!(
+            response_json(
+                app.clone()
+                    .oneshot(request(
+                        "/__orchard_playtest/save/accept-order",
+                        json!({
+                            "slotId": slot_id,
+                            "orderId": "starter-double-cut",
+                            "pot": {"x": 3.0, "z": -6.0, "yaw": 0.5}
+                        }),
+                    ))
+                    .await
+                    .unwrap(),
+            )
+            .await,
+            Value::Null
+        );
+        assert_eq!(
+            response_json(
+                app.clone()
+                    .oneshot(request(
+                        "/__orchard_playtest/save/abandon-order",
+                        json!({"slotId": slot_id, "orderId": "starter-double-cut"}),
+                    ))
+                    .await
+                    .unwrap(),
+            )
+            .await,
+            Value::Null
+        );
+        assert_eq!(
+            response_json(
+                app.clone()
+                    .oneshot(request(
+                        "/__orchard_playtest/save/accept-order",
+                        json!({
+                            "slotId": slot_id,
+                            "orderId": "starter-double-cut",
+                            "pot": {"x": 4.0, "z": -8.0, "yaw": 0.75}
+                        }),
+                    ))
+                    .await
+                    .unwrap(),
+            )
+            .await,
+            Value::Null
+        );
+        assert_eq!(
+            response_json(
+                app.clone()
+                    .oneshot(request(
+                        "/__orchard_playtest/save/complete-order",
+                        json!({"slotId": slot_id, "orderId": "starter-double-cut", "reward": 2}),
+                    ))
+                    .await
+                    .unwrap(),
+            )
+            .await,
+            json!(2)
+        );
 
         let updated_tree = response_json(
             app.clone()
@@ -291,6 +460,13 @@ mod tests {
         assert!(persisted.diagrams.iter().any(|diagram| {
             diagram.diagram_json == "{\"regions\":[{\"id\":\"cut\"}],\"nodes\":[],\"wires\":[]}"
         }));
+        assert!(persisted.trees.iter().any(|tree| tree.tree_id == "tree-2"));
+        assert_eq!(persisted.reputation, 2);
+        assert_eq!(
+            persisted.orders[0].state,
+            crate::save_store::OrderStatus::Completed
+        );
+        assert_eq!(persisted.orders[0].pot, None);
     }
 
     // This catches accidentally dispatching an unauthorized request to SaveStore.

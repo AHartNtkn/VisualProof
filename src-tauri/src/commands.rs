@@ -1,5 +1,6 @@
 use crate::save_store::{
-    CameraRecord, CreateSlotInput, LoadedSlot, SaveStore, SlotListEntry, TreeUpdate,
+    CameraRecord, CreateSlotInput, LoadedSlot, PotPlacementRecord, SaveStore, SlotListEntry,
+    TreeUpdate,
 };
 use tauri::Manager;
 
@@ -42,6 +43,17 @@ pub fn update_tree(
 }
 
 #[tauri::command]
+pub fn insert_tree(
+    app: tauri::AppHandle,
+    slot_id: String,
+    update: TreeUpdate,
+) -> Result<i64, String> {
+    store(&app)?
+        .insert_tree(&slot_id, update)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn update_camera(
     app: tauri::AppHandle,
     slot_id: String,
@@ -49,5 +61,40 @@ pub fn update_camera(
 ) -> Result<(), String> {
     store(&app)?
         .update_camera(&slot_id, camera)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn accept_order(
+    app: tauri::AppHandle,
+    slot_id: String,
+    order_id: String,
+    pot: PotPlacementRecord,
+) -> Result<(), String> {
+    store(&app)?
+        .accept_order(&slot_id, &order_id, pot)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn abandon_order(
+    app: tauri::AppHandle,
+    slot_id: String,
+    order_id: String,
+) -> Result<(), String> {
+    store(&app)?
+        .abandon_order(&slot_id, &order_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn complete_order(
+    app: tauri::AppHandle,
+    slot_id: String,
+    order_id: String,
+    reward: i64,
+) -> Result<i64, String> {
+    store(&app)?
+        .complete_order(&slot_id, &order_id, reward)
         .map_err(|error| error.to_string())
 }

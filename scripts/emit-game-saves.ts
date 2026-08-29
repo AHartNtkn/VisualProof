@@ -27,6 +27,8 @@ const saves = counts.map((count) => {
     displayName: count === 1 ? 'Large Tree' : `Renderer Stress ${count}`,
     updatedAtMs: 0,
     camera: count === 1 ? largeInteractionCamera : stressCamera,
+    reputation: 0,
+    orders: [{ orderId: 'starter-double-cut', state: 'pending', pot: null }],
     trees: (count === 1 ? [largeInteractionTree] : orchardPlacements(count, 34))
       .map((placement) => ({ ...placement, diagramJson })),
   }

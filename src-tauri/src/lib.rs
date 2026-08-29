@@ -14,8 +14,12 @@ pub fn run() {
             commands::list_slots,
             commands::create_slot,
             commands::load_slot,
+            commands::insert_tree,
             commands::update_tree,
-            commands::update_camera
+            commands::update_camera,
+            commands::accept_order,
+            commands::abandon_order,
+            commands::complete_order
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Orchard");
@@ -23,7 +27,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod generated_save_tests {
-    use super::save_store::{CameraRecord, SaveStore};
+    use super::save_store::{CameraRecord, OrderRecord, OrderStatus, SaveStore};
     use std::path::PathBuf;
 
     #[test]
@@ -72,6 +76,15 @@ mod generated_save_tests {
             );
             assert_eq!(loaded.trees.len(), count);
             assert_eq!(loaded.diagrams.len(), 1);
+            assert_eq!(loaded.reputation, 0);
+            assert_eq!(
+                loaded.orders,
+                vec![OrderRecord {
+                    order_id: "starter-double-cut".into(),
+                    state: OrderStatus::Pending,
+                    pot: None,
+                }]
+            );
         }
     }
 }
