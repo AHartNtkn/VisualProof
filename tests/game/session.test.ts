@@ -6,6 +6,10 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { snapshotFromDiagram } from '../../src/game/diagram-snapshot'
 import { sameDiagram } from '../../src/kernel/diagram/canonical/iso'
+import { extractSubgraph } from '../../src/kernel/diagram/subgraph/extract'
+import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
+import { derivedScope } from '../../src/kernel/diagram/regions'
+import { IOTA } from '../../src/kernel/diagram/sig'
 
 const blankDiagram = new DiagramBuilder().build()
 
@@ -258,22 +262,69 @@ describe('game tool session', () => {
     })).toThrow(/whole tree/)
   })
 
-  it('cites a whole tree into another tree without consuming the source', () => {
-    const source = tree('source', largeDiagram)
-    const target = tree('target', blankDiagram)
+  it('cites a complete whole tree at a non-root branch without replacing target content', () => {
+    const sourceBuilder = new DiagramBuilder()
+    const sourceOuter = sourceBuilder.cut(sourceBuilder.root)
+    const sourceNested = sourceBuilder.cut(sourceOuter)
+    sourceBuilder.point(sourceNested)
+    sourceBuilder.identity(sourceBuilder.root, IOTA, 2)
+    const source = tree('source', sourceBuilder.build())
+    const targetBuilder = new DiagramBuilder()
+    const destination = targetBuilder.cut(targetBuilder.root)
+    const rootSentinel = targetBuilder.point(targetBuilder.root)
+    const destinationSentinel = targetBuilder.point(destination)
+    const targetDiagram = targetBuilder.build()
+    const target: GameTree = {
+      ...tree('target', targetDiagram),
+      placement: { x: 13, z: -7, yaw: 0.25 },
+    }
     const session = gameSession(new Map([[source.id, source], [target.id, target]]))
 
     const change = session.planIteration(completeBranchCutting(source, source.snapshot.diagram.root), {
       treeId: target.id,
-      entity: { kind: 'branch', key: 'target', region: target.snapshot.diagram.root, polarity: 0, pts: [] },
+      entity: { kind: 'branch', key: 'destination', region: destination, polarity: 1, pts: [] },
       distance: 1,
     })
+    const after = change.after.snapshot.diagram
+    const originalRegions = new Set(Object.keys(targetDiagram.regions))
+    const originalNodes = new Set(Object.keys(targetDiagram.nodes))
+    const originalWires = new Set(Object.keys(targetDiagram.wires))
+    const insertedRoots = Object.entries(after.regions)
+      .filter(([id, region]) =>
+        !originalRegions.has(id) && region.kind === 'cut' && region.parent === destination,
+      )
+      .map(([id]) => id)
+    const insertedNodeClosure = new Set(Object.keys(after.nodes).filter((id) => !originalNodes.has(id)))
+    const insertedNodes = [...insertedNodeClosure]
+      .filter((id) => after.nodes[id]!.region === destination)
+    const insertedWires = Object.entries(after.wires)
+      .filter(([id, wire]) =>
+        !originalWires.has(id)
+        && derivedScope(after, id) === destination
+        && wire.endpoints.every((endpoint) => insertedNodeClosure.has(endpoint.node)),
+      )
+      .map(([id]) => id)
+    const inserted = extractSubgraph(after, mkSelection(after, {
+      region: destination,
+      regions: insertedRoots,
+      nodes: insertedNodes,
+      wires: insertedWires,
+    })).pattern.diagram
 
     expect(change.kind).toBe('update')
     expect(change.treeId).toBe(target.id)
+    expect(change.after.placement).toEqual({ x: 13, z: -7, yaw: 0.25 })
     expect(session.trees.get(source.id)).toBe(source)
     expect(session.trees.get(target.id)).toBe(target)
-    expect(sameDiagram(change.after.snapshot.diagram, source.snapshot.diagram)).toBe(true)
+    expect(after.regions[destination]).toEqual({ kind: 'cut', parent: 'r0' })
+    expect(after.nodes[rootSentinel]).toEqual({
+      kind: 'identity', region: 'r0', sig: { kind: 'iota' }, arity: 0,
+    })
+    expect(after.nodes[destinationSentinel]).toEqual({
+      kind: 'identity', region: 'r1', sig: { kind: 'iota' }, arity: 0,
+    })
+    expect(insertedRoots).toHaveLength(1)
+    expect(sameDiagram(inserted, source.snapshot.diagram)).toBe(true)
   })
 
   it('duplicates a whole tree with an injected fresh identity and requested placement', () => {
@@ -291,6 +342,8 @@ describe('game tool session', () => {
     })
     expect(session.trees.get(source.id)).toBe(source)
     expect(session.trees.has('tree-fresh')).toBe(false)
+    expect(change.after.snapshot).not.toBe(source.snapshot)
+    expect(change.after.snapshot.diagram).not.toBe(source.snapshot.diagram)
     expect(sameDiagram(change.after.snapshot.diagram, source.snapshot.diagram)).toBe(true)
   })
 
