@@ -30,6 +30,8 @@ export {
 } from './action'
 export type { Theorem, TheoremApplication } from './theorem'
 export { checkTheorem, applyTheorem } from './theorem'
+export type { LibraryProposition } from './library'
+export { libraryProposition, citeLibraryProposition } from './library'
 export type { CompositionBoundaries, CompositionOptions } from './compose'
 export { composeActions, mapStepIds } from './compose'
 export {

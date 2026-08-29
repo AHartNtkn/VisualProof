@@ -19,6 +19,8 @@ import type { ProofAction } from './action'
 import { replayActions } from './action'
 import { ProofError } from './error'
 
+class RewriteOccurrenceMismatch extends RuleError {}
+
 export type Theorem = {
   readonly name: string
   readonly lhs: DiagramWithBoundary
@@ -147,7 +149,16 @@ export function applyTheorem(
   assertProofContext(ctx)
   const thm = ctx.theorems.get(name)
   if (thm === undefined) throw new ProofError(`unknown theorem '${name}'`)
-  return applyVerifiedTheorem(d, thm, at, direction, orientation, reservation)
+  try {
+    return applyVerifiedTheorem(d, thm, at, direction, orientation, reservation)
+  } catch (error) {
+    if (error instanceof RewriteOccurrenceMismatch) {
+      throw new RuleError(
+        `the selection is not an occurrence of theorem '${thm.name}' ${direction === 'forward' ? 'left' : 'right'}-hand side`,
+      )
+    }
+    throw error
+  }
 }
 
 function applyVerifiedTheorem(
@@ -170,10 +181,25 @@ function applyVerifiedTheorem(
       `theorem '${thm.name}' applied ${direction}${orientation === 'backward' ? ' (backward)' : ''} requires a ${need} region; '${at.sel.region}' is ${have}`,
     )
   }
-  const { pattern, attachments } = extractSubgraph(d, at.sel)
+  return rewriteTheoremOccurrence(d, from, to, at, reservation)
+}
+
+/**
+ * Rewrite one exact occurrence independently of any theorem proof or
+ * polarity authority. Callers establish those obligations before invoking
+ * the shared structural rewrite.
+ */
+export function rewriteTheoremOccurrence(
+  host: Diagram,
+  from: DiagramWithBoundary,
+  to: DiagramWithBoundary,
+  at: TheoremApplication,
+  reservation?: IdReservation,
+): Diagram {
+  const { pattern, attachments } = extractSubgraph(host, at.sel)
   if (at.args.length !== from.boundary.length) {
     throw new RuleError(
-      `theorem '${thm.name}' has ${from.boundary.length} boundary positions but ${at.args.length} arguments were given`,
+      `rewrite source has ${from.boundary.length} boundary positions but ${at.args.length} arguments were given`,
     )
   }
   for (const attachment of attachments) {
@@ -203,7 +229,7 @@ function applyVerifiedTheorem(
   const detachedCaptureStubs = new Map<WireId, WireId>()
   const candidateBoundary = from.boundary.map((sourceBoundary, index) => {
     const argument = at.args[index]!
-    const hostWire = d.wires[argument]
+    const hostWire = host.wires[argument]
     if (hostWire === undefined) {
       throw new RuleError(`argument wire '${argument}' does not exist`)
     }
@@ -253,15 +279,13 @@ function applyVerifiedTheorem(
     candidateBoundary,
   )
   if (!sameDiagram(candidate.diagram, from.diagram, candidate.boundary, from.boundary)) {
-    throw new RuleError(
-      `the selection is not an occurrence of theorem '${thm.name}' ${direction === 'forward' ? 'left' : 'right'}-hand side`,
-    )
+    throw new RewriteOccurrenceMismatch('the selection is not an occurrence of the rewrite source')
   }
   // Splice BEFORE removing: fresh ids are then minted against the FULL
   // pre-removal id set, so this step can never resurrect an id it destroys
   // (checkTheorem's per-step boundary checks rely on exactly that). The two
   // phases commute — the splice only adds content and extends the attachment
   // wires, none of which the removal selection touches.
-  const spliced = spliceSubgraphMapped(d, at.sel.region, to, at.args, { reserved: reservation }).diagram
+  const spliced = spliceSubgraphMapped(host, at.sel.region, to, at.args, { reserved: reservation }).diagram
   return removeSubgraph(spliced, at.sel)
 }
