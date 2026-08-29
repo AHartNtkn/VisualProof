@@ -1,5 +1,5 @@
 import type { CameraPose } from './model'
-import type { CameraRecord, SaveClient, TreeUpdate } from './save-client'
+import type { CameraRecord, PotPlacement, SaveClient, TreeUpdate } from './save-client'
 
 export type SaveWriterStatus = {
   readonly state: 'idle' | 'saving' | 'error'
@@ -11,11 +11,23 @@ export type SaveWriterClock = {
   clearTimeout(id: unknown): void
 }
 
-type SaveWriterPort = Pick<SaveClient, 'updateTree' | 'updateCamera'>
+type SaveWriterPort = Pick<
+  SaveClient,
+  | 'updateTree'
+  | 'insertTree'
+  | 'updateCamera'
+  | 'acceptOrder'
+  | 'abandonOrder'
+  | 'completeOrder'
+>
 
 type PendingWrite =
-  | { readonly kind: 'tree'; readonly update: TreeUpdate }
+  | { readonly kind: 'tree-insert'; readonly update: TreeUpdate }
+  | { readonly kind: 'tree-update'; readonly update: TreeUpdate }
   | { readonly kind: 'camera'; readonly camera: CameraRecord }
+  | { readonly kind: 'order-accept'; readonly orderId: string; readonly pot: PotPlacement }
+  | { readonly kind: 'order-abandon'; readonly orderId: string }
+  | { readonly kind: 'order-complete'; readonly orderId: string; readonly reward: number }
 
 const CAMERA_DEBOUNCE_MS = 500
 
@@ -34,8 +46,15 @@ function cameraRecord(pose: CameraPose): CameraRecord {
   }
 }
 
-function writeKey(write: PendingWrite): string {
-  return write.kind === 'tree' ? `tree:${write.update.treeId}` : 'camera'
+function replacementKey(write: PendingWrite): string | null {
+  switch (write.kind) {
+    case 'tree-update': return `tree-update:${write.update.treeId}`
+    case 'camera': return 'camera'
+    case 'tree-insert':
+    case 'order-accept':
+    case 'order-abandon':
+    case 'order-complete': return null
+  }
 }
 
 function errorMessage(error: unknown): string {
@@ -72,7 +91,27 @@ export class SaveWriter {
 
   public tree(update: TreeUpdate): void {
     this.assertAccepting()
-    this.enqueue({ kind: 'tree', update })
+    this.enqueue({ kind: 'tree-update', update })
+  }
+
+  public insertTree(update: TreeUpdate): void {
+    this.assertAccepting()
+    this.enqueue({ kind: 'tree-insert', update })
+  }
+
+  public acceptOrder(orderId: string, pot: PotPlacement): void {
+    this.assertAccepting()
+    this.enqueue({ kind: 'order-accept', orderId, pot })
+  }
+
+  public abandonOrder(orderId: string): void {
+    this.assertAccepting()
+    this.enqueue({ kind: 'order-abandon', orderId })
+  }
+
+  public completeOrder(orderId: string, reward: number): void {
+    this.assertAccepting()
+    this.enqueue({ kind: 'order-complete', orderId, reward })
   }
 
   public camera(camera: CameraPose): void {
@@ -149,10 +188,13 @@ export class SaveWriter {
   }
 
   private enqueue(write: PendingWrite): void {
-    const key = writeKey(write)
-    const existing = this.pending.findIndex((candidate) => writeKey(candidate) === key)
-    if (existing === -1) this.pending.push(write)
-    else this.pending[existing] = write
+    const key = replacementKey(write)
+    if (key === null) this.pending.push(write)
+    else {
+      const existing = this.pending.findIndex((candidate) => replacementKey(candidate) === key)
+      if (existing === -1) this.pending.push(write)
+      else this.pending[existing] = write
+    }
     if (this.blocked) this.blocked = false
     this.startDrain()
   }
@@ -170,13 +212,16 @@ export class SaveWriter {
     while (this.pending.length > 0) {
       const write = this.pending.shift()!
       try {
-        if (write.kind === 'tree') await this.port.updateTree(this.slotId, write.update)
-        else await this.port.updateCamera(this.slotId, write.camera)
-      } catch (error) {
-        const key = writeKey(write)
-        if (!this.pending.some((candidate) => writeKey(candidate) === key)) {
-          this.pending.unshift(write)
+        switch (write.kind) {
+          case 'tree-insert': await this.port.insertTree(this.slotId, write.update); break
+          case 'tree-update': await this.port.updateTree(this.slotId, write.update); break
+          case 'camera': await this.port.updateCamera(this.slotId, write.camera); break
+          case 'order-accept': await this.port.acceptOrder(this.slotId, write.orderId, write.pot); break
+          case 'order-abandon': await this.port.abandonOrder(this.slotId, write.orderId); break
+          case 'order-complete': await this.port.completeOrder(this.slotId, write.orderId, write.reward); break
         }
+      } catch (error) {
+        this.pending.unshift(write)
         this.blocked = true
         this.publish({ state: 'error', message: errorMessage(error) })
         return

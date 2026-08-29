@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { CameraPose } from '../../src/game/model'
-import type { CameraRecord, SaveClient, TreeUpdate } from '../../src/game/save-client'
+import type {
+  CameraRecord,
+  PotPlacement,
+  SaveClient,
+  TreeUpdate,
+} from '../../src/game/save-client'
 import {
   SaveWriter,
   type SaveWriterClock,
@@ -8,6 +13,26 @@ import {
 } from '../../src/game/save-writer'
 
 type SavePort = Pick<SaveClient, 'updateTree' | 'updateCamera'>
+
+type LifecycleSavePort = Pick<
+  SaveClient,
+  | 'updateTree'
+  | 'insertTree'
+  | 'updateCamera'
+  | 'acceptOrder'
+  | 'abandonOrder'
+  | 'completeOrder'
+>
+
+function withLifecycleMethods(port: SavePort): LifecycleSavePort {
+  return {
+    ...port,
+    insertTree: async () => 1,
+    acceptOrder: async () => {},
+    abandonOrder: async () => {},
+    completeOrder: async () => 1,
+  }
+}
 
 function update(treeId: string, diagramJson: string): TreeUpdate {
   return { treeId, diagramJson, x: 1, z: 2, yaw: 3 }
@@ -19,6 +44,10 @@ function cameraAt(x: number): CameraPose {
 
 function cameraRecordAt(x: number): CameraRecord {
   return { x, y: 1.7, z: 8, yaw: x / 10, pitch: -0.18 }
+}
+
+function pot(x: number, z: number, yaw: number): PotPlacement {
+  return { x, z, yaw }
 }
 
 async function until(predicate: () => boolean): Promise<void> {
@@ -89,9 +118,115 @@ class FakeClock implements SaveWriterClock {
 }
 
 describe('ordered save writer', () => {
+  it('persists a new tree insertion before its later update', async () => {
+    const calls: [string, string, string][] = []
+    const port: LifecycleSavePort = {
+      updateTree: async (_slotId, value) => { calls.push(['update-tree', value.treeId, value.diagramJson]); return 1 },
+      insertTree: async (_slotId, value) => { calls.push(['insert-tree', value.treeId, value.diagramJson]); return 1 },
+      updateCamera: async () => {},
+      acceptOrder: async () => {},
+      abandonOrder: async () => {},
+      completeOrder: async () => 1,
+    }
+    const writer = new SaveWriter('slot-a', port)
+
+    writer.insertTree(update('new-tree', 'one'))
+    writer.tree(update('new-tree', 'two'))
+    await writer.flush()
+
+    expect(calls).toEqual([
+      ['insert-tree', 'new-tree', 'one'],
+      ['update-tree', 'new-tree', 'two'],
+    ])
+  })
+
+  it('persists every order transition in its accepted order', async () => {
+    const calls: { kind: string; orderId: string; value?: number | PotPlacement }[] = []
+    const port: LifecycleSavePort = {
+      updateTree: async () => 1,
+      insertTree: async () => 1,
+      updateCamera: async () => {},
+      acceptOrder: async (_slotId, orderId, value) => { calls.push({ kind: 'accept-order', orderId, value }) },
+      abandonOrder: async (_slotId, orderId) => { calls.push({ kind: 'abandon-order', orderId }) },
+      completeOrder: async (_slotId, orderId, reward) => { calls.push({ kind: 'complete-order', orderId, value: reward }); return reward },
+    }
+    const writer = new SaveWriter('slot-a', port)
+
+    writer.acceptOrder('starter-double-cut', pot(1, 2, 3))
+    writer.abandonOrder('starter-double-cut')
+    writer.acceptOrder('starter-double-cut', pot(4, 5, 6))
+    writer.completeOrder('starter-double-cut', 1)
+    await writer.flush()
+
+    expect(calls.map(({ kind }) => kind)).toEqual([
+      'accept-order',
+      'abandon-order',
+      'accept-order',
+      'complete-order',
+    ])
+    expect(calls).toEqual([
+      { kind: 'accept-order', orderId: 'starter-double-cut', value: pot(1, 2, 3) },
+      { kind: 'abandon-order', orderId: 'starter-double-cut' },
+      { kind: 'accept-order', orderId: 'starter-double-cut', value: pot(4, 5, 6) },
+      { kind: 'complete-order', orderId: 'starter-double-cut', value: 1 },
+    ])
+  })
+
+  it('retries the exact failed lifecycle operation before later operations', async () => {
+    const calls: { kind: string; pot?: PotPlacement }[] = []
+    let failuresRemaining = 1
+    const port: LifecycleSavePort = {
+      updateTree: async () => 1,
+      insertTree: async () => 1,
+      updateCamera: async () => {},
+      acceptOrder: async (_slotId, _orderId, value) => {
+        calls.push({ kind: 'accept-order', pot: value })
+        if (failuresRemaining-- > 0) throw new Error('order write failed')
+      },
+      abandonOrder: async () => { calls.push({ kind: 'abandon-order' }) },
+      completeOrder: async () => 1,
+    }
+    const writer = new SaveWriter('slot-a', port)
+
+    writer.acceptOrder('starter-double-cut', pot(1, 2, 3))
+    writer.abandonOrder('starter-double-cut')
+    await writer.flush()
+    writer.retry()
+    await writer.flush()
+
+    expect(calls).toEqual([
+      { kind: 'accept-order', pot: pot(1, 2, 3) },
+      { kind: 'accept-order', pot: pot(1, 2, 3) },
+      { kind: 'abandon-order' },
+    ])
+  })
+
+  it('coalesces pending updates without replacing an earlier insertion', async () => {
+    const calls: [string, string, string][] = []
+    const port: LifecycleSavePort = {
+      updateTree: async (_slotId, value) => { calls.push(['update-tree', value.treeId, value.diagramJson]); return 1 },
+      insertTree: async (_slotId, value) => { calls.push(['insert-tree', value.treeId, value.diagramJson]); return 1 },
+      updateCamera: async () => {},
+      acceptOrder: async () => {},
+      abandonOrder: async () => {},
+      completeOrder: async () => 1,
+    }
+    const writer = new SaveWriter('slot-a', port)
+
+    writer.insertTree(update('new-tree', 'one'))
+    writer.tree(update('new-tree', 'two'))
+    writer.tree(update('new-tree', 'three'))
+    await writer.flush()
+
+    expect(calls).toEqual([
+      ['insert-tree', 'new-tree', 'one'],
+      ['update-tree', 'new-tree', 'three'],
+    ])
+  })
+
   it('persists the newest pending snapshot for each tree', async () => {
     const port = deferredSavePort()
-    const writer = new SaveWriter('slot-a', port)
+    const writer = new SaveWriter('slot-a', withLifecycleMethods(port))
     writer.tree(update('a', 'one'))
     await until(() => port.treeWrites.length === 1)
     writer.tree(update('a', 'two'))
@@ -116,7 +251,7 @@ describe('ordered save writer', () => {
       updateTree: async () => 1,
       updateCamera: async (_slotId, camera) => { cameraWrites.push(camera) },
     }
-    const writer = new SaveWriter('slot-a', port, clock)
+    const writer = new SaveWriter('slot-a', withLifecycleMethods(port), clock)
 
     writer.camera(cameraAt(1))
     clock.advance(499)
@@ -137,7 +272,7 @@ describe('ordered save writer', () => {
       updateTree: async () => 1,
       updateCamera: async (_slotId, camera) => { cameraWrites.push(camera) },
     }
-    const writer = new SaveWriter('slot-a', port, clock)
+    const writer = new SaveWriter('slot-a', withLifecycleMethods(port), clock)
 
     for (let elapsed = 0; elapsed < 500; elapsed += 100) {
       writer.camera(cameraAt(3))
@@ -152,7 +287,7 @@ describe('ordered save writer', () => {
     expect(cameraWrites).toEqual([cameraRecordAt(3)])
   })
 
-  it('keeps the newest unsaved tree state and a persistent error until new state retries it', async () => {
+  it('retries a failed tree update before newer pending tree state', async () => {
     const attempts: TreeUpdate[] = []
     let failuresRemaining = 1
     const port: SavePort = {
@@ -163,7 +298,7 @@ describe('ordered save writer', () => {
       },
       updateCamera: async () => {},
     }
-    const writer = new SaveWriter('slot-a', port)
+    const writer = new SaveWriter('slot-a', withLifecycleMethods(port))
     const statuses: SaveWriterStatus[] = []
     writer.subscribe((status) => statuses.push(status))
 
@@ -178,6 +313,7 @@ describe('ordered save writer', () => {
     await writer.flush()
 
     expect(attempts.map(({ treeId, diagramJson }) => [treeId, diagramJson])).toEqual([
+      ['a', 'one'],
       ['a', 'one'],
       ['a', 'newest'],
       ['b', 'other'],
@@ -196,7 +332,7 @@ describe('ordered save writer', () => {
         if (failuresRemaining-- > 0) throw new Error('camera write failed')
       },
     }
-    const writer = new SaveWriter('slot-a', port, clock)
+    const writer = new SaveWriter('slot-a', withLifecycleMethods(port), clock)
     const statuses: SaveWriterStatus[] = []
     writer.subscribe((status) => statuses.push(status))
 
@@ -221,7 +357,7 @@ describe('ordered save writer', () => {
       updateTree: async (_slotId, value) => { treeWrites.push(value); return 1 },
       updateCamera: async (_slotId, value) => { cameraWrites.push(value) },
     }
-    const writer = new SaveWriter('slot-a', port, clock)
+    const writer = new SaveWriter('slot-a', withLifecycleMethods(port), clock)
     writer.tree(update('a', 'one'))
     writer.camera(cameraAt(7))
     await writer.dispose()
@@ -234,10 +370,10 @@ describe('ordered save writer', () => {
 
   it('rejects a tree synchronously when it cannot accept the update', async () => {
     const writes: TreeUpdate[] = []
-    const writer = new SaveWriter('slot-a', {
+    const writer = new SaveWriter('slot-a', withLifecycleMethods({
       updateTree: async (_slotId, value) => { writes.push(value); return 1 },
       updateCamera: async () => {},
-    })
+    }))
     await writer.dispose()
 
     expect(() => writer.tree(update('a', 'not-accepted'))).toThrow('disposed')
@@ -255,7 +391,7 @@ describe('ordered save writer', () => {
       },
       updateCamera: async () => {},
     }
-    const writer = new SaveWriter('slot-a', port)
+    const writer = new SaveWriter('slot-a', withLifecycleMethods(port))
     writer.tree(update('a', 'one'))
     await writer.flush()
 
@@ -278,7 +414,7 @@ describe('ordered save writer', () => {
       },
       updateCamera: async () => {},
     }
-    const writer = new SaveWriter('slot-a', port)
+    const writer = new SaveWriter('slot-a', withLifecycleMethods(port))
     writer.tree(update('a', 'one'))
 
     const first = writer.dispose()

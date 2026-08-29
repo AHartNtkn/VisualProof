@@ -408,7 +408,11 @@ describe('production game world', () => {
     const world = mountGameWorld(container(), [before])
     const writer = new SaveWriter('slot-a', {
       updateTree: async () => 1,
+      insertTree: async () => 1,
       updateCamera: async () => {},
+      acceptOrder: async () => {},
+      abandonOrder: async () => {},
+      completeOrder: async () => 1,
     })
     await writer.dispose()
     expect(() => publishTreeMutation(
