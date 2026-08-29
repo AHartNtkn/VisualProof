@@ -321,6 +321,31 @@ describe('ordered save writer', () => {
     expect(statuses.at(-1)).toEqual({ state: 'idle' })
   })
 
+  it('keeps a failed tree update ahead of a later update for the same tree', async () => {
+    const attempts: TreeUpdate[] = []
+    let failuresRemaining = 1
+    const port: SavePort = {
+      updateTree: async (_slotId, value) => {
+        attempts.push(value)
+        if (failuresRemaining-- > 0) throw new Error('database unavailable')
+        return 1
+      },
+      updateCamera: async () => {},
+    }
+    const writer = new SaveWriter('slot-a', withLifecycleMethods(port))
+
+    writer.tree(update('a', 'failed-original'))
+    await writer.flush()
+    writer.tree(update('a', 'newest-pending'))
+    await writer.flush()
+
+    expect(attempts.map(({ diagramJson }) => diagramJson)).toEqual([
+      'failed-original',
+      'failed-original',
+      'newest-pending',
+    ])
+  })
+
   it('retries a failed camera explicitly without clearing the error early', async () => {
     const clock = new FakeClock()
     let failuresRemaining = 1

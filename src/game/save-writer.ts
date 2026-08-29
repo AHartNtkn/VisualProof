@@ -191,7 +191,10 @@ export class SaveWriter {
     const key = replacementKey(write)
     if (key === null) this.pending.push(write)
     else {
-      const existing = this.pending.findIndex((candidate) => replacementKey(candidate) === key)
+      const protectedHead = this.blocked ? 1 : 0
+      const existing = this.pending.findIndex(
+        (candidate, index) => index >= protectedHead && replacementKey(candidate) === key,
+      )
       if (existing === -1) this.pending.push(write)
       else this.pending[existing] = write
     }
