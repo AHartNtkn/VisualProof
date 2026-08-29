@@ -116,8 +116,9 @@ move or tool labels, reward decorations, recommendation logic, search, or
 filters. Unavailable orders do not appear.
 
 The player may accept any number of available orders. Every accepted order
-owns its own pot. Active orders can be abandoned through their tiles, and
-completed orders remain visible in Completed.
+owns its own pot. Abandoning an active order returns its tile to Available and
+removes its pot. Successful delivery removes the pot and moves the tile from
+Active to Completed.
 
 The upper-right play interface contains quiet save and operation status. The
 ledger does not add a reputation display in this slice. The held tool model,
