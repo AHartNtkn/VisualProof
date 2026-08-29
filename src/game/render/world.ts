@@ -8,6 +8,8 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import type { GameTree, TreeTarget } from '../model'
 import { snapshotFromDiagram } from '../diagram-snapshot'
 import type { PointedTreePart, TreeChange } from '../session'
+import type { OrderMutation } from '../orders/session'
+import { ORDER_CATALOG, type OrderState } from '../orders/catalog'
 import { DiagramBuilder } from '../../kernel/diagram/builder'
 import { DARK } from '../../view/paint'
 import { TreeRenderAssetCache } from './assets'
@@ -35,6 +37,7 @@ import {
   type TreeMaterialSource,
 } from './tree-objects'
 import type { DisplayCameraPose, TreeRenderAsset } from './types'
+import { makePotObject, type PotObject, type PotRender } from './pots'
 import type { Entity } from '../../view3d/scene'
 import { focusPoint } from '../../view3d/pick'
 import type { Vec3 } from '../../view3d/vec3'
@@ -50,6 +53,7 @@ const INTERACTION_REACH = 100
 export type GameWorldRenderer = {
   readonly canvas: HTMLCanvasElement
   setTrees(trees: readonly GameTree[]): void
+  setPots(pots: readonly PotRender[]): void
   setCamera(pose: DisplayCameraPose): void
   pickTree(ndcX: number, ndcY: number): TreeTarget | null
   pickTreeFocus(ndcX: number, ndcY: number, treeId: string): {
@@ -58,19 +62,41 @@ export type GameWorldRenderer = {
     readonly worldFocus: Vec3
   } | null
   pointAtBranch(ndcX: number, ndcY: number, orbitTarget: string | null): PointedTreePart | null
+  pointAtToolTarget(ndcX: number, ndcY: number, orbitTarget: string | null): ToolWorldTarget | null
   setRenderMode(mode: RenderMode): void
   prepareTreeChange(change: TreeChange): PreparedTreeChange
   commitTreeChange(prepared: PreparedTreeChange): void
   discardTreeChange(prepared: PreparedTreeChange): void
+  prepareOrderChange(mutation: OrderMutation): PreparedOrderChange
+  commitOrderChange(prepared: PreparedOrderChange): void
+  discardOrderChange(prepared: PreparedOrderChange): void
   resize(width: number, height: number): void
   render(now: number): GameFrameStats
   dispose(): void
 }
 
+export type ToolWorldTarget =
+  | { readonly kind: 'branch'; readonly pointed: PointedTreePart }
+  | { readonly kind: 'pot'; readonly orderId: string; readonly distance: number }
+  | { readonly kind: 'ground'; readonly point: { readonly x: number; readonly z: number }; readonly distance: number }
+
 const preparedTreeChange: unique symbol = Symbol('prepared tree change')
 
 export type PreparedTreeChange = {
   readonly [preparedTreeChange]: true
+}
+
+const preparedOrderChange: unique symbol = Symbol('prepared order change')
+
+export type PreparedOrderChange = {
+  readonly [preparedOrderChange]: true
+}
+
+type PreparedOrderChangePayload = {
+  readonly orderId: string
+  readonly before: PotRender | null
+  readonly after: PotRender | null
+  readonly incoming: PotObject | null
 }
 
 type PreparedTreeChangePayload = {
@@ -125,6 +151,9 @@ export function mountGameWorld(
   const treeObjects = new THREE.Group()
   treeObjects.name = 'separate-proof-trees'
   scene.add(treeObjects)
+  const potObjects = new THREE.Group()
+  potObjects.name = 'order-pots'
+  scene.add(potObjects)
   const assetCache = new TreeRenderAssetCache(DARK)
   const assetsByJson = new Map<string, TreeRenderAsset>()
   const materialsByAsset = new WeakMap<TreeRenderAsset, TreeMaterialSource>()
@@ -167,9 +196,16 @@ export function mountGameWorld(
   const preparedPayloads = new WeakMap<PreparedTreeChange, PreparedTreeChangePayload>()
   const outstandingPrepared = new Set<PreparedTreeChange>()
   const preparedByTreeId = new Map<string, PreparedTreeChange>()
+  const potsByOrderId = new Map<string, PotObject>()
+  const preparedOrderPayloads = new WeakMap<PreparedOrderChange, PreparedOrderChangePayload>()
+  const outstandingPreparedOrders = new Set<PreparedOrderChange>()
+  const preparedByOrderId = new Map<string, PreparedOrderChange>()
   let disposed = false
   const treeRaycaster = new THREE.Raycaster()
   const treeHitPoint = new THREE.Vector3()
+  const potHitPoint = new THREE.Vector3()
+  const groundHitPoint = new THREE.Vector3()
+  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -ground.position.y)
 
   const renderTrees = (trees: readonly GameTree[]): RenderTree[] => trees.map((tree, index) => {
     assetsByJson.set(tree.snapshot.json, assetCache.get(tree.snapshot))
@@ -198,6 +234,56 @@ export function mountGameWorld(
       })
     }
     runtime.setTrees(rendered)
+  }
+
+  const samePot = (left: PotRender | null, right: PotRender | null): boolean => {
+    if (left === null || right === null) return left === right
+    return left.orderId === right.orderId
+      && left.goal.json === right.goal.json
+      && Object.is(left.placement.x, right.placement.x)
+      && Object.is(left.placement.z, right.placement.z)
+      && Object.is(left.placement.yaw, right.placement.yaw)
+  }
+
+  const potFor = (orderId: string, state: OrderState | undefined): PotRender | null => {
+    if (state?.kind !== 'accepted') return null
+    const definition = ORDER_CATALOG.find((entry) => entry.id === orderId)
+    if (definition === undefined) throw new Error(`unknown order '${orderId}'`)
+    return { orderId, placement: state.pot, goal: definition.goal }
+  }
+
+  const addPot = (render: PotRender): PotObject => {
+    const object = makePotObject(render, assetCache.get(render.goal), materialsFor(assetCache.get(render.goal)))
+    potObjects.add(object.group)
+    potsByOrderId.set(render.orderId, object)
+    return object
+  }
+
+  const clearPots = (): void => {
+    for (const object of potsByOrderId.values()) object.dispose()
+    potsByOrderId.clear()
+  }
+
+  const discardOutstandingPreparedOrders = (): void => {
+    for (const prepared of outstandingPreparedOrders) {
+      const payload = preparedOrderPayloads.get(prepared)
+      if (payload === undefined) continue
+      preparedOrderPayloads.delete(prepared)
+      if (preparedByOrderId.get(payload.orderId) === prepared) preparedByOrderId.delete(payload.orderId)
+      payload.incoming?.dispose()
+    }
+    outstandingPreparedOrders.clear()
+  }
+
+  const setPots = (pots: readonly PotRender[]): void => {
+    const orderIds = new Set<string>()
+    for (const pot of pots) {
+      if (orderIds.has(pot.orderId)) throw new Error(`duplicate pot for '${pot.orderId}'`)
+      orderIds.add(pot.orderId)
+    }
+    discardOutstandingPreparedOrders()
+    clearPots()
+    for (const pot of pots) addPot(pot)
   }
 
   const matchesTree = (rendered: RenderTree, tree: GameTree): boolean => {
@@ -255,9 +341,11 @@ export function mountGameWorld(
     () => {
       disposed = true
       discardOutstandingPrepared()
+      discardOutstandingPreparedOrders()
     },
     () => dynamicTrees.dispose(),
     () => runtime.dispose(),
+    clearPots,
     () => { for (const material of lineMaterials) material.dispose() },
     () => { for (const material of spriteMaterials) material.dispose() },
     () => { for (const texture of textures) texture.dispose() },
@@ -318,9 +406,36 @@ export function mountGameWorld(
     return closest(dynamic, staticBranch)
   }
 
+  const pointAtToolTarget = (
+    ndcX: number,
+    ndcY: number,
+    orbitTarget: string | null,
+  ): ToolWorldTarget | null => {
+    treeRaycaster.setFromCamera({ x: ndcX, y: ndcY } as THREE.Vector2, camera)
+    const branch = pointAtEntity(ndcX, ndcY, orbitTarget, (entity) => entity.kind === 'branch')
+    let pot: { readonly kind: 'pot'; readonly orderId: string; readonly distance: number } | null = null
+    for (const { render, target } of potsByOrderId.values()) {
+      if (treeRaycaster.ray.intersectSphere(target, potHitPoint) === null) continue
+      const distance = treeRaycaster.ray.origin.distanceTo(potHitPoint)
+      if (pot === null || distance < pot.distance) pot = { kind: 'pot', orderId: render.orderId, distance }
+    }
+    if (branch !== null && (pot === null || branch.distance <= pot.distance)) {
+      return { kind: 'branch', pointed: branch }
+    }
+    if (pot !== null) return pot
+    if (treeRaycaster.ray.intersectPlane(groundPlane, groundHitPoint) === null) return null
+    if (Math.abs(groundHitPoint.x) > TERRAIN_SIZE / 2 || Math.abs(groundHitPoint.z) > TERRAIN_SIZE / 2) return null
+    return {
+      kind: 'ground',
+      point: { x: groundHitPoint.x, z: groundHitPoint.z },
+      distance: treeRaycaster.ray.origin.distanceTo(groundHitPoint),
+    }
+  }
+
   return {
     canvas: renderer.domElement,
     setTrees,
+    setPots,
     setCamera(pose) {
       camera.position.set(pose.eye.x, pose.eye.y, pose.eye.z)
       camera.lookAt(
@@ -328,6 +443,7 @@ export function mountGameWorld(
         pose.eye.y + pose.forward.y,
         pose.eye.z + pose.forward.z,
       )
+      camera.updateMatrixWorld()
     },
     pickTree(ndcX, ndcY) {
       treeRaycaster.setFromCamera({ x: ndcX, y: ndcY } as THREE.Vector2, camera)
@@ -369,6 +485,7 @@ export function mountGameWorld(
     pointAtBranch(ndcX, ndcY, orbitTarget) {
       return pointAtEntity(ndcX, ndcY, orbitTarget, (entity) => entity.kind === 'branch')
     },
+    pointAtToolTarget,
     setRenderMode(mode) {
       runtime.setMode(mode)
     },
@@ -472,6 +589,51 @@ export function mountGameWorld(
       outstandingPrepared.delete(prepared)
       if (preparedByTreeId.get(payload.treeId) === prepared) preparedByTreeId.delete(payload.treeId)
       dynamicTrees.discard(payload.dynamic)
+    },
+    prepareOrderChange(mutation) {
+      if (disposed) throw new Error('game world renderer is disposed')
+      if (preparedByOrderId.has(mutation.orderId)) {
+        throw new Error(`order change for '${mutation.orderId}' is already prepared`)
+      }
+      const before = potFor(mutation.orderId, mutation.before.orders.get(mutation.orderId))
+      const after = potFor(mutation.orderId, mutation.after.orders.get(mutation.orderId))
+      const live = potsByOrderId.get(mutation.orderId)?.render ?? null
+      if (!samePot(live, before)) throw new Error(`stale order change for '${mutation.orderId}'`)
+      const incoming = after === null ? null : makePotObject(
+        after,
+        assetCache.get(after.goal),
+        materialsFor(assetCache.get(after.goal)),
+      )
+      const payload: PreparedOrderChangePayload = { orderId: mutation.orderId, before, after, incoming }
+      const prepared: PreparedOrderChange = { [preparedOrderChange]: true }
+      preparedOrderPayloads.set(prepared, payload)
+      outstandingPreparedOrders.add(prepared)
+      preparedByOrderId.set(payload.orderId, prepared)
+      return prepared
+    },
+    commitOrderChange(prepared) {
+      const payload = preparedOrderPayloads.get(prepared)
+      if (payload === undefined || disposed) return
+      preparedOrderPayloads.delete(prepared)
+      outstandingPreparedOrders.delete(prepared)
+      if (preparedByOrderId.get(payload.orderId) === prepared) preparedByOrderId.delete(payload.orderId)
+      const current = potsByOrderId.get(payload.orderId)
+      if (current !== undefined) {
+        potsByOrderId.delete(payload.orderId)
+        current.dispose()
+      }
+      if (payload.incoming !== null) {
+        potObjects.add(payload.incoming.group)
+        potsByOrderId.set(payload.orderId, payload.incoming)
+      }
+    },
+    discardOrderChange(prepared) {
+      const payload = preparedOrderPayloads.get(prepared)
+      if (payload === undefined) return
+      preparedOrderPayloads.delete(prepared)
+      outstandingPreparedOrders.delete(prepared)
+      if (preparedByOrderId.get(payload.orderId) === prepared) preparedByOrderId.delete(payload.orderId)
+      payload.incoming?.dispose()
     },
     resize,
     render(now) {

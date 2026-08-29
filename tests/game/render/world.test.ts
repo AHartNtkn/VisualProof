@@ -179,6 +179,9 @@ import type { TreeChange } from '../../../src/game/session'
 import { gameSession, publishTreeChange } from '../../../src/game/session'
 import { SaveWriter } from '../../../src/game/save-writer'
 import { treeUpdateFromGameTree } from '../../../src/game/save-client'
+import { ORDER_CATALOG, STARTER_ORDER_ID, type OrderProgress } from '../../../src/game/orders/catalog'
+import { orderSession } from '../../../src/game/orders/session'
+import type { PotRender } from '../../../src/game/render/pots'
 
 beforeEach(() => {
   host.attached = false
@@ -259,6 +262,20 @@ function pointCameraAtBranch(world: ReturnType<typeof mountGameWorld>, tree: Gam
     },
     forward: { x: 0, y: 0, z: -1 },
   })
+}
+
+function starterPot(x = 0, z = -20): PotRender {
+  const goal = ORDER_CATALOG.find(({ id }) => id === STARTER_ORDER_ID)?.goal
+  if (goal === undefined) throw new Error('missing starter order goal')
+  return {
+    orderId: STARTER_ORDER_ID,
+    placement: { x, z, yaw: 0 },
+    goal,
+  }
+}
+
+function pendingStarterOrder(): OrderProgress {
+  return { reputation: 0, orders: new Map([[STARTER_ORDER_ID, { kind: 'pending' as const }]]) }
 }
 
 describe('production game world', () => {
@@ -638,6 +655,85 @@ describe('production game world', () => {
       treeId: 'orbit',
       entity: { kind: 'branch', key: 'b:r0', region: 'r0' },
     })
+    world.dispose()
+  })
+
+  it('returns the nearest semantic branch or pot rather than terrain', () => {
+    const branch = blankTree('branch', 0, -20)
+    const world = mountGameWorld(container(), [branch])
+    world.setPots([starterPot(0, -10)])
+    world.setCamera({ eye: { x: 0, y: 1, z: 0 }, forward: { x: 0, y: -0.05, z: -1 } })
+
+    expect(world.pointAtToolTarget(0, 0, null)).toMatchObject({
+      kind: 'pot', orderId: STARTER_ORDER_ID,
+    })
+
+    world.setPots([starterPot(0, -40)])
+    expect(world.pointAtToolTarget(0, 0, null)).toMatchObject({
+      kind: 'branch', pointed: { treeId: branch.id, entity: { kind: 'branch' } },
+    })
+    world.dispose()
+  })
+
+  it('returns terrain only when the camera ray actually hits it', () => {
+    const world = mountGameWorld(container(), [])
+    world.setCamera({ eye: { x: 2, y: 3, z: 4 }, forward: { x: 0, y: -1, z: 0 } })
+
+    const terrain = world.pointAtToolTarget(0, 0, null)
+    expect(terrain).toMatchObject({ kind: 'ground', point: { x: 2 }, distance: expect.any(Number) })
+    expect(terrain?.kind === 'ground' && terrain.point.z).toBeCloseTo(4, 3)
+
+    world.setCamera({ eye: { x: 2, y: 3, z: 4 }, forward: { x: 0, y: 0, z: -1 } })
+    expect(world.pointAtToolTarget(0, 0, null)).toBeNull()
+    world.dispose()
+  })
+
+  it('restricts branch targeting to the orbit tree without restricting pots', () => {
+    const orbit = blankTree('orbit', 10, -20)
+    const other = blankTree('other', 0, -10)
+    const world = mountGameWorld(container(), [orbit, other])
+    pointCameraAtBranch(world, other)
+
+    expect(world.pointAtToolTarget(0, 0, orbit.id)).toBeNull()
+    world.setPots([starterPot(0, -10)])
+    expect(world.pointAtToolTarget(0, 0, orbit.id)).toMatchObject({
+      kind: 'pot', orderId: STARTER_ORDER_ID,
+    })
+    world.dispose()
+  })
+
+  it('prepares pot appearance and removal without publishing either until commit', () => {
+    const world = mountGameWorld(container(), [])
+    const pending = pendingStarterOrder()
+    const accept = orderSession(pending).planAccept(STARTER_ORDER_ID, { x: 0, z: -20, yaw: 0 })
+    world.setCamera({ eye: { x: 0, y: 0.55, z: 0 }, forward: { x: 0, y: 0, z: -1 } })
+
+    const preparedAppearance = world.prepareOrderChange(accept)
+    expect(world.pointAtToolTarget(0, 0, null)).toBeNull()
+    world.commitOrderChange(preparedAppearance)
+    expect(world.pointAtToolTarget(0, 0, null)).toMatchObject({ kind: 'pot', orderId: STARTER_ORDER_ID })
+
+    const accepted = accept.after
+    const remove = orderSession(accepted).planAbandon(STARTER_ORDER_ID)
+    const preparedRemoval = world.prepareOrderChange(remove)
+    expect(world.pointAtToolTarget(0, 0, null)).toMatchObject({ kind: 'pot', orderId: STARTER_ORDER_ID })
+    world.commitOrderChange(preparedRemoval)
+    expect(world.pointAtToolTarget(0, 0, null)).toBeNull()
+    world.dispose()
+  })
+
+  it('rejects stale prepared pot changes and disposes discarded prepared appearance', () => {
+    const world = mountGameWorld(container(), [])
+    const pending = pendingStarterOrder()
+    const accept = orderSession(pending).planAccept(STARTER_ORDER_ID, { x: 0, z: -20, yaw: 0 })
+    const disposeGeometry = vi.spyOn(THREE.BufferGeometry.prototype, 'dispose')
+    const prepared = world.prepareOrderChange(accept)
+    const beforeDiscard = disposeGeometry.mock.calls.length
+
+    world.discardOrderChange(prepared)
+    expect(disposeGeometry.mock.calls.length).toBeGreaterThan(beforeDiscard)
+    expect(() => world.prepareOrderChange(orderSession(accept.after).planAbandon(STARTER_ORDER_ID)))
+      .toThrow(/stale order change/)
     world.dispose()
   })
 
