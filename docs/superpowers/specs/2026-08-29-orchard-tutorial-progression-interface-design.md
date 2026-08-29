@@ -155,11 +155,20 @@ Tools controls access to developer mode; it is not save progression.
 
 With Developer Tools enabled, backtick toggles developer mode and shows a clear
 mode indicator. In developer mode, clicking an order tile opens that order's
-editor instead of performing its ordinary action.
+editor instead of performing its ordinary action. Clicking the Orders primary
+tab opens a new-order editor.
 
 The editor shows the stable order ID as read-only context. It can edit
 prerequisite IDs, reward, and optional formula input, and it displays the
-authoritative diagram preview. Order-ID renaming is not part of this feature.
+authoritative diagram preview. It also contains a Delete action. Order-ID
+renaming is not part of this feature.
+
+The new-order editor accepts the new stable ID and the same editable content as
+an existing order. Creating or deleting an order updates the checked-in catalog
+and running game immediately. Creation adds its lifecycle entry to the current
+save. Deletion removes its lifecycle entry and any active pot. A create or
+delete that would leave an invalid prerequisite graph fails without changing
+the catalog or save.
 
 An order without remembered formula text opens with a blank formula field. An
 order with remembered text shows it. Submitting formula text parses it, creates
@@ -223,10 +232,10 @@ lifecycle states. The renderer continues to own pot and tree presentation.
 
 This slice includes the complete opening tutorial, reversible tutorial display,
 three-tool category cycling, Sprout Spawner, four prerequisite-linked orders,
-the redesigned HUD and ledger, Settings, and repository-backed order editing.
+the redesigned HUD and ledger, Settings, and repository-backed order creation,
+editing, and deletion.
 
 It does not include final tutorial-companion art, final tool art, additional
 tool categories, input rebinding, final tutorial prose, a general object editor,
-Blender-like world manipulation, order creation or deletion, order-ID renaming,
-puzzle-generation tooling, runtime puzzle generation, search, order filters, or
-recommendation logic.
+Blender-like world manipulation, order-ID renaming, puzzle-generation tooling,
+runtime puzzle generation, search, order filters, or recommendation logic.
