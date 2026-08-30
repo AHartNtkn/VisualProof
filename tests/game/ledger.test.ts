@@ -14,6 +14,7 @@ class TestElement extends EventTarget {
   public width = 240
   public height = 150
   public focusCalls = 0
+  public previewRendered = false
   public parent: EventTarget | null = null
   public readonly dataset: Record<string, string> = {}
   public readonly children: TestElement[] = []
@@ -48,7 +49,9 @@ class TestElement extends EventTarget {
   public getContext(kind: string): CanvasRenderingContext2D | null {
     if (kind !== '2d') return null
     return {
-      clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, save() {}, restore() {},
+      clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {},
+      stroke: () => { this.previewRendered = true },
+      save() {}, restore() {},
     } as unknown as CanvasRenderingContext2D
   }
 
@@ -234,24 +237,17 @@ describe('ledger controller', () => {
     expect(byData(h.content, 'orderId').map(({ dataset }) => dataset['orderId'])).toEqual(['single-double-cut'])
   })
 
-  it('renders order tiles as diagram previews with only their state action', () => {
-    // Catches order metadata, recommendation controls, or a title replacing the view-only preview.
+  it('renders each order tile as one visible preview and one state action without extra copy', () => {
+    // Mutation caught: a title, reward, recommendation, filter, or extra action becomes visible in a tile.
     const h = harness()
     h.controller.show(state())
     click(primaryTab(h.root, 'orders'))
     const tile = byData(h.content, 'orderId')[0]!
 
-    expect(descendants(tile).filter(({ tagName }) => tagName === 'CANVAS')).toHaveLength(1)
-    expect(byData(tile, 'orderAction', 'accept')).toHaveLength(1)
-    expect(descendants(tile).filter(({ tagName }) => tagName === 'STRONG')).toHaveLength(0)
-    expect(descendants(tile).filter(({ tagName }) => ['P', 'INPUT', 'SELECT'].includes(tagName))).toHaveLength(0)
-    expect(byData(tile, 'orderDescription')).toHaveLength(0)
-    expect(byData(tile, 'orderReward')).toHaveLength(0)
-    expect(byData(tile, 'orderReputation')).toHaveLength(0)
-    expect(byData(tile, 'orderTool')).toHaveLength(0)
-    expect(byData(tile, 'recommendation')).toHaveLength(0)
-    expect(byData(tile, 'search')).toHaveLength(0)
-    expect(byData(tile, 'filter')).toHaveLength(0)
+    const descendantsOfTile = descendants(tile)
+    expect(descendantsOfTile.filter(({ previewRendered }) => previewRendered)).toHaveLength(1)
+    expect(descendantsOfTile.filter(({ type }) => type === 'button')).toHaveLength(1)
+    expect(descendantsOfTile.map(({ textContent }) => textContent).filter(Boolean)).toEqual(['Accept'])
   })
 
   it('binds every active order tile to its own abandon callback', () => {

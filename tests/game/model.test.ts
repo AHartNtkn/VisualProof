@@ -50,7 +50,9 @@ describe('loaded game slot decoding', () => {
     // @ts-expect-error Diagram snapshots can only be constructed by their validating factories.
     const invalidSnapshot: DiagramSnapshot = { ...snapshot, json: '{}' }
 
-    expect(Object.isFrozen(snapshot)).toBe(true)
+    try {
+      ;(snapshot as { json: string }).json = '{}'
+    } catch {}
     expect(snapshot.json).toBe(JSON.stringify(diagramToJson(snapshot.diagram)))
     expect(snapshotFromDiagram(snapshot.diagram)).toEqual(snapshot)
     expect(invalidSnapshot.json).toBe('{}')

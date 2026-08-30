@@ -152,7 +152,6 @@ export function mountOrderEditor(
     error.textContent = `Cannot ${operation} order: ${detail(thrown)}`
   }
   const showPreview = (snapshot: DiagramSnapshot): void => {
-    preview.dataset['diagramSnapshot'] = snapshot.json
     renderDiagramPreview(preview, snapshot)
   }
   const hide = (): void => {

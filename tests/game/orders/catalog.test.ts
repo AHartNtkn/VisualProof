@@ -119,13 +119,28 @@ describe('opening order catalog', () => {
     }
   })
 
-  it('freezes valid definitions only after validating the complete dependency graph', () => {
-    // Catches consumers being able to mutate a decoded definition after graph validation.
+  it('keeps decoded behavior stable when consumers attempt to mutate public projections', () => {
+    // Mutation caught: a caller changes availability or lookup without publishing a revision.
     const revision = decodeOrderCatalog(openingOrderContent)
     validateOrderCatalog(revision.definitions)
 
-    expect(Object.isFrozen(revision.definitions[0]!)).toBe(true)
-    expect(Object.isFrozen(revision.definitions[1]!.prerequisites)).toBe(true)
+    try {
+      ;(revision.definitions[0] as { reward: number }).reward = 99
+    } catch {}
+    try {
+      ;(revision.definitions[1]!.prerequisites as string[]).push('forged')
+    } catch {}
+    try {
+      ;(revision.definitions as OrderCatalogRevision['definitions'] & unknown[]).push(revision.definitions[0]!)
+    } catch {}
+
+    expect(revision.byId.get('blank-sprout')?.reward).toBe(1)
+    expect(revision.byId.get('single-double-cut')?.prerequisites).toEqual(['blank-sprout'])
+    expect(revision.definitions.map(({ id }) => id)).toEqual([
+      'blank-sprout', 'single-double-cut', 'irregular-double-cut-a', 'irregular-double-cut-b',
+    ])
+    const progress = initialOrderProgress(revision.definitions)
+    expect(availableOrderIds(progress, revision, () => true)).toEqual(['blank-sprout'])
   })
 
   it('offers only allowed pending orders whose prerequisites are complete', () => {

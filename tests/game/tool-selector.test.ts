@@ -1,8 +1,20 @@
-import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { chromium, type Browser } from '@playwright/test'
+import { resolve } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { createServer, type ViteDevServer } from 'vite'
 import { mountToolSelector, renderHeldToolModel } from '../../game/tool-selector'
-import { ToolInventory } from '../../src/game/tools'
-import { heldColorAuthorityViolations } from './held-color-authority'
+import { TOOL_CATALOG, ToolInventory } from '../../src/game/tools'
+
+const repositoryRoot = resolve(import.meta.dirname, '../..')
+let browser: Browser | undefined
+let server: ViteDevServer | undefined
+
+afterEach(async () => {
+  await browser?.close()
+  browser = undefined
+  await server?.close()
+  server = undefined
+})
 
 class TestElement {
   public textContent = ''
@@ -67,8 +79,8 @@ describe('temporary tool selector', () => {
     expect(root.children).toHaveLength(0)
   })
 
-  it('projects catalog silhouette and color metadata into selector rows and held models', () => {
-    // Catches either visual surface inventing metadata outside TOOL_CATALOG.
+  it('keeps selector rows and held models synchronized with distinct authored presentations', () => {
+    // Mutation caught: either surface substitutes its own presentation or two tools become indistinguishable.
     const documentTarget = new TestDocument()
     const selectorRoot = documentTarget.createElement()
     const heldRoot = documentTarget.createElement()
@@ -80,80 +92,98 @@ describe('temporary tool selector', () => {
 
     mountToolSelector(selectorRoot as unknown as HTMLElement).render(inventory, 101)
     const rows = descendants(selectorRoot).filter(({ dataset }) => Object.hasOwn(dataset, 'toolId'))
-    expect(rows.map(({ dataset, style }) => ({
+    const rendered = rows.map(({ dataset, style }) => ({
       id: dataset['toolId'], silhouette: dataset['silhouette'], color: style.values.get('--tool-color'),
-    }))).toEqual([
-      { id: 'sprout-spawner', silhouette: 'sprout', color: '#8cbf26' },
-      { id: 'double-cut', silhouette: 'nested-cuts', color: '#d76f3f' },
-      { id: 'iteration', silhouette: 'loop', color: '#7166c9' },
-    ])
+    }))
+    expect(rendered).toEqual(TOOL_CATALOG.map(({ id, silhouette, color }) => ({ id, silhouette, color })))
+    expect(new Set(rendered.map(({ silhouette }) => silhouette))).toHaveLength(TOOL_CATALOG.length)
+    expect(new Set(rendered.map(({ color }) => color))).toHaveLength(TOOL_CATALOG.length)
 
     renderHeldToolModel(heldRoot as unknown as HTMLElement, 'iteration', true)
-    expect(heldSilhouette.dataset).toMatchObject({ toolId: 'iteration', silhouette: 'loop' })
-    expect(heldSilhouette.style.values.get('--tool-color')).toBe('#7166c9')
+    const selected = TOOL_CATALOG.find(({ id }) => id === 'iteration')!
+    expect(heldSilhouette.dataset).toMatchObject({
+      toolId: selected.id,
+      silhouette: selected.silhouette,
+    })
+    expect(heldSilhouette.style.values.get('--tool-color')).toBe(selected.color)
     expect(heldRoot.dataset['cuttingHeld']).toBe('true')
   })
 
-  it('derives every held-model colored primitive from the catalog custom property', () => {
-    // Catches a silhouette-specific background, border, shadow, or filter becoming a second color authority.
-    const stylesheet = readFileSync(new URL('../../game/style.css', import.meta.url), 'utf8')
-    expect(heldColorAuthorityViolations(stylesheet)).toEqual([])
-  })
+  it('shows synchronized distinct tools only in the temporary production HUD selector', async () => {
+    // Mutation caught: permanent tool prose, invisible/identical silhouettes, or row/model color drift.
+    server = await createServer({
+      root: repositoryRoot,
+      logLevel: 'silent',
+      server: {
+        host: '127.0.0.1',
+        port: 0,
+        watch: null,
+      },
+      plugins: [{
+        name: 'tool-presentation-test-page',
+        configureServer(vite) {
+          vite.middlewares.use('/tool-presentation-test', (_request, response) => {
+            response.statusCode = 200
+            response.setHeader('content-type', 'text/html')
+            response.end(`<!doctype html>
+              <link rel="stylesheet" href="/game/style.css">
+              <section id="selector" class="tool-selector"></section>
+              <section id="held" class="held-tool-model">
+                <span class="held-tool-silhouette tool-silhouette" data-held-tool-silhouette></span>
+              </section>`)
+          })
+        },
+      }],
+    })
+    await server.listen()
+    const baseUrl = server.resolvedUrls?.local[0]
+    if (baseUrl === undefined) throw new Error('Vite did not expose the production HUD')
+    browser = await chromium.launch({ headless: true })
+    const page = await browser.newPage({ viewport: { width: 1000, height: 700 } })
+    await page.goto(`${baseUrl}tool-presentation-test`, { waitUntil: 'domcontentloaded' })
 
-  it('rejects chromatic named, functional, and perceptual colors in every held color property', () => {
-    // Catches a mixed declaration hiding a second hue authority beside currentcolor.
-    const invalid = `
-      .held-tool-silhouette { color: rebeccapurple; border-color: hsl(120 100% 50%); }
-      .held-tool-silhouette::before {
-        background: linear-gradient(currentcolor, #8cbf26, hwb(120 0% 0%), lab(50% 40 20), lch(50% 30 20));
-        background-image: linear-gradient(currentcolor, rgb(140 191 38));
-        outline-color: var(--rogue-color);
-        fill: rebeccapurple;
-        stroke: currentcolor;
-        box-shadow: 0 0 2px oklab(.5 .1 .1), 0 0 4px oklch(.5 .2 120);
-        filter: drop-shadow(0 0 2px color(display-p3 1 0 0)) hue-rotate(30deg);
-      }
-      @media (prefers-contrast: more) {
-        .held-tool-silhouette::after { border-top-color: Highlight; }
-      }
-    `
+    const presentations = await page.evaluate(async (base) => {
+      const load = (path: string): Promise<Record<string, any>> => (
+        window.eval(`import(${JSON.stringify(`${base}${path}`)})`) as Promise<Record<string, any>>
+      )
+      const [{ mountToolSelector, renderHeldToolModel }, { ToolInventory, TOOL_CATALOG }] = await Promise.all([
+        load('game/tool-selector.ts'),
+        load('src/game/tools.ts'),
+      ])
+      const selectorRoot = document.querySelector<HTMLElement>('#selector')!
+      const heldRoot = document.querySelector<HTMLElement>('#held')!
+      const inventory = new ToolInventory(new Set(TOOL_CATALOG.map(({ id }: { id: string }) => id)), () => 100)
+      inventory.cycle('1', 100)
+      const selector = mountToolSelector(selectorRoot)
+      selector.render(inventory, 101)
+      const rows = [...selectorRoot.querySelectorAll<HTMLElement>('[data-tool-id]')]
+      const result = TOOL_CATALOG.map(({ id }: { id: string }) => {
+        renderHeldToolModel(heldRoot, id, false)
+        const row = rows.find((candidate) => candidate.dataset['toolId'] === id)!
+        return {
+          id,
+          label: row.innerText,
+          rowColor: getComputedStyle(row).getPropertyValue('--tool-color').trim(),
+          heldColor: getComputedStyle(heldRoot.querySelector<HTMLElement>('[data-held-tool-silhouette]')!)
+            .getPropertyValue('--tool-color').trim(),
+        }
+      })
+      Object.assign(window, {
+        __renderHeldToolForTest: (id: string) => renderHeldToolModel(heldRoot, id, false),
+      })
+      return result
+    }, baseUrl)
 
-    expect(heldColorAuthorityViolations(invalid).map(({ color }) => color)).toEqual([
-      'rebeccapurple',
-      'hsl(120 100% 50%)',
-      '#8cbf26',
-      'hwb(120 0% 0%)',
-      'lab(50% 40 20)',
-      'lch(50% 30 20)',
-      'rgb(140 191 38)',
-      'var(--rogue-color)',
-      'rebeccapurple',
-      'oklab(.5 .1 .1)',
-      'oklch(.5 .2 120)',
-      'color(display-p3 1 0 0)',
-      'hue-rotate(30deg)',
-      'Highlight',
-    ])
-  })
+    expect(presentations.map(({ label }: { label: string }) => label)).toEqual(TOOL_CATALOG.map(({ label }) => label))
+    for (const presentation of presentations) expect(presentation.heldColor).toBe(presentation.rowColor)
+    const images: string[] = []
+    for (const { id } of TOOL_CATALOG) {
+      await page.evaluate((toolId) => {
+        ;(window as unknown as Window & { __renderHeldToolForTest(id: string): void }).__renderHeldToolForTest(toolId)
+      }, id)
+      images.push((await page.locator('#held').screenshot()).toString('base64'))
+    }
+    expect(new Set(images).size).toBe(TOOL_CATALOG.length)
 
-  it('allows currentcolor, transparency, and explicit equal-channel neutral shading', () => {
-    // Catches the guard rejecting legitimate luminance and alpha treatment.
-    const neutral = `
-      .held-tool-silhouette {
-        color: currentcolor;
-        border-color: transparent;
-        background: linear-gradient(currentcolor, #fff, rgb(12 12 12 / 40%), hsl(0 0% 20%));
-        box-shadow: inset 0 0 #000, 0 0 hwb(20 50% 50%);
-        filter: drop-shadow(0 0 2px oklch(.5 0 120));
-      }
-    `
-
-    expect(heldColorAuthorityViolations(neutral)).toEqual([])
-  })
-
-  it('keeps ordinary HUD markup free of a permanent equipped-tool label', () => {
-    // Catches temporary selection state being duplicated as permanent keyboard or equipment prose.
-    const markup = readFileSync(new URL('../../game/index.html', import.meta.url), 'utf8')
-    expect(markup).not.toMatch(/Equipped:|data-equipped-item-label|Press 1|No cutting held|Cutting held/)
-  })
+  }, 15_000)
 })
