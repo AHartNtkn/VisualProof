@@ -93,6 +93,25 @@ describe('temporary tool selector', () => {
     expect(heldRoot.dataset['cuttingHeld']).toBe('true')
   })
 
+  it('derives every held-model colored primitive from the catalog custom property', () => {
+    // Catches a silhouette-specific background, border, shadow, or filter becoming a second color authority.
+    const stylesheet = readFileSync(new URL('../../game/style.css', import.meta.url), 'utf8')
+    const heldStart = stylesheet.indexOf('.held-tool-silhouette')
+    const heldEnd = stylesheet.indexOf('.ledger {', heldStart)
+    expect(heldStart).toBeGreaterThanOrEqual(0)
+    expect(heldEnd).toBeGreaterThan(heldStart)
+    const heldStyles = stylesheet.slice(heldStart, heldEnd)
+    const colorDeclarations = [...heldStyles.matchAll(
+      /^\s*(background|border(?:-(?:top|right|bottom|left)(?:-color)?)?|box-shadow|filter):\s*([^;]+);/gm,
+    )].map(([, property, value]) => ({ property: property!, value: value! }))
+
+    expect(colorDeclarations.length).toBeGreaterThan(0)
+    expect(colorDeclarations.filter(({ property, value }) => (
+      !value.includes('currentcolor')
+      && !(property.startsWith('border-') && value.trim().endsWith('transparent'))
+    ))).toEqual([])
+  })
+
   it('keeps ordinary HUD markup free of a permanent equipped-tool label', () => {
     // Catches temporary selection state being duplicated as permanent keyboard or equipment prose.
     const markup = readFileSync(new URL('../../game/index.html', import.meta.url), 'utf8')

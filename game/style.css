@@ -462,7 +462,7 @@ input:disabled {
   height: 44%;
   border: max(3px, calc(var(--held-size) * .045)) solid currentcolor;
   border-radius: 100% 8% 100% 8%;
-  background: rgb(140 191 38 / 16%);
+  background: color-mix(in srgb, currentcolor 16%, transparent);
   transform: rotate(-18deg);
 }
 
@@ -480,7 +480,12 @@ input:disabled {
   width: 20%;
   height: 72%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #6c3221, #d76f3f 55%, #efad80);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, currentcolor 50%, #000),
+    currentcolor 55%,
+    color-mix(in srgb, currentcolor 55%, #fff)
+  );
   transform: rotate(-18deg);
   transform-origin: bottom;
 }
