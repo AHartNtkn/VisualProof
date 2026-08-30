@@ -804,7 +804,7 @@ Add the upper-left tutorial card and provisional stick figure, plus a visible de
 
 - [ ] **Step 5: Implement input routing**
 
-Handle `Escape` before suspended-state routing so it always pauses an active world, including with the ledger open. `Backspace` remains blocked while a modal editor/settings screen owns focus, but otherwise invokes `stepBack`. Backquote invokes the developer toggle only when the application preference is enabled; the composer enforces that gate.
+Handle `Escape` before suspended-state routing so it always pauses an active world, including with the ledger or order editor open; the editor remains open with its draft intact so Resume returns to it. `Backspace` remains outside world routing while a modal editor/settings screen owns focus. The order editor uses it as step-back only when focus is outside an editable input, textarea, or contenteditable region; inside editable text, ordinary character deletion remains browser-owned. Otherwise `Backspace` invokes the world `stepBack`. Backquote invokes the developer toggle only when the application preference is enabled; the composer enforces that gate.
 
 ```ts
 if (event.code === 'Escape') {
@@ -880,14 +880,17 @@ Parse prerequisite IDs from comma/newline-separated text, trim them, reject blan
 
 - [ ] **Step 4: Implement accessible modal behavior**
 
-Trap focus inside the editor. Escape closes without saving. Disable all controls while persistence is pending. Delete is absent in create mode and does not ask a second product-level question; it invokes the supplied delete action directly.
+Trap focus inside the editor. Leave `Escape` unconsumed so the global input boundary opens Pause without closing the editor or losing its draft; Resume returns to the same editor state. `Backspace` closes the editor only when focus is outside an editable input, textarea, or contenteditable region. Within editable text it retains ordinary character deletion, and Cancel remains the explicit close control. Disable all controls while persistence is pending. Delete is absent in create mode and does not ask a second product-level question; it invokes the supplied delete action directly.
 
 ```ts
 const setBusy = (busy: boolean): void => {
   for (const control of editorControls) control.disabled = busy
 }
-const onEscape = (event: KeyboardEvent): void => {
-  if (event.code === 'Escape' && !busy) controller.hide()
+const onEditorKeydown = (event: KeyboardEvent): void => {
+  if (event.code !== 'Backspace' || isEditableTextTarget(document.activeElement)) return
+  event.preventDefault()
+  event.stopPropagation()
+  if (!busy) controller.hide()
 }
 ```
 
@@ -963,7 +966,7 @@ Digit1 calls `tools.cycle('1', performance.now())`, refreshes selector/model, an
 - Double Cut retains current behavior;
 - Iteration retains cutting, application, duplication, and delivery behavior.
 
-Backspace cancels `tools.cutting` first; otherwise it exits orbit. Escape never calls either behavior and instead opens Pause while leaving ledger/editor-independent world state intact.
+Backspace cancels `tools.cutting` first; otherwise it exits orbit. While the order editor is open, it instead closes the editor only from outside editable input, textarea, or contenteditable text. Escape never calls either behavior and instead opens Pause while leaving the ledger or editor and its draft intact for Resume.
 
 ```ts
 function stepBack(): void {

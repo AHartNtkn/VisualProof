@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { attachWorldInput } from '../../game/input'
 import { mountOrderEditor } from '../../game/order-editor'
 import {
   decodeOrderCatalog,
@@ -16,6 +17,7 @@ class TestElement extends EventTarget {
   public type = ''
   public className = ''
   public readOnly = false
+  public isContentEditable = false
   public width = 320
   public height = 200
   public focusCalls = 0
@@ -82,6 +84,9 @@ class TestElement extends EventTarget {
 class TestDocument extends EventTarget {
   public activeElement: TestElement | null = null
   public readonly body: TestElement
+  public parent: EventTarget | null = null
+  public pointerLockElement: Element | null = null
+  public visibilityState: DocumentVisibilityState = 'visible'
 
   public constructor() {
     super()
@@ -91,6 +96,14 @@ class TestDocument extends EventTarget {
 
   public createElement(tagName: string): TestElement {
     return new TestElement(this, tagName.toUpperCase())
+  }
+
+  public exitPointerLock(): void {}
+
+  public override dispatchEvent(event: Event): boolean {
+    const dispatched = super.dispatchEvent(event)
+    if (event.bubbles && !event.cancelBubble) this.parent?.dispatchEvent(event)
+    return dispatched && !event.defaultPrevented
   }
 }
 
@@ -131,7 +144,9 @@ function deferred(): Deferred {
 }
 
 function harness(initialRevision = revisionWithRememberedFormula()) {
+  const windowTarget = new EventTarget()
   const documentTarget = new TestDocument()
+  documentTarget.parent = windowTarget
   const root = element(documentTarget, 'orderEditor', 'section')
   root.hidden = true
   const title = element(documentTarget, 'orderEditorTitle', 'h2')
@@ -166,7 +181,7 @@ function harness(initialRevision = revisionWithRememberedFormula()) {
     },
   })
   return {
-    documentTarget, root, title, form, id, prerequisites, reward, formula, preview, error, remove, cancel, save,
+    windowTarget, documentTarget, root, title, form, id, prerequisites, reward, formula, preview, error, remove, cancel, save,
     saved, deleted, controller, live,
     setSaveResult: (result: Promise<void>) => { saveResult = result },
     setDeleteResult: (result: Promise<void>) => { deleteResult = result },
@@ -187,6 +202,23 @@ function key(code: string, shiftKey = false): Event {
   return Object.defineProperties(new Event('keydown', { bubbles: true, cancelable: true }), {
     code: { value: code },
     shiftKey: { value: shiftKey },
+  })
+}
+
+function attachGlobalInput(h: ReturnType<typeof harness>, pause: () => void) {
+  return attachWorldInput(h.root as unknown as HTMLElement, {
+    pointerDown: () => {},
+    pointerUp: () => {},
+    pointerCancel: () => {},
+    category: () => {},
+    toggleLedger: () => {},
+    stepBack: () => {},
+    toggleDeveloperMode: () => {},
+    pause,
+    engagementChanged: () => {},
+  }, {
+    window: h.windowTarget as Window,
+    document: h.documentTarget as unknown as Document,
   })
 }
 
@@ -387,9 +419,11 @@ describe('order editor controller', () => {
     expect(deleting.controller.isOpen).toBe(false)
   })
 
-  it('traps focus and consumes Escape while the editor owns the modal surface', () => {
-    // Catches keyboard focus leaking into the world or Escape also opening Pause.
+  it('traps focus while leaving Escape to global Pause without losing the draft', () => {
     const h = harness()
+    let paused = false
+    const input = attachGlobalInput(h, () => { paused = true })
+    input.suspend()
     h.controller.create()
 
     h.id.dispatchEvent(key('Tab', true))
@@ -397,17 +431,28 @@ describe('order editor controller', () => {
     h.save.dispatchEvent(key('Tab'))
     expect(h.id.ownerDocument.activeElement).toBe(h.id)
 
+    h.formula.value = 'draft formula'
     const escape = key('Escape')
     h.formula.dispatchEvent(escape)
-    expect(h.controller.isOpen).toBe(false)
+    expect(paused).toBe(true)
+    expect(h.controller.isOpen).toBe(true)
+    expect(h.formula.value).toBe('draft formula')
     expect(escape.defaultPrevented).toBe(true)
-    expect(escape.cancelBubble).toBe(true)
+    expect(escape.cancelBubble).toBe(false)
+
+    input.resume()
+    paused = false
+    expect(paused).toBe(false)
+    expect(h.controller.isOpen).toBe(true)
+    expect(h.formula.value).toBe('draft formula')
   })
 
-  it('captures pending Escape after disabled focus falls back to the document body', async () => {
-    // Catches root-only Escape handling allowing the world Pause action after browser focus leaves the modal.
+  it('routes pending Escape to global Pause after disabled focus falls back to the body', async () => {
     const gate = deferred()
     const h = harness()
+    let paused = false
+    const input = attachGlobalInput(h, () => { paused = true })
+    input.suspend()
     h.setSaveResult(gate.promise)
     h.controller.edit(revisionWithRememberedFormula().byId.get('remembered')!)
 
@@ -417,14 +462,56 @@ describe('order editor controller', () => {
     h.documentTarget.body.dispatchEvent(escape)
 
     expect(h.controller.isOpen).toBe(true)
+    expect(paused).toBe(true)
     expect(escape.defaultPrevented).toBe(true)
-    expect(escape.cancelBubble).toBe(true)
+    expect(escape.cancelBubble).toBe(false)
 
     gate.resolve()
     await settle()
-    const afterClose = key('Escape')
-    h.documentTarget.body.dispatchEvent(afterClose)
-    expect(afterClose.defaultPrevented).toBe(false)
+  })
+
+  it('uses Backspace as editor step-back only outside editable text', () => {
+    const outside = harness()
+    outside.controller.create()
+    outside.save.focus()
+    const close = key('Backspace')
+    outside.save.dispatchEvent(close)
+    expect(outside.controller.isOpen).toBe(false)
+    expect(close.defaultPrevented).toBe(true)
+    expect(close.cancelBubble).toBe(true)
+
+    for (const editable of ['input', 'textarea', 'contenteditable'] as const) {
+      const h = harness()
+      h.controller.create()
+      const target = editable === 'input'
+        ? h.id
+        : editable === 'textarea'
+          ? h.formula
+          : h.documentTarget.createElement('div')
+      if (editable === 'contenteditable') {
+        target.isContentEditable = true
+        h.form.append(target)
+      }
+      target.focus()
+      target.value = 'draft text'
+      const backspace = key('Backspace')
+      target.dispatchEvent(backspace)
+
+      expect(h.controller.isOpen).toBe(true)
+      expect(target.value).toBe('draft text')
+      expect(backspace.defaultPrevented).toBe(false)
+      expect(backspace.cancelBubble).toBe(false)
+    }
+  })
+
+  it('keeps Cancel as the explicit editor close action', () => {
+    const h = harness()
+    h.controller.create()
+    h.formula.value = 'discard me'
+
+    click(h.cancel)
+
+    expect(h.controller.isOpen).toBe(false)
   })
 
   it('keeps persistence locked across hide and rejects overlapping reopen, save, and delete attempts', async () => {

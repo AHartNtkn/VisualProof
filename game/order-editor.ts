@@ -109,6 +109,15 @@ function detail(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function isEditableTextControl(element: Element | null): boolean {
+  if (element === null) return false
+  if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+    const control = element as HTMLInputElement | HTMLTextAreaElement
+    return !control.disabled && !control.readOnly
+  }
+  return (element as HTMLElement).isContentEditable
+}
+
 export function mountOrderEditor(
   root: HTMLElement,
   actions: OrderEditorActions,
@@ -130,8 +139,6 @@ export function mountOrderEditor(
   let operationPending = false
   let disposed = false
   let generation = 0
-  let escapeCaptureInstalled = false
-  const escapeCaptureOptions = { capture: true } as const
 
   const listen = (target: EventTarget, type: string, listener: EventListener): void => {
     target.addEventListener(type, listener)
@@ -148,25 +155,8 @@ export function mountOrderEditor(
     preview.dataset['diagramSnapshot'] = snapshot.json
     renderDiagramPreview(preview, snapshot)
   }
-  const onDocumentKeydown = ((event: KeyboardEvent): void => {
-    if (event.code !== 'Escape') return
-    event.preventDefault()
-    event.stopPropagation()
-    hideIfIdle()
-  }) as EventListener
-  const installEscapeCapture = (): void => {
-    if (escapeCaptureInstalled) return
-    root.ownerDocument.addEventListener('keydown', onDocumentKeydown, escapeCaptureOptions)
-    escapeCaptureInstalled = true
-  }
-  const removeEscapeCapture = (): void => {
-    if (!escapeCaptureInstalled) return
-    root.ownerDocument.removeEventListener('keydown', onDocumentKeydown, escapeCaptureOptions)
-    escapeCaptureInstalled = false
-  }
   const hide = (): void => {
     generation += 1
-    removeEscapeCapture()
     root.hidden = true
     mode = null
     error.textContent = ''
@@ -245,6 +235,13 @@ export function mountOrderEditor(
   listen(cancel, 'click', hideIfIdle)
   listen(root, 'keydown', ((event: KeyboardEvent): void => {
     if (root.hidden) return
+    if (event.code === 'Backspace') {
+      if (isEditableTextControl(root.ownerDocument.activeElement)) return
+      event.preventDefault()
+      event.stopPropagation()
+      hideIfIdle()
+      return
+    }
     if (event.code !== 'Tab' || operationPending) return
     const visibleControls = controls.filter((control) => !control.hidden)
     const activeIndex = visibleControls.findIndex((control) => control === root.ownerDocument.activeElement)
@@ -262,7 +259,6 @@ export function mountOrderEditor(
     mode = nextMode
     error.textContent = ''
     root.hidden = false
-    installEscapeCapture()
     if (nextMode.kind === 'edit') {
       title.textContent = 'Edit order'
       id.value = definition!.id
@@ -303,7 +299,6 @@ export function mountOrderEditor(
       if (disposed) return
       disposed = true
       generation += 1
-      removeEscapeCapture()
       while (disposers.length > 0) disposers.pop()!()
       mode = null
       root.hidden = true
