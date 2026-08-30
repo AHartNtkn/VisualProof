@@ -15,6 +15,10 @@ export type OrderEditorActions = {
   readonly delete: (orderId: string) => Promise<void>
 }
 
+export type OrderEditorPreview = {
+  show(snapshot: DiagramSnapshot): void
+}
+
 export type OrderEditorController = {
   edit(definition: OrderDefinition): void
   create(): void
@@ -121,6 +125,7 @@ function isEditableTextControl(element: Element | null): boolean {
 export function mountOrderEditor(
   root: HTMLElement,
   actions: OrderEditorActions,
+  previewOverride?: OrderEditorPreview,
 ): OrderEditorController {
   const title = required<HTMLElement>(root, '[data-order-editor-title]')
   const form = required<HTMLFormElement>(root, '[data-order-editor-form]')
@@ -129,6 +134,9 @@ export function mountOrderEditor(
   const reward = required<HTMLInputElement>(root, '[data-order-editor-reward]')
   const formula = required<HTMLTextAreaElement>(root, '[data-order-editor-formula]')
   const preview = required<HTMLCanvasElement>(root, '[data-order-editor-preview]')
+  const previewPort: OrderEditorPreview = previewOverride ?? {
+    show: (snapshot) => { renderDiagramPreview(preview, snapshot) },
+  }
   const error = required<HTMLElement>(root, '[data-order-editor-error]')
   const remove = required<HTMLButtonElement>(root, '[data-order-editor-delete]')
   const cancel = required<HTMLButtonElement>(root, '[data-order-editor-cancel]')
@@ -152,7 +160,7 @@ export function mountOrderEditor(
     error.textContent = `Cannot ${operation} order: ${detail(thrown)}`
   }
   const showPreview = (snapshot: DiagramSnapshot): void => {
-    renderDiagramPreview(preview, snapshot)
+    previewPort.show(snapshot)
   }
   const hide = (): void => {
     generation += 1

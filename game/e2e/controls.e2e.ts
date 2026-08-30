@@ -47,6 +47,9 @@ describe('orchard world controls', () => {
     await expect(game()).toHaveAttribute('data-input-engaged', 'true')
     await expect(game()).toHaveAttribute('data-acquired-tool-ids', '["sprout-spawner"]')
     await expect(game()).toHaveAttribute('data-selected-tool', 'sprout-spawner')
+    await expect($('.tool-selector-category')).not.toExist()
+    await expect($('.tool-selector-row')).not.toExist()
+    expect(await $('[data-hud]').getText()).not.toContain('Sprout Spawner')
 
     const loadedPose = await displayedPose()
     await hold('w')
@@ -86,10 +89,16 @@ describe('orchard world controls', () => {
     await browser.keys('1')
     await expect(game()).toHaveAttribute('data-selected-tool', 'sprout-spawner')
     await expect(game()).toHaveAttribute('data-selector-visible', 'true')
+    await expect($('[data-tool-selector]')).toBeDisplayed()
+    await expect($('.tool-selector-category')).toHaveText('1')
+    await expect($('.tool-selector-row')).toHaveText('Sprout Spawner')
     await browser.waitUntil(async () => await game().getAttribute('data-selector-visible') === 'false', {
       timeout: 3_000,
       timeoutMsg: 'single acquired-tool selector did not fade',
     })
+    await expect($('.tool-selector-category')).not.toExist()
+    await expect($('.tool-selector-row')).not.toExist()
+    expect(await $('[data-hud]').getText()).not.toContain('Sprout Spawner')
 
     await browser.keys('Escape')
     await $('[data-pause-main-menu]').click()

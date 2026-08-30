@@ -1,6 +1,13 @@
 import type { Diagram } from '../kernel/diagram'
 import { diagramFromJson, diagramToJson } from '../kernel/diagram'
 
+function freezeOwned<Value>(value: Value, seen = new WeakSet<object>()): Value {
+  if (typeof value !== 'object' || value === null || seen.has(value)) return value
+  seen.add(value)
+  for (const child of Object.values(value)) freezeOwned(child, seen)
+  return Object.freeze(value)
+}
+
 export class DiagramSnapshot {
   readonly #brand = true
 
@@ -13,7 +20,9 @@ export class DiagramSnapshot {
   }
 
   public static fromDiagram(diagram: Diagram): DiagramSnapshot {
-    return new DiagramSnapshot(diagram, JSON.stringify(diagramToJson(diagram)))
+    const json = JSON.stringify(diagramToJson(diagram))
+    const owned = freezeOwned(diagramFromJson(JSON.parse(json)))
+    return new DiagramSnapshot(owned, json)
   }
 
   public static fromJson(json: string): DiagramSnapshot {

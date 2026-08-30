@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { snapshotFromDiagram, snapshotFromJson } from '../../src/game/diagram-snapshot'
-import type { DiagramSnapshot } from '../../src/game/diagram-snapshot'
 import { decodeLoadedSlot } from '../../src/game/model'
 import { decodeCreatedSlot, decodeSlotList } from '../../src/game/save-client'
 import { openingOrderCatalog, type OrderCatalogRevision } from '../../src/game/orders/catalog'
 import { diagramToJson } from '../../src/kernel/diagram'
+import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 
 const diagramJson = JSON.stringify({
   root: 'r0',
@@ -45,17 +45,24 @@ function slotWire(overrides: Record<string, unknown> = {}) {
 }
 
 describe('loaded game slot decoding', () => {
-  it('constructs one canonical snapshot from either JSON or a diagram', () => {
+  it('owns canonical diagram content independently of caller and consumer mutations', () => {
     const snapshot = snapshotFromJson(`${diagramJson}\n`)
-    // @ts-expect-error Diagram snapshots can only be constructed by their validating factories.
-    const invalidSnapshot: DiagramSnapshot = { ...snapshot, json: '{}' }
-
-    try {
-      ;(snapshot as { json: string }).json = '{}'
-    } catch {}
     expect(snapshot.json).toBe(JSON.stringify(diagramToJson(snapshot.diagram)))
     expect(snapshotFromDiagram(snapshot.diagram)).toEqual(snapshot)
-    expect(invalidSnapshot.json).toBe('{}')
+
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const callerDiagram = builder.build()
+    const owned = snapshotFromDiagram(callerDiagram)
+    ;(callerDiagram.regions[cut] as { kind: 'cut'; parent: string }).parent = 'caller-forgery'
+    expect(callerDiagram.regions[cut]).toEqual({ kind: 'cut', parent: 'caller-forgery' })
+    expect(owned.diagram.regions[cut]).toEqual({ kind: 'cut', parent: builder.root })
+
+    try {
+      ;(owned.diagram.regions[cut] as { kind: 'cut'; parent: string }).parent = 'consumer-forgery'
+    } catch {}
+    expect(owned.diagram.regions[cut]).toEqual({ kind: 'cut', parent: builder.root })
+    expect(owned.json).toBe(JSON.stringify(diagramToJson(owned.diagram)))
   })
 
   it('decodes equivalent diagrams and gives every tree the generic model', () => {

@@ -109,8 +109,8 @@ describe('temporary tool selector', () => {
     expect(heldRoot.dataset['cuttingHeld']).toBe('true')
   })
 
-  it('shows synchronized distinct tools only in the temporary production HUD selector', async () => {
-    // Mutation caught: permanent tool prose, invisible/identical silhouettes, or row/model color drift.
+  it('renders synchronized visible colors and distinct silhouettes on both production tool surfaces', async () => {
+    // Mutation caught: invisible/identical silhouettes or selector/model visible-color drift.
     server = await createServer({
       root: repositoryRoot,
       logLevel: 'silent',
@@ -141,6 +141,7 @@ describe('temporary tool selector', () => {
     browser = await chromium.launch({ headless: true })
     const page = await browser.newPage({ viewport: { width: 1000, height: 700 } })
     await page.goto(`${baseUrl}tool-presentation-test`, { waitUntil: 'domcontentloaded' })
+    await page.waitForFunction(() => [...document.styleSheets].some(({ href }) => href?.endsWith('/game/style.css')))
 
     const presentations = await page.evaluate(async (base) => {
       const load = (path: string): Promise<Record<string, any>> => (
@@ -157,15 +158,29 @@ describe('temporary tool selector', () => {
       const selector = mountToolSelector(selectorRoot)
       selector.render(inventory, 101)
       const rows = [...selectorRoot.querySelectorAll<HTMLElement>('[data-tool-id]')]
-      const result = TOOL_CATALOG.map(({ id }: { id: string }) => {
+      const held = heldRoot.querySelector<HTMLElement>('[data-held-tool-silhouette]')!
+      const visibleColor = (element: HTMLElement, silhouette: string, surface: 'row' | 'held'): string => {
+        const pseudo = getComputedStyle(element, silhouette === 'loop' && surface === 'held' ? '::after' : '::before')
+        if (silhouette === 'sprout' && surface === 'row') return pseudo.backgroundColor
+        if (silhouette === 'loop' && surface === 'held') return pseudo.borderLeftColor
+        if (silhouette === 'sprout' && surface === 'held') return getComputedStyle(element, '::after').borderTopColor
+        return pseudo.borderTopColor
+      }
+      const result = TOOL_CATALOG.map(({ id, color, silhouette }: { id: string; color: string; silhouette: string }) => {
         renderHeldToolModel(heldRoot, id, false)
         const row = rows.find((candidate) => candidate.dataset['toolId'] === id)!
+        row.dataset['selected'] = 'false'
+        const colorProbe = document.createElement('span')
+        colorProbe.style.color = color
+        document.body.append(colorProbe)
+        const expectedColor = getComputedStyle(colorProbe).color
+        colorProbe.remove()
         return {
           id,
           label: row.innerText,
-          rowColor: getComputedStyle(row).getPropertyValue('--tool-color').trim(),
-          heldColor: getComputedStyle(heldRoot.querySelector<HTMLElement>('[data-held-tool-silhouette]')!)
-            .getPropertyValue('--tool-color').trim(),
+          expectedColor,
+          rowColor: visibleColor(row, silhouette, 'row'),
+          heldColor: visibleColor(held, silhouette, 'held'),
         }
       })
       Object.assign(window, {
@@ -175,15 +190,21 @@ describe('temporary tool selector', () => {
     }, baseUrl)
 
     expect(presentations.map(({ label }: { label: string }) => label)).toEqual(TOOL_CATALOG.map(({ label }) => label))
-    for (const presentation of presentations) expect(presentation.heldColor).toBe(presentation.rowColor)
-    const images: string[] = []
+    for (const presentation of presentations) {
+      expect(presentation.rowColor).toBe(presentation.expectedColor)
+      expect(presentation.heldColor).toBe(presentation.expectedColor)
+    }
+    const rowImages: string[] = []
+    const heldImages: string[] = []
     for (const { id } of TOOL_CATALOG) {
+      rowImages.push((await page.locator(`[data-tool-id="${id}"]`).screenshot()).toString('base64'))
       await page.evaluate((toolId) => {
         ;(window as unknown as Window & { __renderHeldToolForTest(id: string): void }).__renderHeldToolForTest(toolId)
       }, id)
-      images.push((await page.locator('#held').screenshot()).toString('base64'))
+      heldImages.push((await page.locator('#held').screenshot()).toString('base64'))
     }
-    expect(new Set(images).size).toBe(TOOL_CATALOG.length)
+    expect(new Set(rowImages).size).toBe(TOOL_CATALOG.length)
+    expect(new Set(heldImages).size).toBe(TOOL_CATALOG.length)
 
   }, 15_000)
 })
