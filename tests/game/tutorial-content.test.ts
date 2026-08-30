@@ -5,6 +5,7 @@ import {
   decodeTutorialContent,
   openingTutorialContent,
 } from '../../src/game/tutorial/content'
+import { ToolInventory } from '../../src/game/tools'
 
 const openingRecords: unknown = JSON.parse(readFileSync(
   new URL('../../game/content/tutorial.json', import.meta.url),
@@ -22,6 +23,24 @@ describe('tutorial content authority', () => {
 
     expect(revision.definition('move').text).toContain('W')
     expect(revision.definition('complete-blank-order').text).toMatch(/Orders > Available/i)
+  })
+
+  it('describes acquisition as equipping the tool and 1 as cycling it', () => {
+    // Catches a card directing a player to cycle away from the tool just acquired.
+    const revision = decodeTutorialContent(openingRecords)
+    const inventory = new ToolInventory(new Set(['sprout-spawner']))
+
+    inventory.acquire('double-cut', 0)
+    expect(inventory.selected('1')).toBe('double-cut')
+    expect(revision.definition('apply-double-cut').text).toMatch(/acquir(?:e|ing).*Double Cut.*equip/i)
+    expect(revision.definition('apply-double-cut').text).toMatch(/press 1.*cycl/i)
+    expect(inventory.cycle('1', 100).selected).toBe('sprout-spawner')
+
+    inventory.acquire('iteration', 0)
+    expect(inventory.selected('1')).toBe('iteration')
+    expect(revision.definition('duplicate-nonblank').text).toMatch(/acquir(?:e|ing).*Iteration.*equip/i)
+    expect(revision.definition('duplicate-nonblank').text).toMatch(/press 1.*cycl/i)
+    expect(inventory.cycle('1', 200).selected).toBe('sprout-spawner')
   })
 
   it('rejects a document that omits a visible tutorial milestone', () => {

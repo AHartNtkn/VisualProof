@@ -9,9 +9,9 @@
   { "milestoneId": "exit-orbit", "text": "Press Backspace to return to free flight." },
   { "milestoneId": "spawn-two-sprouts", "text": "Press 1 to expose and cycle the tools, select Sprout Spawner, then right-click clear ground to plant two more blank sprouts. Crowded placements are refused." },
   { "milestoneId": "acquire-double-cut", "text": "Press Tab to open the ledger, choose Tools > Available, and acquire Double Cut." },
-  { "milestoneId": "apply-double-cut", "text": "Press 1 to select Double Cut, left-click a tree, then right-click a branch to add two nested cuts." },
+  { "milestoneId": "apply-double-cut", "text": "Acquiring Double Cut equips it. If you need to change tools, press 1 to expose and cycle them. Left-click a tree, then right-click a branch to add two nested cuts." },
   { "milestoneId": "double-cut-explained", "text": "Press Tab to reopen the ledger after the Double Cut explanation so Iteration becomes available." },
   { "milestoneId": "acquire-iteration", "text": "In the ledger, choose Tools > Available and acquire Iteration." },
-  { "milestoneId": "duplicate-nonblank", "text": "Press 1 to select Iteration, right-click a nonblank tree to hold a cutting, then right-click clear ground to duplicate it. Press Backspace to release a held cutting." },
+  { "milestoneId": "duplicate-nonblank", "text": "Acquiring Iteration equips it. If you need to change tools, press 1 to expose and cycle them. Right-click a nonblank tree to hold a cutting, then right-click clear ground to duplicate it. Press Backspace to release a held cutting." },
   { "milestoneId": "complete-blank-order", "text": "Open Orders > Available and accept the blank-sprout order. Use Iteration and right-click a blank sprout to take it, then right-click that order's pot to deliver it." }
 ]
