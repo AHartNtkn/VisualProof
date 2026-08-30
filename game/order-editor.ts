@@ -233,15 +233,15 @@ export function mountOrderEditor(
   }) as EventListener)
   listen(remove, 'click', () => { void deleteOrder() })
   listen(cancel, 'click', hideIfIdle)
+  listen(root.ownerDocument, 'keydown', ((event: KeyboardEvent): void => {
+    if (root.hidden) return
+    if (event.code !== 'Backspace' || isEditableTextControl(root.ownerDocument.activeElement)) return
+    event.preventDefault()
+    event.stopPropagation()
+    hideIfIdle()
+  }) as EventListener)
   listen(root, 'keydown', ((event: KeyboardEvent): void => {
     if (root.hidden) return
-    if (event.code === 'Backspace') {
-      if (isEditableTextControl(root.ownerDocument.activeElement)) return
-      event.preventDefault()
-      event.stopPropagation()
-      hideIfIdle()
-      return
-    }
     if (event.code !== 'Tab' || operationPending) return
     const visibleControls = controls.filter((control) => !control.hidden)
     const activeIndex = visibleControls.findIndex((control) => control === root.ownerDocument.activeElement)

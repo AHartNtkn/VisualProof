@@ -812,6 +812,11 @@ textarea:disabled {
   text-align: left;
 }
 
+.game[data-paused="true"] .pause,
+.game[data-paused="true"] .settings {
+  z-index: 10;
+}
+
 .order-editor-heading {
   display: flex;
   gap: 20px;

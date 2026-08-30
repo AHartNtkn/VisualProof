@@ -146,6 +146,30 @@ describe('developer order content', () => {
     await expect($('[data-order-editor-formula]')).toHaveValue('')
 
     await $('[data-order-editor-formula]').setValue(REMEMBERED_FORMULA)
+    await browser.keys('Escape')
+    await expect($('[data-pause]')).toBeDisplayed()
+    await expect($('[data-pause-resume]')).toBeFocused()
+    const resume = $('[data-pause-resume]')
+    const foreground = await browser.execute(() => {
+      const control = document.querySelector<HTMLElement>('[data-pause-resume]')!
+      const bounds = control.getBoundingClientRect()
+      const hit = document.elementFromPoint(
+        bounds.left + bounds.width / 2,
+        bounds.top + bounds.height / 2,
+      )
+      return {
+        tag: hit?.tagName ?? null,
+        surface: hit?.closest('[data-pause], [data-order-editor]')?.hasAttribute('data-pause')
+          ? 'pause'
+          : 'order-editor',
+      }
+    })
+    expect(foreground).toEqual({ tag: 'BUTTON', surface: 'pause' })
+    await resume.click()
+    await expect($('[data-pause]')).not.toBeDisplayed()
+    await expect($('[data-order-editor]')).toBeDisplayed()
+    await expect($('[data-order-editor-formula]')).toHaveValue(REMEMBERED_FORMULA)
+
     await $('[data-order-editor-cancel]').click()
     await expect($('[data-order-editor]')).not.toBeDisplayed()
     expect(await settledScreenshot(() => elementScreenshot($(tileSelector)))).toBe(tileBefore)

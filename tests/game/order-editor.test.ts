@@ -384,6 +384,13 @@ describe('order editor controller', () => {
     expect(h.preview.dataset['diagramSnapshot']).toBe(initial.byId.get('remembered')!.goal.json)
     expect(h.live.current).toBe(initial)
     expect(initial.byId.get('remembered')!.reward).toBe(7)
+
+    expect(h.documentTarget.activeElement).toBe(h.documentTarget.body)
+    const backspace = key('Backspace')
+    h.documentTarget.body.dispatchEvent(backspace)
+    expect(h.controller.isOpen).toBe(false)
+    expect(backspace.defaultPrevented).toBe(true)
+    expect(backspace.cancelBubble).toBe(true)
   })
 
   it('closes save and delete only after their persistence promises resolve', async () => {

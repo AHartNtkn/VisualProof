@@ -880,13 +880,13 @@ Parse prerequisite IDs from comma/newline-separated text, trim them, reject blan
 
 - [ ] **Step 4: Implement accessible modal behavior**
 
-Trap focus inside the editor. Leave `Escape` unconsumed so the global input boundary opens Pause without closing the editor or losing its draft; Resume returns to the same editor state. `Backspace` closes the editor only when focus is outside an editable input, textarea, or contenteditable region. Within editable text it retains ordinary character deletion, and Cancel remains the explicit close control. Disable all controls while persistence is pending. Delete is absent in create mode and does not ask a second product-level question; it invokes the supplied delete action directly.
+Trap focus inside the editor. Leave `Escape` unconsumed so the global input boundary opens Pause in the foreground without closing the editor or losing its draft; Resume returns to the same editor state. While the editor is open, own `Backspace` at the document bubbling boundary so it closes the editor whenever focus is outside an editable input, textarea, or contenteditable region, including body focus after an asynchronous operation. Within editable text it retains ordinary character deletion, and Cancel remains the explicit close control. Disable all controls while persistence is pending. Delete is absent in create mode and does not ask a second product-level question; it invokes the supplied delete action directly.
 
 ```ts
 const setBusy = (busy: boolean): void => {
   for (const control of editorControls) control.disabled = busy
 }
-const onEditorKeydown = (event: KeyboardEvent): void => {
+const onDocumentKeydown = (event: KeyboardEvent): void => {
   if (event.code !== 'Backspace' || isEditableTextTarget(document.activeElement)) return
   event.preventDefault()
   event.stopPropagation()
