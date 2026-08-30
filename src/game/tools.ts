@@ -1,4 +1,5 @@
 import type { GameTree } from './model'
+import { openingToolContent } from './tools/content'
 import type { RegionId } from '../kernel/diagram/diagram'
 import { derivedScope } from '../kernel/diagram/regions'
 import {
@@ -23,7 +24,7 @@ export type ToolDefinition = {
 export const TOOL_CATALOG: readonly ToolDefinition[] = [
   {
     id: 'sprout-spawner',
-    label: 'Sprout Spawner',
+    get label(): string { return openingToolContent.current.definition('sprout-spawner').name },
     category: '1',
     capacityRequired: 1,
     color: '#8cbf26',
@@ -31,7 +32,7 @@ export const TOOL_CATALOG: readonly ToolDefinition[] = [
   },
   {
     id: 'double-cut',
-    label: 'Double Cut',
+    get label(): string { return openingToolContent.current.definition('double-cut').name },
     category: '1',
     capacityRequired: 0,
     color: '#d76f3f',
@@ -39,7 +40,7 @@ export const TOOL_CATALOG: readonly ToolDefinition[] = [
   },
   {
     id: 'iteration',
-    label: 'Iteration',
+    get label(): string { return openingToolContent.current.definition('iteration').name },
     category: '1',
     capacityRequired: 0,
     color: '#7166c9',

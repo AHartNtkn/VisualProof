@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { snapshotFromDiagram } from '../../src/game/diagram-snapshot'
 import type { GameTree } from '../../src/game/model'
-import { ToolInventory, completeBranchCutting } from '../../src/game/tools'
+import { TOOL_CATALOG, ToolInventory, completeBranchCutting } from '../../src/game/tools'
+import { LiveToolContent, decodeToolContent, openingToolContent } from '../../src/game/tools/content'
+import { readFileSync } from 'node:fs'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { derivedScope } from '../../src/kernel/diagram/regions'
 import { selectionContents } from '../../src/kernel/diagram/subgraph/selection'
@@ -24,6 +26,37 @@ function sourceTree(): { readonly tree: GameTree; readonly cut: string } {
 }
 
 describe('tool inventory', () => {
+  it('resolves the legacy display label through the live content revision', () => {
+    // Catches the mechanics catalog retaining a copied editable tool name.
+    const original = openingToolContent.current
+    const records: Array<Record<string, unknown>> = JSON.parse(readFileSync(
+      new URL('../../game/content/tools.json', import.meta.url),
+      'utf8',
+    ))
+    records[2]!['name'] = 'Branch Copier'
+
+    try {
+      openingToolContent.publish(decodeToolContent(records))
+      expect(TOOL_CATALOG.find(({ id }) => id === 'iteration')?.label).toBe('Branch Copier')
+    } finally {
+      openingToolContent.publish(original)
+    }
+  })
+
+  it('keeps cycling keyed by tool IDs when live copy changes', () => {
+    // Catches inventory selection deriving its behavior from editable tool labels.
+    const records: Array<Record<string, unknown>> = JSON.parse(readFileSync(
+      new URL('../../game/content/tools.json', import.meta.url),
+      'utf8',
+    ))
+    records[2]!['name'] = 'Branch Copier'
+    const content = new LiveToolContent(decodeToolContent(records))
+    const inventory = new ToolInventory(new Set(['sprout-spawner', 'iteration']))
+
+    expect(content.current.definition('iteration').name).toBe('Branch Copier')
+    expect(inventory.cycle('1', 100).selected).toBe('iteration')
+    expect(inventory.snapshotForSave()).toEqual(['sprout-spawner', 'iteration'])
+  })
   it('cycles acquired tools in authored category order', () => {
     const inventory = new ToolInventory(new Set(['sprout-spawner']))
 

@@ -1,0 +1,17 @@
+[
+  {
+    "id": "sprout-spawner",
+    "name": "Sprout Spawner",
+    "description": "Right-click clear ground to plant a blank sprout. Crowded locations near trees or order pots are refused."
+  },
+  {
+    "id": "double-cut",
+    "name": "Double Cut",
+    "description": "Left-click a tree, then right-click a branch to add two nested cuts at that branch."
+  },
+  {
+    "id": "iteration",
+    "name": "Iteration",
+    "description": "Right-click a tree to take a cutting, right-click clear ground to duplicate it, right-click an order pot to deliver a matching cutting, and press Backspace to release a held cutting."
+  }
+]

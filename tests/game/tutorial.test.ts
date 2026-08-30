@@ -6,12 +6,29 @@ import {
   type TutorialEvent,
   type TutorialMilestoneId,
 } from '../../src/game/tutorial'
+import { LiveTutorialContent, decodeTutorialContent, openingTutorialContent } from '../../src/game/tutorial/content'
+import { readFileSync } from 'node:fs'
 
 function observe(session: TutorialSession, event: TutorialEvent): readonly TutorialMilestoneId[] {
   return session.observe(event).newlyCompleted
 }
 
 describe('TutorialSession', () => {
+  it('keeps tutorial progression keyed by milestone IDs when live copy changes', () => {
+    // Catches progression comparing replaceable tutorial prose instead of semantic milestones.
+    const records: Array<Record<string, unknown>> = JSON.parse(readFileSync(
+      new URL('../../game/content/tutorial.json', import.meta.url),
+      'utf8',
+    ))
+    records[0]!['text'] = 'Walk using W/A/S/D.'
+    const content = new LiveTutorialContent(decodeTutorialContent(records))
+    const session = new TutorialSession(true, [], content)
+
+    expect(session.currentInstruction).toEqual({ milestoneId: 'move', text: 'Walk using W/A/S/D.' })
+    expect(observe(session, { kind: 'camera-capability', capability: 'move' })).toEqual(['move'])
+    expect(session.currentInstruction?.milestoneId).toBe('look')
+    expect(openingTutorialContent.current.definition('move').text).not.toBe('Walk using W/A/S/D.')
+  })
   it('advances the opening sequence from committed events and exposes one instruction', () => {
     const session = new TutorialSession()
 
