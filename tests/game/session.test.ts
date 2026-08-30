@@ -435,6 +435,11 @@ describe('game tool session', () => {
     expect(change.after.snapshot.json).toBe(snapshotFromDiagram(blankDiagram).json)
     expect(session.trees.get(source.id)).toBe(source)
     expect(session.trees.has(change.treeId)).toBe(false)
+
+    const prepared = session.prepare(change)
+    expect(session.trees.has(change.treeId)).toBe(false)
+    session.commit(prepared)
+    expect(session.trees.get(change.treeId)).toBe(change.after)
   })
 
   it('rejects blocked sprout ground without changing session trees', () => {
