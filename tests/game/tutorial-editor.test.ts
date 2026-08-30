@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { attachWorldInput } from '../../game/input'
+import { applyDeveloperToolsSetting, mountSettings } from '../../game/settings'
 import { mountTutorialCard } from '../../game/tutorial-card'
 import { mountTutorialEditor } from '../../game/tutorial-editor'
+import { WorldStateController } from '../../game/world-state'
+import { initialCameraState } from '../../src/game/camera'
+import { ToolInventory } from '../../src/game/tools'
 import {
   decodeTutorialContent,
   LiveTutorialContent,
@@ -17,6 +21,7 @@ class TestElement extends EventTarget {
   readOnly = false
   isContentEditable = false
   tabIndex = -1
+  checked = false
   parent: EventTarget | null = null
   readonly dataset: Record<string, string> = {}
   readonly children: TestElement[] = []
@@ -364,8 +369,8 @@ describe('tutorial editor controller', () => {
     expect(h.text.value).toBe('draft behind Pause')
   })
 
-  it('closes on Cancel or developer-tools shutdown without publishing', () => {
-    // Catches revoking developer authority leaving a privileged editor reachable.
+  it('closes on Cancel without publishing', () => {
+    // Catches Cancel publishing a draft or leaving the editor visible.
     const h = harness()
     h.controller.edit(h.live.current.definition('move'))
     h.text.value = 'discarded'
@@ -373,10 +378,85 @@ describe('tutorial editor controller', () => {
     expect(h.controller.isOpen).toBe(false)
     expect(h.saved).toEqual([])
 
+  })
+
+  it('applies Settings shutdown across editor, card, foreground, and Pause ownership', () => {
+    // Catches the actual Settings transition leaving any privileged surface or suspended owner stale.
+    const h = harness()
+    let developerMode = true
+    let foreground: 'closed' | 'tutorial' = 'tutorial'
+    let pauseVisible = false
+    const inputCalls: string[] = []
+    const cardRoot = new TestElement(h.documentTarget, 'ASIDE')
+    const card = mountTutorialCard(cardRoot as unknown as HTMLElement, { edit: () => {} })
+    const renderCard = () => card.render({ milestoneId: 'move', text: 'Use W to move.' }, true, developerMode)
+    renderCard()
     h.controller.edit(h.live.current.definition('move'))
-    h.text.value = 'also discarded'
-    h.controller.hide()
+    expect(cardRoot.dataset['tutorialEditable']).toBe('true')
+    expect(h.controller.isOpen).toBe(true)
+    expect(foreground).toBe('tutorial')
+
+    const camera = initialCameraState({ position: { x: 0, y: 1.7, z: 8 }, yaw: 0, pitch: 0 })
+    const world = new WorldStateController({
+      getCamera: () => camera,
+      setCamera: () => {},
+      tools: new ToolInventory(new Set(['sprout-spawner'])),
+      ledger: { isOpen: false },
+      foreground: { get isOpen() { return foreground !== 'closed' } },
+      input: {
+        suspend: () => { inputCalls.push('suspend') },
+        resume: () => { inputCalls.push('resume') },
+        engage: () => { inputCalls.push('engage'); return Promise.resolve() },
+      },
+      pauseMenu: {
+        show: () => { pauseVisible = true },
+        hide: () => { pauseVisible = false },
+      },
+      worldName: () => 'My Orchard',
+      setFreeActive: () => {},
+      cuttingCleared: () => {},
+      stateChanged: () => {},
+    })
+    world.pause()
+
+    const settingsRoot = element(h.documentTarget, 'settings', 'section')
+    settingsRoot.hidden = true
+    const tutorials = element(h.documentTarget, 'settingsTutorials', 'input')
+    const developerTools = element(h.documentTarget, 'settingsDeveloperTools', 'input')
+    const back = element(h.documentTarget, 'settingsBack', 'button')
+    settingsRoot.append(tutorials, developerTools, back)
+    const transitionCalls: string[] = []
+    const settings = mountSettings(settingsRoot as unknown as HTMLElement, {
+      setTutorialsEnabled: () => {},
+      setDeveloperToolsEnabled: (enabled) => applyDeveloperToolsSetting(enabled, {
+        persist: (value) => { transitionCalls.push(`persist:${value}`) },
+        setDeveloperMode: (value) => { developerMode = value },
+        hideOrderEditor: () => { transitionCalls.push('hide-order') },
+        hideTutorialEditor: () => { h.controller.hide() },
+        clearForegroundEditor: () => { foreground = 'closed' },
+        renderTutorial: renderCard,
+        refreshVisibleLedger: () => { transitionCalls.push('refresh-ledger') },
+        mirrorRuntimeState: () => { transitionCalls.push('mirror-runtime') },
+      }),
+      back: () => {},
+    })
+    settings.show({ tutorialsEnabled: true, developerToolsEnabled: true })
+    developerTools.checked = false
+    developerTools.dispatchEvent(new Event('change'))
+
+    expect(developerMode).toBe(false)
     expect(h.controller.isOpen).toBe(false)
-    expect(h.saved).toEqual([])
+    expect(foreground).toBe('closed')
+    expect(cardRoot.dataset['tutorialEditable']).toBeUndefined()
+    expect(world.isPaused).toBe(true)
+    expect(pauseVisible).toBe(true)
+    expect(transitionCalls).toEqual([
+      'persist:false', 'hide-order', 'refresh-ledger', 'mirror-runtime',
+    ])
+
+    world.resume()
+    expect(world.isPaused).toBe(false)
+    expect(pauseVisible).toBe(false)
+    expect(inputCalls).toEqual(['suspend', 'resume', 'engage'])
   })
 })

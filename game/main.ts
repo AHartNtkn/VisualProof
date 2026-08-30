@@ -52,7 +52,11 @@ import { mountPauseMenu, type PauseMenuController } from './pause'
 import { mountOrderEditor, type OrderEditorController } from './order-editor'
 import { DeveloperPreferences } from './preferences'
 import { quitApplication } from './quit'
-import { mountSettings, type SettingsController } from './settings'
+import {
+  applyDeveloperToolsSetting,
+  mountSettings,
+  type SettingsController,
+} from './settings'
 import { mountTutorialCard, type TutorialCardController } from './tutorial-card'
 import { mountTutorialEditor, type TutorialEditorController } from './tutorial-editor'
 import { enqueueTutorialCommit } from './tutorial-progression'
@@ -969,6 +973,7 @@ async function startWorld(world: GameWorld): Promise<void> {
         else {
           orderEditor?.hide()
           tutorialEditor?.hide()
+          worldState?.resumeAfterDeveloperMode()
         }
         renderTutorial()
         refreshVisibleLedger()
@@ -1108,16 +1113,16 @@ settings = mountSettings(settingsRoot, {
     }
   },
   setDeveloperToolsEnabled(enabled) {
-    preferences.setDeveloperToolsEnabled(enabled)
-    if (!enabled) {
-      developerMode = false
-      orderEditor?.hide()
-      tutorialEditor?.hide()
-      editorState = { kind: 'closed' }
-    }
-    renderTutorial()
-    refreshVisibleLedger()
-    mirrorRuntimeState()
+    applyDeveloperToolsSetting(enabled, {
+      persist: (value) => { preferences.setDeveloperToolsEnabled(value) },
+      setDeveloperMode: (value) => { developerMode = value },
+      hideOrderEditor: () => { orderEditor?.hide() },
+      hideTutorialEditor: () => { tutorialEditor?.hide() },
+      clearForegroundEditor: () => { editorState = { kind: 'closed' } },
+      renderTutorial,
+      refreshVisibleLedger,
+      mirrorRuntimeState,
+    })
   },
   back: returnToPauseFromSettings,
 })

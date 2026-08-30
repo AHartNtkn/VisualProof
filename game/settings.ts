@@ -15,6 +15,33 @@ export type SettingsController = {
   dispose(): void
 }
 
+export type DeveloperToolsSettingPorts = {
+  readonly persist: (enabled: boolean) => void
+  readonly setDeveloperMode: (enabled: boolean) => void
+  readonly hideOrderEditor: () => void
+  readonly hideTutorialEditor: () => void
+  readonly clearForegroundEditor: () => void
+  readonly renderTutorial: () => void
+  readonly refreshVisibleLedger: () => void
+  readonly mirrorRuntimeState: () => void
+}
+
+export function applyDeveloperToolsSetting(
+  enabled: boolean,
+  ports: DeveloperToolsSettingPorts,
+): void {
+  ports.persist(enabled)
+  if (!enabled) {
+    ports.setDeveloperMode(false)
+    ports.hideOrderEditor()
+    ports.hideTutorialEditor()
+    ports.clearForegroundEditor()
+  }
+  ports.renderTutorial()
+  ports.refreshVisibleLedger()
+  ports.mirrorRuntimeState()
+}
+
 function required<ElementType extends Element>(root: HTMLElement, selector: string): ElementType {
   const element = root.querySelector<ElementType>(selector)
   if (element === null) throw new Error(`missing settings element '${selector}'`)

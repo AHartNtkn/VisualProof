@@ -21,7 +21,7 @@ export type WorldStatePorts = {
   readonly tools: ToolInventory
   readonly ledger: LedgerStatePort
   readonly foreground: ForegroundStatePort
-  readonly input: Pick<WorldInput, 'suspend' | 'resume' | 'engage' | 'release'>
+  readonly input: Pick<WorldInput, 'suspend' | 'resume' | 'engage'>
   readonly pauseMenu: PauseMenuPort
   readonly worldName: () => string
   readonly setFreeActive: (active: boolean) => void
@@ -62,7 +62,13 @@ export class WorldStateController {
 
   public releasePointerForDeveloperMode(): void {
     this.ports.setFreeActive(false)
-    this.ports.input.release()
+    this.ports.input.suspend()
+    this.ports.stateChanged()
+  }
+
+  public resumeAfterDeveloperMode(): void {
+    if (this.#paused || this.ports.ledger.isOpen || this.ports.foreground.isOpen) return
+    this.ports.input.resume()
     this.ports.stateChanged()
   }
 

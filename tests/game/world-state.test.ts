@@ -20,8 +20,9 @@ class TestWorldTarget extends EventTarget {
 class TestDocumentTarget extends EventTarget {
   pointerLockElement: Element | null = null
   visibilityState: DocumentVisibilityState = 'visible'
+  exitCalls = 0
 
-  exitPointerLock(): void {}
+  exitPointerLock(): void { this.exitCalls += 1 }
 }
 
 function key(code: string): Event {
@@ -30,6 +31,14 @@ function key(code: string): Event {
 
 function keyUp(code: string): Event {
   return Object.defineProperty(new Event('keyup'), 'code', { value: code })
+}
+
+function mouse(type: 'mousedown' | 'mouseup', button: number): Event {
+  return Object.defineProperties(new Event(type), {
+    button: { value: button },
+    clientX: { value: 120 },
+    clientY: { value: 80 },
+  })
 }
 
 function sourceTree(): GameTree {
@@ -72,15 +81,15 @@ function composeWorld(options: {
   }
   let pauseVisible = false
   let freeActive = true
-  let releaseCalls = 0
+  const pointerEvents: string[] = []
   const target = new TestWorldTarget()
   const windowTarget = new EventTarget()
   const documentTarget = new TestDocumentTarget()
   let controller!: WorldStateController
   const actions: WorldInputActions = {
-    pointerDown() {},
-    pointerUp() {},
-    pointerCancel() {},
+    pointerDown: () => { pointerEvents.push('down') },
+    pointerUp: () => { pointerEvents.push('up') },
+    pointerCancel: () => { pointerEvents.push('cancel') },
     category() {},
     toggleLedger() {},
     stepBack: () => { controller.stepBack() },
@@ -92,11 +101,6 @@ function composeWorld(options: {
     window: windowTarget as Window,
     document: documentTarget as unknown as Document,
   })
-  const releaseInput = input.release.bind(input)
-  input.release = () => {
-    releaseCalls += 1
-    releaseInput()
-  }
   if (ledgerOpen) input.suspend()
   controller = new WorldStateController({
     getCamera: () => camera,
@@ -119,6 +123,9 @@ function composeWorld(options: {
     input,
     tools,
     windowTarget,
+    target,
+    documentTarget,
+    pointerEvents,
     camera: () => camera,
     ledgerOpen: () => ledgerOpen,
     closeLedger: () => {
@@ -127,7 +134,6 @@ function composeWorld(options: {
     },
     pauseVisible: () => pauseVisible,
     freeActive: () => freeActive,
-    releaseCalls: () => releaseCalls,
     orchardState,
   }
 }
@@ -222,16 +228,50 @@ describe('world state controls', () => {
     const cameraBefore = world.camera()
     const cuttingBefore = world.tools.cutting
     const orchardBefore = world.orchardState
+    world.documentTarget.pointerLockElement = world.target as unknown as Element
+    world.documentTarget.dispatchEvent(new Event('pointerlockchange'))
 
     world.controller.releasePointerForDeveloperMode()
 
-    expect(world.releaseCalls()).toBe(1)
+    expect(world.documentTarget.exitCalls).toBe(1)
     expect(world.freeActive()).toBe(false)
     expect(world.camera()).toBe(cameraBefore)
     expect(world.tools.cutting).toBe(cuttingBefore)
     expect(world.orchardState).toBe(orchardBefore)
     expect(world.controller.isPaused).toBe(false)
     expect(world.ledgerOpen()).toBe(false)
+  })
+
+  it('synchronously cancels an active gesture before developer-mode pointer release', () => {
+    // Catches a mouseup racing pointerlockchange and committing a world action after mode activation.
+    const world = composeWorld({ camera: 'orbit', cutting: true, ledgerOpen: false })
+    const cameraBefore = world.camera()
+    const cuttingBefore = world.tools.cutting
+    world.documentTarget.pointerLockElement = world.target as unknown as Element
+    world.documentTarget.dispatchEvent(new Event('pointerlockchange'))
+    world.target.dispatchEvent(mouse('mousedown', 2))
+
+    world.controller.releasePointerForDeveloperMode()
+    world.windowTarget.dispatchEvent(mouse('mouseup', 2))
+
+    expect(world.pointerEvents).toEqual(['down', 'cancel'])
+    expect(world.camera()).toBe(cameraBefore)
+    expect(world.tools.cutting).toBe(cuttingBefore)
+  })
+
+  it('restores unlocked world input after developer mode turns off', () => {
+    // Catches synchronous gesture cancellation leaving ordinary click-to-engage controls suspended.
+    const world = composeWorld({ camera: 'free', cutting: false, ledgerOpen: false })
+    world.controller.releasePointerForDeveloperMode()
+    world.windowTarget.dispatchEvent(key('KeyW'))
+    expect(world.input.sample().forward).toBe(0)
+
+    world.controller.resumeAfterDeveloperMode()
+    world.windowTarget.dispatchEvent(keyUp('KeyW'))
+    world.windowTarget.dispatchEvent(key('KeyW'))
+
+    expect(world.input.sample().forward).toBe(1)
+    expect(world.freeActive()).toBe(false)
   })
 
   it('keeps world input suspended when Resume restores a foreground editor', () => {
