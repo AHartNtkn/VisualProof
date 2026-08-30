@@ -451,7 +451,12 @@ input:disabled {
   width: 10%;
   height: 70%;
   border-radius: 999px;
-  background: linear-gradient(90deg, color-mix(in srgb, currentcolor 65%, #000), currentcolor 55%, #eef9dc);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, currentcolor 65%, #000),
+    currentcolor 55%,
+    color-mix(in srgb, currentcolor 55%, #fff)
+  );
   transform: rotate(8deg);
 }
 
@@ -470,7 +475,7 @@ input:disabled {
   inset: 9%;
   border: max(4px, calc(var(--held-size) * .055)) solid currentcolor;
   border-radius: 8%;
-  box-shadow: inset 0 0 0 calc(var(--held-size) * .12) rgb(6 12 8 / 78%), inset 0 0 0 calc(var(--held-size) * .17) currentcolor;
+  box-shadow: inset 0 0 0 calc(var(--held-size) * .12) rgb(0 0 0 / 78%), inset 0 0 0 calc(var(--held-size) * .17) currentcolor;
   transform: rotate(8deg) skewY(-5deg);
 }
 

@@ -104,11 +104,25 @@ describe('temporary tool selector', () => {
     const colorDeclarations = [...heldStyles.matchAll(
       /^\s*(background|border(?:-(?:top|right|bottom|left)(?:-color)?)?|box-shadow|filter):\s*([^;]+);/gm,
     )].map(([, property, value]) => ({ property: property!, value: value! }))
+    const neutralHex = new Set(['#000', '#000000', '#fff', '#ffffff'])
+    const nonNeutralHex = (value: string): readonly string[] => [...value.matchAll(/#[0-9a-f]{3,8}\b/gi)]
+      .map(([literal]) => literal.toLowerCase())
+      .filter((literal) => !neutralHex.has(literal))
+    const nonNeutralRgb = (value: string): readonly string[] => [...value.matchAll(/rgba?\(([^)]+)\)/gi)]
+      .flatMap(([literal, channels]) => {
+        const [colorChannels] = channels!.split('/')
+        const values = colorChannels!.trim().split(/[\s,]+/).slice(0, 3).map(Number)
+        return values.length === 3 && values.every(Number.isFinite) && values[0] === values[1] && values[1] === values[2]
+          ? []
+          : [literal]
+      })
 
     expect(colorDeclarations.length).toBeGreaterThan(0)
     expect(colorDeclarations.filter(({ property, value }) => (
-      !value.includes('currentcolor')
-      && !(property.startsWith('border-') && value.trim().endsWith('transparent'))
+      (!value.includes('currentcolor')
+        && !(property.startsWith('border-') && value.trim().endsWith('transparent')))
+      || nonNeutralHex(value).length > 0
+      || nonNeutralRgb(value).length > 0
     ))).toEqual([])
   })
 
