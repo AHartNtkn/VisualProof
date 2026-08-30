@@ -1,44 +1,59 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { sameDiagram } from '../../../src/kernel/diagram/canonical/iso'
 import { libraryProposition } from '../../../src/kernel/proof/library'
 import {
+  LiveOrderCatalog,
   MAX_REPUTATION,
-  ORDER_CATALOG,
-  STARTER_ORDER_ID,
+  decodeOrderCatalog,
+  openingOrderCatalog,
+  type OrderProgress,
 } from '../../../src/game/orders/catalog'
 import {
   initialOrderProgress,
   orderSession,
   publishOrderMutation,
+  reconcileOrderProgress,
   type OrderMutation,
 } from '../../../src/game/orders/session'
 
-const starter = ORDER_CATALOG[0]!
+const openingOrderContent: unknown = JSON.parse(readFileSync(
+  new URL('../../../game/content/orders.json', import.meta.url),
+  'utf8',
+))
+const orderId = 'blank-sprout'
+const starter = openingOrderCatalog.definition(orderId)!
 const acceptedPot = { x: 3, z: -6, yaw: 0.5 }
 
-function freshSession() {
-  return orderSession(initialOrderProgress(ORDER_CATALOG))
+function freshCatalog(): LiveOrderCatalog {
+  return new LiveOrderCatalog(openingOrderCatalog.current)
+}
+
+function freshSession(catalog = freshCatalog()) {
+  return orderSession(initialOrderProgress(catalog.current.definitions), catalog)
 }
 
 function acceptStarter(session = freshSession()) {
-  const accepted = session.planAccept(STARTER_ORDER_ID, acceptedPot)
+  const accepted = session.planAccept(orderId, acceptedPot)
   session.commit(session.prepare(accepted))
   return session
 }
 
-describe('starter order catalog', () => {
-  it('offers one rewarded double-cut goal', () => {
-    // Catches an authored catalog that cannot supply the starter order lifecycle.
-    expect(ORDER_CATALOG).toHaveLength(1)
-    expect(starter).toMatchObject({
-      id: 'starter-double-cut',
-      reward: 1,
-    })
-  })
-})
-
 describe('order session lifecycle', () => {
+  it('uses its supplied live catalog for pending acceptance and exact delivery', () => {
+    // Catches session transitions reading a static catalog rather than the injected live authority.
+    const catalog = freshCatalog()
+    const session = freshSession(catalog)
+    const accepted = session.planAccept(orderId, acceptedPot)
+
+    session.commit(session.prepare(accepted))
+    const completed = session.planDelivery(orderId, libraryProposition('source', starter.goal.diagram))
+    session.commit(session.prepare(completed))
+
+    expect(session.progress.reputation).toBe(1)
+    expect(session.progress.orders.get(orderId)).toEqual({ kind: 'completed' })
+  })
+
   it('rejects non-finite pot placement before planning any live acceptance', () => {
     // Catches invalid placement values entering live order state before the save boundary rejects them.
     const session = freshSession()
@@ -47,56 +62,123 @@ describe('order session lifecycle', () => {
       { x: 0, z: Number.POSITIVE_INFINITY, yaw: 0 },
       { x: 0, z: 0, yaw: Number.NEGATIVE_INFINITY },
     ]) {
-      expect(() => session.planAccept(STARTER_ORDER_ID, pot)).toThrow(/finite/i)
-      expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'pending' })
+      expect(() => session.planAccept(orderId, pot)).toThrow(/finite/i)
+      expect(session.progress.orders.get(orderId)).toEqual({ kind: 'pending' })
     }
   })
 
-  it('rejects a completion that would exceed the wire reputation range before publication', () => {
+  it('rejects completion when its reward would exceed the wire reputation range', () => {
     // Catches live completion and durable enqueue occurring for a reputation the wire cannot represent.
-    const progress = initialOrderProgress(ORDER_CATALOG)
-    const session = orderSession({ ...progress, reputation: MAX_REPUTATION })
-    const accepted = session.planAccept(STARTER_ORDER_ID, acceptedPot)
+    const catalog = freshCatalog()
+    const progress = initialOrderProgress(catalog.current.definitions)
+    const session = orderSession({ ...progress, reputation: MAX_REPUTATION }, catalog)
+    const accepted = session.planAccept(orderId, acceptedPot)
     session.commit(session.prepare(accepted))
-    const effects: string[] = []
 
-    expect(() => {
-      const completion = session.planDelivery(
-        STARTER_ORDER_ID,
-        libraryProposition('source', starter.goal.diagram),
-      )
-      publishOrderMutation(session, completion, {
-        prepareOrderChange() { effects.push('renderer-prepare'); return {} },
-        commitOrderChange() { effects.push('renderer-commit') },
-        discardOrderChange() { effects.push('renderer-discard') },
-      }, () => { effects.push('save-accept') })
-    }).toThrow(/reputation/i)
-    expect(effects).toEqual([])
+    expect(() => session.planDelivery(orderId, libraryProposition('source', starter.goal.diagram)))
+      .toThrow(/reputation/i)
     expect(session.progress.reputation).toBe(MAX_REPUTATION)
-    expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'accepted', pot: acceptedPot })
+    expect(session.progress.orders.get(orderId)).toEqual({ kind: 'accepted', pot: acceptedPot })
   })
 
-  it('accepts the pending starter order at the chosen pot placement', () => {
-    // Catches acceptance that mutates before commit or loses the placement.
-    const session = freshSession()
-    const accepted = session.planAccept(STARTER_ORDER_ID, acceptedPot)
-
-    expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'pending' })
-    session.commit(session.prepare(accepted))
-    expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'accepted', pot: acceptedPot })
-  })
-
-  it('delivers an exactly matching whole proposition and awards its reward', () => {
-    // Catches delivery that compares source identity instead of a cited whole proposition.
+  it('retains accepted state when the delivered proposition differs from the authored goal', () => {
+    // Catches delivery accepting a merely trusted proposition without exact diagram equivalence.
     const session = acceptStarter()
-    const completed = session.planDelivery(
-      STARTER_ORDER_ID,
-      libraryProposition('source', starter.goal.diagram),
+    const wrong = libraryProposition(
+      'wrong',
+      openingOrderCatalog.definition('single-double-cut')!.goal.diagram,
     )
 
+    expect(() => session.planDelivery(orderId, wrong)).toThrow(/does not match/i)
+    expect(session.progress.orders.get(orderId)).toEqual({ kind: 'accepted', pot: acceptedPot })
+  })
+
+  it('requires each lifecycle transition to start from its required state', () => {
+    // Catches acceptance, abandonment, or completion skipping the order state machine.
+    const session = freshSession()
+    expect(() => session.planDelivery(orderId, libraryProposition('source', starter.goal.diagram))).toThrow(/accepted/i)
+    expect(() => session.planAbandon(orderId)).toThrow(/accepted/i)
+
+    acceptStarter(session)
+    expect(() => session.planAccept(orderId, acceptedPot)).toThrow(/pending/i)
+  })
+
+  it('returns an accepted order to pending when it is abandoned', () => {
+    // Catches abandonment removing the order or leaving it accepted.
+    const session = acceptStarter()
+    const abandoned = session.planAbandon(orderId)
+
+    session.commit(session.prepare(abandoned))
+    expect(session.progress.orders.get(orderId)).toEqual({ kind: 'pending' })
+    expect(session.progress.reputation).toBe(0)
+  })
+
+  it('rejects repeated completion', () => {
+    // Catches a completed order accruing reward again or moving through a second completion transition.
+    const session = acceptStarter()
+    const completed = session.planDelivery(orderId, libraryProposition('source', starter.goal.diagram))
     session.commit(session.prepare(completed))
-    expect(session.progress.reputation).toBe(1)
-    expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'completed' })
+
+    expect(() => session.planDelivery(orderId, libraryProposition('source-again', starter.goal.diagram)))
+      .toThrow(/accepted/i)
+    expect(session.progress).toMatchObject({ reputation: 1 })
+  })
+
+  it('rejects a prepared transition planned from stale progress', () => {
+    // Catches prepare replacing newer progress with a mutation planned from an earlier state.
+    const session = freshSession()
+    const first = session.planAccept(orderId, acceptedPot)
+    const stale = session.planAccept(orderId, { x: 9, z: 1, yaw: 2 })
+    session.commit(session.prepare(first))
+
+    expect(() => session.prepare(stale)).toThrow(/changed since mutation was planned/i)
+    expect(session.progress.orders.get(orderId)).toEqual({ kind: 'accepted', pot: acceptedPot })
+  })
+
+  it('revalidates delivery reward against a newer catalog revision before commit', () => {
+    // Catches a prepared completion awarding the reward that was valid only when it was planned.
+    const catalog = freshCatalog()
+    const session = acceptStarter(orderSession(initialOrderProgress(catalog.current.definitions), catalog))
+    const completion = session.planDelivery(orderId, libraryProposition('source', starter.goal.diagram))
+    const content = structuredClone(openingOrderContent) as Array<Record<string, unknown>>
+    content[0]!['reward'] = 2
+
+    catalog.publish(decodeOrderCatalog(content))
+
+    expect(() => session.prepare(completion)).toThrow(/invalid order mutation/i)
+    expect(session.progress.orders.get(orderId)).toEqual({ kind: 'accepted', pot: acceptedPot })
+  })
+
+  it('reconciles progress by preserving shared ids, adding new ids, and removing absent ids', () => {
+    // Catches live revision replacement losing shared order state or retaining deleted order state.
+    const progress: OrderProgress = {
+      reputation: 3,
+      orders: new Map([
+        ['blank-sprout', { kind: 'completed' as const }],
+        ['obsolete', { kind: 'pending' as const }],
+      ]),
+    }
+
+    const reconciled = reconcileOrderProgress(progress, openingOrderCatalog.current)
+
+    expect(reconciled.reputation).toBe(3)
+    expect([...reconciled.orders]).toEqual([
+      ['blank-sprout', { kind: 'completed' }],
+      ['single-double-cut', { kind: 'pending' }],
+      ['irregular-double-cut-a', { kind: 'pending' }],
+      ['irregular-double-cut-b', { kind: 'pending' }],
+    ])
+  })
+
+  it('rejects live progress replacement while a mutation is prepared', () => {
+    // Catches revision reconciliation replacing the state that an in-flight mutation will commit from.
+    const catalog = freshCatalog()
+    const session = freshSession(catalog)
+    const mutation = session.planAccept(orderId, acceptedPot)
+    session.prepare(mutation)
+
+    expect(() => session.replaceProgress(reconcileOrderProgress(session.progress, catalog.current)))
+      .toThrow(/prepared/i)
   })
 
   it('does not consume the proposition supplied for a successful delivery', () => {
@@ -104,81 +186,20 @@ describe('order session lifecycle', () => {
     const session = acceptStarter()
     const source = libraryProposition('source', starter.goal.diagram)
     const before = source.diagram
-    const completed = session.planDelivery(STARTER_ORDER_ID, source)
+    const completed = session.planDelivery(orderId, source)
 
     session.commit(session.prepare(completed))
     expect(source.diagram).toBe(before)
     expect(sameDiagram(source.diagram, starter.goal.diagram)).toBe(true)
   })
 
-  it('rejects acceptance and delivery transitions that do not start from their required state', () => {
-    // Catches lifecycle operations that permit parallel or skipped state transitions.
-    const session = freshSession()
-    expect(() => session.planDelivery(
-      STARTER_ORDER_ID,
-      libraryProposition('source', starter.goal.diagram),
-    )).toThrow(/accepted/i)
-
-    acceptStarter(session)
-    expect(() => session.planAccept(STARTER_ORDER_ID, acceptedPot)).toThrow(/pending/i)
-  })
-
-  it('returns an accepted order to pending when it is abandoned', () => {
-    // Catches abandonment that removes the order or leaves it accepted.
-    const session = acceptStarter()
-    const abandoned = session.planAbandon(STARTER_ORDER_ID)
-
-    session.commit(session.prepare(abandoned))
-    expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'pending' })
-    expect(session.progress.reputation).toBe(0)
-  })
-
-  it('rejects abandoning an order that is not accepted', () => {
-    // Catches abandonment that permits completed or pending orders to re-enter the lifecycle.
-    const session = freshSession()
-    expect(() => session.planAbandon(STARTER_ORDER_ID)).toThrow(/accepted/i)
-  })
-
-  it('retains accepted state when the delivered proposition differs from the authored goal', () => {
-    // Catches delivery that accepts a merely trusted proposition without exact diagram equivalence.
-    const session = acceptStarter()
-    const wrong = libraryProposition('wrong', new DiagramBuilder().build())
-
-    expect(() => session.planDelivery(STARTER_ORDER_ID, wrong)).toThrow(/does not match/i)
-    expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'accepted', pot: acceptedPot })
-  })
-
-  it('rejects repeated completion', () => {
-    // Catches a completed order accruing reward again or moving through a second completion transition.
-    const session = acceptStarter()
-    const completed = session.planDelivery(STARTER_ORDER_ID, libraryProposition('source', starter.goal.diagram))
-    session.commit(session.prepare(completed))
-
-    expect(() => session.planDelivery(
-      STARTER_ORDER_ID,
-      libraryProposition('source-again', starter.goal.diagram),
-    )).toThrow(/accepted/i)
-    expect(session.progress).toMatchObject({ reputation: 1 })
-  })
-
-  it('rejects a prepared transition that was planned from stale progress', () => {
-    // Catches prepare replacing newer progress with a transition planned from an old state.
-    const session = freshSession()
-    const first = session.planAccept(STARTER_ORDER_ID, acceptedPot)
-    const stale = session.planAccept(STARTER_ORDER_ID, { x: 9, z: 1, yaw: 2 })
-    session.commit(session.prepare(first))
-
-    expect(() => session.prepare(stale)).toThrow(/changed since mutation was planned/i)
-    expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'accepted', pot: acceptedPot })
-  })
-
-  it('rejects a forged completion that changes reward and removes order state', () => {
-    // Catches prepare trusting public mutation.after instead of validating the catalog reward and order map.
+  it('rejects forged completions that change reward or remove order state', () => {
+    // Catches prepare trusting public mutation.after instead of validating the current catalog and order map.
     const session = acceptStarter()
     const before = session.progress
     const forged: OrderMutation = {
       kind: 'complete',
-      orderId: STARTER_ORDER_ID,
+      orderId,
       reward: 999,
       before,
       after: { reputation: 999, orders: new Map() },
@@ -186,20 +207,17 @@ describe('order session lifecycle', () => {
 
     expect(() => session.prepare(forged)).toThrow(/invalid order mutation/i)
     expect(session.progress).toBe(before)
-    const abandonment = session.planAbandon(STARTER_ORDER_ID)
-    session.commit(session.prepare(abandonment))
-    expect(session.progress.orders.get(STARTER_ORDER_ID)).toEqual({ kind: 'pending' })
   })
 
-  it('rejects a forged acceptance whose resulting pot differs from its mutation payload', () => {
-    // Catches prepare accepting a state transition whose externally supplied after-state disagrees with it.
+  it('rejects a forged acceptance whose pot differs from its mutation payload', () => {
+    // Catches prepare accepting an after-state that disagrees with the acceptance payload.
     const session = freshSession()
     const before = session.progress
     const orders = new Map(before.orders)
-    orders.set(STARTER_ORDER_ID, { kind: 'accepted', pot: { x: 9, z: 1, yaw: 2 } })
+    orders.set(orderId, { kind: 'accepted', pot: { x: 9, z: 1, yaw: 2 } })
     const forged: OrderMutation = {
       kind: 'accept',
-      orderId: STARTER_ORDER_ID,
+      orderId,
       pot: acceptedPot,
       before,
       after: { reputation: 0, orders },
@@ -210,9 +228,9 @@ describe('order session lifecycle', () => {
   })
 
   it('publishes a completed order only after save acceptance and before renderer commit', () => {
-    // Catches publication that exposes completed progress before persistence accepts it.
+    // Catches publication exposing completed progress before persistence accepts it.
     const session = acceptStarter()
-    const completion = session.planDelivery(STARTER_ORDER_ID, libraryProposition('source', starter.goal.diagram))
+    const completion = session.planDelivery(orderId, libraryProposition('source', starter.goal.diagram))
     const effects: string[] = []
 
     publishOrderMutation(session, completion, {
@@ -233,10 +251,7 @@ describe('order session lifecycle', () => {
   it('leaves an accepted order authoritative when completion renderer preparation fails', () => {
     // Catches completion publication retaining prepared progress after renderer preparation rejects.
     const session = acceptStarter()
-    const completion = session.planDelivery(
-      STARTER_ORDER_ID,
-      libraryProposition('source', starter.goal.diagram),
-    )
+    const completion = session.planDelivery(orderId, libraryProposition('source', starter.goal.diagram))
     const preparationError = new Error('renderer could not prepare completion')
     const effects: string[] = []
 
@@ -254,10 +269,7 @@ describe('order session lifecycle', () => {
   it('preserves completion writer rejection when renderer cleanup also fails', () => {
     // Catches completion cleanup masking the writer rejection or awarding reputation.
     const session = acceptStarter()
-    const completion = session.planDelivery(
-      STARTER_ORDER_ID,
-      libraryProposition('source', starter.goal.diagram),
-    )
+    const completion = session.planDelivery(orderId, libraryProposition('source', starter.goal.diagram))
     const writerError = new Error('completion writer rejected')
     const effects: string[] = []
 

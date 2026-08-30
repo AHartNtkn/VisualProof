@@ -2,8 +2,10 @@ import { sameDiagram } from '../../kernel/diagram/canonical/iso'
 import { citeLibraryProposition, type LibraryProposition } from '../../kernel/proof/library'
 import { DiagramBuilder } from '../../kernel/diagram/builder'
 import {
-  ORDER_CATALOG,
   MAX_REPUTATION,
+  openingOrderCatalog,
+  type LiveOrderCatalog,
+  type OrderCatalogRevision,
   type OrderDefinition,
   type OrderProgress,
   type OrderState,
@@ -51,8 +53,8 @@ class OrderError extends Error {
   }
 }
 
-function definitionFor(orderId: string): OrderDefinition {
-  const definition = ORDER_CATALOG.find((entry) => entry.id === orderId)
+function definitionFor(catalog: LiveOrderCatalog, orderId: string): OrderDefinition {
+  const definition = catalog.definition(orderId)
   if (definition === undefined) throw new OrderError(`unknown order '${orderId}'`)
   return definition
 }
@@ -100,8 +102,8 @@ function preservesOtherOrders(
   return true
 }
 
-function isValidMutation(mutation: OrderMutation): boolean {
-  const definition = definitionFor(mutation.orderId)
+function isValidMutation(catalog: LiveOrderCatalog, mutation: OrderMutation): boolean {
+  const definition = definitionFor(catalog, mutation.orderId)
   const state = stateFor(mutation.before, mutation.orderId)
   switch (mutation.kind) {
     case 'accept':
@@ -144,18 +146,37 @@ export function initialOrderProgress(catalog: readonly OrderDefinition[]): Order
   return { reputation: 0, orders }
 }
 
+export function reconcileOrderProgress(
+  progress: OrderProgress,
+  revision: OrderCatalogRevision,
+): OrderProgress {
+  const orders = new Map<string, OrderState>()
+  for (const definition of revision.definitions) {
+    orders.set(definition.id, progress.orders.get(definition.id) ?? { kind: 'pending' })
+  }
+  return { reputation: progress.reputation, orders }
+}
+
 export class OrderSession {
   private prepared: PreparedOrderCommit | null = null
   private readonly preparedProgress = new WeakMap<PreparedOrderCommit, OrderProgress>()
 
-  public constructor(private currentProgress: OrderProgress) {}
+  public constructor(
+    private currentProgress: OrderProgress,
+    private readonly catalog: LiveOrderCatalog,
+  ) {}
 
   public get progress(): OrderProgress {
     return this.currentProgress
   }
 
+  public replaceProgress(reconciled: OrderProgress): void {
+    if (this.prepared !== null) throw new OrderError('cannot replace order progress while a mutation is prepared')
+    this.currentProgress = reconciled
+  }
+
   public planAccept(orderId: string, pot: PotPlacement): OrderMutation {
-    definitionFor(orderId)
+    definitionFor(this.catalog, orderId)
     const state = stateFor(this.progress, orderId)
     if (state.kind !== 'pending') throw new OrderError(`order '${orderId}' must be pending to accept`)
     if (![pot.x, pot.z, pot.yaw].every(Number.isFinite)) {
@@ -171,7 +192,7 @@ export class OrderSession {
   }
 
   public planAbandon(orderId: string): OrderMutation {
-    definitionFor(orderId)
+    definitionFor(this.catalog, orderId)
     const state = stateFor(this.progress, orderId)
     if (state.kind !== 'accepted') throw new OrderError(`order '${orderId}' must be accepted to abandon`)
     return {
@@ -183,7 +204,7 @@ export class OrderSession {
   }
 
   public planDelivery(orderId: string, source: LibraryProposition): OrderMutation {
-    const definition = definitionFor(orderId)
+    const definition = definitionFor(this.catalog, orderId)
     const state = stateFor(this.progress, orderId)
     if (state.kind !== 'accepted') throw new OrderError(`order '${orderId}' must be accepted to deliver`)
 
@@ -209,7 +230,7 @@ export class OrderSession {
     if (this.progress !== mutation.before) {
       throw new OrderError(`order '${mutation.orderId}' changed since mutation was planned`)
     }
-    if (!isValidMutation(mutation)) throw new OrderError('invalid order mutation')
+    if (!isValidMutation(this.catalog, mutation)) throw new OrderError('invalid order mutation')
     const prepared: PreparedOrderCommit = { [preparedOrderCommit]: true }
     this.prepared = prepared
     this.preparedProgress.set(prepared, mutation.after)
@@ -233,8 +254,8 @@ export class OrderSession {
   }
 }
 
-export function orderSession(progress: OrderProgress): OrderSession {
-  return new OrderSession(progress)
+export function orderSession(progress: OrderProgress, catalog: LiveOrderCatalog = openingOrderCatalog): OrderSession {
+  return new OrderSession(progress, catalog)
 }
 
 export function publishOrderMutation<Prepared>(

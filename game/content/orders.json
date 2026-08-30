@@ -1,0 +1,64 @@
+[
+  {
+    "id": "blank-sprout",
+    "prerequisites": [],
+    "reward": 1,
+    "goal": {
+      "root": "r0",
+      "regions": {
+        "r0": { "kind": "sheet" }
+      },
+      "nodes": {},
+      "wires": {}
+    }
+  },
+  {
+    "id": "single-double-cut",
+    "prerequisites": ["blank-sprout"],
+    "reward": 1,
+    "goal": {
+      "root": "r0",
+      "regions": {
+        "r0": { "kind": "sheet" },
+        "dc": { "kind": "cut", "parent": "r0" },
+        "dc_0": { "kind": "cut", "parent": "dc" }
+      },
+      "nodes": {},
+      "wires": {}
+    }
+  },
+  {
+    "id": "irregular-double-cut-a",
+    "prerequisites": ["single-double-cut"],
+    "reward": 1,
+    "goal": {
+      "root": "r0",
+      "regions": {
+        "r0": { "kind": "sheet" },
+        "dc": { "kind": "cut", "parent": "r0" },
+        "dc_0": { "kind": "cut", "parent": "dc" },
+        "dc_1": { "kind": "cut", "parent": "dc" },
+        "dc_2": { "kind": "cut", "parent": "dc_1" }
+      },
+      "nodes": {},
+      "wires": {}
+    }
+  },
+  {
+    "id": "irregular-double-cut-b",
+    "prerequisites": ["single-double-cut"],
+    "reward": 1,
+    "goal": {
+      "root": "r0",
+      "regions": {
+        "r0": { "kind": "sheet" },
+        "dc": { "kind": "cut", "parent": "r0" },
+        "dc_0": { "kind": "cut", "parent": "dc" },
+        "dc_1": { "kind": "cut", "parent": "dc_0" },
+        "dc_2": { "kind": "cut", "parent": "dc_1" }
+      },
+      "nodes": {},
+      "wires": {}
+    }
+  }
+]
