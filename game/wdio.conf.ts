@@ -49,10 +49,7 @@ if (scenario.invalidSave === true) writeFileSync(join(saveDirectory, 'unreadable
 
 const nativeEnvironment = {
   XDG_DATA_HOME: appDataRoot,
-  DISPLAY: process.env['DISPLAY'] ?? '',
-  GDK_BACKEND: 'x11',
 }
-if (nativeEnvironment.DISPLAY.length === 0) throw new Error('native game tests require a private X11 DISPLAY')
 
 const serviceOptions: TauriServiceOptions = {
   driverProvider: 'embedded',
@@ -72,6 +69,7 @@ const capability: TauriCapabilities = {
 
 export const config: WebdriverIO.Config = {
   runner: 'local',
+  autoXvfb: false,
   specs: [scenario.spec],
   maxInstances: 1,
   maxInstancesPerCapability: 1,
