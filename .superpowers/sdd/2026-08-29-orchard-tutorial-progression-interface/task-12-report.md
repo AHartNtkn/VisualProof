@@ -11,9 +11,11 @@ Two application defects surfaced in native execution and were repaired at their 
 
 The developer scenario verifies draft cancellation, published tile and centered accepted-pot visual changes, changed delivery validation, remembered formula text, create/reload/delete lifecycle behavior, and exact restoration of `game/content/orders.json`. Cropped image evidence is supplemental to the native interactions, persisted state, and delivery outcomes.
 
+The native save-evidence reader now applies SQLite's five-second busy timeout to each read-only connection. This keeps direct persisted-state assertions authoritative while allowing an in-flight application transaction to finish instead of producing a transient lock failure.
+
 ## Automated evidence
 
-- `npm test` — PASS: 210 test files, 1,541 tests.
+- `npm test` — PASS: 211 test files, 1,542 tests.
 - `npm run typecheck` — PASS.
 - `cargo test --manifest-path src-tauri/Cargo.toml` — PASS: 37 Rust tests plus empty main/doc-test targets.
 - `npm run build:game` — PASS: 158 modules transformed and the production web game built.
@@ -28,9 +30,11 @@ The developer scenario verifies draft cancellation, published tile and centered 
 - `git diff --check` — PASS.
 - `git diff -- game/content/orders.json` — empty after the developer scenario.
 
-## Remaining required evidence
+## Direct production-window evidence
 
-The mandatory human-style direct exercise in the production desktop application remains pending for the root task owner, as assigned. This report does not treat the native scripts or their image assertions as a substitute for that pass. The exact remaining evidence is Task 12 step 6: create and reload a tutorials-enabled orchard in `npm run dev:game`, exercise the listed controls and adjacent states through the visible application, inspect the complete UI after each transition, and repeat any affected flow if a defect is found.
+The root task owner completed the mandatory human-style exercise in the production `npm run dev:game` window through native controls. A saved formula edit remained in the active ledger for more than two seconds with no Vite reload, and reopening the editor showed the saved value. The content workflow also covered a second no-prerequisite order, accepting an authored and manual order from one pose, observing two Active tiles, abandoning the authored order, and confirming the Active list became empty after the manual-content lifecycle.
+
+Adjacent state checks covered tutorial and developer-tool toggles, resuming the re-enabled tutorial at `Select the tree`, returning to Main Menu, and reloading the orchard. The tutorial state and all three acquired tools persisted across that reload. The exercise returned `game/content/orders.json` exactly to its repository bytes, and the worktree was clean before the final automated matrix.
 
 ## Development-server persistence follow-up
 
@@ -45,7 +49,8 @@ The regression spawns the installed Vite CLI with the same `vite game --host ...
 - `npm run typecheck` — PASS.
 - `npm run build:game` — PASS: 158 modules transformed, including the current catalog starting bytes.
 - `cargo test --manifest-path src-tauri/Cargo.toml` — PASS: 37 Rust tests plus empty main/doc-test targets.
-- `npm test` — the new watcher regression passed, while 8 existing exact-opening-catalog assertions failed because the root-owned direct-app exercise currently has `direct-manual-order` persisted in `game/content/orders.json`. That live manual state and its `/tmp/orchard-orders-before-direct.json` capture were left untouched as required. A clean full-suite rerun requires the root owner to return the catalog to its starting state through the application.
-- `./scripts/check-game-desktop.sh e2e` — not run against the root-owned manual catalog state because those scenarios consume the checked-in catalog and would not validate the required four-order starting condition. The same catalog-state unblock is required.
+- `npm test` — PASS after the direct exercise restored the catalog: 211 test files, 1,542 tests, including the watcher regression and exact four-order assertions.
+- `./scripts/check-game-desktop.sh e2e` — PASS after the read-only SQLite connection adopted the busy timeout: controls, all three order-loop phases, tutorial progression, developer orders, and exact content-byte comparison.
+- Direct `npm run dev:game` rerun — PASS: the saved edit remained in the active ledger without a reload, and the terminal emitted no Vite page-reload event for the content write.
 
-The mandatory direct production-window rerun remains assigned to the root task owner. Automated Vite/Chromium evidence supplements but does not replace that exercise.
+The automated Vite/Chromium evidence supplements the completed direct production-window exercise; it does not substitute for it.

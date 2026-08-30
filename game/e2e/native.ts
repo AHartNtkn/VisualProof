@@ -316,10 +316,12 @@ function storedDatabase(slotId: string): DatabaseSync {
   const validatedSlotId = validateNativeSlotId(slotId)
   const dataRoot = process.env['GAME_E2E_DATA_ROOT']
   if (dataRoot === undefined) throw new Error('GAME_E2E_DATA_ROOT is required for save inspection')
-  return new DatabaseSync(
+  const database = new DatabaseSync(
     join(dataRoot, 'com.visualproofassistant.orchard', 'saves', `${validatedSlotId}.sqlite3`),
     { readOnly: true },
   )
+  database.exec('PRAGMA busy_timeout = 5000')
+  return database
 }
 
 export type StoredTree = {
