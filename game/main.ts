@@ -909,7 +909,8 @@ async function startWorld(world: GameWorld): Promise<void> {
         ledgerView = displayCameraPose(activeCamera)
         activeInput.suspend()
         freeActive = false
-        const explainsDoubleCut = activeTutorial.currentInstruction?.milestoneId === 'double-cut-explained'
+        const explainsDoubleCut = activeTutorial.completed.has('apply-double-cut')
+          && !activeTutorial.completed.has('double-cut-explained')
         activeLedger.show({
           catalog: openingOrderCatalog.current,
           progress: currentLedgerProgress(activeOrders, activeTools, activeTutorial),

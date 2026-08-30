@@ -268,6 +268,14 @@ describe('opening tutorial progression', () => {
     await doubleCutRegion(slotId, 'tree-0000', storedTreeDiagram(slotId, 'tree-0000').root)
     await expectInstruction('Double Cut adds two nested layers at a leaf or from an intermediate branch.')
 
+    await setTutorials(false)
+    await openLedger('tools')
+    await browser.keys('Tab')
+    await setTutorials(true)
+    await expectInstruction('Acquire Iteration from the ledger.')
+    await waitForSave()
+    expect(storedTutorialProgress(slotId).completed).toContain('double-cut-explained')
+
     await openLedger('tools')
     await expectInstruction('Acquire Iteration from the ledger.')
     await acquire('iteration')

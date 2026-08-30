@@ -7,7 +7,7 @@ The native test suite now covers the approved opening controls, four-order lifec
 Two application defects surfaced in native execution and were repaired at their owning boundaries:
 
 - The developer-mode indicator now has its own selector, so mirroring the indicator does not hide the game root.
-- A ledger-open observation completes the Double Cut explanation only while that instruction is active, so an earlier tool-acquisition visit cannot skip the explanation.
+- A ledger-open observation completes the Double Cut explanation once `apply-double-cut` is complete and `double-cut-explained` is incomplete. That durable gate records the real action while tutorials are disabled without allowing an earlier ledger visit to skip the explanation.
 
 The developer scenario verifies draft cancellation, published tile and centered accepted-pot visual changes, changed delivery validation, remembered formula text, create/reload/delete lifecycle behavior, and exact restoration of `game/content/orders.json`. Cropped image evidence is supplemental to the native interactions, persisted state, and delivery outcomes.
 
@@ -54,3 +54,16 @@ The regression spawns the installed Vite CLI with the same `vite game --host ...
 - Direct `npm run dev:game` rerun — PASS: the saved edit remained in the active ledger without a reload, and the terminal emitted no Vite page-reload event for the content write.
 
 The automated Vite/Chromium evidence supplements the completed direct production-window exercise; it does not substitute for it.
+
+## Disabled-tutorial ledger follow-up
+
+The composed ledger input boundary now derives the `ledger-opened` tutorial observation from completed milestone state rather than the currently visible instruction. This preserves the rule that real actions performed while tutorials are disabled still record milestones.
+
+The native regression completes and applies Double Cut, disables tutorials, opens the ledger through the production Tab input, closes it, and re-enables tutorials. It then verifies that `double-cut-explained` is persisted and that the visible flow advances to `Acquire Iteration from the ledger.` This is automated native evidence; no additional direct production-window exercise is claimed for this follow-up.
+
+- Native RED (`./scripts/check-game-desktop.sh e2e`) — expected failure before the durable gate: after re-enabling tutorials, the composed scenario received the Double Cut explanation instead of Iteration acquisition.
+- Native GREEN (same command) — PASS: controls, all three order-loop phases, the amended tutorial progression, developer orders, and exact content-byte restoration.
+- `npm test` — PASS: 211 test files, 1,542 tests.
+- `npm run typecheck` — PASS.
+- `npm run build:game` — PASS: 158 modules transformed.
+- `git diff -- game/content/orders.json` — empty after the native matrix.
