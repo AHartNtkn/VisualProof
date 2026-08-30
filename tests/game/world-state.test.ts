@@ -60,10 +60,15 @@ function composeWorld(options: {
     : free
   const tools = new ToolInventory(new Set(['sprout-spawner', 'iteration']))
   if (options.cutting) {
+    tools.cycle('1', 0)
     const tree = sourceTree()
     tools.hold(completeBranchCutting(tree, tree.snapshot.diagram.root))
   }
   let ledgerOpen = options.ledgerOpen
+  const orchardState = {
+    revision: 11,
+    treeIds: new Set(['source', 'neighbor']),
+  }
   let pauseVisible = false
   let freeActive = true
   const target = new TestWorldTarget()
@@ -108,8 +113,13 @@ function composeWorld(options: {
     windowTarget,
     camera: () => camera,
     ledgerOpen: () => ledgerOpen,
+    closeLedger: () => {
+      ledgerOpen = false
+      input.resume()
+    },
     pauseVisible: () => pauseVisible,
     freeActive: () => freeActive,
+    orchardState,
   }
 }
 
@@ -150,6 +160,7 @@ describe('world state controls', () => {
     // Catches step-back applying two world mutations in one press or reversing their priority.
     const world = composeWorld({ camera: 'orbit', cutting: true, ledgerOpen: false })
     const orbit = world.camera()
+    expect(world.tools.selected('1')).toBe('iteration')
 
     world.windowTarget.dispatchEvent(key('Backspace'))
 
@@ -161,5 +172,38 @@ describe('world state controls', () => {
 
     expect(world.camera().mode).toBe('free')
     expect(world.tools.cutting).toBeNull()
+  })
+
+  it('preserves one maximal reachable world state across Pause and Resume', () => {
+    // Catches state-conditional Pause/Resume logic that clears the held cutting, exits orbit,
+    // changes the selected tool, closes or unsuspends the ledger, or mutates orchard state.
+    const world = composeWorld({ camera: 'orbit', cutting: true, ledgerOpen: true })
+    const cameraBefore = world.camera()
+    const cuttingBefore = world.tools.cutting
+    const orchardBefore = world.orchardState
+
+    expect(cameraBefore.mode).toBe('orbit')
+    expect(cuttingBefore).not.toBeNull()
+    expect(world.tools.selected('1')).toBe('iteration')
+    expect(world.ledgerOpen()).toBe(true)
+    world.windowTarget.dispatchEvent(key('Escape'))
+    world.controller.resume()
+
+    expect(world.camera()).toBe(cameraBefore)
+    expect(world.tools.cutting).toBe(cuttingBefore)
+    expect(world.tools.selected('1')).toBe('iteration')
+    expect(world.ledgerOpen()).toBe(true)
+    expect(world.orchardState).toBe(orchardBefore)
+    expect(world.orchardState).toEqual({
+      revision: 11,
+      treeIds: new Set(['source', 'neighbor']),
+    })
+
+    world.windowTarget.dispatchEvent(key('KeyW'))
+    expect(world.input.sample().forward).toBe(0)
+    world.closeLedger()
+    world.windowTarget.dispatchEvent(keyUp('KeyW'))
+    world.windowTarget.dispatchEvent(key('KeyW'))
+    expect(world.input.sample().forward).toBe(1)
   })
 })
