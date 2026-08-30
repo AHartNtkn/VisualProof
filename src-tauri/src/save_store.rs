@@ -1,7 +1,10 @@
 use rusqlite::{params, Connection, ErrorCode, OpenFlags, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
-use std::fs;
+use std::collections::{HashMap, HashSet};
+use std::fs::{self, File, Permissions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use uuid::Uuid;
@@ -53,6 +56,7 @@ CREATE TABLE orders (
 ";
 
 const MAX_REPUTATION: i64 = 9_007_199_254_740_991;
+static ORDER_CONTENT_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,6 +100,17 @@ pub struct OrderRecord {
     pub order_id: String,
     pub state: OrderStatus,
     pub pot: Option<PotPlacementRecord>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OrderContentRecord {
+    pub id: String,
+    pub prerequisites: Vec<String>,
+    pub reward: i64,
+    pub goal: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub formula: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -175,6 +190,24 @@ pub enum SaveStoreError {
     NonFinitePotPlacement,
     #[error("order reward must be nonnegative")]
     NegativeOrderReward,
+    #[error("order content reward must be a nonnegative JavaScript-safe integer")]
+    InvalidOrderContentReward,
+    #[error("duplicate order id '{0}'")]
+    DuplicateOrderId(String),
+    #[error("order '{order_id}' has duplicate prerequisite '{prerequisite}'")]
+    DuplicateOrderPrerequisite {
+        order_id: String,
+        prerequisite: String,
+    },
+    #[error("order '{order_id}' requires missing order '{prerequisite}'")]
+    MissingOrderPrerequisite {
+        order_id: String,
+        prerequisite: String,
+    },
+    #[error("order prerequisites contain a cycle at '{0}'")]
+    CyclicOrderPrerequisites(String),
+    #[error("order content write lock is unavailable")]
+    OrderContentLockPoisoned,
     #[error("identifier must not be blank")]
     BlankIdentifier,
     #[error("reputation cannot be increased")]
@@ -195,6 +228,8 @@ pub enum SaveStoreError {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
 }
 
 pub type Result<T> = std::result::Result<T, SaveStoreError>;
@@ -202,6 +237,92 @@ pub type Result<T> = std::result::Result<T, SaveStoreError>;
 #[derive(Clone, Debug)]
 pub struct SaveStore {
     slot_directory: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+pub struct OrderContentStore {
+    path: PathBuf,
+}
+
+impl OrderContentStore {
+    pub fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+
+    pub fn production() -> Self {
+        Self::new(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../game/content/orders.json"))
+    }
+
+    pub fn save_order_catalog_json(
+        &self,
+        saves: &SaveStore,
+        slot_id: &str,
+        content: &[u8],
+    ) -> Result<()> {
+        let definitions = serde_json::from_slice(content)?;
+        self.save_order_catalog(saves, slot_id, definitions)
+    }
+
+    pub fn save_order_catalog(
+        &self,
+        saves: &SaveStore,
+        slot_id: &str,
+        definitions: Vec<OrderContentRecord>,
+    ) -> Result<()> {
+        let _write_guard = ORDER_CONTENT_WRITE_LOCK
+            .lock()
+            .map_err(|_| SaveStoreError::OrderContentLockPoisoned)?;
+        validate_order_content(&definitions)?;
+
+        let previous = fs::read(&self.path)?;
+        let permissions = fs::metadata(&self.path)?.permissions();
+        let mut replacement = serde_json::to_vec_pretty(&definitions)?;
+        replacement.push(b'\n');
+        self.replace_file(&replacement, permissions.clone())?;
+
+        let order_ids = definitions
+            .iter()
+            .map(|definition| definition.id.clone())
+            .collect::<Vec<_>>();
+        if let Err(error) = saves.replace_order_ids(slot_id, &order_ids) {
+            self.replace_file(&previous, permissions)?;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn replace_file(&self, bytes: &[u8], permissions: Permissions) -> Result<()> {
+        let parent = self.path.parent().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "order content path has no parent directory",
+            )
+        })?;
+        let file_name = self
+            .path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "order content path has no UTF-8 file name",
+                )
+            })?;
+        let temporary = parent.join(format!(".{file_name}.{}.tmp", Uuid::new_v4()));
+        let result = (|| -> Result<()> {
+            let mut file = File::create(&temporary)?;
+            file.write_all(bytes)?;
+            file.set_permissions(permissions)?;
+            file.sync_all()?;
+            fs::rename(&temporary, &self.path)?;
+            File::open(parent)?.sync_all()?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&temporary);
+        }
+        result
+    }
 }
 
 impl SaveStore {
@@ -916,6 +1037,67 @@ fn validate_identifiers(identifiers: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn validate_order_content(definitions: &[OrderContentRecord]) -> Result<()> {
+    let mut by_id = HashMap::new();
+    for definition in definitions {
+        validate_identifier(&definition.id)?;
+        if !(0..=MAX_REPUTATION).contains(&definition.reward) {
+            return Err(SaveStoreError::InvalidOrderContentReward);
+        }
+        if by_id.insert(definition.id.as_str(), definition).is_some() {
+            return Err(SaveStoreError::DuplicateOrderId(definition.id.clone()));
+        }
+    }
+
+    for definition in definitions {
+        let mut prerequisites = HashSet::new();
+        for prerequisite in &definition.prerequisites {
+            validate_identifier(prerequisite)?;
+            if !prerequisites.insert(prerequisite.as_str()) {
+                return Err(SaveStoreError::DuplicateOrderPrerequisite {
+                    order_id: definition.id.clone(),
+                    prerequisite: prerequisite.clone(),
+                });
+            }
+            if !by_id.contains_key(prerequisite.as_str()) {
+                return Err(SaveStoreError::MissingOrderPrerequisite {
+                    order_id: definition.id.clone(),
+                    prerequisite: prerequisite.clone(),
+                });
+            }
+        }
+    }
+
+    fn visit<'a>(
+        order_id: &'a str,
+        by_id: &HashMap<&'a str, &'a OrderContentRecord>,
+        visiting: &mut HashSet<&'a str>,
+        visited: &mut HashSet<&'a str>,
+    ) -> Result<()> {
+        if visited.contains(order_id) {
+            return Ok(());
+        }
+        if !visiting.insert(order_id) {
+            return Err(SaveStoreError::CyclicOrderPrerequisites(
+                order_id.to_owned(),
+            ));
+        }
+        for prerequisite in &by_id[order_id].prerequisites {
+            visit(prerequisite, by_id, visiting, visited)?;
+        }
+        visiting.remove(order_id);
+        visited.insert(order_id);
+        Ok(())
+    }
+
+    let mut visiting = HashSet::new();
+    let mut visited = HashSet::new();
+    for definition in definitions {
+        visit(&definition.id, &by_id, &mut visiting, &mut visited)?;
+    }
+    Ok(())
+}
+
 fn validate_camera(camera: &CameraRecord) -> Result<()> {
     if [camera.x, camera.y, camera.z, camera.yaw, camera.pitch]
         .into_iter()
@@ -1504,6 +1686,194 @@ mod tests {
                 },
             ]
         );
+    }
+
+    fn order_content(id: &str, prerequisites: &[&str]) -> OrderContentRecord {
+        OrderContentRecord {
+            id: id.into(),
+            prerequisites: prerequisites.iter().map(|value| (*value).into()).collect(),
+            reward: 1,
+            goal: serde_json::json!({
+                "root": "r0",
+                "regions": {"r0": {"kind": "sheet"}},
+                "nodes": {},
+                "wires": {}
+            }),
+            formula: None,
+        }
+    }
+
+    fn content_and_save_fixture() -> (
+        tempfile::TempDir,
+        OrderContentStore,
+        PathBuf,
+        SaveStore,
+        String,
+        Vec<u8>,
+        LoadedSlot,
+    ) {
+        let temporary = tempfile::tempdir().unwrap();
+        let content_directory = temporary.path().join("content");
+        fs::create_dir(&content_directory).unwrap();
+        let content_path = content_directory.join("orders.json");
+        let previous_content = b"[\n  {\"previous\": true}\n]\n".to_vec();
+        fs::write(&content_path, &previous_content).unwrap();
+        let saves = SaveStore::new(temporary.path().join("saves"));
+        let slot_id = saves.create(basic_input()).unwrap().slot_id;
+        let previous_save = saves.load(&slot_id).unwrap();
+        (
+            temporary,
+            OrderContentStore::new(content_path.clone()),
+            content_path,
+            saves,
+            slot_id,
+            previous_content,
+            previous_save,
+        )
+    }
+
+    // This catches publication before both the formatted content file and lifecycle save commit.
+    #[test]
+    fn order_catalog_replacement_formats_content_and_reconciles_the_save() {
+        let (_temporary, content, content_path, saves, slot_id, _previous_content, _previous_save) =
+            content_and_save_fixture();
+        let definitions = vec![
+            order_content("first", &[]),
+            order_content("second", &["first"]),
+        ];
+
+        content
+            .save_order_catalog(&saves, &slot_id, definitions)
+            .unwrap();
+
+        assert_eq!(
+            fs::read_to_string(content_path).unwrap(),
+            concat!(
+                "[\n",
+                "  {\n",
+                "    \"id\": \"first\",\n",
+                "    \"prerequisites\": [],\n",
+                "    \"reward\": 1,\n",
+                "    \"goal\": {\n",
+                "      \"nodes\": {},\n",
+                "      \"regions\": {\n",
+                "        \"r0\": {\n",
+                "          \"kind\": \"sheet\"\n",
+                "        }\n",
+                "      },\n",
+                "      \"root\": \"r0\",\n",
+                "      \"wires\": {}\n",
+                "    }\n",
+                "  },\n",
+                "  {\n",
+                "    \"id\": \"second\",\n",
+                "    \"prerequisites\": [\n",
+                "      \"first\"\n",
+                "    ],\n",
+                "    \"reward\": 1,\n",
+                "    \"goal\": {\n",
+                "      \"nodes\": {},\n",
+                "      \"regions\": {\n",
+                "        \"r0\": {\n",
+                "          \"kind\": \"sheet\"\n",
+                "        }\n",
+                "      },\n",
+                "      \"root\": \"r0\",\n",
+                "      \"wires\": {}\n",
+                "    }\n",
+                "  }\n",
+                "]\n"
+            )
+        );
+        assert_eq!(
+            saves
+                .load(&slot_id)
+                .unwrap()
+                .orders
+                .into_iter()
+                .map(|order| order.order_id)
+                .collect::<Vec<_>>(),
+            vec!["first", "second"]
+        );
+    }
+
+    // This catches parsing or graph validation after either durable authority has changed.
+    #[test]
+    fn invalid_order_catalogs_change_neither_content_nor_save() {
+        let (_temporary, content, content_path, saves, slot_id, previous_content, previous_save) =
+            content_and_save_fixture();
+
+        assert!(content
+            .save_order_catalog_json(&saves, &slot_id, b"{")
+            .is_err());
+        for definitions in [
+            vec![order_content("same", &[]), order_content("same", &[])],
+            vec![order_content("child", &["missing"])],
+            vec![order_content("a", &["b"]), order_content("b", &["a"])],
+            vec![OrderContentRecord {
+                reward: -1,
+                ..order_content("negative", &[])
+            }],
+            vec![OrderContentRecord {
+                reward: MAX_REPUTATION + 1,
+                ..order_content("unsafe", &[])
+            }],
+        ] {
+            assert!(content
+                .save_order_catalog(&saves, &slot_id, definitions)
+                .is_err());
+        }
+
+        assert_eq!(fs::read(content_path).unwrap(), previous_content);
+        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
+    }
+
+    // This catches save reconciliation running after the replacement file could not be published.
+    #[cfg(unix)]
+    #[test]
+    fn order_catalog_file_failure_changes_neither_content_nor_save() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (_temporary, content, content_path, saves, slot_id, previous_content, previous_save) =
+            content_and_save_fixture();
+        let directory = content_path.parent().unwrap();
+        let original_mode = fs::metadata(directory).unwrap().permissions().mode();
+        fs::set_permissions(directory, fs::Permissions::from_mode(0o500)).unwrap();
+
+        let result =
+            content.save_order_catalog(&saves, &slot_id, vec![order_content("replacement", &[])]);
+
+        fs::set_permissions(directory, fs::Permissions::from_mode(original_mode)).unwrap();
+        assert!(result.is_err());
+        assert_eq!(fs::read(content_path).unwrap(), previous_content);
+        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
+    }
+
+    // This catches returning a save error while leaving newly published content behind.
+    #[test]
+    fn order_catalog_save_failure_restores_exact_content_bytes() {
+        let (temporary, content, content_path, saves, slot_id, previous_content, _previous_save) =
+            content_and_save_fixture();
+        Connection::open(
+            temporary
+                .path()
+                .join("saves")
+                .join(format!("{slot_id}.sqlite3")),
+        )
+        .unwrap()
+        .execute(
+            "UPDATE metadata SET updated_at_ms = ?1 WHERE singleton = 1",
+            [i64::MAX],
+        )
+        .unwrap();
+        let previous_save = saves.load(&slot_id).unwrap();
+
+        let result =
+            content.save_order_catalog(&saves, &slot_id, vec![order_content("replacement", &[])]);
+
+        assert!(matches!(result, Err(SaveStoreError::TimestampOverflow)));
+        assert_eq!(fs::read(content_path).unwrap(), previous_content);
+        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
     }
 
     // This catches structural validation that ignores unauthorised schema additions.

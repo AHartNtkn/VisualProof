@@ -23,7 +23,8 @@ pub fn run() {
             commands::complete_order,
             commands::set_tutorials_enabled,
             commands::complete_tutorial_milestone,
-            commands::acquire_tool
+            commands::acquire_tool,
+            commands::save_order_catalog
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Orchard");

@@ -1,5 +1,6 @@
 use crate::save_store::{
-    CameraRecord, CreateSlotInput, PotPlacementRecord, SaveStore, SaveStoreError, TreeUpdate,
+    CameraRecord, CreateSlotInput, OrderContentRecord, OrderContentStore, PotPlacementRecord,
+    SaveStore, SaveStoreError, TreeUpdate,
 };
 use axum::{
     extract::{Request, State},
@@ -23,11 +24,24 @@ pub struct PlaytestServerConfig {
 #[derive(Clone)]
 struct AppState {
     store: SaveStore,
+    content_store: OrderContentStore,
     config: PlaytestServerConfig,
 }
 
 pub fn router(store: SaveStore, config: PlaytestServerConfig) -> Router {
-    let state = AppState { store, config };
+    router_with_content_store(store, OrderContentStore::production(), config)
+}
+
+pub fn router_with_content_store(
+    store: SaveStore,
+    content_store: OrderContentStore,
+    config: PlaytestServerConfig,
+) -> Router {
+    let state = AppState {
+        store,
+        content_store,
+        config,
+    };
     let cors = CorsLayer::new()
         .allow_origin(state.config.allowed_origin.clone())
         .allow_methods([Method::GET, Method::POST])
@@ -65,6 +79,10 @@ pub fn router(store: SaveStore, config: PlaytestServerConfig) -> Router {
             post(complete_tutorial_milestone),
         )
         .route("/__orchard_playtest/save/acquire-tool", post(acquire_tool))
+        .route(
+            "/__orchard_playtest/content/orders",
+            post(save_order_catalog),
+        )
         .with_state(state.clone())
         .layer(cors)
         .layer(middleware::from_fn_with_state(state, authenticate))
@@ -283,6 +301,24 @@ async fn acquire_tool(
         .map_err(StoreError)
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveOrderCatalogRequest {
+    slot_id: String,
+    content: Vec<OrderContentRecord>,
+}
+
+async fn save_order_catalog(
+    State(state): State<AppState>,
+    Json(input): Json<SaveOrderCatalogRequest>,
+) -> Result<Json<()>, StoreError> {
+    state
+        .content_store
+        .save_order_catalog(&state.store, &input.slot_id, input.content)
+        .map(Json)
+        .map_err(StoreError)
+}
+
 struct StoreError(SaveStoreError);
 
 impl IntoResponse for StoreError {
@@ -293,8 +329,8 @@ impl IntoResponse for StoreError {
 
 #[cfg(test)]
 mod tests {
-    use super::{router, PlaytestServerConfig};
-    use crate::save_store::{CameraRecord, SaveStore};
+    use super::{router, router_with_content_store, PlaytestServerConfig};
+    use crate::save_store::{CameraRecord, OrderContentStore, SaveStore};
     use axum::{
         body::{to_bytes, Body},
         http::{header, HeaderValue, Request, StatusCode},
@@ -580,6 +616,70 @@ mod tests {
             crate::save_store::OrderStatus::Completed
         );
         assert_eq!(persisted.orders[0].pot, None);
+    }
+
+    // This catches a browser-only content authority or a route that omits save reconciliation.
+    #[tokio::test]
+    async fn order_catalog_route_persists_content_and_reconciles_the_same_save_store() {
+        let temporary = tempfile::tempdir().unwrap();
+        let saves = SaveStore::new(temporary.path().join("saves"));
+        let content_path = temporary.path().join("orders.json");
+        std::fs::write(&content_path, "[]\n").unwrap();
+        let app = router_with_content_store(
+            saves.clone(),
+            OrderContentStore::new(content_path.clone()),
+            config(),
+        );
+        let created = response_json(
+            app.clone()
+                .oneshot(request(
+                    "/__orchard_playtest/save/create",
+                    json!({
+                        "displayName": "Content Orchard",
+                        "camera": {"x": 0.0, "y": 1.7, "z": 8.0, "yaw": 0.0, "pitch": 0.0},
+                        "trees": [],
+                        "reputation": 0,
+                        "tutorialsEnabled": true,
+                        "completedTutorialMilestones": [],
+                        "acquiredToolIds": ["sprout-spawner"],
+                        "orders": [{"orderId": "old", "state": "pending", "pot": null}]
+                    }),
+                ))
+                .await
+                .unwrap(),
+        )
+        .await;
+        let slot_id = created["slotId"].as_str().unwrap();
+
+        assert_eq!(
+            response_json(
+                app.oneshot(request(
+                    "/__orchard_playtest/content/orders",
+                    json!({
+                        "slotId": slot_id,
+                        "content": [{
+                            "id": "new",
+                            "prerequisites": [],
+                            "reward": 1,
+                            "goal": {
+                                "root": "r0",
+                                "regions": {"r0": {"kind": "sheet"}},
+                                "nodes": {},
+                                "wires": {}
+                            }
+                        }]
+                    }),
+                ))
+                .await
+                .unwrap(),
+            )
+            .await,
+            Value::Null
+        );
+        assert!(std::fs::read_to_string(content_path)
+            .unwrap()
+            .contains("\"id\": \"new\""));
+        assert_eq!(saves.load(slot_id).unwrap().orders[0].order_id, "new");
     }
 
     // This catches accidentally dispatching an unauthorized request to SaveStore.
