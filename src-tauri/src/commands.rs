@@ -3,7 +3,20 @@ use crate::save_store::{
     OrderContentStore, PotPlacementRecord, SaveStore, SlotListEntry, ToolContentRecord, TreeUpdate,
     TutorialContentRecord,
 };
+use serde::Deserialize;
 use tauri::Manager;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TutorialContentInput {
+    content: Vec<TutorialContentRecord>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ToolContentInput {
+    content: Vec<ToolContentRecord>,
+}
 
 #[tauri::command]
 pub fn quit_game(app: tauri::AppHandle) {
@@ -146,15 +159,15 @@ pub fn save_order_catalog(
 }
 
 #[tauri::command]
-pub fn save_tutorial_content(content: Vec<TutorialContentRecord>) -> Result<(), String> {
+pub fn save_tutorial_content(input: TutorialContentInput) -> Result<(), String> {
     AuthoredContentStore::production()
-        .save_tutorial_content(content)
+        .save_tutorial_content(input.content)
         .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-pub fn save_tool_content(content: Vec<ToolContentRecord>) -> Result<(), String> {
+pub fn save_tool_content(input: ToolContentInput) -> Result<(), String> {
     AuthoredContentStore::production()
-        .save_tool_content(content)
+        .save_tool_content(input.content)
         .map_err(|error| error.to_string())
 }

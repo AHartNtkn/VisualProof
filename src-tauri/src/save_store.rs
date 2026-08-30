@@ -3323,7 +3323,14 @@ mod tests {
         });
         let mut blank_tutorial = tutorial_content_records();
         blank_tutorial[0].text = " \n ".into();
-        for candidate in [missing_tutorial, extra_tutorial, blank_tutorial] {
+        let mut duplicate_tutorial = tutorial_content_records();
+        duplicate_tutorial[1].milestone_id = duplicate_tutorial[0].milestone_id.clone();
+        for candidate in [
+            missing_tutorial,
+            extra_tutorial,
+            blank_tutorial,
+            duplicate_tutorial,
+        ] {
             assert!(content.save_tutorial_content(candidate).is_err());
         }
 
@@ -3337,9 +3344,29 @@ mod tests {
         });
         let mut blank_tool = tool_content_records();
         blank_tool[0].description = "\t".into();
-        for candidate in [missing_tool, extra_tool, blank_tool] {
+        let mut duplicate_tool = tool_content_records();
+        duplicate_tool[1].id = duplicate_tool[0].id.clone();
+        for candidate in [missing_tool, extra_tool, blank_tool, duplicate_tool] {
             assert!(content.save_tool_content(candidate).is_err());
         }
+
+        assert!(
+            serde_json::from_value::<TutorialContentRecord>(serde_json::json!({
+                "milestoneId": "move",
+                "text": "Move",
+                "slotId": "save-shaped"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<ToolContentRecord>(serde_json::json!({
+                "id": "iteration",
+                "name": "Iteration",
+                "description": "Duplicate",
+                "reward": 10
+            }))
+            .is_err()
+        );
 
         assert_eq!(fs::read(tutorial_path).unwrap(), previous_tutorial);
         assert_eq!(fs::read(tool_path).unwrap(), previous_tools);

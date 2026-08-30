@@ -32,7 +32,7 @@ export const tauriAuthoredContentTransport: AuthoredContentTransport = {
   request(operation, input) {
     return invoke(operation === 'save-tutorial'
       ? 'save_tutorial_content'
-      : 'save_tool_content', input)
+      : 'save_tool_content', { input })
   },
 }
 

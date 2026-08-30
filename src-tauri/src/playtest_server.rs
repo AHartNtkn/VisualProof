@@ -334,6 +334,7 @@ async fn save_order_catalog(
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct SaveTutorialContentRequest {
     content: Vec<TutorialContentRecord>,
 }
@@ -350,6 +351,7 @@ async fn save_tutorial_content(
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct SaveToolContentRequest {
     content: Vec<ToolContentRecord>,
 }
@@ -850,6 +852,108 @@ mod tests {
             tools
         );
         assert_eq!(saves.load(slot_id).unwrap(), previous_save);
+    }
+
+    // This catches a save-shaped envelope being silently accepted by a global content route.
+    #[tokio::test]
+    async fn authored_content_routes_reject_slot_ids_without_touching_content_or_saves() {
+        let temporary = tempfile::tempdir().unwrap();
+        let saves = SaveStore::new(temporary.path().join("saves"));
+        let order_path = temporary.path().join("orders.json");
+        let tutorial_path = temporary.path().join("tutorial.json");
+        let tool_path = temporary.path().join("tools.json");
+        std::fs::write(&order_path, "[]\n").unwrap();
+        std::fs::write(&tutorial_path, "tutorial-before\n").unwrap();
+        std::fs::write(&tool_path, "tools-before\n").unwrap();
+        let app = router_with_content_stores(
+            saves.clone(),
+            OrderContentStore::new(order_path),
+            AuthoredContentStore::new(tutorial_path.clone(), tool_path.clone()),
+            config(),
+        );
+        let tutorial = Value::Array(
+            [
+                "move",
+                "look",
+                "ascend",
+                "descend",
+                "sprint",
+                "select-tree",
+                "move-orbit",
+                "exit-orbit",
+                "spawn-two-sprouts",
+                "acquire-double-cut",
+                "apply-double-cut",
+                "double-cut-explained",
+                "acquire-iteration",
+                "duplicate-nonblank",
+                "complete-blank-order",
+            ]
+            .into_iter()
+            .map(|milestone_id| json!({"milestoneId": milestone_id, "text": "Text"}))
+            .collect(),
+        );
+        let tools = json!([
+            {"id": "sprout-spawner", "name": "Spawner", "description": "Plants"},
+            {"id": "double-cut", "name": "Double Cut", "description": "Cuts"},
+            {"id": "iteration", "name": "Iteration", "description": "Duplicates"}
+        ]);
+
+        for (path, content) in [
+            ("/__orchard_playtest/content/tutorial", tutorial),
+            ("/__orchard_playtest/content/tools", tools),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(request(
+                    path,
+                    json!({"slotId": "save-shaped", "content": content}),
+                ))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        }
+
+        assert_eq!(std::fs::read(&tutorial_path).unwrap(), b"tutorial-before\n");
+        assert_eq!(std::fs::read(&tool_path).unwrap(), b"tools-before\n");
+        assert!(saves.list().unwrap().is_empty());
+    }
+
+    // This ignored helper lets the Vite integration test exercise the real authenticated router
+    // against its watched fixture paths without changing checked-in content.
+    #[tokio::test]
+    #[ignore]
+    async fn vite_authored_content_server() {
+        use std::path::PathBuf;
+        use std::time::Duration;
+
+        let port = std::env::var("ORCHARD_TEST_CONTENT_PORT")
+            .unwrap()
+            .parse::<u16>()
+            .unwrap();
+        let origin = std::env::var("ORCHARD_TEST_CONTENT_ORIGIN").unwrap();
+        let root = PathBuf::from(std::env::var("ORCHARD_TEST_CONTENT_ROOT").unwrap());
+        let stop = PathBuf::from(std::env::var("ORCHARD_TEST_CONTENT_STOP").unwrap());
+        let app = router_with_content_stores(
+            SaveStore::new(root.join("saves")),
+            OrderContentStore::new(root.join("orders.json")),
+            AuthoredContentStore::new(root.join("tutorial.json"), root.join("tools.json")),
+            PlaytestServerConfig {
+                token: TOKEN.into(),
+                allowed_origin: origin.parse().unwrap(),
+            },
+        );
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
+            .await
+            .unwrap();
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async move {
+                while !stop.exists() {
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                }
+            })
+            .await
+            .unwrap();
     }
 
     // This catches accidentally dispatching an unauthorized request to SaveStore.

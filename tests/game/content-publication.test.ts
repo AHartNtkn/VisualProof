@@ -115,14 +115,15 @@ describe('authored content publication', () => {
     expect(content.current).toBe(candidate)
   })
 
-  // This catches a late persistent response publishing into a replacement world generation.
-  it('does not publish tool copy when the world becomes stale during persistence', async () => {
+  // This catches a durable global edit being reported as failed after its originating world ends.
+  it('resolves without live publication when the world becomes stale during persistence', async () => {
     const before = toolRevision('Before')
     const candidate = toolRevision('After')
     const content = new LiveToolContent(before)
     const persistence = deferred()
     let current = true
     let saveStarted = false
+    const events: string[] = []
 
     const publication = publishToolContentRevision({
       candidate,
@@ -130,17 +131,24 @@ describe('authored content publication', () => {
         saveTutorial: async () => {},
         saveTools: async () => {
           saveStarted = true
+          events.push('persist')
           await persistence.promise
         },
       },
-      content,
+      content: {
+        publish(revision) {
+          events.push('publish')
+          content.publish(revision)
+        },
+      },
       isCurrent: () => current,
     })
     while (!saveStarted) await Promise.resolve()
     current = false
     persistence.resolve()
 
-    await expect(publication).rejects.toThrow(/no longer active/i)
+    await expect(publication).resolves.toBeUndefined()
+    expect(events).toEqual(['persist'])
     expect(content.current).toBe(before)
   })
 

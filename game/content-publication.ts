@@ -20,7 +20,7 @@ export async function publishTutorialContentRevision(config: {
 }): Promise<void> {
   assertCurrent(config.isCurrent)
   await config.contentClient.saveTutorial(config.candidate.definitions)
-  assertCurrent(config.isCurrent)
+  if (!config.isCurrent()) return
   config.content.publish(config.candidate)
 }
 
@@ -32,6 +32,6 @@ export async function publishToolContentRevision(config: {
 }): Promise<void> {
   assertCurrent(config.isCurrent)
   await config.contentClient.saveTools(config.candidate.definitions)
-  assertCurrent(config.isCurrent)
+  if (!config.isCurrent()) return
   config.content.publish(config.candidate)
 }
