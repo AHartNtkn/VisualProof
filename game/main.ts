@@ -29,7 +29,7 @@ import { initialOrderCreateState, saveClient, treeUpdateFromGameTree, type Camer
 import { SaveWriter } from '../src/game/save-writer'
 import { gameSession, publishTreeChange, ToolError, type GameSession, type TreeChange } from '../src/game/session'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
-import { completeBranchCutting, ToolState } from '../src/game/tools'
+import { completeBranchCutting, TOOL_CATALOG, ToolInventory } from '../src/game/tools'
 import {
   mountCatalog,
   renderEquippedItem,
@@ -78,7 +78,7 @@ let camera: CameraState | null = null
 let input: WorldInput | null = null
 let session: GameSession | null = null
 let orders: OrderSession | null = null
-let tools: ToolState | null = null
+let tools: ToolInventory | null = null
 let writer: SaveWriter | null = null
 let renderer: GameWorldRenderer | null = null
 let catalog: CatalogController | null = null
@@ -132,11 +132,12 @@ function setFeedback(value: string): void {
   feedback.textContent = value
 }
 
-function mirrorToolState(activeTools: ToolState | null = tools): void {
+function mirrorToolInventory(activeTools: ToolInventory | null = tools): void {
   if (activeTools === null) return
   const cuttingHeld = activeTools.cutting !== null
-  renderEquippedItem(hud, activeTools.item, cuttingHeld)
-  root.dataset['equippedItem'] = activeTools.item
+  const selected = activeTools.selected('1')
+  renderEquippedItem(hud, selected, cuttingHeld)
+  root.dataset['equippedItem'] = selected
   root.dataset['cuttingHeld'] = String(cuttingHeld)
 }
 
@@ -468,7 +469,8 @@ function applySecondaryAction(clientX: number, clientY: number): void {
     : pointerNdc(clientX, clientY, activeRenderer.canvas)
   const orbitTarget = activeCamera.mode === 'orbit' ? activeCamera.treeId : null
   try {
-    if (activeTools.item === 'double-cut') {
+    const selected = activeTools.selected('1')
+    if (selected === 'double-cut') {
       const pointed = activeRenderer.pointAtBranch(ndcX, ndcY, orbitTarget)
       if (pointed === null) throw new ToolError('Double cut requires an ordinary branch within reach.')
       const change = activeSession.planDoubleCut(pointed)
@@ -485,7 +487,7 @@ function applySecondaryAction(clientX: number, clientY: number): void {
       const source = activeSession.trees.get(pointed.treeId)
       if (source === undefined) throw new ToolError(`unknown tree '${pointed.treeId}'`)
       activeTools.hold(completeBranchCutting(source, pointed.entity.region))
-      mirrorToolState(activeTools)
+      mirrorToolInventory(activeTools)
       setFeedback(pointed.entity.region === source.snapshot.diagram.root
         ? `Whole-tree cutting held from ${source.id}.`
         : `Subtree cutting held from ${source.id}.`)
@@ -504,7 +506,7 @@ function applySecondaryAction(clientX: number, clientY: number): void {
         (accepted) => acceptOrderWrite(activeWriter, accepted),
       )
       activeTools.cancel()
-      mirrorToolState(activeTools)
+      mirrorToolInventory(activeTools)
       mirrorOrderProgress(activeOrders)
       refreshVisibleCatalog()
       setFeedback(`Completed ${target.orderId}. Reputation ${activeOrders.progress.reputation}.`)
@@ -519,7 +521,7 @@ function applySecondaryAction(clientX: number, clientY: number): void {
         })
     publishPlannedTreeChange(activeSession, activeWriter, activeRenderer, change)
     activeTools.cancel()
-    mirrorToolState(activeTools)
+    mirrorToolInventory(activeTools)
     setFeedback(target.kind === 'branch'
       ? `Iteration applied to ${change.treeId}.`
       : `Duplicated tree as ${change.treeId}.`)
@@ -535,7 +537,7 @@ async function startWorld(world: GameWorld): Promise<void> {
   const nextCamera = initialCameraState(world.camera)
   const nextSession = gameSession(world.trees)
   const nextOrders = orderSession(world.progress, openingOrderCatalog)
-  const nextTools = new ToolState()
+  const nextTools = new ToolInventory(world.progress.acquiredToolIds)
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
   let nextCatalog: CatalogController | null = null
   let nextInput: WorldInput | null = null
@@ -633,7 +635,7 @@ async function startWorld(world: GameWorld): Promise<void> {
         let resumeEngagement = false
         if (activeTools !== null && activeTools.cutting !== null) {
           activeTools.cancel()
-          mirrorToolState(activeTools)
+          mirrorToolInventory(activeTools)
           setFeedback('Cutting cleared.')
           handled = true
         }
@@ -655,9 +657,9 @@ async function startWorld(world: GameWorld): Promise<void> {
       swapTool() {
         const activeTools = tools
         if (paused || activeTools === null || !catalogRoot.hidden) return
-        activeTools.swap()
-        mirrorToolState(activeTools)
-        setFeedback(`Equipped ${activeTools.item === 'double-cut' ? 'Double Cut' : 'Iteration'}.`)
+        const selected = activeTools.cycle('1').selected
+        mirrorToolInventory(activeTools)
+        setFeedback(`Equipped ${TOOL_CATALOG.find((tool) => tool.id === selected)!.label}.`)
       },
       toggleCatalog() {
         const activeCatalog = catalog
@@ -706,7 +708,7 @@ async function startWorld(world: GameWorld): Promise<void> {
     root.dataset['loadedSlot'] = world.slot.id
     maxRepresentationOperations = 0
     root.dataset['renderMode'] = 'game'
-    mirrorToolState(nextTools)
+    mirrorToolInventory(nextTools)
     mirrorOrderProgress(nextOrders)
     mirrorCatalog()
     telemetry.beginTransition()

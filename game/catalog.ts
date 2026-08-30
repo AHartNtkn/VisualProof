@@ -1,5 +1,5 @@
 import { availableOrderIds, type LiveOrderCatalog, type OrderProgress } from '../src/game/orders/catalog'
-import type { EquippedItem } from '../src/game/tools'
+import { TOOL_CATALOG, type ToolId } from '../src/game/tools'
 
 export type CatalogView = {
   readonly eye: { readonly x: number; readonly y: number; readonly z: number }
@@ -25,12 +25,14 @@ function required<ElementType extends Element>(root: HTMLElement, selector: stri
   return element
 }
 
-export function renderEquippedItem(root: HTMLElement, item: EquippedItem, cuttingHeld: boolean): void {
+export function renderEquippedItem(root: HTMLElement, item: ToolId, cuttingHeld: boolean): void {
   const silhouette = required<HTMLElement>(root, '[data-equipped-silhouette]')
   const label = required<HTMLElement>(root, '[data-equipped-item-label]')
   const held = required<HTMLElement>(root, '[data-held-cutting]')
   silhouette.dataset['item'] = item
-  label.textContent = item === 'double-cut' ? 'Double Cut' : 'Iteration'
+  const definition = TOOL_CATALOG.find((candidate) => candidate.id === item)
+  if (definition === undefined) throw new Error(`unknown tool '${item}'`)
+  label.textContent = definition.label
   held.textContent = cuttingHeld ? 'Cutting held' : 'No cutting held'
 }
 

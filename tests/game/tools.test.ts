@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { snapshotFromDiagram } from '../../src/game/diagram-snapshot'
 import type { GameTree } from '../../src/game/model'
-import { ToolState, completeBranchCutting } from '../../src/game/tools'
+import { ToolInventory, completeBranchCutting } from '../../src/game/tools'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { derivedScope } from '../../src/kernel/diagram/regions'
 import { selectionContents } from '../../src/kernel/diagram/subgraph/selection'
@@ -23,31 +23,93 @@ function sourceTree(): { readonly tree: GameTree; readonly cut: string } {
   }
 }
 
-describe('iteration tool state', () => {
-  it('swaps equipped items and clears a held cutting', () => {
+describe('tool inventory', () => {
+  it('cycles acquired tools in authored category order', () => {
+    const inventory = new ToolInventory(new Set(['sprout-spawner']))
+
+    expect(inventory.selected('1')).toBe('sprout-spawner')
+    expect(inventory.cycle('1', 100).selected).toBe('sprout-spawner')
+
+    inventory.acquire('double-cut', 0)
+    expect(inventory.selected('1')).toBe('double-cut')
+    inventory.acquire('iteration', 0)
+    expect(inventory.selected('1')).toBe('iteration')
+    expect(inventory.acquiredInCategory('1')).toEqual([
+      'sprout-spawner', 'double-cut', 'iteration',
+    ])
+    expect(inventory.cycle('1', 200).selected).toBe('sprout-spawner')
+    expect(inventory.cycle('1', 300).selected).toBe('double-cut')
+    expect(inventory.cycle('1', 400).selected).toBe('iteration')
+  })
+
+  it('hides unacquired tools from category selection and save snapshots', () => {
+    const inventory = new ToolInventory(new Set(['sprout-spawner', 'iteration']))
+
+    expect(inventory.acquiredInCategory('1')).toEqual(['sprout-spawner', 'iteration'])
+    expect(inventory.cycle('1', 10).selected).toBe('iteration')
+    expect(inventory.cycle('1', 20).selected).toBe('sprout-spawner')
+    expect(inventory.snapshotForSave()).toEqual(['sprout-spawner', 'iteration'])
+  })
+
+  it('rejects acquisition below a tool capacity requirement', () => {
+    const inventory = new ToolInventory(new Set())
+
+    expect(() => inventory.acquire('sprout-spawner', 0)).toThrow(/capacity/i)
+    inventory.acquire('sprout-spawner', 1)
+    expect(inventory.snapshotForSave()).toEqual(['sprout-spawner'])
+  })
+
+  it('rejects duplicate acquisition without changing selection or saves', () => {
+    const inventory = new ToolInventory(new Set(['sprout-spawner']))
+
+    expect(() => inventory.acquire('sprout-spawner', 1)).toThrow(/already acquired/i)
+    expect(inventory.selected('1')).toBe('sprout-spawner')
+    expect(inventory.snapshotForSave()).toEqual(['sprout-spawner'])
+  })
+
+  it('selects a newly acquired tool without opening a selector', () => {
+    const inventory = new ToolInventory(new Set(['sprout-spawner']))
+
+    inventory.acquire('double-cut', 0)
+
+    expect(inventory.selected('1')).toBe('double-cut')
+    expect(inventory.selectorAt(0)).toBeNull()
+  })
+
+  it('expires a category selector exactly 1800ms after its last cycle without changing selection', () => {
+    const inventory = new ToolInventory(new Set(['sprout-spawner', 'double-cut']))
+
+    const selection = inventory.cycle('1', 100)
+
+    expect(selection).toMatchObject({ category: '1', selected: 'double-cut' })
+    expect(inventory.selectorAt(1899)).toMatchObject({ selected: 'double-cut' })
+    expect(inventory.selectorAt(1900)).toBeNull()
+    expect(inventory.selected('1')).toBe('double-cut')
+  })
+
+  it('clears a held cutting when selecting away from Iteration', () => {
     const { tree, cut } = sourceTree()
     const cutting = completeBranchCutting(tree, cut)
-    const tools = new ToolState()
+    const inventory = new ToolInventory(new Set(['sprout-spawner', 'iteration']))
 
-    expect(tools.item).toBe('double-cut')
-    expect(tools.swap()).toBe('iteration')
-    tools.hold(cutting)
-    expect(tools.cutting).toBe(cutting)
-    expect(tools.swap()).toBe('double-cut')
-    expect(tools.cutting).toBeNull()
+    expect(inventory.cycle('1', 0).selected).toBe('iteration')
+    inventory.hold(cutting)
+    expect(inventory.cutting).toBe(cutting)
+    expect(inventory.cycle('1', 1).selected).toBe('sprout-spawner')
+    expect(inventory.cutting).toBeNull()
   })
 
   it('cancels held state idempotently without changing the equipped item', () => {
     const { tree, cut } = sourceTree()
-    const tools = new ToolState()
-    tools.swap()
-    tools.hold(completeBranchCutting(tree, cut))
+    const inventory = new ToolInventory(new Set(['sprout-spawner', 'iteration']))
+    inventory.cycle('1', 0)
+    inventory.hold(completeBranchCutting(tree, cut))
 
-    tools.cancel()
-    tools.cancel()
+    inventory.cancel()
+    inventory.cancel()
 
-    expect(tools.item).toBe('iteration')
-    expect(tools.cutting).toBeNull()
+    expect(inventory.selected('1')).toBe('iteration')
+    expect(inventory.cutting).toBeNull()
   })
 
   it('cuts a non-root branch as exactly one complete subtree selection', () => {
