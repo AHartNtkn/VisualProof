@@ -38,33 +38,31 @@
         <p class="menu-error" data-menu-error role="alert"></p>
       </section>
 
-      <aside class="hud" data-hud hidden aria-live="polite">
-        <div class="hud-row">
+      <aside class="tutorial-card" data-tutorial-card hidden aria-live="polite"></aside>
+
+      <section class="status-hud" data-hud data-status-hud hidden aria-live="polite">
+        <div class="status-hud-row">
           <strong data-world-name>Orchard</strong>
           <span class="save-status" data-save-status>Saved</span>
           <button class="retry" data-save-retry type="button" hidden>Retry save</button>
         </div>
         <p class="feedback" data-feedback role="status"></p>
-        <div class="equipped-item" data-equipped-item>
-          <span class="equipped-silhouette" data-equipped-silhouette data-item="sprout-spawner" data-silhouette="sprout" aria-hidden="true"></span>
-          <span>Equipped: <strong data-equipped-item-label>Sprout Spawner</strong></span>
-          <span data-held-cutting>No cutting held</span>
-        </div>
-      </aside>
+      </section>
 
-      <section class="catalog" data-catalog hidden aria-label="Order catalog">
-        <header class="catalog-heading">
-          <div>
-            <p class="eyebrow">Orchard orders</p>
-            <h2>Catalog</h2>
-          </div>
-          <output data-catalog-reputation>Reputation: 0</output>
-        </header>
-        <div class="catalog-tabs">
-          <button type="button" data-catalog-pending aria-pressed="true">Pending</button>
-          <button type="button" data-catalog-completed aria-pressed="false">Completed</button>
-        </div>
-        <div class="catalog-orders" data-catalog-orders></div>
+      <section class="tool-selector" data-tool-selector aria-live="polite"></section>
+
+      <section class="held-tool-model" data-held-tool-model hidden aria-hidden="true">
+        <span
+          class="held-tool-silhouette tool-silhouette"
+          data-held-tool-silhouette
+          data-silhouette="sprout"
+        ></span>
+      </section>
+
+      <section class="ledger" data-ledger hidden aria-label="Ledger">
+        <nav class="ledger-primary-tabs" data-ledger-primary-tabs aria-label="Ledger section"></nav>
+        <nav class="ledger-context-tabs" data-ledger-context-tabs aria-label="Ledger view"></nav>
+        <div class="ledger-content" data-ledger-content></div>
       </section>
 
       <section

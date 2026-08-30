@@ -12,7 +12,7 @@ import {
   type CameraMotion,
   type CameraState,
 } from '../src/game/camera'
-import type { GameWorld } from '../src/game/model'
+import type { GameProgress, GameWorld } from '../src/game/model'
 import {
   openingOrderCatalog,
 } from '../src/game/orders/catalog'
@@ -29,14 +29,15 @@ import { initialOrderCreateState, saveClient, treeUpdateFromGameTree, type Camer
 import { SaveWriter } from '../src/game/save-writer'
 import { gameSession, publishTreeChange, ToolError, type GameSession, type TreeChange } from '../src/game/session'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
-import { completeBranchCutting, TOOL_CATALOG, ToolInventory } from '../src/game/tools'
+import { completeBranchCutting, TOOL_CATALOG, ToolInventory, type ToolId } from '../src/game/tools'
+import { TutorialSession } from '../src/game/tutorial'
 import type { PlacementObstacle } from '../src/game/placement'
 import {
-  mountCatalog,
-  renderEquippedItem,
-  type CatalogController,
-  type CatalogView,
-} from './catalog'
+  mountLedger,
+  type LedgerController,
+  type LedgerView,
+} from './ledger'
+import { mountToolSelector, renderHeldToolModel } from './tool-selector'
 import {
   applyStationaryPointerRelease,
   attachWorldInput,
@@ -61,7 +62,9 @@ const saveRetry = document.querySelector<HTMLButtonElement>('[data-save-retry]')
 const feedback = document.querySelector<HTMLElement>('[data-feedback]')!
 const reticle = document.querySelector<HTMLElement>('[data-reticle]')!
 const engage = document.querySelector<HTMLElement>('[data-engage]')!
-const catalogRoot = document.querySelector<HTMLElement>('[data-catalog]')!
+const toolSelectorRoot = document.querySelector<HTMLElement>('[data-tool-selector]')!
+const heldToolRoot = document.querySelector<HTMLElement>('[data-held-tool-model]')!
+const ledgerRoot = document.querySelector<HTMLElement>('[data-ledger]')!
 const pauseRoot = document.querySelector<HTMLElement>('[data-pause]')!
 
 const blankDiagram = new DiagramBuilder().build()
@@ -82,8 +85,9 @@ let orders: OrderSession | null = null
 let tools: ToolInventory | null = null
 let writer: SaveWriter | null = null
 let renderer: GameWorldRenderer | null = null
-let catalog: CatalogController | null = null
-let catalogView: CatalogView | null = null
+let tutorial: TutorialSession | null = null
+let ledger: LedgerController | null = null
+let ledgerView: LedgerView | null = null
 let pauseMenu: PauseMenuController | null = null
 let animationFrame = 0
 let previousFrame = performance.now()
@@ -91,6 +95,7 @@ let disposed = false
 let freeActive = false
 let paused = false
 let releaseWriterStatus = (): void => {}
+const toolSelector = mountToolSelector(toolSelectorRoot)
 
 function authoredGoalForOrder(orderId: string) {
   return openingOrderCatalog.definition(orderId)?.goal
@@ -137,7 +142,9 @@ function mirrorToolInventory(activeTools: ToolInventory | null = tools): void {
   if (activeTools === null) return
   const cuttingHeld = activeTools.cutting !== null
   const selected = activeTools.selected('1')
-  renderEquippedItem(hud, selected, cuttingHeld)
+  renderHeldToolModel(heldToolRoot, selected, cuttingHeld)
+  heldToolRoot.hidden = false
+  toolSelector.render(activeTools, performance.now())
   root.dataset['equippedItem'] = selected
   root.dataset['cuttingHeld'] = String(cuttingHeld)
 }
@@ -151,16 +158,45 @@ function mirrorOrderProgress(activeOrders: OrderSession | null = orders): void {
     : activeOrders.progress.orders.get(openingOrderId)?.kind ?? ''
 }
 
-function mirrorCatalog(): void {
-  root.dataset['catalogOpen'] = String(!catalogRoot.hidden)
+function mirrorLedger(): void {
+  root.dataset['ledgerOpen'] = String(ledger?.isOpen ?? false)
 }
 
-function refreshVisibleCatalog(): void {
-  const activeCatalog = catalog
+function currentLedgerProgress(
+  activeOrders: OrderSession,
+  activeTools: ToolInventory,
+  activeTutorial: TutorialSession,
+): GameProgress {
+  return {
+    ...activeOrders.progress,
+    tutorialsEnabled: activeTutorial.enabled,
+    completedTutorialMilestones: activeTutorial.completed,
+    acquiredToolIds: new Set(activeTools.snapshotForSave()),
+  }
+}
+
+function refreshVisibleLedger(): void {
+  const activeLedger = ledger
   const activeOrders = orders
-  const view = catalogView
-  if (activeCatalog === null || activeOrders === null || view === null || catalogRoot.hidden) return
-  activeCatalog.show(activeOrders.progress, view)
+  const activeTools = tools
+  const activeTutorial = tutorial
+  const view = ledgerView
+  if (
+    activeLedger === null
+    || activeOrders === null
+    || activeTools === null
+    || activeTutorial === null
+    || view === null
+    || !activeLedger.isOpen
+  ) return
+  activeLedger.show({
+    catalog: openingOrderCatalog.current,
+    progress: currentLedgerProgress(activeOrders, activeTools, activeTutorial),
+    tools: activeTools,
+    tutorialCheck: (milestone) => activeTutorial.check(milestone),
+    developerMode: false,
+    view,
+  })
 }
 
 function acceptOrderWrite(activeWriter: SaveWriter, mutation: OrderMutation): void {
@@ -171,10 +207,10 @@ function acceptOrderWrite(activeWriter: SaveWriter, mutation: OrderMutation): vo
   }
 }
 
-function closeCatalog(requestEngagement: boolean): void {
-  catalog?.hide()
-  catalogView = null
-  mirrorCatalog()
+function closeLedger(requestEngagement: boolean): void {
+  ledger?.hide()
+  ledgerView = null
+  mirrorLedger()
   input?.resume()
   if (!requestEngagement || input === null) return
   void input.engage().catch(() => {
@@ -183,7 +219,23 @@ function closeCatalog(requestEngagement: boolean): void {
   })
 }
 
-function acceptCatalogOrder(orderId: string, view: CatalogView): void {
+function acquireLedgerTool(toolId: ToolId): void {
+  const activeTools = tools
+  const activeOrders = orders
+  const activeWriter = writer
+  if (activeTools === null || activeOrders === null || activeWriter === null) return
+  try {
+    activeTools.acquire(toolId, activeOrders.progress.reputation)
+    activeWriter.acquireTool(toolId)
+    mirrorToolInventory(activeTools)
+    refreshVisibleLedger()
+    setFeedback(`Acquired ${TOOL_CATALOG.find((tool) => tool.id === toolId)!.label}.`)
+  } catch (error) {
+    setError(`Tool acquisition failed: ${message(error)}`)
+  }
+}
+
+function acceptLedgerOrder(orderId: string, view: LedgerView): void {
   const activeOrders = orders
   const activeWriter = writer
   const activeRenderer = renderer
@@ -197,15 +249,15 @@ function acceptCatalogOrder(orderId: string, view: CatalogView): void {
       (accepted) => acceptOrderWrite(activeWriter, accepted),
     )
     mirrorOrderProgress(activeOrders)
-    refreshVisibleCatalog()
+    refreshVisibleLedger()
     setFeedback(`Accepted ${orderId}.`)
-    closeCatalog(true)
+    closeLedger(true)
   } catch (error) {
     setError(`Order acceptance failed: ${message(error)}`)
   }
 }
 
-function abandonCatalogOrder(orderId: string): void {
+function abandonLedgerOrder(orderId: string): void {
   const activeOrders = orders
   const activeWriter = writer
   const activeRenderer = renderer
@@ -219,9 +271,9 @@ function abandonCatalogOrder(orderId: string): void {
       (accepted) => acceptOrderWrite(activeWriter, accepted),
     )
     mirrorOrderProgress(activeOrders)
-    refreshVisibleCatalog()
+    refreshVisibleLedger()
     setFeedback(`Abandoned ${orderId}.`)
-    closeCatalog(true)
+    closeLedger(true)
   } catch (error) {
     setError(`Order abandonment failed: ${message(error)}`)
   }
@@ -303,6 +355,7 @@ function animate(now: number): void {
   ) return
   const timing = frameTiming(now, previousFrame)
   previousFrame = now
+  if (tools !== null) toolSelector.render(tools, now)
   const sampledMotion = activeInput.sample()
   const motion = currentCamera.mode === 'free' && !freeActive
     ? NEUTRAL_MOTION
@@ -395,16 +448,17 @@ async function returnToMainMenu(): Promise<void> {
   releaseWriterStatus()
   releaseWriterStatus = (): void => {}
   input?.dispose()
-  catalog?.dispose()
+  ledger?.dispose()
   renderer?.dispose()
   input = null
-  catalog = null
-  catalogView = null
+  ledger = null
+  ledgerView = null
   renderer = null
   camera = null
   session = null
   orders = null
   tools = null
+  tutorial = null
   writer = null
   freeActive = false
   paused = false
@@ -412,6 +466,8 @@ async function returnToMainMenu(): Promise<void> {
   startLifecycle.returnToMenu()
   start.hidden = false
   hud.hidden = true
+  heldToolRoot.hidden = true
+  toolSelector.clear()
   root.dataset['ready'] = 'false'
   root.dataset['loadedSlot'] = ''
   root.dataset['cameraMode'] = 'menu'
@@ -544,7 +600,7 @@ function applySecondaryAction(clientX: number, clientY: number): void {
           activeTools.cancel()
           mirrorToolInventory(activeTools)
           mirrorOrderProgress(activeOrders)
-          refreshVisibleCatalog()
+          refreshVisibleLedger()
           setFeedback(`Completed ${target.orderId}. Reputation ${activeOrders.progress.reputation}.`)
           return
         }
@@ -578,15 +634,22 @@ async function startWorld(world: GameWorld): Promise<void> {
   const nextSession = gameSession(world.trees)
   const nextOrders = orderSession(world.progress, openingOrderCatalog)
   const nextTools = new ToolInventory(world.progress.acquiredToolIds)
+  const nextTutorial = new TutorialSession(
+    world.progress.tutorialsEnabled,
+    world.progress.completedTutorialMilestones,
+  )
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
-  let nextCatalog: CatalogController | null = null
+  let nextLedger: LedgerController | null = null
   let nextInput: WorldInput | null = null
   let nextReleaseWriterStatus = (): void => {}
   let freeSecondaryPress: { readonly x: number; readonly y: number } | null = null
   try {
-    nextCatalog = mountCatalog(catalogRoot, openingOrderCatalog, {
-      accept: acceptCatalogOrder,
-      abandon: abandonCatalogOrder,
+    nextLedger = mountLedger(ledgerRoot, {
+      acquireTool: acquireLedgerTool,
+      acceptOrder: acceptLedgerOrder,
+      abandonOrder: abandonLedgerOrder,
+      editOrder: (orderId) => setError(`Order editing is unavailable for '${orderId}'.`),
+      createOrder: () => setError('Order creation is unavailable.'),
     })
     nextRenderer.setPots([...world.progress.orders].flatMap(([orderId, state]) => {
       if (state.kind !== 'accepted') return []
@@ -679,8 +742,8 @@ async function startWorld(world: GameWorld): Promise<void> {
           setFeedback('Cutting cleared.')
           handled = true
         }
-        if (!catalogRoot.hidden) {
-          closeCatalog(false)
+        if (ledger?.isOpen === true) {
+          closeLedger(false)
           return 'resume-engagement'
         }
         if (camera?.mode === 'orbit') {
@@ -696,32 +759,42 @@ async function startWorld(world: GameWorld): Promise<void> {
       },
       swapTool() {
         const activeTools = tools
-        if (paused || activeTools === null || !catalogRoot.hidden) return
-        const selected = activeTools.cycle('1').selected
+        if (paused || activeTools === null || ledger?.isOpen === true) return
+        activeTools.cycle('1')
         mirrorToolInventory(activeTools)
-        setFeedback(`Equipped ${TOOL_CATALOG.find((tool) => tool.id === selected)!.label}.`)
       },
       toggleCatalog() {
-        const activeCatalog = catalog
+        const activeLedger = ledger
         const activeOrders = orders
+        const activeTools = tools
+        const activeTutorial = tutorial
         const activeCamera = camera
         const activeInput = input
         if (
           paused
-          || activeCatalog === null
+          || activeLedger === null
           || activeOrders === null
+          || activeTools === null
+          || activeTutorial === null
           || activeCamera === null
           || activeInput === null
         ) return
-        if (!catalogRoot.hidden) {
-          closeCatalog(true)
+        if (activeLedger.isOpen) {
+          closeLedger(true)
           return
         }
-        catalogView = displayCameraPose(activeCamera)
+        ledgerView = displayCameraPose(activeCamera)
         activeInput.suspend()
         freeActive = false
-        activeCatalog.show(activeOrders.progress, catalogView)
-        mirrorCatalog()
+        activeLedger.show({
+          catalog: openingOrderCatalog.current,
+          progress: currentLedgerProgress(activeOrders, activeTools, activeTutorial),
+          tools: activeTools,
+          tutorialCheck: (milestone) => activeTutorial.check(milestone),
+          developerMode: false,
+          view: ledgerView,
+        })
+        mirrorLedger()
         mirrorControls()
       },
       engagementChanged(active) {
@@ -735,11 +808,12 @@ async function startWorld(world: GameWorld): Promise<void> {
     session = nextSession
     orders = nextOrders
     tools = nextTools
+    tutorial = nextTutorial
     writer = nextWriter
     releaseWriterStatus = nextReleaseWriterStatus
-    catalog = nextCatalog
-    catalogView = null
-    nextCatalog.hide()
+    ledger = nextLedger
+    ledgerView = null
+    nextLedger.hide()
     start.hidden = true
     hud.hidden = false
     worldName.textContent = world.slot.name
@@ -750,19 +824,21 @@ async function startWorld(world: GameWorld): Promise<void> {
     root.dataset['renderMode'] = 'game'
     mirrorToolInventory(nextTools)
     mirrorOrderProgress(nextOrders)
-    mirrorCatalog()
+    mirrorLedger()
     telemetry.beginTransition()
     mirrorControls()
     previousFrame = performance.now()
     animationFrame = requestAnimationFrame(animate)
   } catch (error) {
-    nextCatalog?.dispose()
+    nextLedger?.dispose()
     nextInput?.dispose()
     nextReleaseWriterStatus()
     await nextWriter.dispose().catch(() => {})
     nextRenderer.dispose()
     start.hidden = false
     hud.hidden = true
+    heldToolRoot.hidden = true
+    toolSelector.clear()
     root.dataset['ready'] = 'false'
     root.dataset['loadedSlot'] = ''
     throw error
@@ -823,12 +899,13 @@ window.addEventListener('pagehide', () => {
   resizeObserver.disconnect()
   input?.dispose()
   input = null
-  catalog?.dispose()
-  catalog = null
-  catalogView = null
+  ledger?.dispose()
+  ledger = null
+  ledgerView = null
   session = null
   orders = null
   tools = null
+  tutorial = null
   pauseMenu?.dispose()
   pauseMenu = null
   releaseWriterStatus()
