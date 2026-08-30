@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   renameSync,
   rmSync,
 } from 'node:fs'
@@ -19,6 +20,33 @@ const diagramJson = JSON.stringify(diagramToJson(largeDiagram))
 const stressCamera = { x: 0, y: 1.7, z: 82, yaw: 0, pitch: -0.04 }
 const largeInteractionCamera = { x: 0, y: 1.7, z: 82, yaw: -0.00841, pitch: 0.15565 }
 const largeInteractionTree = { id: 'tree-0000', index: 0, x: 0, z: 0, yaw: 0 }
+
+function authoredOrderIds(path: string): readonly string[] {
+  let content: unknown
+  try {
+    content = JSON.parse(readFileSync(path, 'utf8'))
+  } catch (error) {
+    throw new Error(`cannot read the authored order catalog: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  if (!Array.isArray(content)) throw new Error('authored order catalog must be an array')
+
+  const seen = new Set<string>()
+  return content.map((value, index) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new Error(`authored order ${index} must be an object`)
+    }
+    const id = (value as Record<string, unknown>)['id']
+    if (typeof id !== 'string' || id.trim() === '') {
+      throw new Error(`authored order ${index} must have a non-blank string id`)
+    }
+    if (seen.has(id)) throw new Error(`authored order catalog has duplicate id '${id}'`)
+    seen.add(id)
+    return id
+  })
+}
+
+const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)))
+const orderIds = authoredOrderIds(join(repositoryRoot, 'game', 'content', 'orders.json'))
 const saves = counts.map((count) => {
   const slotId = count === 1 ? 'large-1' : `stress-${count}`
   return {
@@ -31,18 +59,12 @@ const saves = counts.map((count) => {
     tutorialsEnabled: true,
     completedTutorialMilestones: [],
     acquiredToolIds: ['sprout-spawner'],
-    orders: [
-      { orderId: 'blank-sprout', state: 'pending', pot: null },
-      { orderId: 'single-double-cut', state: 'pending', pot: null },
-      { orderId: 'irregular-double-cut-a', state: 'pending', pot: null },
-      { orderId: 'irregular-double-cut-b', state: 'pending', pot: null },
-    ],
+    orders: orderIds.map((orderId) => ({ orderId, state: 'pending', pot: null })),
     trees: (count === 1 ? [largeInteractionTree] : orchardPlacements(count, 34))
       .map((placement) => ({ ...placement, diagramJson })),
   }
 })
 
-const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const outputDirectory = join(repositoryRoot, 'game', 'generated-saves')
 const manifestPath = join(repositoryRoot, 'src-tauri', 'Cargo.toml')
 mkdirSync(outputDirectory, { recursive: true })

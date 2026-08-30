@@ -32,13 +32,40 @@ pub fn run() {
 
 #[cfg(test)]
 mod generated_save_tests {
-    use super::save_store::{CameraRecord, OrderRecord, OrderStatus, SaveStore};
-    use std::path::PathBuf;
+    use super::save_store::{CameraRecord, OrderStatus, SaveStore};
+    use std::collections::HashSet;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    fn authored_order_ids(path: &Path) -> HashSet<String> {
+        let content: serde_json::Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        let definitions = content.as_array().expect("order catalog must be an array");
+        let mut ids = HashSet::new();
+        for definition in definitions {
+            let id = definition
+                .as_object()
+                .and_then(|record| record.get("id"))
+                .and_then(serde_json::Value::as_str)
+                .expect("every authored order must have a string id");
+            assert!(
+                !id.trim().is_empty(),
+                "authored order ids must be non-blank"
+            );
+            assert!(
+                ids.insert(id.to_owned()),
+                "authored order ids must be unique"
+            );
+        }
+        ids
+    }
 
     #[test]
     fn generated_saves_load_through_the_production_store() {
         let save_directory =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../game/generated-saves");
+        let order_ids = authored_order_ids(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../game/content/orders.json"),
+        );
         let store = SaveStore::new(save_directory);
 
         for count in [1, 10, 50, 100, 250, 500, 1000, 2000] {
@@ -85,30 +112,17 @@ mod generated_save_tests {
             assert!(loaded.tutorials_enabled);
             assert!(loaded.completed_tutorial_milestones.is_empty());
             assert_eq!(loaded.acquired_tool_ids, vec!["sprout-spawner"]);
+            assert!(loaded
+                .orders
+                .iter()
+                .all(|order| { order.state == OrderStatus::Pending && order.pot.is_none() }));
             assert_eq!(
-                loaded.orders,
-                vec![
-                    OrderRecord {
-                        order_id: "blank-sprout".into(),
-                        state: OrderStatus::Pending,
-                        pot: None,
-                    },
-                    OrderRecord {
-                        order_id: "irregular-double-cut-a".into(),
-                        state: OrderStatus::Pending,
-                        pot: None,
-                    },
-                    OrderRecord {
-                        order_id: "irregular-double-cut-b".into(),
-                        state: OrderStatus::Pending,
-                        pot: None,
-                    },
-                    OrderRecord {
-                        order_id: "single-double-cut".into(),
-                        state: OrderStatus::Pending,
-                        pot: None,
-                    },
-                ]
+                loaded
+                    .orders
+                    .iter()
+                    .map(|order| order.order_id.clone())
+                    .collect::<HashSet<_>>(),
+                order_ids
             );
         }
     }
