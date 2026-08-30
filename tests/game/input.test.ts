@@ -192,14 +192,12 @@ describe('world input sampling', () => {
   })
 
   it.each([
-    ['free flight', false],
-    ['orbit', false],
-    ['held cutting', false],
-    ['open ledger', true],
+    ['active input', false],
+    ['suspended input', true],
   ] as const)(
-    'routes Escape only to Pause from %s and clears held movement',
-    (_state, suspended) => {
-      // Catches state-specific Escape handling consuming world state instead of pausing it.
+    'routes Escape only to Pause with %s and clears held movement',
+    (_inputState, suspended) => {
+      // Catches suspended routing swallowing Escape before it reaches the state controller.
       const { windowTarget, semanticActions, input } = createHarness()
       windowTarget.dispatchEvent(event('keydown', { code: 'KeyW' }))
       if (suspended) input.suspend()

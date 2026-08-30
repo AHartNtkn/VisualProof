@@ -7,7 +7,6 @@ import {
   cameraPoseForSave,
   displayCameraPose,
   enterOrbit,
-  exitOrbit,
   initialCameraState,
   type CameraMotion,
   type CameraState,
@@ -46,6 +45,7 @@ import {
 } from './input'
 import { mountPauseMenu, type PauseMenuController } from './pause'
 import { quitApplication } from './quit'
+import { WorldStateController } from './world-state'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
 const worldHost = document.querySelector<HTMLElement>('[data-world]')!
@@ -89,11 +89,11 @@ let tutorial: TutorialSession | null = null
 let ledger: LedgerController | null = null
 let ledgerView: LedgerView | null = null
 let pauseMenu: PauseMenuController | null = null
+let worldState: WorldStateController | null = null
 let animationFrame = 0
 let previousFrame = performance.now()
 let disposed = false
 let freeActive = false
-let paused = false
 let releaseWriterStatus = (): void => {}
 const toolSelector = mountToolSelector(toolSelectorRoot)
 
@@ -325,6 +325,7 @@ function pointerNdc(clientX: number, clientY: number, canvas: HTMLCanvasElement)
 
 function mirrorControls(): void {
   if (camera === null) return
+  const paused = worldState?.isPaused ?? false
   const display = displayCameraPose(camera)
   root.dataset['cameraMode'] = camera.mode
   root.dataset['inputEngaged'] = String(freeActive)
@@ -347,7 +348,7 @@ function animate(now: number): void {
   const currentCamera = camera
   if (
     disposed
-    || paused
+    || worldState?.isPaused === true
     || currentCamera === null
     || activeInput === null
     || activeWriter === null
@@ -395,38 +396,17 @@ function animate(now: number): void {
 }
 
 function openPause(): void {
-  if (paused || camera === null || input === null || pauseMenu === null) return
-  paused = true
-  freeActive = false
-  input.suspend()
+  const activeWorldState = worldState
+  if (activeWorldState === null || !activeWorldState.pause()) return
   cancelAnimationFrame(animationFrame)
   animationFrame = 0
-  pauseMenu.show(worldName.textContent ?? 'Orchard')
-  mirrorControls()
 }
 
 function resumePause(): void {
-  const activeInput = input
-  const activeCamera = camera
-  if (!paused || activeInput === null || activeCamera === null) return
-  pauseMenu?.hide()
-  paused = false
-  if (ledger?.isOpen === true) {
-    previousFrame = performance.now()
-    animationFrame = requestAnimationFrame(animate)
-    mirrorControls()
-    return
-  }
-  activeInput.resume()
+  const activeWorldState = worldState
+  if (activeWorldState === null || !activeWorldState.resume()) return
   previousFrame = performance.now()
   animationFrame = requestAnimationFrame(animate)
-  if (activeCamera.mode === 'free') {
-    void activeInput.engage().catch(() => {
-      freeActive = false
-      mirrorControls()
-    })
-  }
-  mirrorControls()
 }
 
 async function refreshSlots(): Promise<void> {
@@ -447,7 +427,7 @@ async function refreshSlots(): Promise<void> {
 
 async function returnToMainMenu(): Promise<void> {
   const activeWriter = writer
-  if (!paused || activeWriter === null) return
+  if (worldState?.isPaused !== true || activeWriter === null) return
   await activeWriter.dispose()
   cancelAnimationFrame(animationFrame)
   animationFrame = 0
@@ -466,8 +446,8 @@ async function returnToMainMenu(): Promise<void> {
   tools = null
   tutorial = null
   writer = null
+  worldState = null
   freeActive = false
-  paused = false
   pauseMenu?.hide()
   startLifecycle.returnToMenu()
   start.hidden = false
@@ -488,7 +468,7 @@ async function returnToMainMenu(): Promise<void> {
 
 async function quitFromPause(): Promise<void> {
   const activeWriter = writer
-  if (!paused || activeWriter === null) return
+  if (worldState?.isPaused !== true || activeWriter === null) return
   await activeWriter.flushChecked()
   await quitApplication()
 }
@@ -738,32 +718,16 @@ async function startWorld(world: GameWorld): Promise<void> {
         freeSecondaryPress = null
         if (camera?.mode === 'orbit') camera.interaction.cancelPointer()
       },
-      stepBack() {
-        const activeTools = tools
-        if (activeTools !== null && activeTools.cutting !== null) {
-          activeTools.cancel()
-          mirrorToolInventory(activeTools)
-          setFeedback('Cutting cleared.')
-          mirrorControls()
-          return
-        }
-        if (camera?.mode === 'orbit') {
-          camera = exitOrbit(camera)
-          freeActive = false
-          const activeInput = input
-          if (activeInput !== null) {
-            void activeInput.engage().catch(() => {
-              freeActive = false
-              mirrorControls()
-            })
-          }
-        }
-        mirrorControls()
-      },
+      stepBack: () => { worldState?.stepBack() },
       pause: openPause,
       category(code) {
         const activeTools = tools
-        if (code !== '1' || paused || activeTools === null || ledger?.isOpen === true) return
+        if (
+          code !== '1'
+          || worldState?.isPaused === true
+          || activeTools === null
+          || ledger?.isOpen === true
+        ) return
         activeTools.cycle('1')
         mirrorToolInventory(activeTools)
       },
@@ -775,7 +739,7 @@ async function startWorld(world: GameWorld): Promise<void> {
         const activeCamera = camera
         const activeInput = input
         if (
-          paused
+          worldState?.isPaused === true
           || activeLedger === null
           || activeOrders === null
           || activeTools === null
@@ -818,6 +782,23 @@ async function startWorld(world: GameWorld): Promise<void> {
     releaseWriterStatus = nextReleaseWriterStatus
     ledger = nextLedger
     ledgerView = null
+    const activePauseMenu = pauseMenu
+    if (activePauseMenu === null) throw new Error('pause menu is unavailable')
+    worldState = new WorldStateController({
+      getCamera: () => camera ?? nextCamera,
+      setCamera: (next) => { camera = next },
+      tools: nextTools,
+      ledger: nextLedger,
+      input: nextInput,
+      pauseMenu: activePauseMenu,
+      worldName: () => worldName.textContent ?? 'Orchard',
+      setFreeActive: (active) => { freeActive = active },
+      cuttingCleared: () => {
+        mirrorToolInventory(nextTools)
+        setFeedback('Cutting cleared.')
+      },
+      stateChanged: mirrorControls,
+    })
     nextLedger.hide()
     start.hidden = true
     hud.hidden = false
@@ -835,6 +816,7 @@ async function startWorld(world: GameWorld): Promise<void> {
     previousFrame = performance.now()
     animationFrame = requestAnimationFrame(animate)
   } catch (error) {
+    worldState = null
     nextLedger?.dispose()
     nextInput?.dispose()
     nextReleaseWriterStatus()
@@ -912,6 +894,7 @@ window.addEventListener('pagehide', () => {
   orders = null
   tools = null
   tutorial = null
+  worldState = null
   pauseMenu?.dispose()
   pauseMenu = null
   releaseWriterStatus()
