@@ -18,12 +18,36 @@ export type SettingsController = {
 export type DeveloperToolsSettingPorts = {
   readonly persist: (enabled: boolean) => void
   readonly setDeveloperMode: (enabled: boolean) => void
-  readonly hideOrderEditor: () => void
-  readonly hideTutorialEditor: () => void
+  readonly hideForegroundEditors: () => void
   readonly clearForegroundEditor: () => void
   readonly renderTutorial: () => void
   readonly refreshVisibleLedger: () => void
   readonly mirrorRuntimeState: () => void
+}
+
+type HideableEditor = { hide(): void }
+
+export type DeveloperToolsRuntimePorts = Omit<
+  DeveloperToolsSettingPorts,
+  'hideForegroundEditors'
+> & {
+  readonly orderEditor: () => HideableEditor | null
+  readonly tutorialEditor: () => HideableEditor | null
+  readonly toolEditor: () => HideableEditor | null
+}
+
+export function developerToolsSettingPorts(
+  ports: DeveloperToolsRuntimePorts,
+): DeveloperToolsSettingPorts {
+  const { orderEditor, tutorialEditor, toolEditor, ...settingPorts } = ports
+  return {
+    ...settingPorts,
+    hideForegroundEditors: () => {
+      orderEditor()?.hide()
+      tutorialEditor()?.hide()
+      toolEditor()?.hide()
+    },
+  }
 }
 
 export function applyDeveloperToolsSetting(
@@ -33,8 +57,7 @@ export function applyDeveloperToolsSetting(
   ports.persist(enabled)
   if (!enabled) {
     ports.setDeveloperMode(false)
-    ports.hideOrderEditor()
-    ports.hideTutorialEditor()
+    ports.hideForegroundEditors()
     ports.clearForegroundEditor()
   }
   ports.renderTutorial()

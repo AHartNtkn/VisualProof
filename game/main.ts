@@ -55,12 +55,14 @@ import { DeveloperPreferences } from './preferences'
 import { quitApplication } from './quit'
 import {
   applyDeveloperToolsSetting,
+  developerToolsSettingPorts,
   mountSettings,
   type SettingsController,
 } from './settings'
 import { mountTutorialCard, type TutorialCardController } from './tutorial-card'
 import { mountTutorialEditor, type TutorialEditorController } from './tutorial-editor'
 import { mountToolEditor, type ToolEditorController } from './tool-editor'
+import { acquireToolForLedger } from './tool-acquisition'
 import { enqueueTutorialCommit } from './tutorial-progression'
 import { WorldStateController } from './world-state'
 import { commitWorldShutdown } from './world-lifecycle'
@@ -318,12 +320,17 @@ function acquireLedgerTool(toolId: ToolId): void {
   const activeWriter = writer
   if (activeTools === null || activeOrders === null || activeWriter === null) return
   try {
-    activeTools.acquire(toolId, activeOrders.progress.reputation)
+    const acquisitionFeedback = acquireToolForLedger({
+      toolId,
+      tools: activeTools,
+      reputation: activeOrders.progress.reputation,
+      currentContent: () => openingToolContent.current,
+    })
     activeWriter.acquireTool(toolId)
     mirrorToolInventory(activeTools)
     refreshVisibleLedger()
     observeTutorial({ kind: 'tool-acquired', toolId })
-    setFeedback(`Acquired ${openingToolContent.current.definition(toolId).name}.`)
+    setFeedback(acquisitionFeedback)
   } catch (error) {
     setError(`Tool acquisition failed: ${message(error)}`)
   }
@@ -1150,19 +1157,17 @@ settings = mountSettings(settingsRoot, {
     }
   },
   setDeveloperToolsEnabled(enabled) {
-    applyDeveloperToolsSetting(enabled, {
+    applyDeveloperToolsSetting(enabled, developerToolsSettingPorts({
       persist: (value) => { preferences.setDeveloperToolsEnabled(value) },
       setDeveloperMode: (value) => { developerMode = value },
-      hideOrderEditor: () => { orderEditor?.hide() },
-      hideTutorialEditor: () => {
-        tutorialEditor?.hide()
-        toolEditor?.hide()
-      },
+      orderEditor: () => orderEditor,
+      tutorialEditor: () => tutorialEditor,
+      toolEditor: () => toolEditor,
       clearForegroundEditor: () => { editorState = { kind: 'closed' } },
       renderTutorial,
       refreshVisibleLedger,
       mirrorRuntimeState,
-    })
+    }))
   },
   back: returnToPauseFromSettings,
 })

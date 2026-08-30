@@ -431,8 +431,10 @@ describe('tutorial editor controller', () => {
       setDeveloperToolsEnabled: (enabled) => applyDeveloperToolsSetting(enabled, {
         persist: (value) => { transitionCalls.push(`persist:${value}`) },
         setDeveloperMode: (value) => { developerMode = value },
-        hideOrderEditor: () => { transitionCalls.push('hide-order') },
-        hideTutorialEditor: () => { h.controller.hide() },
+        hideForegroundEditors: () => {
+          transitionCalls.push('hide-foreground')
+          h.controller.hide()
+        },
         clearForegroundEditor: () => { foreground = 'closed' },
         renderTutorial: renderCard,
         refreshVisibleLedger: () => { transitionCalls.push('refresh-ledger') },
@@ -451,7 +453,7 @@ describe('tutorial editor controller', () => {
     expect(world.isPaused).toBe(true)
     expect(pauseVisible).toBe(true)
     expect(transitionCalls).toEqual([
-      'persist:false', 'hide-order', 'refresh-ledger', 'mirror-runtime',
+      'persist:false', 'hide-foreground', 'refresh-ledger', 'mirror-runtime',
     ])
 
     world.resume()

@@ -75,26 +75,35 @@ describe('temporary tool selector', () => {
     inventory.cycle('1', 100)
     live.publish(decodeToolContent(live.current.definitions.map((definition) => ({
       ...definition,
-      name: definition.id === 'double-cut' ? 'Renamed Double Cut' : definition.name,
+      name: definition.id === 'double-cut' ? 'Published selector copy' : definition.name,
     }))))
 
     selector.render(inventory, 100)
 
     const selected = descendants(root).find(({ dataset }) => dataset['selected'] === 'true')
-    expect(selected?.textContent).toBe('Renamed Double Cut')
+    expect(selected?.textContent).toBe('Published selector copy')
   })
   it('is empty when expired and otherwise shows the category and every acquired label once', () => {
     // Catches a permanent selected-tool HUD or acquired tools disappearing from the temporary reveal.
     const documentTarget = new TestDocument()
     const root = documentTarget.createElement()
+    const content = decodeToolContent(openingToolContent.current.definitions.map((definition) => ({
+      ...definition,
+      name: `Selector ${definition.id}`,
+      description: `Description for ${definition.id}.`,
+    })))
     const inventory = new ToolInventory(new Set(['sprout-spawner', 'double-cut', 'iteration']), () => 100)
-    const selector = mountToolSelector(root as unknown as HTMLElement)
+    const selector = mountToolSelector(root as unknown as HTMLElement, () => content)
     inventory.cycle('1', 100)
 
     selector.render(inventory, 101)
     const rows = descendants(root).filter(({ dataset }) => Object.hasOwn(dataset, 'toolId'))
     expect(root.children[0]?.textContent).toBe('1')
-    expect(rows.map(({ textContent }) => textContent)).toEqual(['Sprout Spawner', 'Double Cut', 'Iteration'])
+    expect(rows.map(({ textContent }) => textContent)).toEqual([
+      'Selector sprout-spawner',
+      'Selector double-cut',
+      'Selector iteration',
+    ])
     expect(rows.filter(({ dataset }) => dataset['selected'] === 'true')).toHaveLength(1)
     expect(rows.find(({ dataset }) => dataset['selected'] === 'true')?.dataset['toolId']).toBe('double-cut')
 
@@ -170,15 +179,29 @@ describe('temporary tool selector', () => {
       const load = (path: string): Promise<Record<string, any>> => (
         window.eval(`import(${JSON.stringify(`${base}${path}`)})`) as Promise<Record<string, any>>
       )
-      const [{ mountToolSelector, renderHeldToolModel }, { ToolInventory, TOOL_CATALOG }] = await Promise.all([
+      const [
+        { mountToolSelector, renderHeldToolModel },
+        { ToolInventory, TOOL_CATALOG },
+        { decodeToolContent, openingToolContent },
+      ] = await Promise.all([
         load('game/tool-selector.ts'),
         load('src/game/tools.ts'),
+        load('src/game/tools/content.ts'),
       ])
       const selectorRoot = document.querySelector<HTMLElement>('#selector')!
       const heldRoot = document.querySelector<HTMLElement>('#held')!
       const inventory = new ToolInventory(new Set(TOOL_CATALOG.map(({ id }: { id: string }) => id)), () => 100)
       inventory.cycle('1', 100)
-      const selector = mountToolSelector(selectorRoot)
+      const content = decodeToolContent(openingToolContent.current.definitions.map((definition: {
+        id: string
+        name: string
+        description: string
+      }) => ({
+        ...definition,
+        name: `Visual ${definition.id}`,
+        description: `Visual description for ${definition.id}.`,
+      })))
+      const selector = mountToolSelector(selectorRoot, () => content)
       selector.render(inventory, 101)
       const rows = [...selectorRoot.querySelectorAll<HTMLElement>('[data-tool-id]')]
       const held = heldRoot.querySelector<HTMLElement>('[data-held-tool-silhouette]')!
@@ -201,6 +224,7 @@ describe('temporary tool selector', () => {
         return {
           id,
           label: row.innerText,
+          expectedLabel: content.definition(id).name,
           expectedColor,
           rowColor: visibleColor(row, silhouette, 'row'),
           heldColor: visibleColor(held, silhouette, 'held'),
@@ -212,7 +236,9 @@ describe('temporary tool selector', () => {
       return result
     }, baseUrl)
 
-    expect(presentations.map(({ label }: { label: string }) => label)).toEqual(TOOL_CATALOG.map(({ label }) => label))
+    expect(presentations.map(({ label }: { label: string }) => label)).toEqual(
+      presentations.map(({ expectedLabel }: { expectedLabel: string }) => expectedLabel),
+    )
     for (const presentation of presentations) {
       expect(presentation.rowColor).toBe(presentation.expectedColor)
       expect(presentation.heldColor).toBe(presentation.expectedColor)

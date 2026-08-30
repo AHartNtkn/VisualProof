@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { attachWorldInput } from '../../game/input'
+import { mountLedger, type LedgerState } from '../../game/ledger'
+import {
+  applyDeveloperToolsSetting,
+  developerToolsSettingPorts,
+  mountSettings,
+} from '../../game/settings'
 import { mountToolEditor } from '../../game/tool-editor'
+import { WorldStateController } from '../../game/world-state'
+import { initialCameraState } from '../../src/game/camera'
+import type { GameProgress } from '../../src/game/model'
+import { openingOrderCatalog } from '../../src/game/orders/catalog'
+import { ToolInventory } from '../../src/game/tools'
 import {
   decodeToolContent,
   LiveToolContent,
@@ -12,11 +23,19 @@ class TestElement extends EventTarget {
   hidden = false
   value = ''
   textContent = ''
+  className = ''
+  type = ''
+  ariaPressed = 'false'
+  tabIndex = -1
+  checked = false
+  width = 240
+  height = 150
   readOnly = false
   isContentEditable = false
   parent: EventTarget | null = null
   readonly dataset: Record<string, string> = {}
   readonly children: TestElement[] = []
+  readonly style = { setProperty: (_name: string, _value: string): void => {} }
 
   constructor(readonly ownerDocument: TestDocument, readonly tagName: string) { super() }
 
@@ -30,6 +49,12 @@ class TestElement extends EventTarget {
   append(...children: TestElement[]): void {
     for (const child of children) child.parent = this
     this.children.push(...children)
+  }
+
+  replaceChildren(...children: TestElement[]): void {
+    for (const child of this.children) child.parent = null
+    this.children.splice(0, this.children.length)
+    this.append(...children)
   }
 
   contains(target: EventTarget | null): boolean {
@@ -78,12 +103,28 @@ function element(documentTarget: TestDocument, dataName: string, tagName = 'div'
   return target
 }
 
-function revision(name = 'Iteration', description = 'Duplicate a cutting.'): ToolContentRevision {
+function revision(
+  name = 'Synthetic iteration name',
+  description = 'Synthetic iteration description.',
+): ToolContentRevision {
   return decodeToolContent(openingToolContent.current.definitions.map((definition) => ({
     ...definition,
-    name: definition.id === 'iteration' ? name : definition.name,
-    description: definition.id === 'iteration' ? description : definition.description,
+    name: definition.id === 'iteration' ? name : `Synthetic ${definition.id}`,
+    description: definition.id === 'iteration'
+      ? description
+      : `Synthetic description for ${definition.id}.`,
   })))
+}
+
+function descendants(root: TestElement): readonly TestElement[] {
+  return root.children.flatMap((child) => [child, ...descendants(child)])
+}
+
+function byData(root: TestElement, key: string, value?: string): readonly TestElement[] {
+  return descendants(root).filter((candidate) => (
+    Object.hasOwn(candidate.dataset, key)
+    && (value === undefined || candidate.dataset[key] === value)
+  ))
 }
 
 type Deferred = { promise: Promise<void>; resolve(): void; reject(error: Error): void }
@@ -136,14 +177,15 @@ async function settle(): Promise<void> { await Promise.resolve(); await Promise.
 describe('tool editor controller', () => {
   it('shows immutable tool identity and publishes one complete edited revision', async () => {
     // Catches editable identity or a detached partial update replacing the whole content authority.
-    const h = harness()
+    const initial = revision()
+    const h = harness(initial)
     h.controller.edit(h.live.current.definition('iteration'))
     expect(h.id.value).toBe('iteration')
     expect(h.id.readOnly).toBe(true)
-    expect(h.name.value).toBe('Iteration')
-    expect(h.description.value).toBe('Duplicate a cutting.')
+    expect(h.name.value).toBe(initial.definition('iteration').name)
+    expect(h.description.value).toBe(initial.definition('iteration').description)
 
-    h.name.value = 'Iteration Loop'
+    h.name.value = 'Edited synthetic name'
     h.description.value = 'Copies a selected cutting.'
     submit(h.form)
     await settle()
@@ -151,7 +193,7 @@ describe('tool editor controller', () => {
     expect(h.saved).toHaveLength(1)
     expect(h.saved[0]?.definitions).toHaveLength(openingToolContent.current.definitions.length)
     expect(h.saved[0]?.definition('iteration')).toEqual({
-      id: 'iteration', name: 'Iteration Loop', description: 'Copies a selected cutting.',
+      id: 'iteration', name: 'Edited synthetic name', description: 'Copies a selected cutting.',
     })
     expect(h.controller.isOpen).toBe(false)
   })
@@ -236,5 +278,106 @@ describe('tool editor controller', () => {
     expect(h.controller.isOpen).toBe(true)
     input.resume()
     expect(h.name.value).toBe('draft behind Pause')
+  })
+
+  it('shuts down a foreground tool editor without releasing Pause or the open ledger', () => {
+    // Catches Settings clearing only tutorial/order editors or reviving background world input.
+    const h = harness()
+    const ledgerRoot = element(h.documentTarget, 'ledger', 'section')
+    ledgerRoot.hidden = true
+    const primary = element(h.documentTarget, 'ledgerPrimaryTabs', 'nav')
+    const context = element(h.documentTarget, 'ledgerContextTabs', 'nav')
+    const content = element(h.documentTarget, 'ledgerContent')
+    ledgerRoot.append(primary, context, content)
+    const ledger = mountLedger(ledgerRoot as unknown as HTMLElement, {
+      acquireTool: () => {}, acceptOrder: () => {}, abandonOrder: () => {},
+      editOrder: () => {}, editTool: () => {}, createOrder: () => {},
+    })
+    const progress: GameProgress = {
+      reputation: 0,
+      orders: new Map(openingOrderCatalog.current.definitions.map(({ id }) => [
+        id,
+        { kind: 'pending' as const },
+      ])),
+      tutorialsEnabled: false,
+      completedTutorialMilestones: new Set(),
+      acquiredToolIds: new Set(['sprout-spawner']),
+    }
+    const tools = new ToolInventory(progress.acquiredToolIds)
+    let developerMode = true
+    let foreground: 'closed' | 'tool' = 'tool'
+    const ledgerState = (): LedgerState => ({
+      catalog: openingOrderCatalog.current,
+      toolContent: h.live.current,
+      progress,
+      tools,
+      tutorialCheck: () => true,
+      developerMode,
+      view: { eye: { x: 0, y: 1.7, z: 5 }, forward: { x: 0, y: 0, z: -1 } },
+    })
+    ledger.show(ledgerState())
+    h.controller.edit(h.live.current.definition('double-cut'))
+    expect(byData(content, 'toolEditable')).toHaveLength(2)
+
+    let pauseVisible = false
+    const inputCalls: string[] = []
+    const camera = initialCameraState({ position: { x: 0, y: 1.7, z: 8 }, yaw: 0, pitch: 0 })
+    const world = new WorldStateController({
+      getCamera: () => camera,
+      setCamera: () => {},
+      tools,
+      ledger,
+      foreground: { get isOpen() { return foreground !== 'closed' } },
+      input: {
+        suspend: () => { inputCalls.push('suspend') },
+        resume: () => { inputCalls.push('resume') },
+        engage: () => { inputCalls.push('engage'); return Promise.resolve() },
+      },
+      pauseMenu: {
+        show: () => { pauseVisible = true },
+        hide: () => { pauseVisible = false },
+      },
+      worldName: () => 'Tool Orchard',
+      setFreeActive: () => {}, cuttingCleared: () => {}, stateChanged: () => {},
+    })
+    world.pause()
+
+    const settingsRoot = element(h.documentTarget, 'settings', 'section')
+    settingsRoot.hidden = true
+    const tutorials = element(h.documentTarget, 'settingsTutorials', 'input')
+    const developerTools = element(h.documentTarget, 'settingsDeveloperTools', 'input')
+    const back = element(h.documentTarget, 'settingsBack', 'button')
+    settingsRoot.append(tutorials, developerTools, back)
+    const settings = mountSettings(settingsRoot as unknown as HTMLElement, {
+      setTutorialsEnabled: () => {},
+      setDeveloperToolsEnabled: (enabled) => applyDeveloperToolsSetting(
+        enabled,
+        developerToolsSettingPorts({
+          persist: () => {},
+          setDeveloperMode: (value) => { developerMode = value },
+          orderEditor: () => null,
+          tutorialEditor: () => null,
+          toolEditor: () => h.controller,
+          clearForegroundEditor: () => { foreground = 'closed' },
+          renderTutorial: () => {},
+          refreshVisibleLedger: () => { ledger.show(ledgerState()) },
+          mirrorRuntimeState: () => {},
+        }),
+      ),
+      back: () => {},
+    })
+    settings.show({ tutorialsEnabled: false, developerToolsEnabled: true })
+    developerTools.checked = false
+    developerTools.dispatchEvent(new Event('change'))
+
+    expect(h.controller.isOpen).toBe(false)
+    expect(foreground).toBe('closed')
+    expect(developerMode).toBe(false)
+    expect(world.isPaused).toBe(true)
+    expect(ledger.isOpen).toBe(true)
+    expect(pauseVisible).toBe(true)
+    expect(byData(content, 'toolEditable')).toHaveLength(0)
+    expect(byData(content, 'toolAction', 'acquire')).toHaveLength(2)
+    expect(inputCalls).toEqual(['suspend'])
   })
 })
