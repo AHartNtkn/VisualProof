@@ -44,6 +44,7 @@ export type TutorialCommit = {
 
 type TutorialMilestone = TutorialInstruction & {
   readonly prerequisites: readonly TutorialMilestoneId[]
+  readonly recognitionPrerequisites: readonly TutorialMilestoneId[]
   readonly matches: (event: TutorialEvent) => boolean
   readonly visible: boolean
 }
@@ -64,7 +65,13 @@ const milestones: readonly TutorialMilestone[] = [
     event.kind === 'tool-acquired' && event.toolId === 'double-cut'
   )),
   milestone('apply-double-cut', 'Apply Double Cut to a tree.', ['acquire-double-cut'], (event) => event.kind === 'double-cut-applied'),
-  milestone('double-cut-explained', 'Double Cut adds two nested layers at a leaf or from an intermediate branch.', ['apply-double-cut'], (event) => event.kind === 'ledger-opened'),
+  milestone(
+    'double-cut-explained',
+    'Double Cut adds two nested layers at a leaf or from an intermediate branch.',
+    ['apply-double-cut'],
+    (event) => event.kind === 'ledger-opened',
+    ['apply-double-cut'],
+  ),
   milestone('acquire-iteration', 'Acquire Iteration from the ledger.', ['double-cut-explained'], (event) => (
     event.kind === 'tool-acquired' && event.toolId === 'iteration'
   )),
@@ -99,7 +106,6 @@ export function orderTutorialGate(orderId: string): TutorialMilestoneId | null {
 
 export class TutorialSession {
   readonly #completed: Set<TutorialMilestoneId>
-  readonly #evidenced = new Set<TutorialMilestoneId>()
   #enabled: boolean
 
   public constructor(enabled = true, completed: Iterable<string> = []) {
@@ -120,7 +126,7 @@ export class TutorialSession {
   public get currentInstruction(): TutorialInstruction | null {
     if (!this.#enabled) return null
     const next = milestones.find(({ milestoneId, visible }) => visible && !this.#completed.has(milestoneId))
-    return next === undefined ? null : instruction(next)
+    return next === undefined || !this.prerequisitesMet(next) ? null : instruction(next)
   }
 
   public setEnabled(enabled: boolean): void {
@@ -132,47 +138,37 @@ export class TutorialSession {
   }
 
   public observe(event: TutorialEvent): TutorialCommit {
-    this.record(event)
-    return this.drainEvidence()
+    return this.commit(this.record([event]))
   }
 
   public reconcileDurableProgress(
     progress: Pick<GameProgress, 'acquiredToolIds' | 'orders'>,
   ): TutorialCommit {
+    const events: TutorialEvent[] = []
     for (const toolId of progress.acquiredToolIds) {
-      this.record({ kind: 'tool-acquired', toolId })
+      events.push({ kind: 'tool-acquired', toolId })
     }
     for (const [orderId, state] of progress.orders) {
-      if (state.kind === 'completed') this.record({ kind: 'order-completed', orderId })
+      if (state.kind === 'completed') events.push({ kind: 'order-completed', orderId })
     }
-    return this.drainEvidence()
+    return this.commit(this.record(events))
   }
 
-  private record(event: TutorialEvent): void {
-    for (const milestone of milestones) {
-      if (!this.#completed.has(milestone.milestoneId) && milestone.matches(event)) {
-        this.#evidenced.add(milestone.milestoneId)
-      }
-    }
-  }
-
-  private drainEvidence(): TutorialCommit {
+  private record(events: readonly TutorialEvent[]): readonly TutorialMilestoneId[] {
     const newlyCompleted: TutorialMilestoneId[] = []
-    let advanced = true
-    while (advanced) {
-      advanced = false
-      for (const milestone of milestones) {
-        if (
-          this.#completed.has(milestone.milestoneId)
-          || !this.#evidenced.has(milestone.milestoneId)
-          || !this.prerequisitesMet(milestone)
-        ) continue
-        this.#completed.add(milestone.milestoneId)
-        this.#evidenced.delete(milestone.milestoneId)
-        newlyCompleted.push(milestone.milestoneId)
-        advanced = true
-      }
+    for (const milestone of milestones) {
+      if (
+        this.#completed.has(milestone.milestoneId)
+        || !milestone.recognitionPrerequisites.every((prerequisite) => this.#completed.has(prerequisite))
+        || !events.some((event) => milestone.matches(event))
+      ) continue
+      this.#completed.add(milestone.milestoneId)
+      newlyCompleted.push(milestone.milestoneId)
     }
+    return newlyCompleted
+  }
+
+  private commit(newlyCompleted: readonly TutorialMilestoneId[]): TutorialCommit {
     return { newlyCompleted, instruction: this.currentInstruction }
   }
 
@@ -196,8 +192,9 @@ function milestone(
   text: string,
   prerequisites: readonly TutorialMilestoneId[],
   matches: (event: TutorialEvent) => boolean,
+  recognitionPrerequisites: readonly TutorialMilestoneId[] = [],
 ): TutorialMilestone {
-  return { milestoneId, text, prerequisites, matches, visible: true }
+  return { milestoneId, text, prerequisites, recognitionPrerequisites, matches, visible: true }
 }
 
 function silentMilestone(
@@ -205,7 +202,7 @@ function silentMilestone(
   prerequisites: readonly TutorialMilestoneId[],
   matches: (event: TutorialEvent) => boolean,
 ): TutorialMilestone {
-  return { milestoneId, text: '', prerequisites, matches, visible: false }
+  return { milestoneId, text: '', prerequisites, recognitionPrerequisites: [], matches, visible: false }
 }
 
 function instruction(milestone: TutorialInstruction): TutorialInstruction {

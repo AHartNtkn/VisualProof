@@ -52,31 +52,30 @@ describe('TutorialSession', () => {
     ] as const).every((milestoneId) => session.check(milestoneId))).toBe(true)
     expect(session.check('acquire-double-cut')).toBe(true)
     expect(session.completed.has('acquire-double-cut')).toBe(false)
+    expect(session.currentInstruction).toBeNull()
 
-    expect(observe(session, { kind: 'tool-acquired', toolId: 'double-cut' })).toEqual([])
-    expect(session.completed.has('acquire-double-cut')).toBe(false)
-
-    completeThroughSpawn(session)
-    expect(session.check('acquire-double-cut')).toBe(true)
+    expect(observe(session, { kind: 'tool-acquired', toolId: 'double-cut' })).toEqual([
+      'acquire-double-cut',
+    ])
     expect(session.completed.has('acquire-double-cut')).toBe(true)
+
     session.setEnabled(true)
-    expect(session.currentInstruction?.milestoneId).not.toBe('acquire-double-cut')
+    expect(session.currentInstruction?.milestoneId).toBe('move')
   })
 
-  it('retains early committed evidence and cascades it when prerequisites later complete', () => {
-    // Catches unchecked creation or early ungated acquisition erasing legitimate tutorial progress.
+  it('completes repeatable accomplishments immediately while presenting the first unfinished step', () => {
     const session = new TutorialSession(false)
 
-    expect(observe(session, { kind: 'tool-acquired', toolId: 'double-cut' })).toEqual([])
-    expect(session.completed.has('acquire-double-cut')).toBe(false)
+    expect(observe(session, { kind: 'sprout-spawned', blankTreeCount: 3 })).toEqual([
+      'spawn-two-sprouts',
+    ])
+    expect(observe(session, { kind: 'double-cut-applied' })).toEqual(['apply-double-cut'])
+    expect(observe(session, { kind: 'nonblank-tree-duplicated' })).toEqual([
+      'duplicate-nonblank',
+    ])
     session.setEnabled(true)
-    expect(session.completed.has('acquire-double-cut')).toBe(false)
 
-    const finalCommit = completeThroughSpawn(session)
-
-    expect(finalCommit).toEqual(['spawn-two-sprouts', 'acquire-double-cut'])
-    expect(session.completed.has('acquire-double-cut')).toBe(true)
-    expect(session.currentInstruction?.milestoneId).toBe('apply-double-cut')
+    expect(session.currentInstruction?.milestoneId).toBe('move')
   })
 
   it('reconstructs early acquired-tool evidence from durable progress without repeating acquisition', () => {
@@ -92,7 +91,9 @@ describe('TutorialSession', () => {
       'exit-orbit',
     ] as const
     const beforeSave = new TutorialSession(false, completedBeforeSpawn)
-    expect(observe(beforeSave, { kind: 'tool-acquired', toolId: 'double-cut' })).toEqual([])
+    expect(observe(beforeSave, { kind: 'tool-acquired', toolId: 'double-cut' })).toEqual([
+      'acquire-double-cut',
+    ])
 
     const reconstructed = new TutorialSession(false, beforeSave.completed)
     expect(reconstructed.reconcileDurableProgress({
@@ -108,7 +109,7 @@ describe('TutorialSession', () => {
     reconstructed.setEnabled(true)
     const commit = observe(reconstructed, { kind: 'sprout-spawned', blankTreeCount: 3 })
 
-    expect(commit).toEqual(['spawn-two-sprouts', 'acquire-double-cut'])
+    expect(commit).toEqual(['spawn-two-sprouts'])
     expect(reconstructed.completed.has('acquire-double-cut')).toBe(true)
   })
 
@@ -130,8 +131,12 @@ describe('TutorialSession', () => {
       'acquire-iteration',
     ] as const
     const beforeSave = new TutorialSession(false, completedThroughIteration)
-    expect(observe(beforeSave, { kind: 'order-completed', orderId: 'blank-sprout' })).toEqual([])
-    expect(observe(beforeSave, { kind: 'order-completed', orderId: 'single-double-cut' })).toEqual([])
+    expect(observe(beforeSave, { kind: 'order-completed', orderId: 'blank-sprout' })).toEqual([
+      'complete-blank-order',
+    ])
+    expect(observe(beforeSave, { kind: 'order-completed', orderId: 'single-double-cut' })).toEqual([
+      'complete-single-double-cut-order',
+    ])
 
     const reconstructed = new TutorialSession(false, beforeSave.completed)
     expect(reconstructed.reconcileDurableProgress({
@@ -148,15 +153,11 @@ describe('TutorialSession', () => {
     reconstructed.setEnabled(true)
     const commit = observe(reconstructed, { kind: 'nonblank-tree-duplicated' })
 
-    expect(commit).toEqual([
-      'duplicate-nonblank',
-      'complete-blank-order',
-      'complete-single-double-cut-order',
-    ])
+    expect(commit).toEqual(['duplicate-nonblank'])
+    expect(reconstructed.currentInstruction).toBeNull()
   })
 
-  it('does not infer repeatable tutorial actions from durable tools and orders alone', () => {
-    // Catches reconstruction treating unrelated durable state as proof of camera or tree actions.
+  it('reconstructs irreversible progress without inferring repeatable actions', () => {
     const session = new TutorialSession(false)
 
     expect(session.reconcileDurableProgress({
@@ -167,8 +168,27 @@ describe('TutorialSession', () => {
         ['irregular-double-cut-a', { kind: 'completed' }],
         ['irregular-double-cut-b', { kind: 'completed' }],
       ]),
-    }).newlyCompleted).toEqual([])
-    expect([...session.completed]).toEqual([])
+    }).newlyCompleted).toEqual([
+      'acquire-double-cut',
+      'acquire-iteration',
+      'complete-blank-order',
+      'complete-single-double-cut-order',
+      'complete-irregular-double-cut-a-order',
+      'complete-irregular-double-cut-b-order',
+    ])
+    expect(session.completed.has('spawn-two-sprouts')).toBe(false)
+    expect(session.completed.has('apply-double-cut')).toBe(false)
+    expect(session.completed.has('double-cut-explained')).toBe(false)
+    expect(session.completed.has('duplicate-nonblank')).toBe(false)
+  })
+
+  it('does not treat a ledger visit before Double Cut as its explanation', () => {
+    const session = new TutorialSession(false)
+
+    expect(observe(session, { kind: 'ledger-opened' })).toEqual([])
+    expect(session.completed.has('double-cut-explained')).toBe(false)
+    expect(observe(session, { kind: 'double-cut-applied' })).toEqual(['apply-double-cut'])
+    expect(observe(session, { kind: 'ledger-opened' })).toEqual(['double-cut-explained'])
   })
 
   it('hides the card after the blank order while completing silent orders in either final-order sequence', () => {
@@ -189,10 +209,11 @@ describe('TutorialSession', () => {
       const session = new TutorialSession()
       completeThroughDuplication(session)
 
-      expect(observe(session, { kind: 'order-completed', orderId: 'single-double-cut' })).toEqual([])
+      expect(observe(session, { kind: 'order-completed', orderId: 'single-double-cut' })).toEqual([
+        'complete-single-double-cut-order',
+      ])
       expect(observe(session, { kind: 'order-completed', orderId: 'blank-sprout' })).toEqual([
         'complete-blank-order',
-        'complete-single-double-cut-order',
       ])
       expect(session.currentInstruction).toBeNull()
       expect(observe(session, { kind: 'order-completed', orderId: first })).toEqual([firstMilestone])

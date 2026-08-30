@@ -15,7 +15,7 @@ The native save-evidence reader now applies SQLite's five-second busy timeout to
 
 ## Automated evidence
 
-- `npm test` — PASS: 211 test files, 1,542 tests.
+- `npm test` — PASS: 211 test files, 1,543 tests.
 - `npm run typecheck` — PASS.
 - `cargo test --manifest-path src-tauri/Cargo.toml` — PASS: 37 Rust tests plus empty main/doc-test targets.
 - `npm run build:game` — PASS: 158 modules transformed and the production web game built.
@@ -51,7 +51,7 @@ The regression spawns the installed Vite CLI with the same `vite game --host ...
 - `npm run typecheck` — PASS.
 - `npm run build:game` — PASS: 158 modules transformed, including the current catalog starting bytes.
 - `cargo test --manifest-path src-tauri/Cargo.toml` — PASS: 37 Rust tests plus empty main/doc-test targets.
-- `npm test` — PASS after the direct exercise restored the catalog: 211 test files, 1,542 tests, including the watcher regression and exact four-order assertions.
+- `npm test` — PASS after the direct exercise restored the catalog: 211 test files, 1,543 tests, including the watcher regression and exact four-order assertions.
 - `./scripts/check-game-desktop.sh e2e` — PASS after the read-only SQLite connection adopted the busy timeout: controls, all three order-loop phases, tutorial progression, developer orders, and exact content-byte comparison.
 - Direct `npm run dev:game` rerun — PASS: the saved edit remained in the active ledger without a reload, and the terminal emitted no Vite page-reload event for the content write.
 
@@ -65,7 +65,22 @@ The native regression completes and applies Double Cut, disables tutorials, open
 
 - Native RED (`./scripts/check-game-desktop.sh e2e`) — expected failure before the durable gate: after re-enabling tutorials, the composed scenario received the Double Cut explanation instead of Iteration acquisition.
 - Native GREEN (same command) — PASS: controls, all three order-loop phases, the amended tutorial progression, developer orders, and exact content-byte restoration.
-- `npm test` — PASS: 211 test files, 1,542 tests.
+- `npm test` — PASS: 211 test files, 1,543 tests.
 - `npm run typecheck` — PASS.
 - `npm run build:game` — PASS: 158 modules transformed.
 - `git diff -- game/content/orders.json` — empty after the native matrix.
+
+## Immediate disabled-action persistence follow-up
+
+Tutorial completion now records a genuinely matched milestone immediately, independently of the ordered presentation prerequisites. Re-enabling tutorials still presents the first visible incomplete milestone whose prerequisites are complete, so ahead actions remain durable without reordering the teaching flow. The Double Cut ledger explanation has its own recognition prerequisite, which keeps a ledger visit before `apply-double-cut` inert, and disabled tutorial gates remain pass-only until a real matching action occurs.
+
+The persistence regression performs a repeatable nonblank duplication while tutorials are disabled, commits `duplicate-nonblank` through the real save writer, reconstructs a new tutorial session from those saved milestone IDs, and verifies both that the accomplishment survives and that presentation resumes at the earlier unfinished `move` instruction. Unit coverage also exercises ahead sprout creation and Double Cut application, irreversible load reconstruction, silent order timing, and the premature-ledger failure path.
+
+- Focused RED (`npx vitest run --config vitest.config.ts tests/game/tutorial.test.ts tests/game/tutorial-progression.test.ts`) — 8 failures demonstrated prerequisite-buffered completion and the save/reload loss.
+- Focused GREEN (same command) — PASS: 2 files, 10 tests.
+- `npm test` — PASS: 211 test files, 1,543 tests.
+- `npm run typecheck` — PASS.
+- `npm run build:game` — PASS: 158 modules transformed.
+- `./scripts/check-game-desktop.sh e2e` — PASS: controls, all three order-loop phases, tutorial progression, developer orders, and exact content-byte restoration.
+
+This follow-up is supported by automated unit, persistence, build, and native scenario evidence; no direct production-window exercise is claimed for it.

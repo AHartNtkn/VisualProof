@@ -20,33 +20,21 @@ function savePort(completed: string[]) {
 }
 
 describe('tutorial progression persistence', () => {
-  it('persists a reconstructed acquisition when its prerequisite later completes', async () => {
-    // Catches reconstruction completing in memory without entering the active save writer.
-    const completedBeforeSpawn = [
-      'move',
-      'look',
-      'ascend',
-      'descend',
-      'sprint',
-      'select-tree',
-      'move-orbit',
-      'exit-orbit',
-    ] as const
-    const session = new TutorialSession(false, completedBeforeSpawn)
-    session.reconcileDurableProgress({
-      acquiredToolIds: new Set(['sprout-spawner', 'double-cut']),
-      orders: new Map(),
-    })
+  it('persists a repeatable disabled-ahead action across save and reload', async () => {
+    const session = new TutorialSession(false)
     const completedWrites: string[] = []
     const writer = new SaveWriter('slot-a', savePort(completedWrites))
 
     enqueueTutorialCommit(
       writer,
-      session.observe({ kind: 'sprout-spawned', blankTreeCount: 3 }),
+      session.observe({ kind: 'nonblank-tree-duplicated' }),
     )
     await writer.flushChecked()
 
-    expect(completedWrites).toEqual(['spawn-two-sprouts', 'acquire-double-cut'])
+    expect(completedWrites).toEqual(['duplicate-nonblank'])
+    const reloaded = new TutorialSession(true, completedWrites)
+    expect(reloaded.completed.has('duplicate-nonblank')).toBe(true)
+    expect(reloaded.currentInstruction?.milestoneId).toBe('move')
     await writer.dispose()
   })
 })
