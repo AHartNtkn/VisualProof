@@ -201,6 +201,39 @@
         </form>
       </section>
 
+      <section
+        class="tool-editor"
+        data-tool-editor
+        hidden
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tool-editor-title"
+      >
+        <header class="tool-editor-heading">
+          <p class="eyebrow">Developer tools</p>
+          <h2 id="tool-editor-title">Edit tool content</h2>
+        </header>
+        <form class="tool-editor-form" data-tool-editor-form>
+          <label>
+            <span>Tool ID</span>
+            <input type="text" readonly data-tool-editor-id>
+          </label>
+          <label>
+            <span>Name</span>
+            <input type="text" required data-tool-editor-name>
+          </label>
+          <label>
+            <span>Description</span>
+            <textarea rows="6" required data-tool-editor-description></textarea>
+          </label>
+          <p class="tool-editor-error" data-tool-editor-error role="alert"></p>
+          <div class="tool-editor-actions">
+            <button type="button" data-tool-editor-cancel>Cancel</button>
+            <button class="tool-editor-save" type="submit" data-tool-editor-save>Save changes</button>
+          </div>
+        </form>
+      </section>
+
     </main>
     <script type="module" src="/main.ts"></script>
   </body>

@@ -4,6 +4,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createServer, type ViteDevServer } from 'vite'
 import { mountToolSelector, renderHeldToolModel } from '../../game/tool-selector'
 import { TOOL_CATALOG, ToolInventory } from '../../src/game/tools'
+import {
+  decodeToolContent,
+  LiveToolContent,
+  openingToolContent,
+} from '../../src/game/tools/content'
 
 const repositoryRoot = resolve(import.meta.dirname, '../..')
 let browser: Browser | undefined
@@ -60,6 +65,24 @@ function descendants(root: TestElement): readonly TestElement[] {
 }
 
 describe('temporary tool selector', () => {
+  it('resolves labels from the current live tool content on every render', () => {
+    // Catches a mounted selector retaining copy from before a successful permanent publication.
+    const documentTarget = new TestDocument()
+    const root = documentTarget.createElement()
+    const live = new LiveToolContent(openingToolContent.current)
+    const inventory = new ToolInventory(new Set(['sprout-spawner', 'double-cut', 'iteration']), () => 100)
+    const selector = mountToolSelector(root as unknown as HTMLElement, () => live.current)
+    inventory.cycle('1', 100)
+    live.publish(decodeToolContent(live.current.definitions.map((definition) => ({
+      ...definition,
+      name: definition.id === 'double-cut' ? 'Renamed Double Cut' : definition.name,
+    }))))
+
+    selector.render(inventory, 100)
+
+    const selected = descendants(root).find(({ dataset }) => dataset['selected'] === 'true')
+    expect(selected?.textContent).toBe('Renamed Double Cut')
+  })
   it('is empty when expired and otherwise shows the category and every acquired label once', () => {
     // Catches a permanent selected-tool HUD or acquired tools disappearing from the temporary reveal.
     const documentTarget = new TestDocument()

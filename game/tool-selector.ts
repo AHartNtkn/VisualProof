@@ -1,4 +1,5 @@
 import { TOOL_CATALOG, type ToolId, type ToolInventory } from '../src/game/tools'
+import { openingToolContent, type ToolContentRevision } from '../src/game/tools/content'
 
 export type ToolSelectorController = {
   render(inventory: ToolInventory, now: number): void
@@ -18,7 +19,10 @@ function applyToolMetadata(element: HTMLElement, toolId: ToolId): void {
   element.style.setProperty('--tool-color', definition.color)
 }
 
-export function mountToolSelector(root: HTMLElement): ToolSelectorController {
+export function mountToolSelector(
+  root: HTMLElement,
+  currentContent: () => ToolContentRevision = () => openingToolContent.current,
+): ToolSelectorController {
   return {
     render(inventory, now) {
       const selection = inventory.selectorAt(now)
@@ -33,12 +37,11 @@ export function mountToolSelector(root: HTMLElement): ToolSelectorController {
       const list = root.ownerDocument.createElement('div')
       list.className = 'tool-selector-list'
       for (const toolId of selection.acquired) {
-        const definition = definitionFor(toolId)
         const row = root.ownerDocument.createElement('div')
         row.className = 'tool-selector-row tool-silhouette'
         row.dataset['selected'] = String(toolId === selection.selected)
         applyToolMetadata(row, toolId)
-        row.textContent = definition.label
+        row.textContent = currentContent().definition(toolId).name
         list.append(row)
       }
       root.replaceChildren(category, list)

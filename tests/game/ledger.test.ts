@@ -3,6 +3,10 @@ import { mountLedger, type LedgerState } from '../../game/ledger'
 import { openingOrderCatalog, type OrderState } from '../../src/game/orders/catalog'
 import type { GameProgress } from '../../src/game/model'
 import { ToolInventory } from '../../src/game/tools'
+import {
+  decodeToolContent,
+  openingToolContent,
+} from '../../src/game/tools/content'
 
 class TestElement extends EventTarget {
   public textContent = ''
@@ -130,6 +134,7 @@ function harness(): {
     accepted: Array<{ orderId: string; view: typeof view }>
     abandoned: string[]
     edited: string[]
+    editedTools: string[]
     created: number
   }
   readonly controller: ReturnType<typeof mountLedger>
@@ -146,6 +151,7 @@ function harness(): {
     accepted: [] as Array<{ orderId: string; view: typeof view }>,
     abandoned: [] as string[],
     edited: [] as string[],
+    editedTools: [] as string[],
     created: 0,
   }
   const controller = mountLedger(root as unknown as HTMLElement, {
@@ -153,6 +159,7 @@ function harness(): {
     acceptOrder: (orderId, acceptedView) => calls.accepted.push({ orderId, view: acceptedView }),
     abandonOrder: (orderId) => calls.abandoned.push(orderId),
     editOrder: (orderId) => calls.edited.push(orderId),
+    editTool: (toolId) => calls.editedTools.push(toolId),
     createOrder: () => { calls.created += 1 },
   })
   return { root, primary, context, content, calls, controller }
@@ -162,6 +169,7 @@ function state(overrides: Partial<LedgerState> = {}): LedgerState {
   const gameProgress = progress()
   return {
     catalog: openingOrderCatalog.current,
+    toolContent: openingToolContent.current,
     progress: gameProgress,
     tools: new ToolInventory(gameProgress.acquiredToolIds),
     tutorialCheck: () => true,
@@ -184,6 +192,53 @@ function contextTab(root: TestElement, name: string): TestElement {
 }
 
 describe('ledger controller', () => {
+  it('renders current names and descriptions in Available and Acquired tool views', () => {
+    // Catches either tool view substituting mechanics copy or omitting authored descriptions.
+    const h = harness()
+    const content = decodeToolContent(openingToolContent.current.definitions.map((definition) => ({
+      ...definition,
+      name: `${definition.id} live name`,
+      description: `${definition.id} live description`,
+    })))
+    const gameProgress = progress({}, 0, ['sprout-spawner'])
+    h.controller.show(state({
+      toolContent: content,
+      progress: gameProgress,
+      tools: new ToolInventory(gameProgress.acquiredToolIds),
+    }))
+
+    const available = byData(h.content, 'toolId', 'double-cut')[0]!
+    expect(available.querySelector<HTMLElement>('[data-tool-name]')?.textContent)
+      .toBe('double-cut live name')
+    expect(available.querySelector<HTMLElement>('[data-tool-description]')?.textContent)
+      .toBe('double-cut live description')
+
+    click(contextTab(h.root, 'acquired'))
+    const acquired = byData(h.content, 'toolId', 'sprout-spawner')[0]!
+    expect(acquired.querySelector<HTMLElement>('[data-tool-name]')?.textContent)
+      .toBe('sprout-spawner live name')
+    expect(acquired.querySelector<HTMLElement>('[data-tool-description]')?.textContent)
+      .toBe('sprout-spawner live description')
+  })
+
+  it('opens tool editing from both developer tool views without acquiring', () => {
+    // Catches row clicks preserving the normal acquisition side effect in developer mode.
+    const h = harness()
+    const gameProgress = progress({}, 0, ['sprout-spawner'])
+    h.controller.show(state({
+      developerMode: true,
+      progress: gameProgress,
+      tools: new ToolInventory(gameProgress.acquiredToolIds),
+    }))
+
+    click(byData(h.content, 'toolId', 'double-cut')[0]!)
+    click(contextTab(h.root, 'acquired'))
+    click(byData(h.content, 'toolId', 'sprout-spawner')[0]!)
+
+    expect(h.calls.editedTools).toEqual(['double-cut', 'sprout-spawner'])
+    expect(h.calls.acquired).toEqual([])
+    expect(byData(h.content, 'toolAction', 'acquire')).toHaveLength(0)
+  })
   it('projects tool rows through ownership, capacity, and tutorial gates', () => {
     // Catches owned, over-capacity, or tutorial-locked tools leaking into Available.
     const h = harness()

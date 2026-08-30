@@ -2,6 +2,7 @@ import { availableOrderIds, type OrderCatalogRevision } from '../src/game/orders
 import type { GameProgress } from '../src/game/model'
 import { orderTutorialGate, toolTutorialGate, type TutorialMilestoneId } from '../src/game/tutorial'
 import { TOOL_CATALOG, type ToolId, type ToolInventory } from '../src/game/tools'
+import type { ToolContentRevision } from '../src/game/tools/content'
 import { renderDiagramPreview } from './diagram-preview'
 
 export type LedgerView = {
@@ -11,6 +12,7 @@ export type LedgerView = {
 
 export type LedgerState = {
   readonly catalog: OrderCatalogRevision
+  readonly toolContent: ToolContentRevision
   readonly progress: GameProgress
   readonly tools: ToolInventory
   readonly tutorialCheck: (milestone: TutorialMilestoneId) => boolean
@@ -23,6 +25,7 @@ export type LedgerActions = {
   readonly acceptOrder: (orderId: string, view: LedgerView) => void
   readonly abandonOrder: (orderId: string) => void
   readonly editOrder: (orderId: string) => void
+  readonly editTool: (toolId: ToolId) => void
   readonly createOrder: () => void
 }
 
@@ -121,6 +124,7 @@ export function mountLedger(root: HTMLElement, actions: LedgerActions): LedgerCo
         && state.progress.reputation >= definition.capacityRequired
         && gatePasses(toolTutorialGate(definition.id), state.tutorialCheck))
     const rows = definitions.map((definition) => {
+      const authored = state.toolContent.definition(definition.id)
       const row = root.ownerDocument.createElement('div')
       row.className = 'ledger-tool-row'
       row.dataset['toolId'] = definition.id
@@ -128,11 +132,28 @@ export function mountLedger(root: HTMLElement, actions: LedgerActions): LedgerCo
       silhouette.className = 'tool-silhouette ledger-tool-silhouette'
       silhouette.dataset['silhouette'] = definition.silhouette
       silhouette.style.setProperty('--tool-color', definition.color)
-      const label = root.ownerDocument.createElement('span')
-      label.className = 'ledger-tool-label'
-      label.textContent = definition.label
-      row.append(silhouette, label)
-      if (toolsTab === 'available') {
+      const copy = root.ownerDocument.createElement('span')
+      copy.className = 'ledger-tool-copy'
+      const name = root.ownerDocument.createElement('strong')
+      name.className = 'ledger-tool-label'
+      name.dataset['toolName'] = ''
+      name.textContent = authored.name
+      const description = root.ownerDocument.createElement('span')
+      description.className = 'ledger-tool-description'
+      description.dataset['toolDescription'] = ''
+      description.textContent = authored.description
+      copy.append(name, description)
+      row.append(silhouette, copy)
+      if (state.developerMode) {
+        row.dataset['toolEditable'] = 'true'
+        row.tabIndex = 0
+        listen(row, 'click', () => actions.editTool(definition.id), renderDisposers)
+        listen(row, 'keydown', ((event: KeyboardEvent): void => {
+          if (event.code !== 'Enter' && event.code !== 'Space') return
+          event.preventDefault()
+          actions.editTool(definition.id)
+        }) as EventListener, renderDisposers)
+      } else if (toolsTab === 'available') {
         const acquire = root.ownerDocument.createElement('button')
         acquire.type = 'button'
         acquire.dataset['toolAction'] = 'acquire'

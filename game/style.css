@@ -703,13 +703,36 @@ textarea:disabled {
   background: rgb(255 255 255 / 4%);
 }
 
+.ledger-tool-row[data-tool-editable="true"] {
+  cursor: pointer;
+}
+
+.ledger-tool-row[data-tool-editable="true"]:hover {
+  border-color: rgb(235 190 102 / 48%);
+  background: rgb(235 190 102 / 8%);
+}
+
+.ledger-tool-row[data-tool-editable="true"]:focus-visible {
+  outline: 2px solid #f3d495;
+  outline-offset: 2px;
+}
+
 .ledger-tool-silhouette {
   width: 26px;
   height: 26px;
 }
 
 .ledger-tool-label {
+  display: block;
   font: 600 15px Georgia, serif;
+}
+
+.ledger-tool-description {
+  display: block;
+  margin-top: 3px;
+  color: #9fb39b;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .ledger-order-tiles {
@@ -744,7 +767,8 @@ textarea:disabled {
 .pause,
 .settings,
 .order-editor,
-.tutorial-editor {
+.tutorial-editor,
+.tool-editor {
   position: absolute;
   z-index: 8;
   top: 50%;
@@ -763,7 +787,8 @@ textarea:disabled {
 .pause h2,
 .settings h2,
 .order-editor h2,
-.tutorial-editor h2 {
+.tutorial-editor h2,
+.tool-editor h2 {
   font: 600 clamp(38px, 8vw, 56px) / 1 Georgia, serif;
   letter-spacing: -.04em;
 }
@@ -824,7 +849,8 @@ textarea:disabled {
   text-align: left;
 }
 
-.tutorial-editor {
+.tutorial-editor,
+.tool-editor {
   z-index: 9;
   width: min(560px, calc(100vw - 32px));
   padding: clamp(22px, 4vw, 34px);
@@ -938,28 +964,33 @@ textarea:disabled {
   font-weight: 720;
 }
 
-.tutorial-editor-heading {
+.tutorial-editor-heading,
+.tool-editor-heading {
   padding-bottom: 14px;
   border-bottom: 1px solid rgb(235 190 102 / 26%);
 }
 
-.tutorial-editor-heading h2 {
+.tutorial-editor-heading h2,
+.tool-editor-heading h2 {
   margin-top: 5px;
   font-size: clamp(30px, 6vw, 44px);
 }
 
-.tutorial-editor-form {
+.tutorial-editor-form,
+.tool-editor-form {
   display: grid;
   gap: 14px;
   margin-top: 20px;
 }
 
-.tutorial-editor-form label {
+.tutorial-editor-form label,
+.tool-editor-form label {
   display: grid;
   gap: 6px;
 }
 
-.tutorial-editor-form label > span {
+.tutorial-editor-form label > span,
+.tool-editor-form label > span {
   color: #b8c9b3;
   font-size: 11px;
   font-weight: 700;
@@ -967,24 +998,28 @@ textarea:disabled {
   text-transform: uppercase;
 }
 
-.tutorial-editor [data-tutorial-editor-id] {
+.tutorial-editor [data-tutorial-editor-id],
+.tool-editor [data-tool-editor-id] {
   color: #d5ba83;
   background: rgb(235 190 102 / 7%);
 }
 
-.tutorial-editor-error {
+.tutorial-editor-error,
+.tool-editor-error {
   min-height: 18px;
   color: #f0a38d;
   font-size: 12px;
 }
 
-.tutorial-editor-actions {
+.tutorial-editor-actions,
+.tool-editor-actions {
   display: flex;
   gap: 9px;
   justify-content: flex-end;
 }
 
-.tutorial-editor-save {
+.tutorial-editor-save,
+.tool-editor-save {
   border-color: #648c55;
   background: #426038;
   font-weight: 720;
