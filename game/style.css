@@ -139,6 +139,29 @@ h1 {
   gap: 8px;
 }
 
+.create .create-option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: max-content;
+  margin: 11px 0 0;
+  color: #c3d4bf;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.create-option input,
+.settings-options input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  padding: 0;
+  accent-color: #648c55;
+}
+
 input,
 button {
   border: 1px solid rgb(255 255 255 / 20%);
@@ -291,8 +314,13 @@ input:disabled {
   z-index: 4;
   top: 16px;
   left: 16px;
-  width: min(360px, calc(100vw - 32px));
-  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 12px;
+  align-items: center;
+  width: min(380px, calc(100vw - 32px));
+  min-height: 82px;
+  padding: 10px 14px 10px 10px;
   border-left: 3px solid #8cbf26;
   border-radius: 2px 10px 10px 2px;
   color: #e5efde;
@@ -300,6 +328,77 @@ input:disabled {
   box-shadow: 0 12px 36px rgb(0 0 0 / 28%);
   font: 14px/1.45 Georgia, serif;
   backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.tutorial-instruction {
+  font: inherit;
+}
+
+.tutorial-companion {
+  position: relative;
+  width: 58px;
+  height: 62px;
+  opacity: .9;
+}
+
+.tutorial-companion span {
+  position: absolute;
+  display: block;
+  color: #b1e09b;
+}
+
+.tutorial-companion-head {
+  top: 2px;
+  left: 23px;
+  width: 15px;
+  height: 15px;
+  border: 2px solid currentcolor;
+  border-radius: 50%;
+}
+
+.tutorial-companion-body {
+  top: 18px;
+  left: 29px;
+  width: 2px;
+  height: 24px;
+  background: currentcolor;
+}
+
+.tutorial-companion-arms {
+  top: 25px;
+  left: 17px;
+  width: 27px;
+  height: 2px;
+  background: currentcolor;
+  transform: rotate(-8deg);
+}
+
+.tutorial-companion-legs {
+  top: 39px;
+  left: 18px;
+  width: 24px;
+  height: 18px;
+  border-top: 2px solid currentcolor;
+  border-right: 2px solid currentcolor;
+  border-left: 2px solid currentcolor;
+  transform: perspective(20px) rotateX(-18deg);
+}
+
+.developer-mode-indicator {
+  position: absolute;
+  z-index: 4;
+  top: 82px;
+  right: 16px;
+  padding: 5px 8px;
+  border: 1px solid rgb(235 190 102 / 52%);
+  border-radius: 7px;
+  color: #f3d495;
+  background: rgb(30 23 9 / 78%);
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: .08em;
+  text-transform: uppercase;
   pointer-events: none;
 }
 
@@ -622,7 +721,8 @@ input:disabled {
   font-size: 12px;
 }
 
-.pause {
+.pause,
+.settings {
   position: absolute;
   z-index: 8;
   top: 50%;
@@ -638,9 +738,32 @@ input:disabled {
   text-align: center;
 }
 
-.pause h2 {
+.pause h2,
+.settings h2 {
   font: 600 clamp(38px, 8vw, 56px) / 1 Georgia, serif;
   letter-spacing: -.04em;
+}
+
+.settings-options {
+  display: grid;
+  gap: 9px;
+  margin: 28px 0 18px;
+  text-align: left;
+}
+
+.settings-options label {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 9px;
+  background: rgb(255 255 255 / 4%);
+  cursor: pointer;
+}
+
+.settings [data-settings-back] {
+  width: 100%;
 }
 
 .pause-world {
@@ -685,6 +808,11 @@ input:disabled {
   .tutorial-card {
     top: 10px;
     left: 10px;
+  }
+
+  .developer-mode-indicator {
+    top: 76px;
+    right: 10px;
   }
 
   .held-tool-model {

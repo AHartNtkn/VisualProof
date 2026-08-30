@@ -57,21 +57,24 @@ function harness(actions: {
   resume?: () => void
   mainMenu?: () => Promise<void>
   quit?: () => Promise<void>
+  settings?: () => void
 } = {}) {
   const documentTarget: { activeElement: TestElement | null } = { activeElement: null }
   const root = element(documentTarget, 'pause')
   const name = element(documentTarget, 'pauseWorldName')
   const error = element(documentTarget, 'pauseError')
   const resume = element(documentTarget, 'pauseResume')
+  const settings = element(documentTarget, 'pauseSettings')
   const mainMenu = element(documentTarget, 'pauseMainMenu')
   const quit = element(documentTarget, 'pauseQuit')
-  root.append(name, error, resume, mainMenu, quit)
+  root.append(name, error, resume, settings, mainMenu, quit)
   const controller = mountPauseMenu(root as unknown as HTMLElement, {
     resume: actions.resume ?? (() => {}),
+    settings: actions.settings ?? (() => {}),
     mainMenu: actions.mainMenu ?? (() => Promise.resolve()),
     quit: actions.quit ?? (() => Promise.resolve()),
   })
-  return { root, name, error, resume, mainMenu, quit, controller }
+  return { root, name, error, resume, settings, mainMenu, quit, controller }
 }
 
 describe('pause menu', () => {
@@ -95,11 +98,25 @@ describe('pause menu', () => {
     pause.controller.show('My Orchard')
 
     pause.resume.dispatchEvent(key('Tab'))
-    expect(pause.mainMenu.ownerDocument.activeElement).toBe(pause.mainMenu)
+    expect(pause.settings.ownerDocument.activeElement).toBe(pause.settings)
 
     const backward = Object.defineProperty(key('Tab'), 'shiftKey', { value: true })
-    pause.mainMenu.dispatchEvent(backward)
+    pause.settings.dispatchEvent(backward)
     expect(pause.resume.ownerDocument.activeElement).toBe(pause.resume)
+  })
+
+  it('opens Settings without resuming the world', () => {
+    // Catches the Settings action sharing Resume's side effect.
+    const calls: string[] = []
+    const pause = harness({
+      resume: () => calls.push('resume'),
+      settings: () => calls.push('settings'),
+    })
+    pause.controller.show('My Orchard')
+
+    pause.settings.dispatchEvent(new Event('click'))
+
+    expect(calls).toEqual(['settings'])
   })
 
   it('stays open and restores controls when returning to the menu cannot save', async () => {

@@ -1,5 +1,6 @@
 export type PauseMenuActions = {
   readonly resume: () => void
+  readonly settings: () => void
   readonly mainMenu: () => Promise<void>
   readonly quit: () => Promise<void>
 }
@@ -27,9 +28,10 @@ export function mountPauseMenu(
   const worldName = required<HTMLElement>(root, '[data-pause-world-name]')
   const error = required<HTMLElement>(root, '[data-pause-error]')
   const resume = required<HTMLButtonElement>(root, '[data-pause-resume]')
+  const settings = required<HTMLButtonElement>(root, '[data-pause-settings]')
   const mainMenu = required<HTMLButtonElement>(root, '[data-pause-main-menu]')
   const quit = required<HTMLButtonElement>(root, '[data-pause-quit]')
-  const controls = [resume, mainMenu, quit] as const
+  const controls = [resume, settings, mainMenu, quit] as const
   const disposers: Array<() => void> = []
   let busy = false
 
@@ -56,6 +58,9 @@ export function mountPauseMenu(
   }
 
   listen(resume, 'click', resumeGame)
+  listen(settings, 'click', () => {
+    if (!busy && !root.hidden) actions.settings()
+  })
   listen(mainMenu, 'click', () => run('return to main menu', actions.mainMenu))
   listen(quit, 'click', () => run('quit game', actions.quit))
   listen(root, 'keydown', ((event: KeyboardEvent): void => {

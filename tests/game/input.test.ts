@@ -46,10 +46,7 @@ function createHarness(): {
     readonly relativeDistance: number
   }>
   readonly engagements: boolean[]
-  readonly escapes: { count: number }
-  readonly swaps: { count: number }
-  readonly catalogToggles: { count: number }
-  readonly escapeResult: { value: 'unhandled' | 'resume-engagement' | 'handled' }
+  readonly semanticActions: string[]
   readonly input: ReturnType<typeof attachWorldInput>
 } {
   const target = new TestWorldTarget()
@@ -63,12 +60,7 @@ function createHarness(): {
     readonly relativeDistance: number
   }> = []
   const engagements: boolean[] = []
-  const escapes = { count: 0 }
-  const swaps = { count: 0 }
-  const catalogToggles = { count: 0 }
-  const escapeResult: {
-    value: 'unhandled' | 'resume-engagement' | 'handled'
-  } = { value: 'unhandled' }
+  const semanticActions: string[] = []
   const actions: WorldInputActions = {
     pointerDown: (button, clientX, clientY) => pointers.push(`down:${button}:${clientX}:${clientY}`),
     pointerUp: (button, clientX, clientY, relativeDistance) => {
@@ -77,9 +69,11 @@ function createHarness(): {
     },
     pointerCancel: () => pointers.push('cancel'),
     engagementChanged: (active) => engagements.push(active),
-    escape: () => { escapes.count += 1; return escapeResult.value },
-    swapTool: () => { swaps.count += 1 },
-    toggleCatalog: () => { catalogToggles.count += 1 },
+    category: (code) => semanticActions.push(`category:${code}`),
+    toggleLedger: () => semanticActions.push('toggle-ledger'),
+    stepBack: () => semanticActions.push('step-back'),
+    toggleDeveloperMode: () => semanticActions.push('toggle-developer-mode'),
+    pause: () => semanticActions.push('pause'),
   }
   const input = attachWorldInput(target as unknown as HTMLElement, actions, {
     window: windowTarget as Window,
@@ -87,8 +81,7 @@ function createHarness(): {
   })
 
   return {
-    target, windowTarget, documentTarget, pointers, releases, engagements, escapes, swaps, catalogToggles,
-    escapeResult, input,
+    target, windowTarget, documentTarget, pointers, releases, engagements, semanticActions, input,
   }
 }
 
@@ -133,20 +126,24 @@ describe('world input sampling', () => {
     expect(secondaryActions).toBe(0)
   })
 
-  it('transports single Digit1 and Tab presses without holding either key', () => {
-    const { windowTarget, input, swaps, catalogToggles } = createHarness()
+  it('routes category, ledger, and developer commands once without holding command keys', () => {
+    // Catches command keys becoming movement state or key repeat dispatching duplicate actions.
+    const { windowTarget, input, semanticActions } = createHarness()
     const digit = event('keydown', { code: 'Digit1' }, true)
     const tab = event('keydown', { code: 'Tab' }, true)
+    const backquote = event('keydown', { code: 'Backquote' }, true)
 
     windowTarget.dispatchEvent(digit)
     windowTarget.dispatchEvent(tab)
+    windowTarget.dispatchEvent(backquote)
     windowTarget.dispatchEvent(event('keydown', { code: 'Digit1', repeat: true }, true))
     windowTarget.dispatchEvent(event('keydown', { code: 'Tab', repeat: true }, true))
+    windowTarget.dispatchEvent(event('keydown', { code: 'Backquote', repeat: true }, true))
 
-    expect(swaps.count).toBe(1)
-    expect(catalogToggles.count).toBe(1)
+    expect(semanticActions).toEqual(['category:1', 'toggle-ledger', 'toggle-developer-mode'])
     expect(digit.defaultPrevented).toBe(true)
     expect(tab.defaultPrevented).toBe(true)
+    expect(backquote.defaultPrevented).toBe(true)
     expect(input.sample()).toEqual({
       forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
     })
@@ -194,16 +191,40 @@ describe('world input sampling', () => {
     })
   })
 
-  it('reports pointer coordinates and leaves an unhandled Escape browser-owned', () => {
-    const { target, windowTarget, pointers, escapes, input } = createHarness()
+  it.each([
+    ['free flight', false],
+    ['orbit', false],
+    ['held cutting', false],
+    ['open ledger', true],
+  ] as const)(
+    'routes Escape only to Pause from %s and clears held movement',
+    (_state, suspended) => {
+      // Catches state-specific Escape handling consuming world state instead of pausing it.
+      const { windowTarget, semanticActions, input } = createHarness()
+      windowTarget.dispatchEvent(event('keydown', { code: 'KeyW' }))
+      if (suspended) input.suspend()
+      const escape = event('keydown', { code: 'Escape' }, true)
 
-    target.dispatchEvent(event('mousedown', { button: 0, clientX: 123, clientY: 456 }))
-    const escape = event('keydown', { code: 'Escape' }, true)
-    windowTarget.dispatchEvent(escape)
+      windowTarget.dispatchEvent(escape)
 
-    expect(pointers).toEqual(['down:0:123:456'])
-    expect(escapes.count).toBe(1)
-    expect(escape.defaultPrevented).toBe(false)
+      expect(semanticActions).toEqual(['pause'])
+      expect(escape.defaultPrevented).toBe(true)
+      expect(input.sample()).toEqual({
+        forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
+      })
+    },
+  )
+
+  it('routes Backspace only to step back without holding the command key', () => {
+    // Catches Backspace falling through into held input or invoking Pause semantics.
+    const { windowTarget, semanticActions, input } = createHarness()
+    const backspace = event('keydown', { code: 'Backspace' }, true)
+
+    windowTarget.dispatchEvent(backspace)
+    windowTarget.dispatchEvent(event('keydown', { code: 'Backspace', repeat: true }, true))
+
+    expect(semanticActions).toEqual(['step-back'])
+    expect(backspace.defaultPrevented).toBe(true)
     expect(input.sample()).toEqual({
       forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
     })
@@ -227,7 +248,7 @@ describe('world input sampling', () => {
   })
 
   it('delivers raw pointer and wheel lifecycle while preventing native scrolling and menus', () => {
-    const { target, windowTarget, pointers, escapes } = createHarness()
+    const { target, windowTarget, pointers, semanticActions } = createHarness()
     target.dispatchEvent(event('mousedown', { button: 2, clientX: 70, clientY: 80 }))
     windowTarget.dispatchEvent(event('mousemove', { clientX: 74, clientY: 83 }))
     windowTarget.dispatchEvent(event('mouseup', { button: 2, clientX: 74, clientY: 83 }))
@@ -241,7 +262,7 @@ describe('world input sampling', () => {
     expect(pointers).toEqual([
       'down:2:70:80', 'up:2:74:83',
     ])
-    expect(escapes.count).toBe(0)
+    expect(semanticActions).toEqual([])
   })
 
   it('reports cumulative pointer-locked relative distance when client coordinates stay fixed', () => {
@@ -287,30 +308,6 @@ describe('world input sampling', () => {
     ])
   })
 
-  it('handles orbit Escape by requesting engagement synchronously in the key event', () => {
-    const harness = createHarness()
-    harness.escapeResult.value = 'resume-engagement'
-    const escape = event('keydown', { code: 'Escape' }, true)
-
-    harness.windowTarget.dispatchEvent(escape)
-
-    expect(escape.defaultPrevented).toBe(true)
-    expect(harness.target.requestPointerLockCalls).toBe(1)
-  })
-
-  it('handles pause Escape without immediately requesting pointer lock again', () => {
-    const harness = createHarness()
-    harness.escapeResult.value = 'handled'
-    const escape = event('keydown', { code: 'Escape' }, true)
-
-    harness.windowTarget.dispatchEvent(escape)
-
-    expect(escape.defaultPrevented).toBe(true)
-    expect(harness.target.requestPointerLockCalls).toBe(0)
-    expect(harness.input.sample()).toEqual({
-      forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
-    })
-  })
 })
 
 describe('world input interruption and lifecycle', () => {
@@ -343,7 +340,7 @@ describe('world input interruption and lifecycle', () => {
       forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
     })
     expect(harness.pointers).toEqual(['down:0:10:20', 'cancel'])
-    expect(harness.escapes.count).toBe(0)
+    expect(harness.semanticActions).toEqual([])
     expect(harness.engagements.at(-1)).toBe(false)
   })
 
@@ -377,7 +374,7 @@ describe('world input interruption and lifecycle', () => {
       forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
     })
     expect(harness.pointers).toEqual(['down:0:10:20', 'cancel'])
-    expect(harness.escapes.count).toBe(0)
+    expect(harness.semanticActions).toEqual([])
   })
 
   it('engages and releases only the target world', async () => {
@@ -392,32 +389,6 @@ describe('world input interruption and lifecycle', () => {
     documentTarget.pointerLockElement = target as unknown as Element
     input.release()
     expect(documentTarget.exitPointerLockCalls).toBe(1)
-  })
-
-  it('reports engagement changes and reports a rejected handled-Escape request inactive', async () => {
-    const harness = createHarness()
-    harness.documentTarget.pointerLockElement = harness.target as unknown as Element
-    harness.documentTarget.dispatchEvent(event('pointerlockchange'))
-    harness.escapeResult.value = 'resume-engagement'
-    harness.target.rejectEngagement = true
-
-    harness.windowTarget.dispatchEvent(event('keydown', { code: 'Escape' }, true))
-    await Promise.resolve()
-
-    expect(harness.engagements).toEqual([false, true, false])
-  })
-
-  it('reports a synchronous handled-Escape engagement failure inactive', async () => {
-    const harness = createHarness()
-    harness.escapeResult.value = 'resume-engagement'
-    harness.target.throwEngagement = true
-
-    expect(() => harness.windowTarget.dispatchEvent(
-      event('keydown', { code: 'Escape' }, true),
-    )).not.toThrow()
-    await Promise.resolve()
-
-    expect(harness.engagements).toEqual([false, false])
   })
 
   it('normalizes a synchronous ordinary engagement failure to a rejected promise', async () => {

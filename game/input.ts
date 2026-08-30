@@ -9,9 +9,11 @@ export type WorldInputActions = {
     relativeDistance: number,
   ) => void
   readonly pointerCancel: () => void
-  readonly escape: () => 'unhandled' | 'handled' | 'resume-engagement'
-  readonly swapTool: () => void
-  readonly toggleCatalog: () => void
+  readonly category: (code: string) => void
+  readonly toggleLedger: () => void
+  readonly stepBack: () => void
+  readonly toggleDeveloperMode: () => void
+  readonly pause: () => void
   readonly engagementChanged: (active: boolean) => void
 }
 
@@ -80,21 +82,26 @@ export function attachWorldInput(
     disposers.push(() => eventTarget.removeEventListener(type, listener))
   }
   const down = ((event: KeyboardEvent): void => {
-    if (event.code === 'Digit1' || event.code === 'Tab') {
+    if (event.code === 'Escape') {
       event.preventDefault()
       if (event.repeat) return
-      if (event.code === 'Digit1') actions.swapTool()
-      else actions.toggleCatalog()
+      actions.pause()
+      clear()
       return
     }
-    if (event.code === 'Escape') {
-      const result = actions.escape()
-      if (result === 'unhandled') return
+    const category = event.code.match(/^Digit([0-9])$/)?.[1]
+    if (category !== undefined || event.code === 'Tab' || event.code === 'Backquote') {
       event.preventDefault()
-      clear()
-      if (result === 'resume-engagement') {
-        void requestWorldEngagement(target).catch(() => actions.engagementChanged(false))
-      }
+      if (event.repeat) return
+      if (category !== undefined) actions.category(category)
+      else if (event.code === 'Tab') actions.toggleLedger()
+      else actions.toggleDeveloperMode()
+      return
+    }
+    if (!suspended && event.code === 'Backspace') {
+      event.preventDefault()
+      if (event.repeat) return
+      actions.stepBack()
       return
     }
     if (suspended) {

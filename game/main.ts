@@ -411,6 +411,12 @@ function resumePause(): void {
   if (!paused || activeInput === null || activeCamera === null) return
   pauseMenu?.hide()
   paused = false
+  if (ledger?.isOpen === true) {
+    previousFrame = performance.now()
+    animationFrame = requestAnimationFrame(animate)
+    mirrorControls()
+    return
+  }
   activeInput.resume()
   previousFrame = performance.now()
   animationFrame = requestAnimationFrame(animate)
@@ -732,38 +738,36 @@ async function startWorld(world: GameWorld): Promise<void> {
         freeSecondaryPress = null
         if (camera?.mode === 'orbit') camera.interaction.cancelPointer()
       },
-      escape() {
+      stepBack() {
         const activeTools = tools
-        let handled = false
-        let resumeEngagement = false
         if (activeTools !== null && activeTools.cutting !== null) {
           activeTools.cancel()
           mirrorToolInventory(activeTools)
           setFeedback('Cutting cleared.')
-          handled = true
-        }
-        if (ledger?.isOpen === true) {
-          closeLedger(false)
-          return 'resume-engagement'
+          mirrorControls()
+          return
         }
         if (camera?.mode === 'orbit') {
           camera = exitOrbit(camera)
           freeActive = false
-          handled = true
-          resumeEngagement = true
+          const activeInput = input
+          if (activeInput !== null) {
+            void activeInput.engage().catch(() => {
+              freeActive = false
+              mirrorControls()
+            })
+          }
         }
         mirrorControls()
-        if (handled) return resumeEngagement ? 'resume-engagement' : 'handled'
-        openPause()
-        return 'handled'
       },
-      swapTool() {
+      pause: openPause,
+      category(code) {
         const activeTools = tools
-        if (paused || activeTools === null || ledger?.isOpen === true) return
+        if (code !== '1' || paused || activeTools === null || ledger?.isOpen === true) return
         activeTools.cycle('1')
         mirrorToolInventory(activeTools)
       },
-      toggleCatalog() {
+      toggleLedger() {
         const activeLedger = ledger
         const activeOrders = orders
         const activeTools = tools
@@ -797,6 +801,7 @@ async function startWorld(world: GameWorld): Promise<void> {
         mirrorLedger()
         mirrorControls()
       },
+      toggleDeveloperMode() {},
       engagementChanged(active) {
         freeActive = active
         mirrorControls()
@@ -857,6 +862,7 @@ startLifecycle.registerControl(nameInput)
 for (const button of createForm.querySelectorAll<HTMLButtonElement>('button')) startLifecycle.registerControl(button)
 pauseMenu = mountPauseMenu(pauseRoot, {
   resume: resumePause,
+  settings: () => {},
   mainMenu: returnToMainMenu,
   quit: quitFromPause,
 })

@@ -28,6 +28,10 @@
             <input id="orchard-name" name="name" value="My Orchard" maxlength="80" required data-new-slot-name>
             <button type="submit" data-create-slot>Create</button>
           </div>
+          <label class="create-option">
+            <input type="checkbox" checked data-create-tutorials>
+            Tutorials
+          </label>
         </form>
 
         <div class="slots" aria-labelledby="saved-heading">
@@ -39,6 +43,8 @@
       </section>
 
       <aside class="tutorial-card" data-tutorial-card hidden aria-live="polite"></aside>
+
+      <p class="developer-mode-indicator" data-developer-mode hidden>Developer mode</p>
 
       <section class="status-hud" data-hud data-status-hud hidden aria-live="polite">
         <div class="status-hud-row">
@@ -78,10 +84,34 @@
         <p class="pause-world" data-pause-world-name></p>
         <div class="pause-actions">
           <button type="button" data-pause-resume>Resume</button>
+          <button type="button" data-pause-settings>Settings</button>
           <button type="button" data-pause-main-menu>Main Menu</button>
           <button type="button" data-pause-quit>Quit Game</button>
         </div>
         <p class="pause-error" data-pause-error role="alert"></p>
+      </section>
+
+      <section
+        class="settings"
+        data-settings
+        hidden
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+      >
+        <p class="eyebrow">Orchard</p>
+        <h2 id="settings-title">Settings</h2>
+        <div class="settings-options">
+          <label>
+            <input type="checkbox" data-settings-tutorials>
+            <span>Tutorials</span>
+          </label>
+          <label>
+            <input type="checkbox" data-settings-developer-tools>
+            <span>Developer Tools</span>
+          </label>
+        </div>
+        <button type="button" data-settings-back>Back</button>
       </section>
 
     </main>
