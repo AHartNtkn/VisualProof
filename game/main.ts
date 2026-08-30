@@ -759,13 +759,14 @@ createForm.addEventListener('submit', (event) => {
     return
   }
   clearError()
-  const initialOrders = initialOrderCreateState(openingOrderCatalog.current)
+  const revision = openingOrderCatalog.current
+  const initialOrders = initialOrderCreateState(revision)
   startOpening(() => saveClient.create({
     displayName,
     camera: initialCameraRecord,
     trees: [initialTree],
     ...initialOrders,
-  }).then((created) => saveClient.load(created.slotId)))
+  }, revision).then((created) => saveClient.load(created.slotId)))
 })
 saveRetry.addEventListener('click', () => writer?.retry())
 

@@ -20,7 +20,10 @@ pub fn run() {
             commands::update_camera,
             commands::accept_order,
             commands::abandon_order,
-            commands::complete_order
+            commands::complete_order,
+            commands::set_tutorials_enabled,
+            commands::complete_tutorial_milestone,
+            commands::acquire_tool
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Orchard");

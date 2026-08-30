@@ -4,7 +4,6 @@ import type { GameWorld } from './model'
 import type { GameTree } from './model'
 import {
   MAX_REPUTATION,
-  openingOrderCatalog,
   type OrderCatalogRevision,
   type OrderProgress,
   type PotPlacement,
@@ -82,7 +81,7 @@ export type SlotListEntry = {
 
 export type SaveClient = {
   readonly list: () => Promise<readonly SlotListEntry[]>
-  readonly create: (state: CreateSlotState) => Promise<SlotListEntry>
+  readonly create: (state: CreateSlotState, revision: OrderCatalogRevision) => Promise<SlotListEntry>
   readonly load: (slotId: string) => Promise<GameWorld>
   readonly updateTree: (slotId: string, update: TreeUpdate) => Promise<number>
   readonly insertTree: (slotId: string, update: TreeUpdate) => Promise<number>
@@ -236,9 +235,9 @@ function validateCreateIdentifiers(value: unknown, singular: string, plural: str
   }
 }
 
-function validateCreateState(state: CreateSlotState): void {
+function validateCreateState(state: CreateSlotState, revision: OrderCatalogRevision): void {
   nonnegativeSafeInteger(state.reputation, 'create state.reputation')
-  assertCatalogOrderIds(state.orders.map(validateCreateOrder), openingOrderCatalog.current, 'create state orders')
+  assertCatalogOrderIds(state.orders.map(validateCreateOrder), revision, 'create state orders')
   if (typeof state.tutorialsEnabled !== 'boolean') {
     throw new Error('create state.tutorialsEnabled must be a boolean')
   }
@@ -277,7 +276,7 @@ export function initialOrderCreateState(
     orders: orderRecordsFromProgress(progress, revision),
     tutorialsEnabled: true,
     completedTutorialMilestones: [],
-    acquiredToolIds: [],
+    acquiredToolIds: ['sprout-spawner'],
   }
 }
 
@@ -295,8 +294,8 @@ function decodeVoid(value: unknown, what: string): void {
 export function createSaveClient(transport: SaveTransport): SaveClient {
   return {
     list: () => transport.request('list', {}).then(decodeSlotList),
-    create: async (state) => {
-      validateCreateState(state)
+    create: async (state, revision) => {
+      validateCreateState(state, revision)
       return decodeCreatedSlot(await transport.request('create', state))
     },
     load: (slotId) => transport.request('load', { slotId }).then(decodeLoadedSlot),

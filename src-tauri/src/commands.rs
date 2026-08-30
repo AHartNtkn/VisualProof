@@ -103,3 +103,32 @@ pub fn complete_order(
         .complete_order(&slot_id, &order_id, reward)
         .map_err(|error| error.to_string())
 }
+
+#[tauri::command]
+pub fn set_tutorials_enabled(
+    app: tauri::AppHandle,
+    slot_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    store(&app)?
+        .set_tutorials_enabled(&slot_id, enabled)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn complete_tutorial_milestone(
+    app: tauri::AppHandle,
+    slot_id: String,
+    milestone_id: String,
+) -> Result<(), String> {
+    store(&app)?
+        .complete_tutorial_milestone(&slot_id, &milestone_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn acquire_tool(app: tauri::AppHandle, slot_id: String, tool_id: String) -> Result<(), String> {
+    store(&app)?
+        .acquire_tool(&slot_id, &tool_id)
+        .map_err(|error| error.to_string())
+}

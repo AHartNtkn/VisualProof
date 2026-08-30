@@ -56,6 +56,15 @@ pub fn router(store: SaveStore, config: PlaytestServerConfig) -> Router {
             "/__orchard_playtest/save/complete-order",
             post(complete_order),
         )
+        .route(
+            "/__orchard_playtest/save/set-tutorials-enabled",
+            post(set_tutorials_enabled),
+        )
+        .route(
+            "/__orchard_playtest/save/complete-tutorial-milestone",
+            post(complete_tutorial_milestone),
+        )
+        .route("/__orchard_playtest/save/acquire-tool", post(acquire_tool))
         .with_state(state.clone())
         .layer(cors)
         .layer(middleware::from_fn_with_state(state, authenticate))
@@ -220,6 +229,60 @@ async fn complete_order(
         .map_err(StoreError)
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetTutorialsEnabledRequest {
+    slot_id: String,
+    enabled: bool,
+}
+
+async fn set_tutorials_enabled(
+    State(state): State<AppState>,
+    Json(input): Json<SetTutorialsEnabledRequest>,
+) -> Result<Json<()>, StoreError> {
+    state
+        .store
+        .set_tutorials_enabled(&input.slot_id, input.enabled)
+        .map(Json)
+        .map_err(StoreError)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CompleteTutorialMilestoneRequest {
+    slot_id: String,
+    milestone_id: String,
+}
+
+async fn complete_tutorial_milestone(
+    State(state): State<AppState>,
+    Json(input): Json<CompleteTutorialMilestoneRequest>,
+) -> Result<Json<()>, StoreError> {
+    state
+        .store
+        .complete_tutorial_milestone(&input.slot_id, &input.milestone_id)
+        .map(Json)
+        .map_err(StoreError)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AcquireToolRequest {
+    slot_id: String,
+    tool_id: String,
+}
+
+async fn acquire_tool(
+    State(state): State<AppState>,
+    Json(input): Json<AcquireToolRequest>,
+) -> Result<Json<()>, StoreError> {
+    state
+        .store
+        .acquire_tool(&input.slot_id, &input.tool_id)
+        .map(Json)
+        .map_err(StoreError)
+}
+
 struct StoreError(SaveStoreError);
 
 impl IntoResponse for StoreError {
@@ -287,6 +350,9 @@ mod tests {
                             "yaw": 0.75
                         }],
                         "reputation": 0,
+                        "tutorialsEnabled": true,
+                        "completedTutorialMilestones": [],
+                        "acquiredToolIds": ["sprout-spawner"],
                         "orders": [{
                             "orderId": "starter-double-cut",
                             "state": "pending",
@@ -325,6 +391,8 @@ mod tests {
         assert_eq!(loaded["camera"]["x"], 1.0);
         assert_eq!(loaded["trees"][0]["treeId"], "tree-1");
         assert_eq!(loaded["reputation"], 0);
+        assert_eq!(loaded["tutorialsEnabled"], true);
+        assert_eq!(loaded["acquiredToolIds"], json!(["sprout-spawner"]));
         assert_eq!(loaded["orders"][0]["state"], "pending");
 
         let inserted_tree = response_json(
@@ -408,6 +476,45 @@ mod tests {
             .await,
             json!(2)
         );
+        assert_eq!(
+            response_json(
+                app.clone()
+                    .oneshot(request(
+                        "/__orchard_playtest/save/set-tutorials-enabled",
+                        json!({"slotId": slot_id, "enabled": false}),
+                    ))
+                    .await
+                    .unwrap(),
+            )
+            .await,
+            Value::Null
+        );
+        assert_eq!(
+            response_json(
+                app.clone()
+                    .oneshot(request(
+                        "/__orchard_playtest/save/complete-tutorial-milestone",
+                        json!({"slotId": slot_id, "milestoneId": "move"}),
+                    ))
+                    .await
+                    .unwrap(),
+            )
+            .await,
+            Value::Null
+        );
+        assert_eq!(
+            response_json(
+                app.clone()
+                    .oneshot(request(
+                        "/__orchard_playtest/save/acquire-tool",
+                        json!({"slotId": slot_id, "toolId": "double-cut"}),
+                    ))
+                    .await
+                    .unwrap(),
+            )
+            .await,
+            Value::Null
+        );
 
         let updated_tree = response_json(
             app.clone()
@@ -462,6 +569,12 @@ mod tests {
         }));
         assert!(persisted.trees.iter().any(|tree| tree.tree_id == "tree-2"));
         assert_eq!(persisted.reputation, 2);
+        assert!(!persisted.tutorials_enabled);
+        assert_eq!(persisted.completed_tutorial_milestones, vec!["move"]);
+        assert_eq!(
+            persisted.acquired_tool_ids,
+            vec!["double-cut", "sprout-spawner"]
+        );
         assert_eq!(
             persisted.orders[0].state,
             crate::save_store::OrderStatus::Completed

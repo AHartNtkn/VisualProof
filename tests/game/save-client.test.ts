@@ -93,7 +93,7 @@ describe('save client transports', () => {
     await expect(client.list()).resolves.toEqual([
       { slotId: 'slot-a', displayName: 'First orchard', updatedAtMs: 24, error: null },
     ])
-    await expect(client.create(createState)).resolves.toEqual({
+    await expect(client.create(createState, openingRevision)).resolves.toEqual({
       slotId: 'slot-b', displayName: 'Second orchard', updatedAtMs: 25, error: null,
     })
     const world = await client.load('slot-a')
@@ -137,7 +137,10 @@ describe('save client transports', () => {
     }
 
     expect(() => orderRecordsFromProgress(progress, openingRevision)).toThrow('progress orders must match the authored order catalog')
-    await expect(client.create({ ...createState, orders: [{ orderId: 'unknown-order', state: 'pending', pot: null }] }))
+    await expect(client.create(
+      { ...createState, orders: [{ orderId: 'unknown-order', state: 'pending', pot: null }] },
+      openingRevision,
+    ))
       .rejects.toThrow('create state orders must match the authored order catalog')
   })
 
@@ -186,7 +189,7 @@ describe('save client transports', () => {
       },
     })
 
-    await expect(client.create(state as unknown as CreateSlotState)).rejects.toThrow(error)
+    await expect(client.create(state as unknown as CreateSlotState, openingRevision)).rejects.toThrow(error)
     expect(requestCount).toBe(0)
   })
 
@@ -215,7 +218,7 @@ describe('save client transports', () => {
       },
     })
 
-    await expect(client.create(state as unknown as CreateSlotState)).rejects.toThrow(error)
+    await expect(client.create(state as unknown as CreateSlotState, openingRevision)).rejects.toThrow(error)
     expect(requestCount).toBe(0)
   })
 
@@ -255,8 +258,34 @@ describe('save client transports', () => {
     expect(initialOrderCreateState(live.current)).toMatchObject({
       tutorialsEnabled: true,
       completedTutorialMilestones: [],
-      acquiredToolIds: [],
+      acquiredToolIds: ['sprout-spawner'],
     })
+  })
+
+  it('validates creation against the supplied revision without serializing that revision', async () => {
+    const live = new LiveOrderCatalog(decodeOrderCatalog(openingOrderContent))
+    const updatedContent = structuredClone(openingOrderContent) as Array<Record<string, unknown>>
+    updatedContent.push({ ...updatedContent[0]!, id: 'new-sprout', prerequisites: [] })
+    live.publish(decodeOrderCatalog(updatedContent))
+    const revision = live.current
+    const state: CreateSlotState = {
+      ...createState,
+      ...initialOrderCreateState(revision),
+    }
+    const requests: RecordedRequest[] = []
+    const client = createSaveClient({
+      async request(operation, input) {
+        requests.push({ operation, input })
+        return { slotId: 'slot-b', displayName: 'Second orchard', updatedAtMs: 25, error: null }
+      },
+    })
+
+    await expect(client.create(state, revision)).resolves.toEqual({
+      slotId: 'slot-b', displayName: 'Second orchard', updatedAtMs: 25, error: null,
+    })
+    expect(requests).toEqual([{ operation: 'create', input: state }])
+    await expect(client.create(state, openingRevision))
+      .rejects.toThrow('create state orders must match the authored order catalog')
   })
 
   // This fails if a Rust operation response reaches game state without matching its wire type.
@@ -409,7 +438,7 @@ describe('save client transports', () => {
     await expect(client.list()).resolves.toEqual([
       { slotId: 'slot-a', displayName: 'First orchard', updatedAtMs: 24, error: null },
     ])
-    await expect(client.create(createState)).resolves.toEqual({
+    await expect(client.create(createState, openingRevision)).resolves.toEqual({
       slotId: 'slot-b', displayName: 'Second orchard', updatedAtMs: 25, error: null,
     })
     const world = await client.load('slot-a')
