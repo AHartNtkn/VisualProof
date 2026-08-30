@@ -165,6 +165,9 @@ describe('developer order content', () => {
       }
     })
     expect(foreground).toEqual({ tag: 'BUTTON', surface: 'pause' })
+    await browser.keys('Backspace')
+    await expect($('[data-pause]')).toBeDisplayed()
+    await expect(resume).toBeFocused()
     await resume.click()
     await expect($('[data-pause]')).not.toBeDisplayed()
     await expect($('[data-order-editor]')).toBeDisplayed()

@@ -235,7 +235,10 @@ export function mountOrderEditor(
   listen(cancel, 'click', hideIfIdle)
   listen(root.ownerDocument, 'keydown', ((event: KeyboardEvent): void => {
     if (root.hidden) return
-    if (event.code !== 'Backspace' || isEditableTextControl(root.ownerDocument.activeElement)) return
+    const activeElement = root.ownerDocument.activeElement
+    const editorOwnsFocus = activeElement === root.ownerDocument.body
+      || (activeElement !== null && root.contains(activeElement))
+    if (event.code !== 'Backspace' || !editorOwnsFocus || isEditableTextControl(activeElement)) return
     event.preventDefault()
     event.stopPropagation()
     hideIfIdle()

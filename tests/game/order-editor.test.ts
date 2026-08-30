@@ -50,6 +50,10 @@ class TestElement extends EventTarget {
     this.children.push(...children)
   }
 
+  public contains(target: EventTarget | null): boolean {
+    return target === this || this.children.some((child) => child.contains(target))
+  }
+
   public focus(): void {
     this.focusCalls += 1
     this.ownerDocument.activeElement = this
@@ -446,6 +450,15 @@ describe('order editor controller', () => {
     expect(h.formula.value).toBe('draft formula')
     expect(escape.defaultPrevented).toBe(true)
     expect(escape.cancelBubble).toBe(false)
+
+    const resume = h.documentTarget.createElement('button')
+    h.documentTarget.body.append(resume)
+    resume.focus()
+    const pauseBackspace = key('Backspace')
+    resume.dispatchEvent(pauseBackspace)
+    expect(h.controller.isOpen).toBe(true)
+    expect(h.formula.value).toBe('draft formula')
+    expect(pauseBackspace.defaultPrevented).toBe(false)
 
     input.resume()
     paused = false
