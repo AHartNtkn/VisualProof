@@ -28,7 +28,15 @@ const saves = counts.map((count) => {
     updatedAtMs: 0,
     camera: count === 1 ? largeInteractionCamera : stressCamera,
     reputation: 0,
-    orders: [{ orderId: 'starter-double-cut', state: 'pending', pot: null }],
+    tutorialsEnabled: true,
+    completedTutorialMilestones: [],
+    acquiredToolIds: ['sprout-spawner'],
+    orders: [
+      { orderId: 'blank-sprout', state: 'pending', pot: null },
+      { orderId: 'single-double-cut', state: 'pending', pot: null },
+      { orderId: 'irregular-double-cut-a', state: 'pending', pot: null },
+      { orderId: 'irregular-double-cut-b', state: 'pending', pot: null },
+    ],
     trees: (count === 1 ? [largeInteractionTree] : orchardPlacements(count, 34))
       .map((placement) => ({ ...placement, diagramJson })),
   }

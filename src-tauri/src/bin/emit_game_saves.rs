@@ -21,6 +21,9 @@ struct EmitterSave {
     camera: CameraRecord,
     trees: Vec<EmitterTree>,
     reputation: i64,
+    tutorials_enabled: bool,
+    completed_tutorial_milestones: Vec<String>,
+    acquired_tool_ids: Vec<String>,
     orders: Vec<OrderRecord>,
 }
 
@@ -75,6 +78,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 camera: save.camera,
                 trees,
                 reputation: save.reputation,
+                tutorials_enabled: save.tutorials_enabled,
+                completed_tutorial_milestones: save.completed_tutorial_milestones,
+                acquired_tool_ids: save.acquired_tool_ids,
                 orders: save.orders,
             },
         )?;

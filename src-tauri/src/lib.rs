@@ -78,13 +78,33 @@ mod generated_save_tests {
             assert_eq!(loaded.trees.len(), count);
             assert_eq!(loaded.diagrams.len(), 1);
             assert_eq!(loaded.reputation, 0);
+            assert!(loaded.tutorials_enabled);
+            assert!(loaded.completed_tutorial_milestones.is_empty());
+            assert_eq!(loaded.acquired_tool_ids, vec!["sprout-spawner"]);
             assert_eq!(
                 loaded.orders,
-                vec![OrderRecord {
-                    order_id: "starter-double-cut".into(),
-                    state: OrderStatus::Pending,
-                    pot: None,
-                }]
+                vec![
+                    OrderRecord {
+                        order_id: "blank-sprout".into(),
+                        state: OrderStatus::Pending,
+                        pot: None,
+                    },
+                    OrderRecord {
+                        order_id: "irregular-double-cut-a".into(),
+                        state: OrderStatus::Pending,
+                        pot: None,
+                    },
+                    OrderRecord {
+                        order_id: "irregular-double-cut-b".into(),
+                        state: OrderStatus::Pending,
+                        pot: None,
+                    },
+                    OrderRecord {
+                        order_id: "single-double-cut".into(),
+                        state: OrderStatus::Pending,
+                        pot: None,
+                    },
+                ]
             );
         }
     }

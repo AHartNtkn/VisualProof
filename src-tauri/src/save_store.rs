@@ -29,7 +29,14 @@ CREATE TABLE trees (
 );
 CREATE TABLE progress (
   singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-  reputation INTEGER NOT NULL CHECK (reputation >= 0)
+  reputation INTEGER NOT NULL CHECK (reputation >= 0),
+  tutorials_enabled BOOLEAN NOT NULL CHECK (tutorials_enabled IN (0, 1))
+);
+CREATE TABLE tutorial_milestones (
+  milestone_id TEXT PRIMARY KEY
+);
+CREATE TABLE acquired_tools (
+  tool_id TEXT PRIMARY KEY
 );
 CREATE TABLE orders (
   order_id TEXT PRIMARY KEY,
@@ -98,6 +105,9 @@ pub struct CreateSlotInput {
     pub camera: CameraRecord,
     pub trees: Vec<TreeUpdate>,
     pub reputation: i64,
+    pub tutorials_enabled: bool,
+    pub completed_tutorial_milestones: Vec<String>,
+    pub acquired_tool_ids: Vec<String>,
     pub orders: Vec<OrderRecord>,
 }
 
@@ -128,6 +138,9 @@ pub struct LoadedSlot {
     pub trees: Vec<TreeRecord>,
     pub diagrams: Vec<DiagramRecord>,
     pub reputation: i64,
+    pub tutorials_enabled: bool,
+    pub completed_tutorial_milestones: Vec<String>,
+    pub acquired_tool_ids: Vec<String>,
     pub orders: Vec<OrderRecord>,
 }
 
@@ -162,6 +175,8 @@ pub enum SaveStoreError {
     NonFinitePotPlacement,
     #[error("order reward must be nonnegative")]
     NegativeOrderReward,
+    #[error("identifier must not be blank")]
+    BlankIdentifier,
     #[error("reputation cannot be increased")]
     ReputationOverflow,
     #[error("save database has an invalid structure")]
@@ -327,11 +342,11 @@ impl SaveStore {
         for tree in &trees {
             validate_tree_numbers(tree.x, tree.z, tree.yaw)?;
         }
-        let reputation = connection
+        let (reputation, tutorials_enabled) = connection
             .query_row(
-                "SELECT reputation FROM progress WHERE singleton = 1",
+                "SELECT reputation, tutorials_enabled FROM progress WHERE singleton = 1",
                 [],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get::<_, bool>(1)?)),
             )
             .map_err(|_| SaveStoreError::InvalidStructure)?;
         if table_row_count(&connection, "progress")? != 1
@@ -339,6 +354,11 @@ impl SaveStore {
         {
             return Err(SaveStoreError::InvalidStructure);
         }
+        let completed_tutorial_milestones =
+            query_identifier_table(&connection, "tutorial_milestones", "milestone_id")
+                .map_err(|_| SaveStoreError::InvalidStructure)?;
+        let acquired_tool_ids = query_identifier_table(&connection, "acquired_tools", "tool_id")
+            .map_err(|_| SaveStoreError::InvalidStructure)?;
         let orders = query_orders(&connection)?;
 
         Ok(LoadedSlot {
@@ -349,6 +369,9 @@ impl SaveStore {
             trees,
             diagrams,
             reputation,
+            tutorials_enabled,
+            completed_tutorial_milestones,
+            acquired_tool_ids,
             orders,
         })
     }
@@ -428,6 +451,98 @@ impl SaveStore {
         )?;
         if changed != 1 {
             return Err(SaveStoreError::InvalidStructure);
+        }
+        update_timestamp(&transaction)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn set_tutorials_enabled(&self, slot_id: &str, enabled: bool) -> Result<()> {
+        let path = self.existing_slot_path(slot_id)?;
+        let mut connection = open_connection(&path, true)?;
+        validate_update_safety(&connection)?;
+        let transaction = connection.transaction()?;
+        let changed = transaction.execute(
+            "UPDATE progress SET tutorials_enabled = ?1
+             WHERE singleton = 1 AND tutorials_enabled != ?1",
+            [enabled],
+        )?;
+        if changed > 1 {
+            return Err(SaveStoreError::InvalidStructure);
+        }
+        if changed == 1 {
+            update_timestamp(&transaction)?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn complete_tutorial_milestone(&self, slot_id: &str, milestone_id: &str) -> Result<()> {
+        validate_identifier(milestone_id)?;
+        let path = self.existing_slot_path(slot_id)?;
+        let mut connection = open_connection(&path, true)?;
+        validate_update_safety(&connection)?;
+        let transaction = connection.transaction()?;
+        let inserted = transaction.execute(
+            "INSERT INTO tutorial_milestones(milestone_id) VALUES (?1)
+             ON CONFLICT DO NOTHING",
+            [milestone_id],
+        )?;
+        if inserted == 1 {
+            update_timestamp(&transaction)?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn acquire_tool(&self, slot_id: &str, tool_id: &str) -> Result<()> {
+        validate_identifier(tool_id)?;
+        let path = self.existing_slot_path(slot_id)?;
+        let mut connection = open_connection(&path, true)?;
+        validate_update_safety(&connection)?;
+        let transaction = connection.transaction()?;
+        let inserted = transaction.execute(
+            "INSERT INTO acquired_tools(tool_id) VALUES (?1) ON CONFLICT DO NOTHING",
+            [tool_id],
+        )?;
+        if inserted == 1 {
+            update_timestamp(&transaction)?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn replace_order_ids(&self, slot_id: &str, order_ids: &[String]) -> Result<()> {
+        validate_identifiers(order_ids)?;
+        let path = self.existing_slot_path(slot_id)?;
+        let mut connection = open_connection(&path, true)?;
+        validate_update_safety(&connection)?;
+        let transaction = connection.transaction()?;
+        let existing_order_ids = {
+            let mut statement = transaction.prepare("SELECT order_id FROM orders")?;
+            let order_ids = statement
+                .query_map([], |row| row.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            order_ids
+        };
+        let requested = order_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<std::collections::HashSet<_>>();
+        for existing_order_id in existing_order_ids {
+            if !requested.contains(existing_order_id.as_str()) {
+                transaction.execute(
+                    "DELETE FROM orders WHERE order_id = ?1",
+                    [&existing_order_id],
+                )?;
+            }
+        }
+        for order_id in order_ids {
+            transaction.execute(
+                "INSERT INTO orders(order_id, state, pot_x, pot_z, pot_yaw)
+                 VALUES (?1, 'pending', NULL, NULL, NULL) ON CONFLICT DO NOTHING",
+                [order_id],
+            )?;
         }
         update_timestamp(&transaction)?;
         transaction.commit()?;
@@ -575,9 +690,18 @@ fn create_database(
         )?;
     }
     transaction.execute(
-        "INSERT INTO progress(singleton, reputation) VALUES (1, ?1)",
-        [input.reputation],
+        "INSERT INTO progress(singleton, reputation, tutorials_enabled) VALUES (1, ?1, ?2)",
+        params![input.reputation, input.tutorials_enabled],
     )?;
+    for milestone_id in &input.completed_tutorial_milestones {
+        transaction.execute(
+            "INSERT INTO tutorial_milestones(milestone_id) VALUES (?1)",
+            [milestone_id],
+        )?;
+    }
+    for tool_id in &input.acquired_tool_ids {
+        transaction.execute("INSERT INTO acquired_tools(tool_id) VALUES (?1)", [tool_id])?;
+    }
     for order in &input.orders {
         let (state, pot_x, pot_z, pot_yaw) = order_columns(order);
         transaction.execute(
@@ -669,6 +793,21 @@ fn query_orders(connection: &Connection) -> Result<Vec<OrderRecord>> {
     Ok(orders)
 }
 
+fn query_identifier_table(
+    connection: &Connection,
+    table: &str,
+    id_column: &str,
+) -> Result<Vec<String>> {
+    let mut statement = connection.prepare(&format!(
+        "SELECT {id_column} FROM {table} ORDER BY {id_column}"
+    ))?;
+    let ids = statement
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    validate_identifiers(&ids).map_err(|_| SaveStoreError::InvalidStructure)?;
+    Ok(ids)
+}
+
 fn query_order_state(
     connection: &Connection,
     order_id: &str,
@@ -741,8 +880,11 @@ fn validate_input(input: &CreateSlotInput) -> Result<()> {
     if !(0..=MAX_REPUTATION).contains(&input.reputation) {
         return Err(SaveStoreError::InvalidStructure);
     }
+    validate_identifiers(&input.completed_tutorial_milestones)?;
+    validate_identifiers(&input.acquired_tool_ids)?;
     let mut order_ids = std::collections::HashSet::new();
     for order in &input.orders {
+        validate_identifier(&order.order_id)?;
         if !order_ids.insert(&order.order_id) {
             return Err(SaveStoreError::InvalidStructure);
         }
@@ -750,6 +892,25 @@ fn validate_input(input: &CreateSlotInput) -> Result<()> {
             (OrderStatus::Pending | OrderStatus::Completed, None) => {}
             (OrderStatus::Accepted, Some(pot)) => validate_pot(pot)?,
             _ => return Err(SaveStoreError::InvalidStructure),
+        }
+    }
+    Ok(())
+}
+
+fn validate_identifier(identifier: &str) -> Result<()> {
+    if identifier.trim().is_empty() {
+        Err(SaveStoreError::BlankIdentifier)
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_identifiers(identifiers: &[String]) -> Result<()> {
+    let mut seen = std::collections::HashSet::new();
+    for identifier in identifiers {
+        validate_identifier(identifier)?;
+        if !seen.insert(identifier) {
+            return Err(SaveStoreError::InvalidStructure);
         }
     }
     Ok(())
@@ -855,6 +1016,7 @@ fn validate_database(connection: &Connection) -> Result<()> {
 
 fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
     validate_no_required_table_triggers(connection)?;
+    validate_exact_tables(connection)?;
     validate_required_columns(
         connection,
         "metadata",
@@ -902,7 +1064,18 @@ fn validate_database_inner(connection: &Connection) -> rusqlite::Result<()> {
         vec![
             column("singleton", "INTEGER", false, 1),
             column("reputation", "INTEGER", true, 0),
+            column("tutorials_enabled", "BOOLEAN", true, 0),
         ],
+    )?;
+    validate_required_columns(
+        connection,
+        "tutorial_milestones",
+        vec![column("milestone_id", "TEXT", false, 1)],
+    )?;
+    validate_required_columns(
+        connection,
+        "acquired_tools",
+        vec![column("tool_id", "TEXT", false, 1)],
     )?;
     validate_required_columns(
         connection,
@@ -953,10 +1126,12 @@ fn validate_required_check_constraints(connection: &Connection) -> rusqlite::Res
     )?;
     let probe = Connection::open_in_memory()?;
     probe.execute_batch(&progress_sql)?;
-    probe.execute("INSERT INTO progress VALUES(1, 0)", [])?;
+    probe.execute("INSERT INTO progress VALUES(1, 0, 1)", [])?;
     probe.execute("DELETE FROM progress", [])?;
-    if !is_constraint_error(probe.execute("INSERT INTO progress VALUES(2, 0)", []))
-        || !is_constraint_error(probe.execute("INSERT INTO progress VALUES(1, -1)", []))
+    if !is_constraint_error(probe.execute("INSERT INTO progress VALUES(2, 0, 1)", []))
+        || !is_constraint_error(probe.execute("INSERT INTO progress VALUES(1, -1, 1)", []))
+        || !is_constraint_error(probe.execute("INSERT INTO progress VALUES(1, 0, 2)", []))
+        || !is_constraint_error(probe.execute("INSERT INTO progress VALUES(1, 0, NULL)", []))
     {
         return Err(rusqlite::Error::InvalidQuery);
     }
@@ -1041,6 +1216,32 @@ fn validate_required_columns(
     Ok(())
 }
 
+fn validate_exact_tables(connection: &Connection) -> rusqlite::Result<()> {
+    let mut statement = connection.prepare(
+        "SELECT name FROM sqlite_schema
+         WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+         ORDER BY name",
+    )?;
+    let tables = statement
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let expected = vec![
+        "acquired_tools",
+        "camera",
+        "diagrams",
+        "metadata",
+        "orders",
+        "progress",
+        "trees",
+        "tutorial_milestones",
+    ];
+    if tables == expected {
+        Ok(())
+    } else {
+        Err(rusqlite::Error::InvalidQuery)
+    }
+}
+
 fn sqlite_affinity(declared_type: &str) -> Affinity {
     let declared_type = declared_type.to_ascii_uppercase();
     if declared_type.contains("INT") {
@@ -1071,7 +1272,10 @@ fn validate_no_required_table_triggers(connection: &Connection) -> rusqlite::Res
         "SELECT EXISTS(
            SELECT 1 FROM sqlite_schema
            WHERE type = 'trigger'
-             AND tbl_name IN ('metadata', 'camera', 'diagrams', 'trees', 'progress', 'orders')
+             AND tbl_name IN (
+               'metadata', 'camera', 'diagrams', 'trees', 'progress', 'tutorial_milestones',
+               'acquired_tools', 'orders'
+             )
          )",
         [],
         |row| row.get(0),
@@ -1202,11 +1406,130 @@ mod tests {
             camera: camera(),
             trees: vec![tree("a", BLANK), tree("b", BLANK)],
             reputation: 0,
+            tutorials_enabled: true,
+            completed_tutorial_milestones: vec![],
+            acquired_tool_ids: vec!["sprout-spawner".into()],
             orders: vec![OrderRecord {
                 order_id: "starter-double-cut".into(),
                 state: OrderStatus::Pending,
                 pot: None,
             }],
+        }
+    }
+
+    // This catches omitted tutorial/tool persistence and non-idempotent progression retries.
+    #[test]
+    fn persists_tutorial_and_tool_progression_idempotently() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = SaveStore::new(temp.path().to_path_buf());
+        let slot_id = store.create(basic_input()).unwrap().slot_id;
+
+        let created = store.load(&slot_id).unwrap();
+        assert!(created.tutorials_enabled);
+        assert_eq!(created.completed_tutorial_milestones, Vec::<String>::new());
+        assert_eq!(created.acquired_tool_ids, vec!["sprout-spawner"]);
+
+        store.set_tutorials_enabled(&slot_id, false).unwrap();
+        store
+            .complete_tutorial_milestone(&slot_id, "welcome")
+            .unwrap();
+        store
+            .complete_tutorial_milestone(&slot_id, "welcome")
+            .unwrap();
+        store.acquire_tool(&slot_id, "double-cut-tool").unwrap();
+        store.acquire_tool(&slot_id, "double-cut-tool").unwrap();
+
+        let loaded = store.load(&slot_id).unwrap();
+        assert!(!loaded.tutorials_enabled);
+        assert_eq!(loaded.completed_tutorial_milestones, vec!["welcome"]);
+        assert_eq!(
+            loaded.acquired_tool_ids,
+            vec!["double-cut-tool", "sprout-spawner"]
+        );
+    }
+
+    // This catches catalog reconciliation that resets preserved state or retains obsolete pots.
+    #[test]
+    fn replaces_order_ids_preserving_matching_state_and_removing_absent_pots() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = SaveStore::new(temp.path().to_path_buf());
+        let mut input = basic_input();
+        input.orders = vec![
+            OrderRecord {
+                order_id: "a".into(),
+                state: OrderStatus::Pending,
+                pot: None,
+            },
+            OrderRecord {
+                order_id: "removed".into(),
+                state: OrderStatus::Pending,
+                pot: None,
+            },
+        ];
+        let slot_id = store.create(input).unwrap().slot_id;
+        let kept_pot = PotPlacementRecord {
+            x: 3.0,
+            z: -6.0,
+            yaw: 0.5,
+        };
+        store.accept_order(&slot_id, "a", kept_pot.clone()).unwrap();
+        store
+            .accept_order(
+                &slot_id,
+                "removed",
+                PotPlacementRecord {
+                    x: 4.0,
+                    z: -8.0,
+                    yaw: 0.75,
+                },
+            )
+            .unwrap();
+
+        store
+            .replace_order_ids(&slot_id, &["a".into(), "b".into()])
+            .unwrap();
+
+        assert_eq!(
+            store.load(&slot_id).unwrap().orders,
+            vec![
+                OrderRecord {
+                    order_id: "a".into(),
+                    state: OrderStatus::Accepted,
+                    pot: Some(kept_pot),
+                },
+                OrderRecord {
+                    order_id: "b".into(),
+                    state: OrderStatus::Pending,
+                    pot: None,
+                },
+            ]
+        );
+    }
+
+    // This catches structural validation that ignores unauthorised schema additions.
+    #[test]
+    fn rejects_unknown_columns_and_tables() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = SaveStore::new(temp.path().to_path_buf());
+
+        for (slot_id, mutation) in [
+            (
+                "unknown-column",
+                "ALTER TABLE progress ADD COLUMN legacy INTEGER",
+            ),
+            ("unknown-table", "CREATE TABLE legacy (value TEXT)"),
+        ] {
+            let path = temp.path().join(format!("{slot_id}.sqlite3"));
+            store.create_at(&path, slot_id, 0, basic_input()).unwrap();
+            Connection::open(path)
+                .unwrap()
+                .execute_batch(mutation)
+                .unwrap();
+
+            assert!(matches!(
+                store.load(slot_id),
+                Err(SaveStoreError::InvalidStructure)
+            ));
         }
     }
 
@@ -1581,7 +1904,9 @@ mod tests {
                  CREATE TABLE diagrams(diagram_key INTEGER PRIMARY KEY,diagram_json TEXT UNIQUE NOT NULL);
                  CREATE TABLE trees(tree_id TEXT PRIMARY KEY,diagram_key INTEGER NOT NULL REFERENCES diagrams(diagram_key),
                     x REAL NOT NULL,z REAL NOT NULL,yaw REAL NOT NULL);
-                 CREATE TABLE progress(singleton INTEGER PRIMARY KEY CHECK(singleton = 1),reputation INTEGER NOT NULL CHECK(reputation >= 0));
+                 CREATE TABLE progress(singleton INTEGER PRIMARY KEY CHECK(singleton = 1),reputation INTEGER NOT NULL CHECK(reputation >= 0),tutorials_enabled BOOLEAN NOT NULL CHECK(tutorials_enabled IN (0, 1)));
+                 CREATE TABLE tutorial_milestones(milestone_id TEXT PRIMARY KEY);
+                 CREATE TABLE acquired_tools(tool_id TEXT PRIMARY KEY);
                  CREATE TABLE orders(order_id TEXT PRIMARY KEY,state TEXT NOT NULL CHECK(state IN ('pending','accepted','completed')),
                     pot_x REAL,pot_z REAL,pot_yaw REAL,
                     CHECK((state = 'accepted' AND pot_x IS NOT NULL AND pot_z IS NOT NULL AND pot_yaw IS NOT NULL)
@@ -1591,7 +1916,7 @@ mod tests {
                  INSERT INTO camera VALUES(1, 1, 2, 3, .25, -.5);
                  INSERT INTO diagrams VALUES(7, '{\"regions\":[],\"nodes\":[],\"wires\":[]}');
                  INSERT INTO trees VALUES('tree-a', 7, 4, 5, .75);
-                 INSERT INTO progress VALUES(1, 0);
+                 INSERT INTO progress VALUES(1, 0, 1);
                  INSERT INTO orders VALUES('starter-double-cut', 'pending', NULL, NULL, NULL);",
             )
             .unwrap();
@@ -1639,7 +1964,7 @@ mod tests {
                  INSERT INTO camera VALUES(1, 1, 2, 3, .25, -.5);
                  INSERT INTO diagrams VALUES(7, '{\"regions\":[],\"nodes\":[],\"wires\":[]}');
                  INSERT INTO trees VALUES('tree-a', 7, 4, 5, .75);
-                 INSERT INTO progress VALUES(1, 0);
+                 INSERT INTO progress VALUES(1, 0, 1);
                  INSERT INTO orders VALUES('starter-double-cut', 'pending', NULL, NULL, NULL);",
             )
             .unwrap();
@@ -1673,7 +1998,7 @@ mod tests {
                  INSERT INTO camera VALUES(1, 1, 2, 3, .25, -.5);
                  INSERT INTO diagrams VALUES(7, '{\"regions\":[],\"nodes\":[],\"wires\":[]}');
                  INSERT INTO trees VALUES('tree-a', 7, 4, 5, .75);
-                 INSERT INTO progress VALUES(1, 0);
+                 INSERT INTO progress VALUES(1, 0, 1);
                  INSERT INTO orders VALUES('starter-double-cut', 'pending', NULL, NULL, NULL);",
             )
             .unwrap();
@@ -1792,7 +2117,7 @@ mod tests {
                     "INSERT INTO metadata(singleton, slot_id, display_name, updated_at_ms)
                      VALUES(1, '{slot_id}', 'Invalid', 0);
                      INSERT INTO camera VALUES(1, 0, 0, 0, 0, 0);
-                     INSERT INTO progress VALUES(1, 0);
+                     INSERT INTO progress VALUES(1, 0, 1);
                      INSERT INTO orders VALUES('starter-double-cut', 'pending', NULL, NULL, NULL);"
                 ))
                 .unwrap();
@@ -1837,7 +2162,7 @@ mod tests {
                 .execute_batch(&format!(
                     "INSERT INTO metadata VALUES(1, '{slot_id}', 'Invalid', 0);
                      INSERT INTO camera VALUES(1, 0, 0, 0, 0, 0);
-                     INSERT INTO progress VALUES(1, 0);
+                     INSERT INTO progress VALUES(1, 0, 1);
                      INSERT INTO orders VALUES('starter-double-cut', 'pending', NULL, NULL, NULL);"
                 ))
                 .unwrap();
@@ -1871,7 +2196,7 @@ mod tests {
                 .execute_batch(&format!(
                     "INSERT INTO metadata VALUES(1, '{slot_id}', 'Invalid', 0);
                      INSERT INTO camera VALUES(1, 0, 0, 0, 0, 0);
-                     INSERT INTO progress VALUES(1, 0);
+                     INSERT INTO progress VALUES(1, 0, 1);
                      INSERT INTO orders VALUES('starter-double-cut', 'pending', NULL, NULL, NULL);"
                 ))
                 .unwrap();
@@ -1943,7 +2268,7 @@ mod tests {
                 "PRAGMA foreign_keys = OFF;
              INSERT INTO metadata VALUES(1, 'dangling', 'Dangling', 0);
              INSERT INTO camera VALUES(1, 0, 0, 0, 0, 0);
-             INSERT INTO progress VALUES(1, 0);
+             INSERT INTO progress VALUES(1, 0, 1);
              INSERT INTO orders VALUES('starter-double-cut', 'pending', NULL, NULL, NULL);
              INSERT INTO trees VALUES('tree-a', 9, 0, 0, 0);",
             )
@@ -1957,7 +2282,7 @@ mod tests {
                 "INSERT INTO metadata VALUES(1, 'non-finite', 'Non finite', 0);
              INSERT INTO camera VALUES(1, 0, 0, 0, 0, 0);
              INSERT INTO diagrams VALUES(1, '{\"regions\":[],\"nodes\":[],\"wires\":[]}');
-             INSERT INTO progress VALUES(1, 0);
+             INSERT INTO progress VALUES(1, 0, 1);
              INSERT INTO orders VALUES('starter-double-cut', 'pending', NULL, NULL, NULL);
              INSERT INTO trees VALUES('tree-a', 1, 1e999, 0, 0);",
             )
@@ -1983,6 +2308,9 @@ mod tests {
                 camera: camera(),
                 trees: vec![tree("tree-a", r#""not a diagram""#)],
                 reputation: 0,
+                tutorials_enabled: true,
+                completed_tutorial_milestones: vec![],
+                acquired_tool_ids: vec![],
                 orders: vec![],
             })
             .unwrap();
@@ -2012,6 +2340,9 @@ mod tests {
                     tree("c", r#"{ "regions":[],"nodes":[],"wires":[]}"#),
                 ],
                 reputation: 0,
+                tutorials_enabled: true,
+                completed_tutorial_milestones: vec![],
+                acquired_tool_ids: vec![],
                 orders: vec![],
             })
             .unwrap();
