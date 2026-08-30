@@ -16,11 +16,10 @@ class TestElement extends EventTarget {
   public type = ''
   public className = ''
   public readOnly = false
-  public disabled = false
   public width = 320
   public height = 200
   public focusCalls = 0
-  public parent: TestElement | null = null
+  public parent: EventTarget | null = null
   public readonly dataset: Record<string, string> = {}
   public readonly children: TestElement[] = []
 
@@ -29,6 +28,19 @@ class TestElement extends EventTarget {
     public readonly tagName: string,
   ) {
     super()
+  }
+
+  private disabledValue = false
+
+  public get disabled(): boolean {
+    return this.disabledValue
+  }
+
+  public set disabled(value: boolean) {
+    this.disabledValue = value
+    if (value && this.ownerDocument.activeElement === this) {
+      this.ownerDocument.activeElement = this.ownerDocument.body
+    }
   }
 
   public append(...children: TestElement[]): void {
@@ -67,8 +79,15 @@ class TestElement extends EventTarget {
   }
 }
 
-class TestDocument {
+class TestDocument extends EventTarget {
   public activeElement: TestElement | null = null
+  public readonly body: TestElement
+
+  public constructor() {
+    super()
+    this.body = new TestElement(this, 'BODY')
+    this.body.parent = this
+  }
 
   public createElement(tagName: string): TestElement {
     return new TestElement(this, tagName.toUpperCase())
@@ -128,6 +147,7 @@ function harness(initialRevision = revisionWithRememberedFormula()) {
   const save = element(documentTarget, 'orderEditorSave', 'button')
   form.append(id, prerequisites, reward, formula, preview, error, remove, cancel, save)
   root.append(title, form)
+  documentTarget.body.append(root)
 
   const live = new LiveOrderCatalog(initialRevision)
   const saved: OrderCatalogRevision[] = []
@@ -146,7 +166,7 @@ function harness(initialRevision = revisionWithRememberedFormula()) {
     },
   })
   return {
-    root, title, form, id, prerequisites, reward, formula, preview, error, remove, cancel, save,
+    documentTarget, root, title, form, id, prerequisites, reward, formula, preview, error, remove, cancel, save,
     saved, deleted, controller, live,
     setSaveResult: (result: Promise<void>) => { saveResult = result },
     setDeleteResult: (result: Promise<void>) => { deleteResult = result },
@@ -219,15 +239,17 @@ describe('order editor controller', () => {
   })
 
   it('uses exact nonblank formula text to replace the goal in a decoded candidate revision', async () => {
-    // Catches formula being treated as display-only or normalized before it is remembered.
+    // Catches formula normalization or a mutated read-only control changing edit identity.
     const h = harness()
     h.controller.edit(revisionWithRememberedFormula().byId.get('remembered')!)
+    h.id.value = 'forged-id'
     h.formula.value = '  ∀P:o. ¬¬P  '
 
     submit(h.form)
     await settle()
 
     const changed = h.saved[0]!.byId.get('remembered')!
+    expect(h.saved[0]!.byId.has('forged-id')).toBe(false)
     expect(changed.formula).toBe('  ∀P:o. ¬¬P  ')
     expect(changed.goal.json).toBe(JSON.stringify(diagramToJson(formulaToDiagram('  ∀P:o. ¬¬P  '))))
     expect(changed.goal.json).not.toBe(revisionWithRememberedFormula().byId.get('remembered')!.goal.json)
@@ -307,19 +329,27 @@ describe('order editor controller', () => {
   })
 
   it('stays open, restores controls, and leaves the live revision untouched after persistence rejects', async () => {
-    // Catches optimistic publication or a failed save stranding the modal in pending state.
+    // Catches failed persistence retaining a candidate preview or stranding the modal in pending state.
     const initial = revisionWithRememberedFormula()
+    const gate = deferred()
     const h = harness(initial)
-    h.setSaveResult(Promise.reject(new Error('repository is read-only')))
+    h.setSaveResult(gate.promise)
     h.controller.edit(initial.byId.get('remembered')!)
     h.reward.value = '9'
+    h.formula.value = '  ∀P:o. ¬¬P  '
 
     submit(h.form)
+    const candidatePreview = h.saved[0]!.byId.get('remembered')!.goal.json
+    expect(h.preview.dataset['diagramSnapshot']).toBe(candidatePreview)
+    expect(candidatePreview).not.toBe(initial.byId.get('remembered')!.goal.json)
+
+    gate.reject(new Error('repository is read-only'))
     await settle()
 
     expect(h.controller.isOpen).toBe(true)
     expect(h.error.textContent).toContain('repository is read-only')
     expect(h.id.disabled).toBe(false)
+    expect(h.preview.dataset['diagramSnapshot']).toBe(initial.byId.get('remembered')!.goal.json)
     expect(h.live.current).toBe(initial)
     expect(initial.byId.get('remembered')!.reward).toBe(7)
   })
@@ -328,14 +358,21 @@ describe('order editor controller', () => {
     // Catches closing before permanent content success or delete bypassing local graph validation.
     const saveGate = deferred()
     const saving = harness()
-    saving.setSaveResult(saveGate.promise)
+    saving.setSaveResult(saveGate.promise.then(() => {
+      saving.live.publish(saving.saved[0]!)
+    }))
     saving.controller.edit(revisionWithRememberedFormula().byId.get('remembered')!)
+    saving.formula.value = '  ∀P:o. ¬¬P  '
     submit(saving.form)
+    const candidatePreview = saving.saved[0]!.byId.get('remembered')!.goal.json
     expect(saving.controller.isOpen).toBe(true)
     expect(saving.save.disabled).toBe(true)
+    expect(saving.preview.dataset['diagramSnapshot']).toBe(candidatePreview)
     saveGate.resolve()
     await settle()
     expect(saving.controller.isOpen).toBe(false)
+    expect(saving.preview.dataset['diagramSnapshot']).toBe(candidatePreview)
+    expect(saving.live.current).toBe(saving.saved[0])
 
     const deleteGate = deferred()
     const deleting = harness()
@@ -367,20 +404,55 @@ describe('order editor controller', () => {
     expect(escape.cancelBubble).toBe(true)
   })
 
-  it('allows the application to hide a busy editor without stale completion closing a later editor', async () => {
-    // Catches the Developer Tools close guard or a stale save promise taking ownership of a later modal session.
+  it('captures pending Escape after disabled focus falls back to the document body', async () => {
+    // Catches root-only Escape handling allowing the world Pause action after browser focus leaves the modal.
+    const gate = deferred()
+    const h = harness()
+    h.setSaveResult(gate.promise)
+    h.controller.edit(revisionWithRememberedFormula().byId.get('remembered')!)
+
+    submit(h.form)
+    expect(h.documentTarget.activeElement).toBe(h.documentTarget.body)
+    const escape = key('Escape')
+    h.documentTarget.body.dispatchEvent(escape)
+
+    expect(h.controller.isOpen).toBe(true)
+    expect(escape.defaultPrevented).toBe(true)
+    expect(escape.cancelBubble).toBe(true)
+
+    gate.resolve()
+    await settle()
+    const afterClose = key('Escape')
+    h.documentTarget.body.dispatchEvent(afterClose)
+    expect(afterClose.defaultPrevented).toBe(false)
+  })
+
+  it('keeps persistence locked across hide and rejects overlapping reopen, save, and delete attempts', async () => {
+    // Catches modal visibility or session generation releasing an unresolved persistence operation.
     const gate = deferred()
     const h = harness()
     h.setSaveResult(gate.promise)
     h.controller.edit(revisionWithRememberedFormula().byId.get('remembered')!)
     submit(h.form)
 
-    h.controller.hide()
+    h.controller.create()
+    expect(h.id.value).toBe('remembered')
+    click(h.remove)
+    expect(h.deleted).toEqual([])
 
+    h.controller.hide()
     expect(h.controller.isOpen).toBe(false)
     h.controller.create()
+    submit(h.form)
+    click(h.remove)
+    expect(h.controller.isOpen).toBe(false)
+    expect(h.saved).toHaveLength(1)
+    expect(h.deleted).toEqual([])
+
     gate.resolve()
     await settle()
+
+    h.controller.create()
     expect(h.controller.isOpen).toBe(true)
   })
 

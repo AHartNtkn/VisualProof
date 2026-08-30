@@ -127,16 +127,18 @@ export function mountOrderEditor(
   const controls = [id, prerequisites, reward, formula, remove, cancel, save] as const
   const disposers: Array<() => void> = []
   let mode: EditorMode | null = null
-  let busy = false
+  let operationPending = false
   let disposed = false
   let generation = 0
+  let escapeCaptureInstalled = false
+  const escapeCaptureOptions = { capture: true } as const
 
   const listen = (target: EventTarget, type: string, listener: EventListener): void => {
     target.addEventListener(type, listener)
     disposers.push(() => target.removeEventListener(type, listener))
   }
-  const setBusy = (value: boolean): void => {
-    busy = value
+  const setOperationPending = (value: boolean): void => {
+    operationPending = value
     for (const control of controls) control.disabled = value
   }
   const showError = (operation: 'save' | 'delete', thrown: unknown): void => {
@@ -146,24 +148,43 @@ export function mountOrderEditor(
     preview.dataset['diagramSnapshot'] = snapshot.json
     renderDiagramPreview(preview, snapshot)
   }
+  const onDocumentKeydown = ((event: KeyboardEvent): void => {
+    if (event.code !== 'Escape') return
+    event.preventDefault()
+    event.stopPropagation()
+    hideIfIdle()
+  }) as EventListener
+  const installEscapeCapture = (): void => {
+    if (escapeCaptureInstalled) return
+    root.ownerDocument.addEventListener('keydown', onDocumentKeydown, escapeCaptureOptions)
+    escapeCaptureInstalled = true
+  }
+  const removeEscapeCapture = (): void => {
+    if (!escapeCaptureInstalled) return
+    root.ownerDocument.removeEventListener('keydown', onDocumentKeydown, escapeCaptureOptions)
+    escapeCaptureInstalled = false
+  }
   const hide = (): void => {
     generation += 1
-    setBusy(false)
+    removeEscapeCapture()
     root.hidden = true
     mode = null
     error.textContent = ''
   }
   const hideIfIdle = (): void => {
-    if (!busy) hide()
+    if (!operationPending) hide()
   }
   const submit = async (): Promise<void> => {
-    if (disposed || busy || mode === null) return
+    if (disposed || operationPending || mode === null) return
     error.textContent = ''
     let candidate: OrderCatalogRevision
+    let candidatePreview: DiagramSnapshot
+    const authoritativePreview = mode.goal
     try {
       const goal = candidateGoal(mode.goal, formula.value)
+      candidatePreview = goal.goal
       const shared = {
-        id: id.value,
+        id: mode.kind === 'edit' ? mode.orderId : id.value,
         prerequisites: parsePrerequisites(prerequisites.value),
         reward: parseReward(reward.value),
         goal: diagramToJson(goal.goal.diagram),
@@ -177,21 +198,23 @@ export function mountOrderEditor(
       showError('save', thrown)
       return
     }
+    showPreview(candidatePreview)
     const operationGeneration = generation
-    setBusy(true)
+    setOperationPending(true)
     try {
       await actions.save(candidate)
+      setOperationPending(false)
       if (operationGeneration !== generation) return
-      setBusy(false)
       hide()
     } catch (thrown) {
+      setOperationPending(false)
       if (operationGeneration !== generation) return
-      setBusy(false)
+      showPreview(authoritativePreview)
       showError('save', thrown)
     }
   }
   const deleteOrder = async (): Promise<void> => {
-    if (disposed || busy || mode?.kind !== 'edit') return
+    if (disposed || operationPending || mode?.kind !== 'edit') return
     error.textContent = ''
     try {
       deletionCandidate(actions.currentRevision(), mode.orderId)
@@ -201,15 +224,15 @@ export function mountOrderEditor(
     }
     const orderId = mode.orderId
     const operationGeneration = generation
-    setBusy(true)
+    setOperationPending(true)
     try {
       await actions.delete(orderId)
+      setOperationPending(false)
       if (operationGeneration !== generation) return
-      setBusy(false)
       hide()
     } catch (thrown) {
+      setOperationPending(false)
       if (operationGeneration !== generation) return
-      setBusy(false)
       showError('delete', thrown)
     }
   }
@@ -222,13 +245,7 @@ export function mountOrderEditor(
   listen(cancel, 'click', hideIfIdle)
   listen(root, 'keydown', ((event: KeyboardEvent): void => {
     if (root.hidden) return
-    if (event.code === 'Escape') {
-      event.preventDefault()
-      event.stopPropagation()
-      hideIfIdle()
-      return
-    }
-    if (event.code !== 'Tab' || busy) return
+    if (event.code !== 'Tab' || operationPending) return
     const visibleControls = controls.filter((control) => !control.hidden)
     const activeIndex = visibleControls.findIndex((control) => control === root.ownerDocument.activeElement)
     const nextIndex = event.shiftKey
@@ -240,12 +257,12 @@ export function mountOrderEditor(
   }) as EventListener)
 
   const show = (nextMode: EditorMode, definition?: OrderDefinition): void => {
-    if (disposed) return
+    if (disposed || operationPending) return
     generation += 1
     mode = nextMode
-    setBusy(false)
     error.textContent = ''
     root.hidden = false
+    installEscapeCapture()
     if (nextMode.kind === 'edit') {
       title.textContent = 'Edit order'
       id.value = definition!.id
@@ -286,8 +303,8 @@ export function mountOrderEditor(
       if (disposed) return
       disposed = true
       generation += 1
+      removeEscapeCapture()
       while (disposers.length > 0) disposers.pop()!()
-      busy = false
       mode = null
       root.hidden = true
       error.textContent = ''
