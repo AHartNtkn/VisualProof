@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { $, browser, expect } from '@wdio/globals'
 import { after, describe, it } from 'mocha'
+import { formulaToDiagram } from '../../src/formula'
+import { DiagramBuilder, diagramFromJson, sameDiagram, type Diagram } from '../../src/kernel/diagram'
 import {
   aimReticleAt,
   attribute,
@@ -24,6 +26,66 @@ const contentPath = new URL('../content/orders.json', import.meta.url)
 const startingContent = readFileSync(contentPath)
 const CREATED_ID = 'developer-blank'
 const REMEMBERED_FORMULA = '∀P:o. ¬¬P'
+
+type PersistedOrderDefinition = {
+  readonly id: string
+  readonly prerequisites: readonly string[]
+  readonly reward: number
+  readonly goal: Diagram
+  readonly formula?: string
+}
+
+function persistedCatalog(): readonly PersistedOrderDefinition[] {
+  const content: unknown = JSON.parse(readFileSync(contentPath, 'utf8'))
+  if (!Array.isArray(content)) throw new Error('persisted order catalog is not an array')
+  return content.map((value, index) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new Error(`persisted order ${index} is not an object`)
+    }
+    const record = value as Record<string, unknown>
+    if (typeof record['id'] !== 'string') throw new Error(`persisted order ${index} has no string id`)
+    if (!Array.isArray(record['prerequisites']) || record['prerequisites'].some((entry) => typeof entry !== 'string')) {
+      throw new Error(`persisted order ${index} has malformed prerequisites`)
+    }
+    if (typeof record['reward'] !== 'number' || !Number.isSafeInteger(record['reward'])) {
+      throw new Error(`persisted order ${index} has malformed reward`)
+    }
+    if (record['formula'] !== undefined && typeof record['formula'] !== 'string') {
+      throw new Error(`persisted order ${index} has malformed formula`)
+    }
+    const common = {
+      id: record['id'],
+      prerequisites: record['prerequisites'] as string[],
+      reward: record['reward'],
+      goal: diagramFromJson(record['goal']),
+    }
+    return record['formula'] === undefined
+      ? common
+      : { ...common, formula: record['formula'] }
+  })
+}
+
+function persistedOrderDefinition(orderId: string): PersistedOrderDefinition {
+  const matches = persistedCatalog().filter(({ id }) => id === orderId)
+  if (matches.length !== 1) {
+    throw new Error(`expected exactly one persisted definition for '${orderId}', found ${matches.length}`)
+  }
+  return matches[0]!
+}
+
+function expectPersistedFormulaOrder(orderId: string, formula: string): void {
+  const definition = persistedOrderDefinition(orderId)
+  expect(definition.formula).toBe(formula)
+  expect(sameDiagram(definition.goal, formulaToDiagram(formula))).toBe(true)
+}
+
+function expectPersistedBlankOrder(orderId: string): void {
+  const definition = persistedOrderDefinition(orderId)
+  expect(definition.prerequisites).toEqual([])
+  expect(definition.reward).toBe(1)
+  expect(definition.formula).toBeUndefined()
+  expect(sameDiagram(definition.goal, new DiagramBuilder().build())).toBe(true)
+}
 
 after(() => {
   writeFileSync(contentPath, startingContent)
@@ -184,7 +246,7 @@ describe('developer order content', () => {
     await $('[data-order-editor-save]').click()
     await expect($('[data-order-editor]')).not.toBeDisplayed()
     await waitForSave()
-    expect(readFileSync(contentPath, 'utf8')).toContain(REMEMBERED_FORMULA)
+    expectPersistedFormulaOrder('blank-sprout', REMEMBERED_FORMULA)
     expect(await settledScreenshot(() => elementScreenshot($(tileSelector)))).not.toBe(tileBefore)
     expect(await settledScreenshot(canvasCenterScreenshot)).not.toBe(potBefore)
 
@@ -207,7 +269,7 @@ describe('developer order content', () => {
     await expect($('[data-order-editor]')).not.toBeDisplayed()
     await waitForSave()
     expect(storedOrderIds(slotId)).toContain(CREATED_ID)
-    expect(readFileSync(contentPath, 'utf8')).toContain(`"id": "${CREATED_ID}"`)
+    expectPersistedBlankOrder(CREATED_ID)
 
     await toggleDeveloperMode(false)
     await $('[data-ledger-context="available"]').click()
@@ -222,7 +284,7 @@ describe('developer order content', () => {
     await loadSlot(slotId)
     expect(storedOrderIds(slotId)).toContain(CREATED_ID)
     expect(storedOrder(slotId, CREATED_ID).state).toBe('accepted')
-    expect(readFileSync(contentPath, 'utf8')).toContain(`"id": "${CREATED_ID}"`)
+    expectPersistedBlankOrder(CREATED_ID)
 
     await toggleDeveloperMode(true)
     await openLedger('orders')
@@ -233,7 +295,7 @@ describe('developer order content', () => {
     await expect($('[data-order-editor]')).not.toBeDisplayed()
     await waitForSave()
     expect(storedOrderIds(slotId)).not.toContain(CREATED_ID)
-    expect(readFileSync(contentPath, 'utf8')).not.toContain(`"id": "${CREATED_ID}"`)
+    expect(persistedCatalog().some(({ id }) => id === CREATED_ID)).toBe(false)
     expect(await canvasCenterScreenshot()).not.toBe(acceptedPotFrame)
     await expect($(`[data-order-id="${CREATED_ID}"]`)).not.toExist()
     expect(await attribute('errors')).toBe('')

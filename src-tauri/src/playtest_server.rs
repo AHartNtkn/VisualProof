@@ -330,7 +330,7 @@ impl IntoResponse for StoreError {
 #[cfg(test)]
 mod tests {
     use super::{router, router_with_content_store, PlaytestServerConfig};
-    use crate::save_store::{CameraRecord, OrderContentStore, SaveStore};
+    use crate::save_store::{CameraRecord, OrderContentRecord, OrderContentStore, SaveStore};
     use axum::{
         body::{to_bytes, Body},
         http::{header, HeaderValue, Request, StatusCode},
@@ -618,7 +618,8 @@ mod tests {
         assert_eq!(persisted.orders[0].pot, None);
     }
 
-    // This catches a browser-only content authority or a route that omits save reconciliation.
+    // This catches a browser-only content authority, persistence under the wrong order identity,
+    // or a route that omits save reconciliation.
     #[tokio::test]
     async fn order_catalog_route_persists_content_and_reconciles_the_same_save_store() {
         let temporary = tempfile::tempdir().unwrap();
@@ -663,10 +664,14 @@ mod tests {
                             "reward": 1,
                             "goal": {
                                 "root": "r0",
-                                "regions": {"r0": {"kind": "sheet"}},
+                                "regions": {
+                                    "r0": {"kind": "sheet"},
+                                    "outer": {"kind": "cut", "parent": "r0"}
+                                },
                                 "nodes": {},
                                 "wires": {}
-                            }
+                            },
+                            "formula": "¬P"
                         }]
                     }),
                 ))
@@ -676,9 +681,27 @@ mod tests {
             .await,
             Value::Null
         );
-        assert!(std::fs::read_to_string(content_path)
-            .unwrap()
-            .contains("\"id\": \"new\""));
+        assert_eq!(
+            serde_json::from_slice::<Vec<OrderContentRecord>>(
+                &std::fs::read(content_path).unwrap()
+            )
+            .unwrap(),
+            vec![OrderContentRecord {
+                id: "new".into(),
+                prerequisites: vec![],
+                reward: 1,
+                goal: json!({
+                    "root": "r0",
+                    "regions": {
+                        "r0": {"kind": "sheet"},
+                        "outer": {"kind": "cut", "parent": "r0"}
+                    },
+                    "nodes": {},
+                    "wires": {}
+                }),
+                formula: Some("¬P".into()),
+            }]
+        );
         assert_eq!(saves.load(slot_id).unwrap().orders[0].order_id, "new");
     }
 

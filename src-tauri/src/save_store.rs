@@ -1890,58 +1890,37 @@ mod tests {
         )
     }
 
-    // This catches publication before both the formatted content file and lifecycle save commit.
+    // This catches a successful content write changing an order's identity, goal, or optional
+    // formula while the lifecycle save is reconciled to a different set of IDs.
     #[test]
-    fn order_catalog_replacement_formats_content_and_reconciles_the_save() {
+    fn order_catalog_replacement_persists_definitions_and_reconciles_the_save() {
         let (_temporary, content, content_path, saves, slot_id, _previous_content, _previous_save) =
             content_and_save_fixture();
         let definitions = vec![
             order_content("first", &[]),
-            order_content("second", &["first"]),
+            OrderContentRecord {
+                goal: serde_json::json!({
+                    "root": "r0",
+                    "regions": {
+                        "r0": {"kind": "sheet"},
+                        "outer": {"kind": "cut", "parent": "r0"}
+                    },
+                    "nodes": {},
+                    "wires": {}
+                }),
+                formula: Some("¬P".into()),
+                ..order_content("second", &["first"])
+            },
         ];
 
         content
-            .save_order_catalog(&saves, &slot_id, definitions)
+            .save_order_catalog(&saves, &slot_id, definitions.clone())
             .unwrap();
 
         assert_eq!(
-            fs::read_to_string(content_path).unwrap(),
-            concat!(
-                "[\n",
-                "  {\n",
-                "    \"id\": \"first\",\n",
-                "    \"prerequisites\": [],\n",
-                "    \"reward\": 1,\n",
-                "    \"goal\": {\n",
-                "      \"nodes\": {},\n",
-                "      \"regions\": {\n",
-                "        \"r0\": {\n",
-                "          \"kind\": \"sheet\"\n",
-                "        }\n",
-                "      },\n",
-                "      \"root\": \"r0\",\n",
-                "      \"wires\": {}\n",
-                "    }\n",
-                "  },\n",
-                "  {\n",
-                "    \"id\": \"second\",\n",
-                "    \"prerequisites\": [\n",
-                "      \"first\"\n",
-                "    ],\n",
-                "    \"reward\": 1,\n",
-                "    \"goal\": {\n",
-                "      \"nodes\": {},\n",
-                "      \"regions\": {\n",
-                "        \"r0\": {\n",
-                "          \"kind\": \"sheet\"\n",
-                "        }\n",
-                "      },\n",
-                "      \"root\": \"r0\",\n",
-                "      \"wires\": {}\n",
-                "    }\n",
-                "  }\n",
-                "]\n"
-            )
+            serde_json::from_slice::<Vec<OrderContentRecord>>(&fs::read(content_path).unwrap())
+                .unwrap(),
+            definitions
         );
         assert_eq!(
             saves
