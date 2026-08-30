@@ -194,6 +194,7 @@ import { gameSession, publishTreeChange } from '../../../src/game/session'
 import { SaveWriter } from '../../../src/game/save-writer'
 import { treeUpdateFromGameTree } from '../../../src/game/save-client'
 import { openingOrderCatalog, type OrderProgress } from '../../../src/game/orders/catalog'
+import { availablePotPlacementAhead } from '../../../src/game/orders/placement'
 import { orderSession as createOrderSession, publishOrderMutation } from '../../../src/game/orders/session'
 import type { PotObject, PotRender } from '../../../src/game/render/pots'
 
@@ -780,6 +781,30 @@ describe('production game world', () => {
     world.dispose()
   })
 
+  it('targets either independently placed parallel order pot by ID', () => {
+    // Catches accepted pots remaining geometrically merged even when their lifecycle IDs differ.
+    const view = { eye: { x: 0, y: 0.55, z: 0 }, forward: { x: 0, y: 0, z: -1 } }
+    const first = availablePotPlacementAhead(view, 6, [])
+    const second = availablePotPlacementAhead(view, 6, [first])
+    const world = mountOrderWorld()
+    world.setPots([
+      { ...starterPot(first.x, first.z), orderId: 'parallel-a', placement: first },
+      { ...starterPot(second.x, second.z), orderId: 'parallel-b', placement: second },
+    ])
+
+    for (const [orderId, placement] of [['parallel-a', first], ['parallel-b', second]] as const) {
+      const dx = placement.x - view.eye.x
+      const dz = placement.z - view.eye.z
+      const length = Math.hypot(dx, dz)
+      world.setCamera({
+        eye: view.eye,
+        forward: { x: dx / length, y: 0, z: dz / length },
+      })
+      expect(world.pointAtToolTarget(0, 0, null)).toMatchObject({ kind: 'pot', orderId })
+    }
+    world.dispose()
+  })
+
   it('orders close semantic branch and pot hits by their ray distances', () => {
     const branch = blankTree('branch', 0, -20)
     const world = mountGameWorld(container(), [branch])
@@ -1067,6 +1092,14 @@ describe('production game world', () => {
     expect(() => world.commitOrderChange(prepared)).toThrow(/stale prepared order change/i)
     expect(() => world.discardOrderChange(prepared)).toThrow(/stale prepared order change/i)
     expect(incoming.group.parent).toBeNull()
+  })
+
+  it('rejects authoritative pot replacement after disposal', () => {
+    // Catches a stale async catalog publication repopulating a released renderer.
+    const world = mountOrderWorld()
+    world.dispose()
+
+    expect(() => world.setPots([starterPot()])).toThrow(/disposed/i)
   })
 
   it('points a branch through the same rotated placement used for rendering', () => {

@@ -16,9 +16,6 @@ describe('TutorialSession', () => {
     const session = new TutorialSession()
 
     expect(session.currentInstruction?.milestoneId).toBe('move')
-    expect(observe(session, { kind: 'tree-selected' })).toEqual([])
-    expect(observe(session, { kind: 'camera-capability', capability: 'look' })).toEqual([])
-
     expect(observe(session, { kind: 'camera-capability', capability: 'move' })).toEqual(['move'])
     expect(session.currentInstruction?.milestoneId).toBe('look')
     expect(observe(session, { kind: 'camera-capability', capability: 'look' })).toEqual(['look'])
@@ -34,7 +31,6 @@ describe('TutorialSession', () => {
 
     expect(observe(session, { kind: 'sprout-spawned', blankTreeCount: 2 })).toEqual([])
     expect(observe(session, { kind: 'sprout-spawned', blankTreeCount: 3 })).toEqual(['spawn-two-sprouts'])
-    expect(observe(session, { kind: 'tool-acquired', toolId: 'iteration' })).toEqual([])
     expect(observe(session, { kind: 'tool-acquired', toolId: 'double-cut' })).toEqual(['acquire-double-cut'])
     expect(observe(session, { kind: 'double-cut-applied' })).toEqual(['apply-double-cut'])
     expect(session.currentInstruction?.milestoneId).toBe('double-cut-explained')
@@ -61,14 +57,26 @@ describe('TutorialSession', () => {
     expect(session.completed.has('acquire-double-cut')).toBe(false)
 
     completeThroughSpawn(session)
-    session.setEnabled(false)
     expect(session.check('acquire-double-cut')).toBe(true)
-    expect(session.completed.has('acquire-double-cut')).toBe(false)
-
-    expect(observe(session, { kind: 'tool-acquired', toolId: 'double-cut' })).toEqual(['acquire-double-cut'])
     expect(session.completed.has('acquire-double-cut')).toBe(true)
     session.setEnabled(true)
     expect(session.currentInstruction?.milestoneId).not.toBe('acquire-double-cut')
+  })
+
+  it('retains early committed evidence and cascades it when prerequisites later complete', () => {
+    // Catches unchecked creation or early ungated acquisition erasing legitimate tutorial progress.
+    const session = new TutorialSession(false)
+
+    expect(observe(session, { kind: 'tool-acquired', toolId: 'double-cut' })).toEqual([])
+    expect(session.completed.has('acquire-double-cut')).toBe(false)
+    session.setEnabled(true)
+    expect(session.completed.has('acquire-double-cut')).toBe(false)
+
+    const finalCommit = completeThroughSpawn(session)
+
+    expect(finalCommit).toEqual(['spawn-two-sprouts', 'acquire-double-cut'])
+    expect(session.completed.has('acquire-double-cut')).toBe(true)
+    expect(session.currentInstruction?.milestoneId).toBe('apply-double-cut')
   })
 
   it('hides the card after the blank order while completing silent orders in either final-order sequence', () => {
@@ -90,9 +98,11 @@ describe('TutorialSession', () => {
       completeThroughDuplication(session)
 
       expect(observe(session, { kind: 'order-completed', orderId: 'single-double-cut' })).toEqual([])
-      expect(observe(session, { kind: 'order-completed', orderId: 'blank-sprout' })).toEqual(['complete-blank-order'])
+      expect(observe(session, { kind: 'order-completed', orderId: 'blank-sprout' })).toEqual([
+        'complete-blank-order',
+        'complete-single-double-cut-order',
+      ])
       expect(session.currentInstruction).toBeNull()
-      expect(observe(session, { kind: 'order-completed', orderId: 'single-double-cut' })).toEqual(['complete-single-double-cut-order'])
       expect(observe(session, { kind: 'order-completed', orderId: first })).toEqual([firstMilestone])
       expect(observe(session, { kind: 'order-completed', orderId: second })).toEqual([secondMilestone])
       expect(session.completed.has('complete-irregular-double-cut-a-order')).toBe(true)
@@ -115,7 +125,7 @@ describe('TutorialSession', () => {
   })
 })
 
-function completeThroughSpawn(session: TutorialSession): void {
+function completeThroughSpawn(session: TutorialSession): readonly TutorialMilestoneId[] {
   observe(session, { kind: 'camera-capability', capability: 'move' })
   observe(session, { kind: 'camera-capability', capability: 'look' })
   observe(session, { kind: 'camera-capability', capability: 'ascend' })
@@ -124,7 +134,7 @@ function completeThroughSpawn(session: TutorialSession): void {
   observe(session, { kind: 'tree-selected' })
   observe(session, { kind: 'orbit-moved' })
   observe(session, { kind: 'orbit-exited' })
-  observe(session, { kind: 'sprout-spawned', blankTreeCount: 3 })
+  return observe(session, { kind: 'sprout-spawned', blankTreeCount: 3 })
 }
 
 function completeThroughDuplication(session: TutorialSession): void {

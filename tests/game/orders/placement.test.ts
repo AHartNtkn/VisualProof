@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { potPlacementAhead } from '../../../src/game/orders/placement'
+import { SPROUT_CLEARANCE } from '../../../src/game/placement'
+import { availablePotPlacementAhead, potPlacementAhead } from '../../../src/game/orders/placement'
 
 describe('pot placement ahead of the display camera', () => {
   it('places a pot six units ahead and faces it toward the camera', () => {
@@ -24,5 +25,21 @@ describe('pot placement ahead of the display camera', () => {
       eye: { x: 0, y: 2, z: 0 },
       forward: { x: 0, y: -1, z: 0 },
     }, 6)).toThrow(/horizontal/i)
+  })
+
+  it('deterministically allocates distinct clear pots from the same view', () => {
+    // Catches parallel accepted orders occupying one target and becoming indistinguishable.
+    const view = {
+      eye: { x: 0, y: 2, z: 0 },
+      forward: { x: 0, y: 0, z: -1 },
+    }
+    const first = availablePotPlacementAhead(view, 6, [])
+    const second = availablePotPlacementAhead(view, 6, [first])
+    const repeated = availablePotPlacementAhead(view, 6, [first])
+
+    expect(first).toEqual({ x: 0, z: -6, yaw: 0 })
+    expect(second).toEqual({ x: SPROUT_CLEARANCE, z: -6, yaw: 0 })
+    expect(repeated).toEqual(second)
+    expect(Math.hypot(second.x - first.x, second.z - first.z)).toBeGreaterThanOrEqual(SPROUT_CLEARANCE)
   })
 })

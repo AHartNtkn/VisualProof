@@ -97,6 +97,7 @@ export function orderTutorialGate(orderId: string): TutorialMilestoneId | null {
 
 export class TutorialSession {
   readonly #completed: Set<TutorialMilestoneId>
+  readonly #evidenced = new Set<TutorialMilestoneId>()
   #enabled: boolean
 
   public constructor(enabled = true, completed: Iterable<string> = []) {
@@ -129,14 +130,23 @@ export class TutorialSession {
   }
 
   public observe(event: TutorialEvent): TutorialCommit {
+    for (const milestone of milestones) {
+      if (!this.#completed.has(milestone.milestoneId) && milestone.matches(event)) {
+        this.#evidenced.add(milestone.milestoneId)
+      }
+    }
     const newlyCompleted: TutorialMilestoneId[] = []
     let advanced = true
     while (advanced) {
       advanced = false
       for (const milestone of milestones) {
-        if (this.#completed.has(milestone.milestoneId) || !this.prerequisitesMet(milestone)) continue
-        if (!milestone.matches(event)) continue
+        if (
+          this.#completed.has(milestone.milestoneId)
+          || !this.#evidenced.has(milestone.milestoneId)
+          || !this.prerequisitesMet(milestone)
+        ) continue
         this.#completed.add(milestone.milestoneId)
+        this.#evidenced.delete(milestone.milestoneId)
         newlyCompleted.push(milestone.milestoneId)
         advanced = true
       }

@@ -290,6 +290,7 @@ export function mountGameWorld(
   }
 
   const setPots = (pots: readonly PotRender[]): void => {
+    if (disposed) throw new Error('game world renderer is disposed')
     const orderIds = new Set<string>()
     for (const pot of pots) {
       if (orderIds.has(pot.orderId)) throw new Error(`duplicate pot for '${pot.orderId}'`)

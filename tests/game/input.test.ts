@@ -309,6 +309,36 @@ describe('world input sampling', () => {
 })
 
 describe('world input interruption and lifecycle', () => {
+  it.each(['Pause', 'ledger', 'Settings', 'order editor'])(
+    'suppresses new world pointer gestures while %s owns suspended input',
+    (_owner) => {
+      // Catches overlays stopping keyboard motion while world clicks still select or mutate trees.
+      const harness = createHarness()
+      harness.input.suspend()
+
+      harness.target.dispatchEvent(event('mousedown', { button: 2, clientX: 10, clientY: 20 }))
+      harness.windowTarget.dispatchEvent(event('mousemove', {
+        clientX: 15, clientY: 25, movementX: 5, movementY: 5,
+      }))
+      harness.windowTarget.dispatchEvent(event('mouseup', { button: 2, clientX: 15, clientY: 25 }))
+
+      expect(harness.pointers).toEqual([])
+      expect(harness.releases).toEqual([])
+    },
+  )
+
+  it('cancels a partial pointer gesture once and ignores its release after suspension', () => {
+    // Catches a pre-overlay press turning into a stationary world action when released over the overlay.
+    const harness = createHarness()
+    harness.target.dispatchEvent(event('mousedown', { button: 2, clientX: 10, clientY: 20 }))
+
+    harness.input.suspend()
+    harness.windowTarget.dispatchEvent(event('mouseup', { button: 2, clientX: 10, clientY: 20 }))
+
+    expect(harness.pointers).toEqual(['down:2:10:20', 'cancel'])
+    expect(harness.releases).toEqual([])
+  })
+
   it.each([
     ['pointer-lock loss', (harness: ReturnType<typeof createHarness>) => {
       harness.documentTarget.pointerLockElement = null

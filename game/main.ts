@@ -17,12 +17,11 @@ import {
   openingOrderCatalog,
 } from '../src/game/orders/catalog'
 import { orderContentClient, serializeOrderCatalog } from '../src/game/orders/content-client'
-import { potPlacementAhead } from '../src/game/orders/placement'
+import { availablePotPlacementAhead, potPlacementAhead } from '../src/game/orders/placement'
 import {
   initialOrderProgress,
   orderSession,
   publishOrderMutation,
-  reconcileOrderProgress,
   type OrderMutation,
   type OrderSession,
 } from '../src/game/orders/session'
@@ -54,6 +53,10 @@ import { quitApplication } from './quit'
 import { mountSettings, type SettingsController } from './settings'
 import { mountTutorialCard, type TutorialCardController } from './tutorial-card'
 import { WorldStateController } from './world-state'
+import {
+  acceptedPotsForRevision,
+  publishOrderCatalogRevision,
+} from './order-catalog-publication'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
 const worldHost = document.querySelector<HTMLElement>('[data-world]')!
@@ -112,6 +115,7 @@ let disposed = false
 let freeActive = false
 let developerMode = false
 let editorState: 'closed' | 'create' | 'edit' = 'closed'
+let worldGeneration = 0
 let releaseWriterStatus = (): void => {}
 const toolSelector = mountToolSelector(toolSelectorRoot)
 const preferences = new DeveloperPreferences()
@@ -231,32 +235,6 @@ function currentLedgerProgress(
   }
 }
 
-function acceptedPots(
-  activeOrders: OrderSession,
-): Parameters<GameWorldRenderer['setPots']>[0] {
-  return [...activeOrders.progress.orders].flatMap(([orderId, state]) => {
-    if (state.kind !== 'accepted') return []
-    const goal = openingOrderCatalog.definition(orderId)?.goal
-    if (goal === undefined) throw new Error(`missing authored goal for '${orderId}'`)
-    return [{ orderId, placement: state.pot, goal }]
-  })
-}
-
-async function publishCatalogRevision(
-  slotId: string,
-  activeOrders: OrderSession,
-  activeRenderer: GameWorldRenderer,
-  candidate: Parameters<typeof openingOrderCatalog.publish>[0],
-): Promise<void> {
-  await orderContentClient.save(slotId, serializeOrderCatalog(candidate))
-  activeOrders.replaceProgress(reconcileOrderProgress(activeOrders.progress, candidate))
-  openingOrderCatalog.publish(candidate)
-  activeRenderer.setPots(acceptedPots(activeOrders))
-  mirrorOrderProgress(activeOrders)
-  refreshVisibleLedger()
-  mirrorRuntimeState()
-}
-
 function deletionRevision(orderId: string) {
   return decodeOrderCatalog(
     serializeOrderCatalog(openingOrderCatalog.current).filter((definition) => definition.id !== orderId),
@@ -330,7 +308,13 @@ function acceptLedgerOrder(orderId: string, view: LedgerView): void {
   const activeRenderer = renderer
   if (activeOrders === null || activeWriter === null || activeRenderer === null) return
   try {
-    const mutation = activeOrders.planAccept(orderId, potPlacementAhead(view, POT_SPAWN_DISTANCE))
+    const occupiedPots = [...activeOrders.progress.orders.values()].flatMap((state) =>
+      state.kind === 'accepted' ? [state.pot] : [])
+    const mutation = activeOrders.planAccept(orderId, availablePotPlacementAhead(
+      view,
+      POT_SPAWN_DISTANCE,
+      occupiedPots,
+    ))
     publishOrderMutation(
       activeOrders,
       mutation,
@@ -535,6 +519,7 @@ async function refreshSlots(): Promise<void> {
 async function returnToMainMenu(): Promise<void> {
   const activeWriter = writer
   if (worldState?.isPaused !== true || activeWriter === null) return
+  worldGeneration += 1
   await activeWriter.dispose()
   cancelAnimationFrame(animationFrame)
   animationFrame = 0
@@ -734,6 +719,7 @@ function applySecondaryAction(clientX: number, clientY: number): void {
 }
 
 async function startWorld(world: GameWorld): Promise<void> {
+  const generation = ++worldGeneration
   const nextRenderer = mountGameWorld(worldHost, [...world.trees.values()], {
     goalForOrder: authoredGoalForOrder,
   })
@@ -752,6 +738,26 @@ async function startWorld(world: GameWorld): Promise<void> {
   let nextReleaseWriterStatus = (): void => {}
   let freeSecondaryPress: { readonly x: number; readonly y: number } | null = null
   try {
+    const publishCatalog = async (
+      candidate: Parameters<typeof openingOrderCatalog.publish>[0],
+    ): Promise<void> => {
+      await publishOrderCatalogRevision({
+        slotId: world.slot.id,
+        candidate,
+        writer: nextWriter,
+        contentClient: orderContentClient,
+        catalog: openingOrderCatalog,
+        orders: nextOrders,
+        renderer: nextRenderer,
+        isCurrent: () => generation === worldGeneration
+          && orders === nextOrders
+          && writer === nextWriter
+          && renderer === nextRenderer,
+      })
+      mirrorOrderProgress(nextOrders)
+      refreshVisibleLedger()
+      mirrorRuntimeState()
+    }
     nextLedger = mountLedger(ledgerRoot, {
       acquireTool: acquireLedgerTool,
       acceptOrder: acceptLedgerOrder,
@@ -776,15 +782,13 @@ async function startWorld(world: GameWorld): Promise<void> {
     })
     nextEditor = mountOrderEditor(orderEditorRoot, {
       currentRevision: () => openingOrderCatalog.current,
-      save: (candidate) => publishCatalogRevision(world.slot.id, nextOrders, nextRenderer, candidate),
-      delete: (orderId) => publishCatalogRevision(
-        world.slot.id,
-        nextOrders,
-        nextRenderer,
-        deletionRevision(orderId),
-      ),
+      save: publishCatalog,
+      delete: (orderId) => publishCatalog(deletionRevision(orderId)),
     })
-    nextRenderer.setPots(acceptedPots(nextOrders))
+    nextRenderer.setPots(acceptedPotsForRevision(
+      nextOrders.progress,
+      openingOrderCatalog.current,
+    ))
     nextRenderer.resize(worldHost.clientWidth, worldHost.clientHeight)
     nextRenderer.setCamera(displayCameraPose(nextCamera))
     nextReleaseWriterStatus = nextWriter.subscribe((status) => {
@@ -979,6 +983,7 @@ async function startWorld(world: GameWorld): Promise<void> {
     previousFrame = performance.now()
     animationFrame = requestAnimationFrame(animate)
   } catch (error) {
+    if (worldGeneration === generation) worldGeneration += 1
     worldState = null
     nextLedger?.dispose()
     nextEditor?.dispose()
@@ -1092,6 +1097,7 @@ resizeObserver.observe(worldHost)
 window.addEventListener('pagehide', () => {
   if (disposed) return
   disposed = true
+  worldGeneration += 1
   startLifecycle.dispose()
   cancelAnimationFrame(animationFrame)
   resizeObserver.disconnect()

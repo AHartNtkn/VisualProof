@@ -116,6 +116,7 @@ export function attachWorldInput(
     blockedUntilUp.delete(event.code)
   }) as EventListener
   const mouseMove = ((event: MouseEvent): void => {
+    if (suspended) return
     if (environment.document.pointerLockElement === target) {
       lookX += event.movementX
       lookY += event.movementY
@@ -123,11 +124,17 @@ export function attachWorldInput(
     }
   }) as EventListener
   const mouseDown = ((event: MouseEvent): void => {
+    if (suspended) return
     gestureActive = true
     gestureRelativeDistance = 0
     actions.pointerDown(event.button, event.clientX, event.clientY)
   }) as EventListener
   const mouseUp = ((event: MouseEvent): void => {
+    if (suspended) {
+      gestureActive = false
+      gestureRelativeDistance = 0
+      return
+    }
     if (!gestureActive) return
     gestureActive = false
     const relativeDistance = gestureRelativeDistance
