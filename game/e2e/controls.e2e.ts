@@ -49,7 +49,7 @@ describe('orchard world controls', () => {
     await expect(game()).toHaveAttribute('data-selected-tool', 'sprout-spawner')
     await expect($('.tool-selector-category')).not.toExist()
     await expect($('.tool-selector-row')).not.toExist()
-    expect(await $('[data-hud]').getText()).not.toContain('Sprout Spawner')
+    expect(await game().getText()).not.toContain('Sprout Spawner')
 
     const loadedPose = await displayedPose()
     await hold('w')
@@ -98,7 +98,7 @@ describe('orchard world controls', () => {
     })
     await expect($('.tool-selector-category')).not.toExist()
     await expect($('.tool-selector-row')).not.toExist()
-    expect(await $('[data-hud]').getText()).not.toContain('Sprout Spawner')
+    expect(await game().getText()).not.toContain('Sprout Spawner')
 
     await browser.keys('Escape')
     await $('[data-pause-main-menu]').click()
