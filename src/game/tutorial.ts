@@ -1,0 +1,181 @@
+export type TutorialMilestoneId =
+  | 'move'
+  | 'look'
+  | 'ascend'
+  | 'descend'
+  | 'sprint'
+  | 'select-tree'
+  | 'move-orbit'
+  | 'exit-orbit'
+  | 'spawn-two-sprouts'
+  | 'acquire-double-cut'
+  | 'apply-double-cut'
+  | 'double-cut-explained'
+  | 'acquire-iteration'
+  | 'duplicate-nonblank'
+  | 'complete-blank-order'
+  | 'complete-single-double-cut-order'
+  | 'complete-irregular-double-cut-a-order'
+  | 'complete-irregular-double-cut-b-order'
+
+export type TutorialEvent =
+  | { readonly kind: 'camera-capability'; readonly capability: 'move' | 'look' | 'ascend' | 'descend' | 'sprint' }
+  | { readonly kind: 'tree-selected' }
+  | { readonly kind: 'orbit-moved' }
+  | { readonly kind: 'orbit-exited' }
+  | { readonly kind: 'sprout-spawned'; readonly blankTreeCount: number }
+  | { readonly kind: 'tool-acquired'; readonly toolId: string }
+  | { readonly kind: 'double-cut-applied' }
+  | { readonly kind: 'ledger-opened' }
+  | { readonly kind: 'nonblank-tree-duplicated' }
+  | { readonly kind: 'order-completed'; readonly orderId: string }
+
+export type TutorialInstruction = {
+  readonly milestoneId: TutorialMilestoneId
+  readonly text: string
+}
+
+export type TutorialCommit = {
+  readonly newlyCompleted: readonly TutorialMilestoneId[]
+  readonly instruction: TutorialInstruction | null
+}
+
+type TutorialMilestone = TutorialInstruction & {
+  readonly prerequisites: readonly TutorialMilestoneId[]
+  readonly matches: (event: TutorialEvent) => boolean
+  readonly visible: boolean
+}
+
+const milestones: readonly TutorialMilestone[] = [
+  capabilityMilestone('move', 'Move through the orchard.', []),
+  capabilityMilestone('look', 'Look around with the mouse.', ['move']),
+  capabilityMilestone('ascend', 'Ascend while flying.', ['look']),
+  capabilityMilestone('descend', 'Descend while flying.', ['ascend']),
+  capabilityMilestone('sprint', 'Sprint through the orchard.', ['descend']),
+  milestone('select-tree', 'Select the tree.', ['sprint'], (event) => event.kind === 'tree-selected'),
+  milestone('move-orbit', 'Move while orbiting the selected tree.', ['select-tree'], (event) => event.kind === 'orbit-moved'),
+  milestone('exit-orbit', 'Press Backspace to return to free flight.', ['move-orbit'], (event) => event.kind === 'orbit-exited'),
+  milestone('spawn-two-sprouts', 'Plant two more blank sprouts on clear ground.', ['exit-orbit'], (event) => (
+    event.kind === 'sprout-spawned' && event.blankTreeCount >= 3
+  )),
+  milestone('acquire-double-cut', 'Open the ledger and acquire Double Cut.', ['spawn-two-sprouts'], (event) => (
+    event.kind === 'tool-acquired' && event.toolId === 'double-cut'
+  )),
+  milestone('apply-double-cut', 'Apply Double Cut to a tree.', ['acquire-double-cut'], (event) => event.kind === 'double-cut-applied'),
+  milestone('double-cut-explained', 'Double Cut adds two nested layers at a leaf or from an intermediate branch.', ['apply-double-cut'], (event) => event.kind === 'ledger-opened'),
+  milestone('acquire-iteration', 'Acquire Iteration from the ledger.', ['double-cut-explained'], (event) => (
+    event.kind === 'tool-acquired' && event.toolId === 'iteration'
+  )),
+  milestone('duplicate-nonblank', 'Duplicate a tree that is not a blank sprout.', ['acquire-iteration'], (event) => event.kind === 'nonblank-tree-duplicated'),
+  milestone('complete-blank-order', 'Accept and deliver the blank sprout order.', ['duplicate-nonblank'], (event) => (
+    event.kind === 'order-completed' && event.orderId === 'blank-sprout'
+  )),
+  silentMilestone('complete-single-double-cut-order', ['complete-blank-order'], (event) => (
+    event.kind === 'order-completed' && event.orderId === 'single-double-cut'
+  )),
+  silentMilestone('complete-irregular-double-cut-a-order', ['complete-single-double-cut-order'], (event) => (
+    event.kind === 'order-completed' && event.orderId === 'irregular-double-cut-a'
+  )),
+  silentMilestone('complete-irregular-double-cut-b-order', ['complete-single-double-cut-order'], (event) => (
+    event.kind === 'order-completed' && event.orderId === 'irregular-double-cut-b'
+  )),
+]
+
+const milestoneIds = new Set<TutorialMilestoneId>(milestones.map(({ milestoneId }) => milestoneId))
+
+export function toolTutorialGate(toolId: string): TutorialMilestoneId | null {
+  switch (toolId) {
+    case 'double-cut': return 'spawn-two-sprouts'
+    case 'iteration': return 'double-cut-explained'
+    default: return null
+  }
+}
+
+export function orderTutorialGate(orderId: string): TutorialMilestoneId | null {
+  return orderId === 'blank-sprout' ? 'duplicate-nonblank' : null
+}
+
+export class TutorialSession {
+  readonly #completed: Set<TutorialMilestoneId>
+  #enabled: boolean
+
+  public constructor(enabled = true, completed: Iterable<string> = []) {
+    this.#enabled = enabled
+    this.#completed = new Set(
+      [...completed].filter((milestoneId): milestoneId is TutorialMilestoneId => milestoneIds.has(milestoneId as TutorialMilestoneId)),
+    )
+  }
+
+  public get enabled(): boolean {
+    return this.#enabled
+  }
+
+  public get completed(): ReadonlySet<TutorialMilestoneId> {
+    return this.#completed
+  }
+
+  public get currentInstruction(): TutorialInstruction | null {
+    if (!this.#enabled) return null
+    const next = milestones.find(({ milestoneId, visible }) => visible && !this.#completed.has(milestoneId))
+    return next === undefined ? null : instruction(next)
+  }
+
+  public setEnabled(enabled: boolean): void {
+    this.#enabled = enabled
+  }
+
+  public check(milestoneId: TutorialMilestoneId): boolean {
+    return !this.#enabled || this.#completed.has(milestoneId)
+  }
+
+  public observe(event: TutorialEvent): TutorialCommit {
+    const newlyCompleted: TutorialMilestoneId[] = []
+    let advanced = true
+    while (advanced) {
+      advanced = false
+      for (const milestone of milestones) {
+        if (this.#completed.has(milestone.milestoneId) || !this.prerequisitesMet(milestone)) continue
+        if (!milestone.matches(event)) continue
+        this.#completed.add(milestone.milestoneId)
+        newlyCompleted.push(milestone.milestoneId)
+        advanced = true
+      }
+    }
+    return { newlyCompleted, instruction: this.currentInstruction }
+  }
+
+  private prerequisitesMet(milestone: TutorialMilestone): boolean {
+    return milestone.prerequisites.every((prerequisite) => this.#completed.has(prerequisite))
+  }
+}
+
+function capabilityMilestone(
+  milestoneId: Extract<TutorialMilestoneId, 'move' | 'look' | 'ascend' | 'descend' | 'sprint'>,
+  text: string,
+  prerequisites: readonly TutorialMilestoneId[],
+): TutorialMilestone {
+  return milestone(milestoneId, text, prerequisites, (event) => (
+    event.kind === 'camera-capability' && event.capability === milestoneId
+  ))
+}
+
+function milestone(
+  milestoneId: TutorialMilestoneId,
+  text: string,
+  prerequisites: readonly TutorialMilestoneId[],
+  matches: (event: TutorialEvent) => boolean,
+): TutorialMilestone {
+  return { milestoneId, text, prerequisites, matches, visible: true }
+}
+
+function silentMilestone(
+  milestoneId: TutorialMilestoneId,
+  prerequisites: readonly TutorialMilestoneId[],
+  matches: (event: TutorialEvent) => boolean,
+): TutorialMilestone {
+  return { milestoneId, text: '', prerequisites, matches, visible: false }
+}
+
+function instruction(milestone: TutorialInstruction): TutorialInstruction {
+  return { milestoneId: milestone.milestoneId, text: milestone.text }
+}
