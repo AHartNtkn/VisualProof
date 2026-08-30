@@ -81,7 +81,7 @@ const ledgerRoot = document.querySelector<HTMLElement>('[data-ledger]')!
 const pauseRoot = document.querySelector<HTMLElement>('[data-pause]')!
 const settingsRoot = document.querySelector<HTMLElement>('[data-settings]')!
 const tutorialCardRoot = document.querySelector<HTMLElement>('[data-tutorial-card]')!
-const developerModeIndicator = document.querySelector<HTMLElement>('[data-developer-mode]')!
+const developerModeIndicator = document.querySelector<HTMLElement>('[data-developer-mode-indicator]')!
 const orderEditorRoot = document.querySelector<HTMLElement>('[data-order-editor]')!
 const createTutorials = document.querySelector<HTMLInputElement>('[data-create-tutorials]')!
 
@@ -909,6 +909,7 @@ async function startWorld(world: GameWorld): Promise<void> {
         ledgerView = displayCameraPose(activeCamera)
         activeInput.suspend()
         freeActive = false
+        const explainsDoubleCut = activeTutorial.currentInstruction?.milestoneId === 'double-cut-explained'
         activeLedger.show({
           catalog: openingOrderCatalog.current,
           progress: currentLedgerProgress(activeOrders, activeTools, activeTutorial),
@@ -919,7 +920,7 @@ async function startWorld(world: GameWorld): Promise<void> {
         })
         mirrorLedger()
         mirrorControls()
-        observeTutorial({ kind: 'ledger-opened' })
+        if (explainsDoubleCut) observeTutorial({ kind: 'ledger-opened' })
       },
       toggleDeveloperMode() {
         if (

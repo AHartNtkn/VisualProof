@@ -32,10 +32,12 @@ The orchard is one sheet of assertion. Each tree is an isolated top-level subgra
 
 Accept orders from a catalog; grow the ordered tree; deliver it by iterating a copy into the order's pot.
 
-- **Catalog.** `Tab` opens the catalog and releases world input. Pending and
-  completed orders live in separate tabs. The current catalog contains one
-  starter order. It can be accepted or abandoned freely; abandonment removes
-  its pot and returns it to Pending with no penalty.
+- **Ledger.** `Tab` toggles a centered ledger and releases world input. Tools
+  has Available and Acquired views; Orders has Available, Active, and
+  Completed views. Available orders are derived from completed prerequisites.
+  Multiple orders may be active at once, each with its own pot. Abandonment
+  removes only that order's pot and returns the order to Available with no
+  penalty.
 - **Pot.** Opening the catalog captures the player's displayed position and
   horizontal facing. Accepting places the pot six world units ahead of that
   chosen view and displays a hologram of the goal diagram. A goal is always
@@ -59,23 +61,25 @@ mapping. While a tree is selected, `A`/`D` rotate around it, `W`/`S` change the
 horizontal radius, and `Space`/`Control` change eye height. Mouse movement and
 the wheel do not move the selected-tree camera. The shared interaction remains
 the sole owner of the camera pose, component focus, click classification, and
-focus glide. `Escape` restores the exact pre-selection free-flight pose and
-requests free-flight input again during that same key interaction, so play
-resumes without another click when engagement succeeds.
+  focus glide. `Backspace` restores the exact pre-selection free-flight pose
+  and requests free-flight input again during that same key interaction, so
+  play resumes without another click when engagement succeeds.
 
-In ordinary free flight, `Escape` opens the pause menu instead of leaving the
-player at an input-engagement prompt. Pausing suspends world input and frame
-updates without changing the camera, selected tool, or orchard state. Resume
-returns to the same play state and requests free-flight input again. Main Menu
-finishes pending saves before closing the world and refreshes the saved-orchard
-list in the same application session; a save failure leaves the pause menu open.
-Quit Game likewise requires pending saves to finish before closing the native
-application.
+`Escape` opens Pause from free flight, orbit, a held cutting, or the open
+ledger. Pausing suspends world input and frame updates without changing the
+camera mode, held cutting, selected tool, ledger state, or orchard state.
+Resume returns to that exact play state. Main Menu finishes pending saves before
+closing the world and refreshes the saved-orchard list in the same application
+session; a save failure leaves Pause open. Quit Game likewise requires pending
+saves to finish before closing the native application.
 
-The player carries exactly two tools in the current loop: Double Cut and
-Iteration. Pressing `1` swaps them, updates the HUD, and clears any held
-cutting. Double Cut applies its proof move with one stationary secondary
-release on the targeted branch.
+The player begins with Sprout Spawner. Its stationary secondary action plants a
+blank sprout on clear ground; placement within four horizontal world units of a
+tree or active order pot is refused without changing the orchard. Double Cut
+and Iteration are acquired from the ledger. Pressing `1` cycles only the tools
+already acquired in category 1 and briefly shows that category's list. Double
+Cut applies its proof move with one stationary secondary release on the targeted
+branch.
 
 Iteration is a two-stage stationary secondary gesture. The first release takes
 either the whole targeted tree or a targeted proper subtree. The second release
@@ -88,9 +92,9 @@ chooses its destination:
 - a whole tree onto the accepted order's pot attempts delivery.
 
 A proper subtree cannot target a different tree. Invalid destinations explain
-the refusal and keep the cutting held so the player can try again. `Escape`
-clears a held cutting before applying its existing orbit-exit behavior.
-Deiteration is not part of Iteration; it remains a future, separate tool.
+the refusal and keep the cutting held so the player can try again. `Backspace`
+clears a held cutting before applying its orbit-exit behavior. Deiteration is
+not part of Iteration; it remains a future, separate tool.
 
 A dragged mouse does not move the camera or fire a proof action. Proof actions
 do not change the camera or navigation mode. A successful change publishes one
@@ -108,9 +112,21 @@ parallel control path.
 
 ## Progression and economy
 
-- **One prerequisite DAG of puzzles.** The root of the DAG is a teaching spine: propositional fundamentals first; completing them unlocks the second-order propositional basics sequence and (as a separate branch) first-order equational logic; after all fundamentals, the Boolean capstone unlocks. Bulk/optional sequences (the ~100 propositional puzzles and counterparts in other domains) bud off the spine for pacing. Each puzzle unlocks only a few others so the player is never flooded. No hard acts — everything previously opened stays open.
+- **Opening prerequisite DAG.** A blank-sprout order opens first. Completing it
+  unlocks one bare Double Cut; completing that order unlocks two authored
+  irregular Double-Cut goals together. Each awards one reputation, and the two
+  final orders may be completed in either order. This is the implemented first
+  branch of the larger puzzle DAG: previously opened content stays open.
 - **Tools unlock by readiness** — completion of specific puzzles — and each tool unlock opens that tool's starter puzzle sequence, which carries its tutorial.
-- **Tutorials** are delivered by a robot companion that accompanies the player after each tool unlock, giving plain guidance ("try this") on the starter puzzles, then leaves. Text is allowed and should be sparse, direct, and well written; the game is mostly quiet. Vocabulary is horticultural-first: mathematical terminology avoided but not banned, with each tool's naming decided when the tool is designed.
+- **Tutorials** are a per-save preference, enabled by default at orchard
+  creation and editable in Settings. One upper-left instruction at a time leads
+  through movement, look, ascent/descent, sprint, orbit and `Backspace`, two
+  sprouts, both tool acquisitions, Double Cut, Iteration duplication, and the
+  first delivery. The card then disappears while the remaining order milestones
+  continue silently. Disabling tutorials hides the card and opens tutorial-gated
+  ledger entries without marking milestones complete; ordinary actions still
+  record their evidence, so re-enabling resumes at the first genuinely unmet
+  instruction.
 - **Reputation** is the single progression stat: a cap that rises as puzzles are completed. Unlocks and expansion draw against the cap (usage accumulates toward the cap; mechanically like spending money, but framed as standing rather than wealth).
 - **Expansion** is core: the player starts on a bounded plot and opens adjacent land (later: floating islands, planetoids — the world is abstract and 3D). Areas should be visually distinct to aid navigation and self-organization, but are never bound to logical domains — organization is the player's, aided by fences and signs. Decoration beyond fences and signs is not core.
 
@@ -121,13 +137,33 @@ No runtime puzzle generation, ever — it has been investigated repeatedly and d
 1. **Enumerate-then-curate catalogs.** For each decidable/semidecidable domain: exhaustively enumerate theorems up to a size (modulo symmetries like variable ordering), filter by interestingness criteria (e.g. reject anything solvable by erasure alone — criteria designed per domain), then hand-select. Demo domains: propositional, second-order Boolean formulas, first-order equational logic. The three enumeration/filter pipelines are dev-tooling deliverables of the demo.
 2. **Hand-authored sequences**, inspired by real formalizations and teaching material. The demo's capstone is a Boolean sequence: establish the adjunction between true and false, use it to identify the universal properties of the Boolean operators, derive the truth tables from those universal properties, then prove the algebraic laws. When the capstone is reachable and every core mechanic is exercised by real puzzles, the demo is complete.
 
+Developer Tools is an application-wide preference in Pause > Settings. When it
+is enabled, backtick toggles a visible developer mode. In that mode an order
+tile opens the repository-backed editor, while clicking the Orders primary tab
+opens a new-order editor. The editor changes prerequisites, reward, and optional
+formula input; the stored diagram remains runtime authority and is previewed
+before publication. Existing IDs are read-only, new orders begin with a blank
+goal, and Delete removes the order's lifecycle entry and active pot. A successful
+save writes `game/content/orders.json` before publishing the revision to the
+ledger, accepted-pot goals, and delivery validation. Invalid formulas, invalid
+prerequisite graphs, and persistence failures leave both the running catalog and
+checked-in content unchanged.
+
 **Bootstrap corpus.** The `game/cursebreaker` branch (worktree `.worktrees/cursebreaker-domain`) holds 121 entirely propositional puzzles in the kernel's own diagram JSON (`content/puzzles/`), each with a machine-checked backward solution (`content/validation/`), a prerequisite DAG (`content/progression/core.json`), and a hint-intervention system (`content/guidance/`). The diagram-JSON loader files are byte-identical to main, so the puzzles load unchanged. Those puzzles are stated in backward orientation — the stored diagram is the goal, which is exactly what a pot hologram needs; the backward solutions flip to forward solvability certificates under the shared-implementation polarity-flip law. This corpus is interim content for implementation and will eventually be replaced by the propositional enumeration pipeline. Nine of the puzzles already exercise lemma citation.
 
 ## Tech
 
 - **Codebase:** an isolated branch of the VisualProofAssistant repo that directly consumes the shared `src/kernel` and `src/view3d` authorities; full separation into its own repo later. The proof assistant itself is an investigation platform with no maintenance obligation.
 - **Shell:** a standalone Tauri app, scaffolded from the start of implementation (save-file I/O, window/input behavior, and packaging proven in the real shell throughout). Web tech inside: Vite + three.js, unchanged.
-- **Saves:** unlimited named save slots backed by files, Skyrim-style. The save format always has one exact current shape: no format versions, version checks, migrations, legacy readers, or fallback parsing. Runtime worlds are constructed only by loading ordinary saves; developer and stress fixtures use the same persistence authority.
+- **Saves:** unlimited named save slots backed by files, Skyrim-style. A save
+  stores its name, free-flight camera pose, trees, reputation, tutorial setting
+  and completed milestones, acquired tool IDs, and every authored order's
+  pending/accepted/completed lifecycle (including active pot placement). Open
+  ledger/editor state, selected tool, held cutting, developer mode, and selector
+  visibility are transient. The save format always has one exact current shape:
+  no format versions, migrations, legacy readers, or fallback parsing. Runtime
+  worlds are constructed only by loading ordinary saves; developer and stress
+  fixtures use the same persistence authority.
 - **Scale:** the shared `src/view3d/transition.ts` track owns growth timing, interruption, and sampling. Each changing tree owns one track independently, so several trees may animate concurrently. The established stress workload has proven static rendering, LOD, and culling to 2000 trees; generated game saves preserve that workload against the production renderer. Every tree uses the same kernel-backed model and can take the temporary per-frame render role when it changes.
 - **Renderer authority:** `game/` is the sole 3D world frontend. Performance workloads are ordinary generated game saves, and stress tests exercise the same production renderer used by play.
 

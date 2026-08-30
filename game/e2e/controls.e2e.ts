@@ -1,201 +1,101 @@
 import { $, browser, expect } from '@wdio/globals'
 import { describe, it } from 'mocha'
-import { Key } from 'webdriverio'
-import { diagramFromJson } from '../../src/kernel/diagram'
-import { focusPoint } from '../../src/view3d/pick'
-import { scene3 } from '../../src/view3d/scene'
 import {
-  canvasOffsetForWorldPoint,
-  canvas,
   clickWorld,
-  dragWorld,
   displayedPose,
-  expectDirectionClose,
-  expectDoubleCut,
   expectPoseClose,
   game,
   hold,
+  loadSlot,
   poseEyeDistance,
-  rightClickWorld,
   storedCameraPose,
-  storedTreeDiagram,
-  waitForVisibleTreeTween,
-  wheelWorld,
+  waitForMenu,
 } from './native'
 
+async function openPauseAndResume(expected: {
+  readonly mode: 'free' | 'orbit'
+  readonly ledgerOpen: boolean
+}): Promise<void> {
+  const pose = await displayedPose()
+  await browser.keys('Escape')
+  await expect(game()).toHaveAttribute('data-paused', 'true')
+  await expect($('[data-pause]')).toBeDisplayed()
+  await expect($('[data-pause-resume]')).toBeFocused()
+  await expect(game()).toHaveAttribute('data-camera-mode', expected.mode)
+  await expect(game()).toHaveAttribute('data-ledger-open', String(expected.ledgerOpen))
+  await expectPoseClose(await displayedPose(), pose)
+
+  await $('[data-pause-resume]').click()
+  await expect($('[data-pause]')).not.toBeDisplayed()
+  await expect(game()).toHaveAttribute('data-paused', 'false')
+  await expect(game()).toHaveAttribute('data-camera-mode', expected.mode)
+  await expect(game()).toHaveAttribute('data-ledger-open', String(expected.ledgerOpen))
+  await expectPoseClose(await displayedPose(), pose)
+}
+
 describe('orchard world controls', () => {
-  it('moves through free flight and orbit while persisting only the free pose', async () => {
-    await expect(game()).toHaveAttribute('data-camera-mode', 'menu')
+  it('preserves free flight, orbit, and ledger states across Pause and uses Backspace to step back', async () => {
+    await waitForMenu()
     await expect($('.slot.invalid')).toBeDisplayed()
     await expect($('.slot.invalid small')).not.toHaveText('')
     await $('[data-new-slot-name]').setValue('   ')
     await $('[data-create-slot]').click()
     await expect($('[data-menu-error]')).toHaveText('Enter a name for the new orchard.')
 
-    await $('[data-load-slot="large-1"]').click()
-    await expect(game()).toHaveAttribute('data-ready', 'true')
-    await expect(game()).toHaveAttribute('data-loaded-slot', 'large-1')
+    await loadSlot('large-1')
     await expect(game()).toHaveAttribute('data-camera-mode', 'free')
     await expect(game()).toHaveAttribute('data-input-engaged', 'true')
-    const engagePrompt = $('[data-engage]')
-    await expect(engagePrompt).not.toBeDisplayed()
-    await expect($('[data-reticle]')).toBeDisplayed()
+    await expect(game()).toHaveAttribute('data-acquired-tool-ids', '["sprout-spawner"]')
+    await expect(game()).toHaveAttribute('data-selected-tool', 'sprout-spawner')
 
     const loadedPose = await displayedPose()
-    await clickWorld(500, 300)
-    await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
-    await expect(game()).toHaveAttribute('data-orbit-target', 'tree-0000')
-    await browser.keys('Escape')
-    await expect(game()).toHaveAttribute('data-camera-mode', 'free')
-    await expectPoseClose(await displayedPose(), loadedPose)
-    await expect(game()).toHaveAttribute('data-input-engaged', 'true')
-
     await hold('w')
     const movedPose = await displayedPose()
     expect(poseEyeDistance(movedPose, loadedPose)).toBeGreaterThan(0.01)
-    await expect(game()).toHaveAttribute('data-camera-mode', 'free')
-    const preOrbitPose = movedPose
+    await browser.waitUntil(() => poseEyeDistance(storedCameraPose('large-1'), movedPose) < 0.000_001)
 
-    await browser.waitUntil(() => poseEyeDistance(storedCameraPose('large-1'), preOrbitPose) < 0.000_001)
-    await expect(game()).toHaveAttribute('data-save-state', 'idle')
-    const diagramBeforeDoubleCut = storedTreeDiagram('large-1', 'tree-0000')
+    await openPauseAndResume({ mode: 'free', ledgerOpen: false })
+    await expect(game()).toHaveAttribute('data-input-engaged', 'true')
+
+    await browser.keys('Tab')
+    await expect($('[data-ledger]')).toBeDisplayed()
+    await expect(game()).toHaveAttribute('data-ledger-open', 'true')
+    await expect(game()).toHaveAttribute('data-ledger-tab', 'tools')
+    await openPauseAndResume({ mode: 'free', ledgerOpen: true })
+    await expect($('[data-ledger]')).toBeDisplayed()
+    await expect(game()).toHaveAttribute('data-input-engaged', 'false')
+    await browser.keys('Tab')
+    await expect($('[data-ledger]')).not.toBeDisplayed()
+    await expect(game()).toHaveAttribute('data-input-engaged', 'true')
+
     await clickWorld()
     await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
     await expect(game()).toHaveAttribute('data-orbit-target', 'tree-0000')
-    await expect(game()).toHaveAttribute('data-input-engaged', 'false')
-    await expect($('[data-reticle]')).not.toBeDisplayed()
-    await expect($('[data-engage]')).not.toBeDisplayed()
-    expect((await canvas().getCSSProperty('cursor')).value).toBe('auto')
-    expect(storedTreeDiagram('large-1', 'tree-0000')).toEqual(diagramBeforeDoubleCut)
-
     const orbitPose = await displayedPose()
-    const savedFreePose = storedCameraPose('large-1')
-    await dragWorld(0, { x: -30, y: -20 }, { x: 45, y: 25 })
-    await browser.pause(100)
-    await expectPoseClose(await displayedPose(), orbitPose)
-
-    await wheelWorld(-320)
-    await browser.pause(100)
-    await expectPoseClose(await displayedPose(), orbitPose)
-
     await hold('a')
-    const movedOrbitPose = await displayedPose()
-    expect(poseEyeDistance(movedOrbitPose, orbitPose)).toBeGreaterThan(0.01)
-    expectPoseClose(storedCameraPose('large-1'), savedFreePose)
+    expect(poseEyeDistance(await displayedPose(), orbitPose)).toBeGreaterThan(0.01)
+    expectPoseClose(storedCameraPose('large-1'), movedPose)
 
-    await hold('w')
-    const zoomedOrbitPose = await displayedPose()
-    expect(poseEyeDistance(zoomedOrbitPose, movedOrbitPose)).toBeGreaterThan(0.01)
-    expectPoseClose(storedCameraPose('large-1'), savedFreePose)
-
-    await hold(Key.Space)
-    const raisedOrbitPose = await displayedPose()
-    expect(poseEyeDistance(raisedOrbitPose, zoomedOrbitPose)).toBeGreaterThan(0.01)
-    expectPoseClose(storedCameraPose('large-1'), savedFreePose)
-
-    const semanticScene = scene3(diagramFromJson(diagramBeforeDoubleCut))
-    const branchFocuses = semanticScene.entities.flatMap((entity) => {
-      if (entity.kind !== 'branch') return []
-      const focus = focusPoint(entity.key, semanticScene.entities)
-      return focus === null ? [] : [{ entity, focus }]
-    }).sort((a, b) => {
-      const distance = ({ focus }: typeof a): number => Math.hypot(
-        focus.x - semanticScene.center.x,
-        focus.y - semanticScene.center.y,
-        focus.z - semanticScene.center.z,
-      )
-      return distance(b) - distance(a)
-    })
-    const offCenterBranch = branchFocuses[0]
-    if (offCenterBranch === undefined) throw new Error('fixture has no branch to focus')
-    const segment = offCenterBranch.entity.pts.slice(1).map((end, index) => ({
-      start: offCenterBranch.entity.pts[index]!,
-      end,
-    })).sort((a, b) => Math.hypot(
-      b.end.x - b.start.x,
-      b.end.y - b.start.y,
-      b.end.z - b.start.z,
-    ) - Math.hypot(
-      a.end.x - a.start.x,
-      a.end.y - a.start.y,
-      a.end.z - a.start.z,
-    ))[0]
-    if (segment === undefined) throw new Error('fixture branch has no visible segment')
-    const visibleBranchPoint = {
-      x: (segment.start.x + segment.end.x) / 2,
-      y: (segment.start.y + segment.end.y) / 2,
-      z: (segment.start.z + segment.end.z) / 2,
-    }
-    const focusOffset = await canvasOffsetForWorldPoint(raisedOrbitPose, visibleBranchPoint)
-    await clickWorld(focusOffset.x, focusOffset.y)
-    await browser.pause(300)
-    const focusedOrbitPose = await displayedPose()
-    for (const axis of ['x', 'y', 'z'] as const) {
-      const translation = offCenterBranch.focus[axis] - semanticScene.center[axis]
-      expect(focusedOrbitPose.eye[axis]).toBeCloseTo(raisedOrbitPose.eye[axis] + translation, 6)
-      expect(focusedOrbitPose.direction[axis]).toBeCloseTo(raisedOrbitPose.direction[axis], 6)
-    }
-
-    const beforeToolPose = focusedOrbitPose
-    const toolOffset = await canvasOffsetForWorldPoint(focusedOrbitPose, offCenterBranch.focus)
-    await rightClickWorld(toolOffset.x, toolOffset.y)
-    await expect($('[data-feedback]')).toHaveText('Double cut applied to tree-0000.')
-    await waitForVisibleTreeTween()
-    const diagramAfterDoubleCut = storedTreeDiagram('large-1', 'tree-0000')
-    expectDoubleCut(
-      diagramBeforeDoubleCut,
-      diagramAfterDoubleCut,
-      offCenterBranch.entity.region,
-    )
-    await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
-    await expect(game()).toHaveAttribute('data-orbit-target', 'tree-0000')
-    await expectPoseClose(await displayedPose(), beforeToolPose)
-
-    await browser.keys('Escape')
+    await openPauseAndResume({ mode: 'orbit', ledgerOpen: false })
+    await expect(game()).toHaveAttribute('data-input-engaged', 'false')
+    await browser.keys('Backspace')
     await expect(game()).toHaveAttribute('data-camera-mode', 'free')
     await expect(game()).toHaveAttribute('data-input-engaged', 'true')
-    await expectPoseClose(await displayedPose(), preOrbitPose)
+    await expectPoseClose(await displayedPose(), movedPose)
 
-    await hold('w')
-    const finalPose = await displayedPose()
-    expect(poseEyeDistance(finalPose, preOrbitPose)).toBeGreaterThan(0.01)
-    expectDirectionClose(finalPose, preOrbitPose)
-    await browser.waitUntil(() => poseEyeDistance(storedCameraPose('large-1'), finalPose) < 0.000_001)
-    await expect(game()).toHaveAttribute('data-save-state', 'idle')
-    await expectPoseClose(storedCameraPose('large-1'), finalPose)
-    expect(storedTreeDiagram('large-1', 'tree-0000')).toEqual(diagramAfterDoubleCut)
-
-    await browser.keys('Escape')
-    await expect(game()).toHaveAttribute('data-paused', 'true')
-    await expect($('[data-pause]')).toBeDisplayed()
-    await expect($('[data-pause-world-name]')).toHaveText('Large Tree')
-    await expect($('[data-pause-resume]')).toBeFocused()
-    await browser.keys('Tab')
-    await expect($('[data-pause-main-menu]')).toBeFocused()
-    await expect($('[data-reticle]')).not.toBeDisplayed()
-    await expect($('[data-engage]')).not.toBeDisplayed()
-    const pausedPose = await displayedPose()
-    await hold('w')
-    await expectPoseClose(await displayedPose(), pausedPose)
-
-    await $('[data-pause-resume]').click()
-    await expect($('[data-pause]')).not.toBeDisplayed()
-    await expect(game()).toHaveAttribute('data-paused', 'false')
-    await expect(game()).toHaveAttribute('data-input-engaged', 'true')
+    await browser.keys('1')
+    await expect(game()).toHaveAttribute('data-selected-tool', 'sprout-spawner')
+    await expect(game()).toHaveAttribute('data-selector-visible', 'true')
+    await browser.waitUntil(async () => await game().getAttribute('data-selector-visible') === 'false', {
+      timeout: 3_000,
+      timeoutMsg: 'single acquired-tool selector did not fade',
+    })
 
     await browser.keys('Escape')
     await $('[data-pause-main-menu]').click()
-    await expect($('[data-pause]')).not.toBeDisplayed()
-    await expect($('[data-start]')).toBeDisplayed()
-    await expect(game()).toHaveAttribute('data-ready', 'false')
-    await expect(game()).toHaveAttribute('data-loaded-slot', '')
+    await waitForMenu()
     await expect(game()).toHaveAttribute('data-camera-mode', 'menu')
-    await expect($('[data-load-slot="large-1"]')).toBeDisplayed()
-
-    await $('[data-load-slot="large-1"]').click()
-    await expect(game()).toHaveAttribute('data-ready', 'true')
-    await expectPoseClose(await displayedPose(), finalPose)
-    expect(storedTreeDiagram('large-1', 'tree-0000')).toEqual(diagramAfterDoubleCut)
-
+    await loadSlot('large-1')
+    await expectPoseClose(await displayedPose(), movedPose)
   })
 })

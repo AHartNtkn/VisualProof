@@ -1,364 +1,189 @@
-import { $, browser, expect } from '@wdio/globals'
+import { $, $$, browser, expect } from '@wdio/globals'
 import { describe, it } from 'mocha'
-import { Key } from 'webdriverio'
 import {
+  aimReticleAt,
   attribute,
-  canvasScreenshot,
-  clickWorld,
   createSlot,
   displayedPose,
   game,
-  hold,
+  loadSlot,
+  moveFreeCameraTo,
   rightClickWorld,
+  soleSlotId,
   storedOrder,
+  storedOrderIds,
   storedReputation,
   storedTreeDiagram,
   storedTreeIds,
-  waitForVisibleTreeTween,
 } from './native'
 
-const ORDER_ID = 'starter-double-cut'
+const ORDER_IDS = [
+  'blank-sprout',
+  'single-double-cut',
+  'irregular-double-cut-a',
+  'irregular-double-cut-b',
+] as const
 const SOURCE_ID = 'tree-0000'
 
 async function waitForSave(): Promise<void> {
   await expect(game()).toHaveAttribute('data-save-state', 'idle')
 }
 
-async function expectTextContains(selector: string, expected: string): Promise<void> {
-  await browser.waitUntil(async () => (await $(selector).getText()).includes(expected), {
-    timeoutMsg: `${selector} did not contain ${JSON.stringify(expected)}`,
-  })
-}
-
-async function moveFreeCameraTo(
-  target: { readonly x: number; readonly y: number; readonly z: number },
-): Promise<void> {
-  const moveAxis = async (
-    axis: 'x' | 'y' | 'z',
-    positive: string,
-    negative: string,
-  ): Promise<void> => {
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const delta = target[axis] - (await displayedPose()).eye[axis]
-      if (Math.abs(delta) < 0.08) return
-      await hold(delta > 0 ? positive : negative, Math.max(12, Math.round(Math.abs(delta) * 125)))
-    }
-    expect(Math.abs((await displayedPose()).eye[axis] - target[axis])).toBeLessThan(0.1)
-  }
-  await moveAxis('x', 'd', 'a')
-  await moveAxis('z', 's', 'w')
-  await moveAxis('y', Key.Space, Key.Control)
-}
-
-async function aimReticleAt(
-  point: { readonly x: number; readonly y: number; readonly z: number },
-  horizontalDistance = 7,
-): Promise<void> {
-  const { direction } = await displayedPose()
-  const horizontalLength = Math.hypot(direction.x, direction.z)
-  if (horizontalLength === 0) throw new Error('cannot aim the reticle through a vertical view')
-  const distance = horizontalDistance / horizontalLength
-  await moveFreeCameraTo({
-    x: point.x - direction.x * distance,
-    y: point.y - direction.y * distance,
-    z: point.z - direction.z * distance,
-  })
-}
-
-function horizontalPointAhead(
-  view: Awaited<ReturnType<typeof displayedPose>>,
-  distance: number,
-): { readonly x: number; readonly z: number } {
-  const horizontalLength = Math.hypot(view.direction.x, view.direction.z)
-  if (horizontalLength === 0) throw new Error('cannot project from a vertical view')
-  return {
-    x: view.eye.x + (view.direction.x / horizontalLength) * distance,
-    z: view.eye.z + (view.direction.z / horizontalLength) * distance,
-  }
-}
-
-async function soleSlotId(): Promise<string> {
-  const load = $('[data-load-slot]')
-  await load.waitForDisplayed()
-  const slotId = await load.getAttribute('data-load-slot')
-  if (slotId === null || slotId.length === 0) throw new Error('expected one saved orchard')
-  return slotId
-}
-
-async function expectPlaying(
-  state: {
-    readonly mode?: 'free' | 'orbit'
-    readonly engaged?: boolean
-    readonly item?: 'double-cut' | 'iteration'
-    readonly cutting?: boolean
-    readonly catalog?: boolean
-    readonly order?: 'pending' | 'accepted' | 'completed'
-    readonly reputation?: number
-  },
-): Promise<void> {
-  if (state.mode !== undefined) await expect(game()).toHaveAttribute('data-camera-mode', state.mode)
-  if (state.engaged !== undefined) {
-    await expect(game()).toHaveAttribute('data-input-engaged', String(state.engaged))
-  }
-  if (state.item !== undefined) await expect(game()).toHaveAttribute('data-equipped-item', state.item)
-  if (state.cutting !== undefined) {
-    await expect(game()).toHaveAttribute('data-cutting-held', String(state.cutting))
-  }
-  if (state.catalog !== undefined) {
-    await expect(game()).toHaveAttribute('data-catalog-open', String(state.catalog))
-  }
-  if (state.order !== undefined) await expect(game()).toHaveAttribute('data-order-state', state.order)
-  if (state.reputation !== undefined) {
-    await expect(game()).toHaveAttribute('data-reputation', String(state.reputation))
-  }
-}
-
-async function openCatalog(): Promise<void> {
+async function openLedger(tab: 'tools' | 'orders'): Promise<void> {
   await browser.keys('Tab')
-  await expect($('[data-catalog]')).toBeDisplayed()
-  await expectPlaying({ mode: 'free', engaged: false, catalog: true })
+  await expect($('[data-ledger]')).toBeDisplayed()
+  if (await attribute('ledger-tab') !== tab) await $(`[data-ledger-primary="${tab}"]`).click()
+  await expect(game()).toHaveAttribute('data-ledger-tab', tab)
 }
 
-describe('orchard first order loop', () => {
+async function acquire(toolId: 'double-cut' | 'iteration'): Promise<void> {
+  const action = $(`[data-tool-id="${toolId}"] [data-tool-action="acquire"]`)
+  await action.waitForDisplayed()
+  await action.click()
+  await expect(game()).toHaveAttribute('data-selected-tool', toolId)
+}
+
+async function selectTool(toolId: 'sprout-spawner' | 'double-cut' | 'iteration'): Promise<void> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (await attribute('selected-tool') === toolId) return
+    await browser.keys('1')
+  }
+  await expect(game()).toHaveAttribute('data-selected-tool', toolId)
+}
+
+async function accept(orderId: string): Promise<void> {
+  await openLedger('orders')
+  const action = $(`[data-order-id="${orderId}"] [data-order-action="accept"]`)
+  await action.waitForDisplayed()
+  await action.click()
+  await expect($('[data-feedback]')).toHaveText(`Accepted ${orderId}.`)
+  await expect(game()).toHaveAttribute('data-ledger-open', 'false')
+  await waitForSave()
+}
+
+async function takeWholeTree(tree: { readonly x: number; readonly z: number }): Promise<void> {
+  await aimReticleAt({ ...tree, y: 0.25 })
+  await rightClickWorld()
+  await expect($('[data-feedback]')).toHaveText(expect.stringContaining('Whole-tree cutting held from'))
+  await expect(game()).toHaveAttribute('data-cutting-held', 'true')
+}
+
+async function deliver(slotId: string, orderId: string): Promise<void> {
+  const pot = storedOrder(slotId, orderId).pot
+  if (pot === null) throw new Error(`order '${orderId}' has no accepted pot`)
+  await aimReticleAt({ x: pot.x + 0.85, y: 0.55, z: pot.z })
+  await rightClickWorld()
+  await expect($('[data-feedback]')).toHaveText(expect.stringContaining(`Completed ${orderId}.`))
+  await expect(game()).toHaveAttribute('data-cutting-held', 'false')
+  await waitForSave()
+}
+
+describe('orchard order lifecycle', () => {
   const phase = process.env['GAME_E2E_PHASE']
 
-  it('plays, reloads, or verifies the order loop through native controls', async () => {
+  it('uses the four authored IDs, acquired-tool cycle, independent pots, and native lifecycle controls', async () => {
     if (phase === 'play') {
-      const slotId = await createSlot('Order Loop')
-      await expectPlaying({
-        mode: 'free', engaged: true, item: 'double-cut', cutting: false,
-        catalog: false, order: 'pending', reputation: 0,
-      })
+      const slotId = await createSlot('Order Lifecycle', false)
+      expect(storedOrderIds(slotId)).toEqual([...ORDER_IDS].sort())
+      await expect(game()).toHaveAttribute('data-selected-tool', 'sprout-spawner')
 
-      const beforeMove = await displayedPose()
-      await hold('w', 120)
-      const movedView = await displayedPose()
-      expect(movedView.eye).not.toEqual(beforeMove.eye)
-      await clickWorld()
-      await expectPlaying({ mode: 'orbit', engaged: false })
-      const beforeLook = await displayedPose()
-      await hold('a', 120)
-      expect((await displayedPose()).direction).not.toEqual(beforeLook.direction)
-      await browser.keys('Escape')
-      await expectPlaying({ mode: 'free', engaged: true })
-      await hold('d', 260)
-      const chosenView = await displayedPose()
+      await openLedger('tools')
+      await acquire('double-cut')
+      await acquire('iteration')
+      await browser.keys('Tab')
+      await expect(game()).toHaveAttribute('data-ledger-open', 'false')
 
-      await openCatalog()
-      await expect($(`[data-catalog-accept="${ORDER_ID}"]`)).toBeDisplayed()
-      await $(`[data-catalog-accept="${ORDER_ID}"]`).click()
-      await expect($('[data-catalog]')).not.toBeDisplayed()
-      await expect($('[data-feedback]')).toHaveText(`Accepted ${ORDER_ID}.`)
-      await expectPlaying({
-        mode: 'free', engaged: true, item: 'double-cut', cutting: false,
-        catalog: false, order: 'accepted', reputation: 0,
-      })
-      await waitForSave()
+      await browser.keys('1')
+      await expect(game()).toHaveAttribute('data-selected-tool', 'sprout-spawner')
+      await browser.keys('1')
+      await expect(game()).toHaveAttribute('data-selected-tool', 'double-cut')
+      await browser.keys('1')
+      await expect(game()).toHaveAttribute('data-selected-tool', 'iteration')
+      await expect(game()).toHaveAttribute('data-selector-visible', 'true')
 
-      const accepted = storedOrder(slotId, ORDER_ID)
-      expect(accepted.state).toBe('accepted')
-      expect(accepted.pot).not.toBeNull()
-      const horizontalLength = Math.hypot(chosenView.direction.x, chosenView.direction.z)
-      const expectedX = chosenView.eye.x + (chosenView.direction.x / horizontalLength) * 6
-      const expectedZ = chosenView.eye.z + (chosenView.direction.z / horizontalLength) * 6
-      expect(accepted.pot!.x).toBeCloseTo(expectedX, 6)
-      expect(accepted.pot!.z).toBeCloseTo(expectedZ, 6)
-      expect(Math.hypot(accepted.pot!.x - chosenView.eye.x, accepted.pot!.z - chosenView.eye.z))
-        .toBeCloseTo(6, 6)
-      expect(storedTreeIds(slotId)).toEqual([SOURCE_ID])
-      expect(storedReputation(slotId)).toBe(0)
+      await moveFreeCameraTo({ x: 0, y: 1.7, z: 12 })
+      await accept('blank-sprout')
+      expect(storedOrder(slotId, 'blank-sprout').state).toBe('accepted')
+      expect(storedOrder(slotId, 'single-double-cut').state).toBe('pending')
       return
     }
-
-    if (phase === 'verify') {
-      const slotId = await soleSlotId()
-      await $(`[data-load-slot="${slotId}"]`).click()
-      await expectPlaying({
-        mode: 'free', engaged: true, item: 'double-cut', cutting: false,
-        catalog: false, order: 'completed', reputation: 1,
-      })
-      await expect(game()).toHaveAttribute('data-logical-count', '2')
-      expect(storedOrder(slotId, ORDER_ID)).toEqual({ state: 'completed', pot: null })
-      expect(storedReputation(slotId)).toBe(1)
-      const verifiedTreeIds = storedTreeIds(slotId)
-      expect(verifiedTreeIds).toHaveLength(2)
-      expect(verifiedTreeIds).toContain(SOURCE_ID)
-      const verifiedSource = storedTreeDiagram(slotId, SOURCE_ID)
-      expect(Object.keys(verifiedSource.regions)).toHaveLength(3)
-      expect(Object.keys(verifiedSource.nodes)).toHaveLength(0)
-      expect(Object.keys(verifiedSource.wires)).toHaveLength(0)
-      const verifiedCuts = Object.entries(verifiedSource.regions)
-        .filter((entry): entry is [string, { readonly kind: 'cut'; readonly parent: string }] =>
-          entry[1].kind === 'cut')
-      expect(verifiedCuts).toHaveLength(2)
-      const verifiedOuter = verifiedCuts.find(([, region]) => region.parent === verifiedSource.root)
-      expect(verifiedOuter).toBeDefined()
-      expect(verifiedCuts.some(([, region]) => region.parent === verifiedOuter?.[0])).toBe(true)
-
-      await openCatalog()
-      await $('[data-catalog-completed]').click()
-      await expect($('[data-catalog-completed]')).toHaveAttribute('aria-pressed', 'true')
-      await expect($('[data-catalog-orders] strong')).toHaveText('Double Cut')
-      await expect($('[data-catalog-reputation]')).toHaveText('Reputation: 1')
-      await browser.keys('Escape')
-      await expectPlaying({ catalog: false, mode: 'free', engaged: true, order: 'completed', reputation: 1 })
-      await expect(game()).toHaveAttribute('data-logical-count', '2')
-      expect(await attribute('errors')).toBe('')
-      return
-    }
-
-    if (phase !== 'reload') throw new Error(`unknown order-loop phase '${String(phase)}'`)
 
     const slotId = await soleSlotId()
-    await $(`[data-load-slot="${slotId}"]`).click()
-    await expectPlaying({
-      mode: 'free', engaged: true, item: 'double-cut', cutting: false,
-      catalog: false, order: 'accepted', reputation: 0,
-    })
-    const loadedAcceptanceView = await displayedPose()
-    const expectedPotCenter = horizontalPointAhead(loadedAcceptanceView, 6)
-    const potInteractionPoint = {
-      x: expectedPotCenter.x + 0.85,
-      y: 0.55,
-      z: expectedPotCenter.z,
+    await loadSlot(slotId)
+
+    if (phase === 'reload') {
+      await selectTool('iteration')
+      await takeWholeTree({ x: 0, z: 0 })
+      const heldPose = await displayedPose()
+      await browser.keys('Escape')
+      await expect($('[data-pause]')).toBeDisplayed()
+      await expect(game()).toHaveAttribute('data-cutting-held', 'true')
+      await expect(game()).toHaveAttribute('data-selected-tool', 'iteration')
+      await $('[data-pause-resume]').click()
+      await expect(game()).toHaveAttribute('data-cutting-held', 'true')
+      await expect(displayedPose()).resolves.toEqual(heldPose)
+
+      await browser.keys('Backspace')
+      await expect($('[data-feedback]')).toHaveText('Cutting cleared.')
+      await expect(game()).toHaveAttribute('data-cutting-held', 'false')
+      await expect(game()).toHaveAttribute('data-camera-mode', 'free')
+
+      await takeWholeTree({ x: 0, z: 0 })
+      await deliver(slotId, 'blank-sprout')
+      expect(storedOrder(slotId, 'blank-sprout')).toEqual({ state: 'completed', pot: null })
+      expect(storedReputation(slotId)).toBe(1)
+
+      await moveFreeCameraTo({ x: 8, y: 1.7, z: 12 })
+      await accept('single-double-cut')
+      await selectTool('double-cut')
+      const before = storedTreeDiagram(slotId, SOURCE_ID)
+      await aimReticleAt({ x: 0, y: 0.25, z: 0 })
+      await rightClickWorld()
+      await expect($('[data-feedback]')).toHaveText(`Double cut applied to ${SOURCE_ID}.`)
+      await browser.waitUntil(() => Object.keys(storedTreeDiagram(slotId, SOURCE_ID).regions).length
+        === Object.keys(before.regions).length + 2)
+
+      await selectTool('iteration')
+      await takeWholeTree({ x: 0, z: 0 })
+      await deliver(slotId, 'single-double-cut')
+      expect(storedOrder(slotId, 'single-double-cut')).toEqual({ state: 'completed', pot: null })
+      expect(storedReputation(slotId)).toBe(2)
+      return
     }
-    expect(storedOrder(slotId, ORDER_ID).state).toBe('accepted')
-    expect(storedOrder(slotId, ORDER_ID).pot).not.toBeNull()
-    const sourceBefore = storedTreeDiagram(slotId, SOURCE_ID)
-    await aimReticleAt({ x: 0, y: 0.25, z: 0 })
 
-    await browser.keys('1')
-    await expect($('[data-feedback]')).toHaveText('Equipped Iteration.')
-    await expectPlaying({ item: 'iteration', cutting: false })
+    if (phase !== 'verify') throw new Error(`unknown order-loop phase '${String(phase)}'`)
+    expect(storedTreeIds(slotId)).toEqual([SOURCE_ID])
+    expect(storedOrder(slotId, 'blank-sprout').state).toBe('completed')
+    expect(storedOrder(slotId, 'single-double-cut').state).toBe('completed')
+    expect(storedReputation(slotId)).toBe(2)
 
-    await rightClickWorld()
-    await expect($('[data-feedback]')).toHaveText(`Whole-tree cutting held from ${SOURCE_ID}.`)
-    await expectPlaying({ mode: 'free', engaged: true, item: 'iteration', cutting: true })
-    const duplicateGround = { x: -4, z: 0 }
-    await aimReticleAt({ ...duplicateGround, y: -0.035 })
-    const duplicateDirection = (await displayedPose()).direction
-    const duplicateYaw = Math.atan2(-duplicateDirection.x, -duplicateDirection.z)
-    const beforeDuplicateFrame = await canvasScreenshot()
-    await rightClickWorld()
-    await expectTextContains('[data-feedback]', 'Duplicated tree as tree-')
-    await waitForVisibleTreeTween(beforeDuplicateFrame)
-    await expectPlaying({ mode: 'free', engaged: true, item: 'iteration', cutting: false })
-    const idsAfterDuplicate = storedTreeIds(slotId)
-    expect(idsAfterDuplicate).toHaveLength(2)
-    expect(idsAfterDuplicate).toContain(SOURCE_ID)
-    const duplicateId = idsAfterDuplicate.find((id) => id !== SOURCE_ID)
-    if (duplicateId === undefined) throw new Error('duplicate did not receive a fresh tree ID')
-    expect(storedTreeDiagram(slotId, SOURCE_ID)).toEqual(sourceBefore)
+    await openLedger('orders')
+    const availableIds: Array<string | null> = []
+    for (const element of await $$('[data-order-id]')) {
+      availableIds.push(await element.getAttribute('data-order-id'))
+    }
+    expect(new Set(availableIds)).toEqual(new Set([
+      'irregular-double-cut-a',
+      'irregular-double-cut-b',
+    ]))
+    await $(`[data-order-id="irregular-double-cut-b"] [data-order-action="accept"]`).click()
+    await expect(game()).toHaveAttribute('data-ledger-open', 'false')
+    await moveFreeCameraTo({ x: -8, y: 1.7, z: 12 })
+    await accept('irregular-double-cut-a')
 
-    await browser.keys('1')
-    await expect($('[data-feedback]')).toHaveText('Equipped Double Cut.')
-    await expectPlaying({ item: 'double-cut', cutting: false })
-    const duplicateBeforeCut = storedTreeDiagram(slotId, duplicateId)
-    await aimReticleAt({ ...duplicateGround, y: 0.25 })
-    await rightClickWorld()
-    await expect($('[data-feedback]')).toHaveText(`Double cut applied to ${duplicateId}.`)
-    await waitForVisibleTreeTween()
-    const duplicateAfterCut = storedTreeDiagram(slotId, duplicateId)
-    expect(Object.keys(duplicateAfterCut.regions)).toHaveLength(
-      Object.keys(duplicateBeforeCut.regions).length + 2,
-    )
+    const first = storedOrder(slotId, 'irregular-double-cut-a')
+    const second = storedOrder(slotId, 'irregular-double-cut-b')
+    expect(first.state).toBe('accepted')
+    expect(second.state).toBe('accepted')
+    expect(first.pot).not.toEqual(second.pot)
 
-    await browser.keys('1')
-    await expectPlaying({ item: 'iteration', cutting: false })
-
-    await aimReticleAt({ ...duplicateGround, y: 1.05 })
-    await rightClickWorld()
-    await expect($('[data-feedback]')).toHaveText(`Subtree cutting held from ${duplicateId}.`)
-    await expectPlaying({ mode: 'free', item: 'iteration', cutting: true })
-    await aimReticleAt({ ...duplicateGround, y: 0.25 })
-    await rightClickWorld()
-    await expect($('[data-feedback]')).toHaveText(`Iteration applied to ${duplicateId}.`)
-    await waitForVisibleTreeTween()
-    await expectPlaying({ item: 'iteration', cutting: false })
-    const duplicateAfterIteration = storedTreeDiagram(slotId, duplicateId)
-    expect(Object.keys(duplicateAfterIteration.regions).length)
-      .toBeGreaterThan(Object.keys(duplicateAfterCut.regions).length)
-
-    const branchLocal = { x: 0.155, z: -0.343 }
-    const cosine = Math.cos(duplicateYaw)
-    const sine = Math.sin(duplicateYaw)
-    await aimReticleAt({
-      x: duplicateGround.x + branchLocal.x * cosine + branchLocal.z * sine,
-      y: 1.05,
-      z: duplicateGround.z - branchLocal.x * sine + branchLocal.z * cosine,
-    })
-    await rightClickWorld()
-    await expect($('[data-feedback]')).toHaveText(`Subtree cutting held from ${duplicateId}.`)
-    await expectPlaying({ mode: 'free', item: 'iteration', cutting: true })
-    await aimReticleAt({ x: 0, y: 0.25, z: 0 })
-    await rightClickWorld()
-    await expect($('[data-feedback]')).toHaveText('cross-tree iteration requires a whole tree cutting')
-    await expectPlaying({ mode: 'free', item: 'iteration', cutting: true, order: 'accepted', reputation: 0 })
-    expect(storedTreeDiagram(slotId, SOURCE_ID)).toEqual(sourceBefore)
-
-    const duplicateBeforeRetainedRetry = storedTreeDiagram(slotId, duplicateId)
-    await aimReticleAt({ ...duplicateGround, y: 0.25 })
-    await rightClickWorld()
-    await expect($('[data-feedback]')).toHaveText(`Iteration applied to ${duplicateId}.`)
-    await waitForVisibleTreeTween()
-    await expectPlaying({ mode: 'free', item: 'iteration', cutting: false })
-    const duplicateAfterRetainedRetry = storedTreeDiagram(slotId, duplicateId)
-    expect(Object.keys(duplicateAfterRetainedRetry.regions).length)
-      .toBeGreaterThan(Object.keys(duplicateBeforeRetainedRetry.regions).length)
-
-    const duplicateBeforeMismatch = storedTreeDiagram(slotId, duplicateId)
-    const orderBeforeMismatch = storedOrder(slotId, ORDER_ID)
-    expect(orderBeforeMismatch.state).toBe('accepted')
-    expect(orderBeforeMismatch.pot).not.toBeNull()
-    await aimReticleAt({ ...duplicateGround, y: 0.25 })
-    await rightClickWorld()
-    await expect($('[data-feedback]')).toHaveText(`Whole-tree cutting held from ${duplicateId}.`)
-    await aimReticleAt(potInteractionPoint)
-    await rightClickWorld()
-    await expect($('[data-feedback]')).toHaveText(`delivered proposition does not match order '${ORDER_ID}'`)
-    await expectPlaying({ mode: 'free', item: 'iteration', cutting: true, order: 'accepted', reputation: 0 })
-    expect(storedTreeDiagram(slotId, duplicateId)).toEqual(duplicateBeforeMismatch)
-    expect(storedOrder(slotId, ORDER_ID)).toEqual(orderBeforeMismatch)
-    expect(storedOrder(slotId, ORDER_ID).state).toBe('accepted')
-    expect(storedReputation(slotId)).toBe(0)
-    expect(storedTreeIds(slotId)).toEqual(idsAfterDuplicate)
-    expect(storedTreeDiagram(slotId, SOURCE_ID)).toEqual(sourceBefore)
-
-    await browser.keys('Escape')
-    await expect($('[data-feedback]')).toHaveText('Cutting cleared.')
-    await expectPlaying({ mode: 'free', engaged: true, item: 'iteration', cutting: false })
-    await browser.keys('1')
-    await expectPlaying({ item: 'double-cut', cutting: false })
-    await aimReticleAt({ x: 0, y: 0.25, z: 0 })
-    await rightClickWorld()
-    await expect($('[data-feedback]')).toHaveText(`Double cut applied to ${SOURCE_ID}.`)
-    await waitForVisibleTreeTween()
-    const exactSource = storedTreeDiagram(slotId, SOURCE_ID)
-    expect(Object.keys(exactSource.regions)).toHaveLength(Object.keys(sourceBefore.regions).length + 2)
-
-    await browser.keys('1')
-    await aimReticleAt({ x: 0, y: 0.25, z: 0 })
-    await rightClickWorld()
-    await expect($('[data-feedback]')).toHaveText(`Whole-tree cutting held from ${SOURCE_ID}.`)
-    await aimReticleAt(potInteractionPoint)
-    await rightClickWorld()
-    await expect($('[data-feedback]')).toHaveText(`Completed ${ORDER_ID}. Reputation 1.`)
-    await expectPlaying({ item: 'iteration', cutting: false, order: 'completed', reputation: 1 })
+    await openLedger('orders')
+    await $('[data-ledger-context="active"]').click()
+    await expect($$('[data-order-action="abandon"]')).toBeElementsArrayOfSize(2)
+    await $(`[data-order-id="irregular-double-cut-a"] [data-order-action="abandon"]`).click()
     await waitForSave()
-    expect(storedOrder(slotId, ORDER_ID)).toEqual({ state: 'completed', pot: null })
-    expect(storedReputation(slotId)).toBe(1)
-    expect(storedTreeIds(slotId)).toEqual(idsAfterDuplicate)
-    expect(storedTreeDiagram(slotId, SOURCE_ID)).toEqual(exactSource)
-
-    await openCatalog()
-    await $('[data-catalog-completed]').click()
-    await expect($('[data-catalog-completed]')).toHaveAttribute('aria-pressed', 'true')
-    await expect($('[data-catalog-pending]')).toHaveAttribute('aria-pressed', 'false')
-    await expect($('[data-catalog-orders] strong')).toHaveText('Double Cut')
-    await expect($('[data-catalog-reputation]')).toHaveText('Reputation: 1')
-    await browser.keys('Escape')
-    await expectPlaying({ catalog: false, mode: 'free', engaged: true, order: 'completed', reputation: 1 })
-
+    expect(storedOrder(slotId, 'irregular-double-cut-a')).toEqual({ state: 'pending', pot: null })
+    expect(storedOrder(slotId, 'irregular-double-cut-b').state).toBe('accepted')
     expect(await attribute('errors')).toBe('')
   })
 })

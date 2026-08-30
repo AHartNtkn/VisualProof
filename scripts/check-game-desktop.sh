@@ -4,8 +4,13 @@ set -euo pipefail
 mode=${1:-e2e}
 data_roots=()
 smoke_pid=
+content_backup=
 
 cleanup() {
+  if [[ -n "$content_backup" && -f "$content_backup" ]]; then
+    cp -- "$content_backup" game/content/orders.json
+    rm -f -- "$content_backup"
+  fi
   if [[ -n "$smoke_pid" ]] && kill -0 "$smoke_pid" 2>/dev/null; then
     kill "$smoke_pid"
     wait "$smoke_pid" 2>/dev/null || true
@@ -65,6 +70,13 @@ case "$mode" in
     run_scenario order-loop play "$current_data_root"
     run_scenario order-loop reload "$current_data_root"
     run_scenario order-loop verify "$current_data_root"
+    new_data_root
+    run_scenario tutorial-progression tutorial "$current_data_root"
+    content_backup=$(mktemp /tmp/orchard-orders-content.XXXXXX)
+    cp -- game/content/orders.json "$content_backup"
+    new_data_root
+    run_scenario developer-orders developer "$current_data_root"
+    cmp --silent "$content_backup" game/content/orders.json
     ;;
   stress)
     npm run build:game:e2e
