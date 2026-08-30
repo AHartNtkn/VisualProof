@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::{self, File, Permissions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use uuid::Uuid;
@@ -208,6 +208,12 @@ pub enum SaveStoreError {
     CyclicOrderPrerequisites(String),
     #[error("order content write lock is unavailable")]
     OrderContentLockPoisoned,
+    #[error("{primary}; additionally failed to restore prior order content: {restoration}")]
+    OrderContentRestoreFailed {
+        #[source]
+        primary: Box<SaveStoreError>,
+        restoration: Box<SaveStoreError>,
+    },
     #[error("identifier must not be blank")]
     BlankIdentifier,
     #[error("reputation cannot be increased")]
@@ -242,15 +248,48 @@ pub struct SaveStore {
 #[derive(Clone, Debug)]
 pub struct OrderContentStore {
     path: PathBuf,
+    faults: OrderContentFaults,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum OrderContentFaultPoint {
+    PublishedDirectorySync,
+    BeforeRestoreRename,
+}
+
+#[derive(Clone, Debug, Default)]
+struct OrderContentFaults {
+    points: Arc<Mutex<HashSet<OrderContentFaultPoint>>>,
+}
+
+#[derive(Debug)]
+struct OrderContentBackup {
+    path: PathBuf,
 }
 
 impl OrderContentStore {
     pub fn new(path: PathBuf) -> Self {
-        Self { path }
+        Self {
+            path,
+            faults: OrderContentFaults::default(),
+        }
     }
 
     pub fn production() -> Self {
         Self::new(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../game/content/orders.json"))
+    }
+
+    #[cfg(test)]
+    fn with_faults(
+        path: PathBuf,
+        points: impl IntoIterator<Item = OrderContentFaultPoint>,
+    ) -> Self {
+        Self {
+            path,
+            faults: OrderContentFaults {
+                points: Arc::new(Mutex::new(points.into_iter().collect())),
+            },
+        }
     }
 
     pub fn save_order_catalog_json(
@@ -274,30 +313,125 @@ impl OrderContentStore {
             .map_err(|_| SaveStoreError::OrderContentLockPoisoned)?;
         validate_order_content(&definitions)?;
 
-        let previous = fs::read(&self.path)?;
         let permissions = fs::metadata(&self.path)?.permissions();
         let mut replacement = serde_json::to_vec_pretty(&definitions)?;
         replacement.push(b'\n');
-        self.replace_file(&replacement, permissions.clone())?;
+        let backup = self.replace_content_bytes(&replacement, permissions)?;
 
         let order_ids = definitions
             .iter()
             .map(|definition| definition.id.clone())
             .collect::<Vec<_>>();
         if let Err(error) = saves.replace_order_ids(slot_id, &order_ids) {
-            self.replace_file(&previous, permissions)?;
-            return Err(error);
+            return Err(self.restore_or_attach(error, &backup));
         }
+        self.discard_backup(&backup);
         Ok(())
     }
 
-    fn replace_file(&self, bytes: &[u8], permissions: Permissions) -> Result<()> {
-        let parent = self.path.parent().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "order content path has no parent directory",
-            )
-        })?;
+    fn replace_content_bytes(
+        &self,
+        bytes: &[u8],
+        permissions: Permissions,
+    ) -> Result<OrderContentBackup> {
+        let parent = self.parent_directory()?;
+        let backup = OrderContentBackup {
+            path: self.sibling_path("backup")?,
+        };
+        let previous = fs::read(&self.path)?;
+        let replacement = self.write_temporary(bytes, permissions.clone(), "replacement")?;
+        let prepared_backup =
+            match self.write_temporary(&previous, permissions, "backup-preparation") {
+                Ok(path) => path,
+                Err(error) => {
+                    let _ = fs::remove_file(&replacement);
+                    return Err(error);
+                }
+            };
+
+        if let Err(error) = fs::rename(&prepared_backup, &backup.path) {
+            let _ = fs::remove_file(&replacement);
+            let _ = fs::remove_file(&prepared_backup);
+            return Err(error.into());
+        }
+        if let Err(error) = self.sync_parent(parent, None) {
+            let _ = fs::remove_file(&replacement);
+            self.discard_backup(&backup);
+            return Err(error);
+        }
+        if let Err(error) = fs::rename(&replacement, &self.path) {
+            let _ = fs::remove_file(&replacement);
+            return Err(self.restore_or_attach(error.into(), &backup));
+        }
+        if let Err(error) =
+            self.sync_parent(parent, Some(OrderContentFaultPoint::PublishedDirectorySync))
+        {
+            return Err(self.restore_or_attach(error, &backup));
+        }
+        Ok(backup)
+    }
+
+    fn restore_or_attach(
+        &self,
+        primary: SaveStoreError,
+        backup: &OrderContentBackup,
+    ) -> SaveStoreError {
+        match self.restore_backup(backup) {
+            Ok(()) => primary,
+            Err(restoration) => SaveStoreError::OrderContentRestoreFailed {
+                primary: Box::new(primary),
+                restoration: Box::new(restoration),
+            },
+        }
+    }
+
+    fn restore_backup(&self, backup: &OrderContentBackup) -> Result<()> {
+        let previous = fs::read(&backup.path)?;
+        let permissions = fs::metadata(&backup.path)?.permissions();
+        let restoration = self.write_temporary(&previous, permissions, "restoration")?;
+        if let Err(error) = self.inject_fault(OrderContentFaultPoint::BeforeRestoreRename) {
+            let _ = fs::remove_file(&restoration);
+            return Err(error);
+        }
+        if let Err(error) = fs::rename(&restoration, &self.path) {
+            let _ = fs::remove_file(&restoration);
+            return Err(error.into());
+        }
+        self.sync_parent(self.parent_directory()?, None)?;
+        self.discard_backup(backup);
+        Ok(())
+    }
+
+    fn discard_backup(&self, backup: &OrderContentBackup) {
+        if fs::remove_file(&backup.path).is_ok() {
+            if let Ok(parent) = self.parent_directory() {
+                let _ = self.sync_parent(parent, None);
+            }
+        }
+    }
+
+    fn write_temporary(
+        &self,
+        bytes: &[u8],
+        permissions: Permissions,
+        purpose: &str,
+    ) -> Result<PathBuf> {
+        let temporary = self.sibling_path(purpose)?;
+        let result = (|| -> Result<()> {
+            let mut file = File::create(&temporary)?;
+            file.write_all(bytes)?;
+            file.set_permissions(permissions)?;
+            file.sync_all()?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&temporary);
+        }
+        result.map(|()| temporary)
+    }
+
+    fn sibling_path(&self, purpose: &str) -> Result<PathBuf> {
+        let parent = self.parent_directory()?;
         let file_name = self
             .path
             .file_name()
@@ -308,20 +442,44 @@ impl OrderContentStore {
                     "order content path has no UTF-8 file name",
                 )
             })?;
-        let temporary = parent.join(format!(".{file_name}.{}.tmp", Uuid::new_v4()));
-        let result = (|| -> Result<()> {
-            let mut file = File::create(&temporary)?;
-            file.write_all(bytes)?;
-            file.set_permissions(permissions)?;
-            file.sync_all()?;
-            fs::rename(&temporary, &self.path)?;
-            File::open(parent)?.sync_all()?;
-            Ok(())
-        })();
-        if result.is_err() {
-            let _ = fs::remove_file(&temporary);
+        Ok(parent.join(format!(".{file_name}.{}.{}.tmp", Uuid::new_v4(), purpose)))
+    }
+
+    fn parent_directory(&self) -> Result<&Path> {
+        self.path.parent().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "order content path has no parent directory",
+            )
+            .into()
+        })
+    }
+
+    fn sync_parent(&self, parent: &Path, fault: Option<OrderContentFaultPoint>) -> Result<()> {
+        if let Some(point) = fault {
+            self.inject_fault(point)?;
         }
-        result
+        File::open(parent)?.sync_all()?;
+        Ok(())
+    }
+
+    fn inject_fault(&self, point: OrderContentFaultPoint) -> Result<()> {
+        let injected = self
+            .faults
+            .points
+            .lock()
+            .map_err(|_| SaveStoreError::OrderContentLockPoisoned)?
+            .remove(&point);
+        if !injected {
+            return Ok(());
+        }
+        let message = match point {
+            OrderContentFaultPoint::PublishedDirectorySync => {
+                "injected published directory sync failure"
+            }
+            OrderContentFaultPoint::BeforeRestoreRename => "injected restore rename failure",
+        };
+        Err(std::io::Error::other(message).into())
     }
 }
 
@@ -1849,6 +2007,33 @@ mod tests {
         assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
     }
 
+    // This catches a directory-sync error after rename leaving new content with the old save.
+    #[test]
+    fn order_catalog_post_publish_sync_failure_restores_prior_content_before_returning() {
+        let (temporary, _content, content_path, saves, slot_id, previous_content, previous_save) =
+            content_and_save_fixture();
+        let content = OrderContentStore::with_faults(
+            content_path.clone(),
+            [OrderContentFaultPoint::PublishedDirectorySync],
+        );
+
+        let result =
+            content.save_order_catalog(&saves, &slot_id, vec![order_content("replacement", &[])]);
+
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("injected published directory sync failure"));
+        assert_eq!(fs::read(&content_path).unwrap(), previous_content);
+        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
+        assert_eq!(
+            fs::read_dir(temporary.path().join("content"))
+                .unwrap()
+                .count(),
+            1
+        );
+    }
+
     // This catches returning a save error while leaving newly published content behind.
     #[test]
     fn order_catalog_save_failure_restores_exact_content_bytes() {
@@ -1874,6 +2059,60 @@ mod tests {
         assert!(matches!(result, Err(SaveStoreError::TimestampOverflow)));
         assert_eq!(fs::read(content_path).unwrap(), previous_content);
         assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
+    }
+
+    // This catches restoration failure masking the primary save error or losing prior bytes.
+    #[test]
+    fn order_catalog_rollback_failure_keeps_save_error_primary_and_prior_backup_durable() {
+        let (temporary, _content, content_path, saves, slot_id, previous_content, _previous_save) =
+            content_and_save_fixture();
+        Connection::open(
+            temporary
+                .path()
+                .join("saves")
+                .join(format!("{slot_id}.sqlite3")),
+        )
+        .unwrap()
+        .execute(
+            "UPDATE metadata SET updated_at_ms = ?1 WHERE singleton = 1",
+            [i64::MAX],
+        )
+        .unwrap();
+        let previous_save = saves.load(&slot_id).unwrap();
+        let content = OrderContentStore::with_faults(
+            content_path.clone(),
+            [OrderContentFaultPoint::BeforeRestoreRename],
+        );
+
+        let error = content
+            .save_order_catalog(&saves, &slot_id, vec![order_content("replacement", &[])])
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .starts_with("save timestamp cannot be advanced"));
+        assert!(error
+            .to_string()
+            .contains("additionally failed to restore prior order content"));
+
+        match error {
+            SaveStoreError::OrderContentRestoreFailed {
+                primary,
+                restoration,
+            } => {
+                assert!(matches!(*primary, SaveStoreError::TimestampOverflow));
+                assert!(restoration
+                    .to_string()
+                    .contains("injected restore rename failure"));
+            }
+            other => panic!("expected save error with restoration context, got {other}"),
+        }
+        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
+        let retained_backup = fs::read_dir(temporary.path().join("content"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| path != &content_path && fs::read(path).unwrap() == previous_content)
+            .expect("the exact prior bytes must remain in a durable sibling backup");
+        assert!(retained_backup.is_file());
     }
 
     // This catches structural validation that ignores unauthorised schema additions.
