@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { mountToolSelector, renderHeldToolModel } from '../../game/tool-selector'
 import { ToolInventory } from '../../src/game/tools'
+import { heldColorAuthorityViolations } from './held-color-authority'
 
 class TestElement {
   public textContent = ''
@@ -96,34 +97,58 @@ describe('temporary tool selector', () => {
   it('derives every held-model colored primitive from the catalog custom property', () => {
     // Catches a silhouette-specific background, border, shadow, or filter becoming a second color authority.
     const stylesheet = readFileSync(new URL('../../game/style.css', import.meta.url), 'utf8')
-    const heldStart = stylesheet.indexOf('.held-tool-silhouette')
-    const heldEnd = stylesheet.indexOf('.ledger {', heldStart)
-    expect(heldStart).toBeGreaterThanOrEqual(0)
-    expect(heldEnd).toBeGreaterThan(heldStart)
-    const heldStyles = stylesheet.slice(heldStart, heldEnd)
-    const colorDeclarations = [...heldStyles.matchAll(
-      /^\s*(background|border(?:-(?:top|right|bottom|left)(?:-color)?)?|box-shadow|filter):\s*([^;]+);/gm,
-    )].map(([, property, value]) => ({ property: property!, value: value! }))
-    const neutralHex = new Set(['#000', '#000000', '#fff', '#ffffff'])
-    const nonNeutralHex = (value: string): readonly string[] => [...value.matchAll(/#[0-9a-f]{3,8}\b/gi)]
-      .map(([literal]) => literal.toLowerCase())
-      .filter((literal) => !neutralHex.has(literal))
-    const nonNeutralRgb = (value: string): readonly string[] => [...value.matchAll(/rgba?\(([^)]+)\)/gi)]
-      .flatMap(([literal, channels]) => {
-        const [colorChannels] = channels!.split('/')
-        const values = colorChannels!.trim().split(/[\s,]+/).slice(0, 3).map(Number)
-        return values.length === 3 && values.every(Number.isFinite) && values[0] === values[1] && values[1] === values[2]
-          ? []
-          : [literal]
-      })
+    expect(heldColorAuthorityViolations(stylesheet)).toEqual([])
+  })
 
-    expect(colorDeclarations.length).toBeGreaterThan(0)
-    expect(colorDeclarations.filter(({ property, value }) => (
-      (!value.includes('currentcolor')
-        && !(property.startsWith('border-') && value.trim().endsWith('transparent')))
-      || nonNeutralHex(value).length > 0
-      || nonNeutralRgb(value).length > 0
-    ))).toEqual([])
+  it('rejects chromatic named, functional, and perceptual colors in every held color property', () => {
+    // Catches a mixed declaration hiding a second hue authority beside currentcolor.
+    const invalid = `
+      .held-tool-silhouette { color: rebeccapurple; border-color: hsl(120 100% 50%); }
+      .held-tool-silhouette::before {
+        background: linear-gradient(currentcolor, #8cbf26, hwb(120 0% 0%), lab(50% 40 20), lch(50% 30 20));
+        background-image: linear-gradient(currentcolor, rgb(140 191 38));
+        outline-color: var(--rogue-color);
+        fill: rebeccapurple;
+        stroke: currentcolor;
+        box-shadow: 0 0 2px oklab(.5 .1 .1), 0 0 4px oklch(.5 .2 120);
+        filter: drop-shadow(0 0 2px color(display-p3 1 0 0)) hue-rotate(30deg);
+      }
+      @media (prefers-contrast: more) {
+        .held-tool-silhouette::after { border-top-color: Highlight; }
+      }
+    `
+
+    expect(heldColorAuthorityViolations(invalid).map(({ color }) => color)).toEqual([
+      'rebeccapurple',
+      'hsl(120 100% 50%)',
+      '#8cbf26',
+      'hwb(120 0% 0%)',
+      'lab(50% 40 20)',
+      'lch(50% 30 20)',
+      'rgb(140 191 38)',
+      'var(--rogue-color)',
+      'rebeccapurple',
+      'oklab(.5 .1 .1)',
+      'oklch(.5 .2 120)',
+      'color(display-p3 1 0 0)',
+      'hue-rotate(30deg)',
+      'Highlight',
+    ])
+  })
+
+  it('allows currentcolor, transparency, and explicit equal-channel neutral shading', () => {
+    // Catches the guard rejecting legitimate luminance and alpha treatment.
+    const neutral = `
+      .held-tool-silhouette {
+        color: currentcolor;
+        border-color: transparent;
+        background: linear-gradient(currentcolor, #fff, rgb(12 12 12 / 40%), hsl(0 0% 20%));
+        box-shadow: inset 0 0 #000, 0 0 hwb(20 50% 50%);
+        filter: drop-shadow(0 0 2px oklch(.5 0 120));
+      }
+    `
+
+    expect(heldColorAuthorityViolations(neutral)).toEqual([])
   })
 
   it('keeps ordinary HUD markup free of a permanent equipped-tool label', () => {
