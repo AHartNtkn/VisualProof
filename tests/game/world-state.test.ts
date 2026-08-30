@@ -45,6 +45,7 @@ function composeWorld(options: {
   readonly camera: 'free' | 'orbit'
   readonly cutting: boolean
   readonly ledgerOpen: boolean
+  readonly foregroundOpen?: boolean
 }) {
   const free = initialCameraState({
     position: { x: 0, y: 1.7, z: 8 },
@@ -71,6 +72,7 @@ function composeWorld(options: {
   }
   let pauseVisible = false
   let freeActive = true
+  let releaseCalls = 0
   const target = new TestWorldTarget()
   const windowTarget = new EventTarget()
   const documentTarget = new TestDocumentTarget()
@@ -90,12 +92,18 @@ function composeWorld(options: {
     window: windowTarget as Window,
     document: documentTarget as unknown as Document,
   })
+  const releaseInput = input.release.bind(input)
+  input.release = () => {
+    releaseCalls += 1
+    releaseInput()
+  }
   if (ledgerOpen) input.suspend()
   controller = new WorldStateController({
     getCamera: () => camera,
     setCamera: (next) => { camera = next },
     tools,
     ledger: { get isOpen() { return ledgerOpen } },
+    foreground: { get isOpen() { return options.foregroundOpen ?? false } },
     input,
     pauseMenu: {
       show: () => { pauseVisible = true },
@@ -119,6 +127,7 @@ function composeWorld(options: {
     },
     pauseVisible: () => pauseVisible,
     freeActive: () => freeActive,
+    releaseCalls: () => releaseCalls,
     orchardState,
   }
 }
@@ -205,5 +214,39 @@ describe('world state controls', () => {
     world.windowTarget.dispatchEvent(keyUp('KeyW'))
     world.windowTarget.dispatchEvent(key('KeyW'))
     expect(world.input.sample().forward).toBe(1)
+  })
+
+  it('releases active world capture for developer interaction without mutating world state', () => {
+    // Catches developer reachability exiting orbit, clearing tools, or changing progression/world data.
+    const world = composeWorld({ camera: 'orbit', cutting: true, ledgerOpen: false })
+    const cameraBefore = world.camera()
+    const cuttingBefore = world.tools.cutting
+    const orchardBefore = world.orchardState
+
+    world.controller.releasePointerForDeveloperMode()
+
+    expect(world.releaseCalls()).toBe(1)
+    expect(world.freeActive()).toBe(false)
+    expect(world.camera()).toBe(cameraBefore)
+    expect(world.tools.cutting).toBe(cuttingBefore)
+    expect(world.orchardState).toBe(orchardBefore)
+    expect(world.controller.isPaused).toBe(false)
+    expect(world.ledgerOpen()).toBe(false)
+  })
+
+  it('keeps world input suspended when Resume restores a foreground editor', () => {
+    // Catches Resume stealing capture and keyboard ownership from preserved editor state.
+    const world = composeWorld({
+      camera: 'free', cutting: false, ledgerOpen: false, foregroundOpen: true,
+    })
+
+    world.controller.pause()
+    world.controller.resume()
+    world.windowTarget.dispatchEvent(key('KeyW'))
+
+    expect(world.controller.isPaused).toBe(false)
+    expect(world.pauseVisible()).toBe(false)
+    expect(world.freeActive()).toBe(false)
+    expect(world.input.sample().forward).toBe(0)
   })
 })

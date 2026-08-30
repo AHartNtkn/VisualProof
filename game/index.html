@@ -172,6 +172,35 @@
         </form>
       </section>
 
+      <section
+        class="tutorial-editor"
+        data-tutorial-editor
+        hidden
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tutorial-editor-title"
+      >
+        <header class="tutorial-editor-heading">
+          <p class="eyebrow">Developer tools</p>
+          <h2 id="tutorial-editor-title">Edit tutorial text</h2>
+        </header>
+        <form class="tutorial-editor-form" data-tutorial-editor-form>
+          <label>
+            <span>Milestone ID</span>
+            <input type="text" readonly data-tutorial-editor-id>
+          </label>
+          <label>
+            <span>Instruction</span>
+            <textarea rows="6" required data-tutorial-editor-text></textarea>
+          </label>
+          <p class="tutorial-editor-error" data-tutorial-editor-error role="alert"></p>
+          <div class="tutorial-editor-actions">
+            <button type="button" data-tutorial-editor-cancel>Cancel</button>
+            <button class="tutorial-editor-save" type="submit" data-tutorial-editor-save>Save changes</button>
+          </div>
+        </form>
+      </section>
+
     </main>
     <script type="module" src="/main.ts"></script>
   </body>

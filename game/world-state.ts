@@ -6,6 +6,10 @@ type LedgerStatePort = {
   readonly isOpen: boolean
 }
 
+type ForegroundStatePort = {
+  readonly isOpen: boolean
+}
+
 type PauseMenuPort = {
   show(worldName: string): void
   hide(): void
@@ -16,7 +20,8 @@ export type WorldStatePorts = {
   readonly setCamera: (camera: CameraState) => void
   readonly tools: ToolInventory
   readonly ledger: LedgerStatePort
-  readonly input: Pick<WorldInput, 'suspend' | 'resume' | 'engage'>
+  readonly foreground: ForegroundStatePort
+  readonly input: Pick<WorldInput, 'suspend' | 'resume' | 'engage' | 'release'>
   readonly pauseMenu: PauseMenuPort
   readonly worldName: () => string
   readonly setFreeActive: (active: boolean) => void
@@ -47,12 +52,18 @@ export class WorldStateController {
     if (!this.#paused) return false
     this.ports.pauseMenu.hide()
     this.#paused = false
-    if (!this.ports.ledger.isOpen) {
+    if (!this.ports.ledger.isOpen && !this.ports.foreground.isOpen) {
       this.ports.input.resume()
       if (this.ports.getCamera().mode === 'free') this.engageFreeFlight()
     }
     this.ports.stateChanged()
     return true
+  }
+
+  public releasePointerForDeveloperMode(): void {
+    this.ports.setFreeActive(false)
+    this.ports.input.release()
+    this.ports.stateChanged()
   }
 
   public stepBack(): 'cutting-cleared' | 'orbit-exited' | 'unchanged' {

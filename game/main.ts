@@ -33,6 +33,8 @@ import { gameSession, publishTreeChange, ToolError, type GameSession, type TreeC
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
 import { completeBranchCutting, TOOL_CATALOG, ToolInventory, type ToolId } from '../src/game/tools'
 import { TutorialSession, type TutorialEvent } from '../src/game/tutorial'
+import { openingTutorialContent } from '../src/game/tutorial/content'
+import { authoredContentClient } from '../src/game/content-client'
 import type { PlacementObstacle } from '../src/game/placement'
 import {
   mountLedger,
@@ -52,6 +54,7 @@ import { DeveloperPreferences } from './preferences'
 import { quitApplication } from './quit'
 import { mountSettings, type SettingsController } from './settings'
 import { mountTutorialCard, type TutorialCardController } from './tutorial-card'
+import { mountTutorialEditor, type TutorialEditorController } from './tutorial-editor'
 import { enqueueTutorialCommit } from './tutorial-progression'
 import { WorldStateController } from './world-state'
 import { commitWorldShutdown } from './world-lifecycle'
@@ -59,6 +62,7 @@ import {
   acceptedPotsForRevision,
   publishOrderCatalogRevision,
 } from './order-catalog-publication'
+import { publishTutorialContentRevision } from './content-publication'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
 const worldHost = document.querySelector<HTMLElement>('[data-world]')!
@@ -83,6 +87,7 @@ const settingsRoot = document.querySelector<HTMLElement>('[data-settings]')!
 const tutorialCardRoot = document.querySelector<HTMLElement>('[data-tutorial-card]')!
 const developerModeIndicator = document.querySelector<HTMLElement>('[data-developer-mode-indicator]')!
 const orderEditorRoot = document.querySelector<HTMLElement>('[data-order-editor]')!
+const tutorialEditorRoot = document.querySelector<HTMLElement>('[data-tutorial-editor]')!
 const createTutorials = document.querySelector<HTMLInputElement>('[data-create-tutorials]')!
 
 const blankDiagram = new DiagramBuilder().build()
@@ -110,13 +115,18 @@ let pauseMenu: PauseMenuController | null = null
 let settings: SettingsController | null = null
 let tutorialCard: TutorialCardController | null = null
 let orderEditor: OrderEditorController | null = null
+let tutorialEditor: TutorialEditorController | null = null
 let worldState: WorldStateController | null = null
 let animationFrame = 0
 let previousFrame = performance.now()
 let disposed = false
 let freeActive = false
 let developerMode = false
-let editorState: 'closed' | 'create' | 'edit' = 'closed'
+type ForegroundEditorState =
+  | { readonly kind: 'closed' }
+  | { readonly kind: 'order'; readonly mode: 'create' | 'edit' }
+  | { readonly kind: 'tutorial' }
+let editorState: ForegroundEditorState = { kind: 'closed' }
 let worldGeneration = 0
 let releaseWriterStatus = (): void => {}
 const toolSelector = mountToolSelector(toolSelectorRoot)
@@ -164,7 +174,12 @@ function setFeedback(value: string): void {
 }
 
 function mirrorRuntimeState(): void {
-  if (orderEditor?.isOpen !== true) editorState = 'closed'
+  const tutorialClosed = editorState.kind === 'tutorial' && tutorialEditor?.isOpen !== true
+  if (
+    (editorState.kind === 'order' && orderEditor?.isOpen !== true)
+    || tutorialClosed
+  ) editorState = { kind: 'closed' }
+  if (tutorialClosed && worldState?.isPaused === false && ledger?.isOpen !== true) input?.resume()
   root.dataset['tutorialsEnabled'] = String(tutorial?.enabled ?? false)
   root.dataset['completedTutorialMilestones'] = JSON.stringify(
     tutorial === null ? [] : [...tutorial.completed],
@@ -175,13 +190,13 @@ function mirrorRuntimeState(): void {
   root.dataset['ledgerOpen'] = String(ledger?.isOpen ?? false)
   root.dataset['ledgerTab'] = ledger?.selectedPrimaryTab ?? 'tools'
   root.dataset['developerMode'] = String(developerMode)
-  root.dataset['editorState'] = editorState
+  root.dataset['editorState'] = editorState.kind === 'order' ? editorState.mode : editorState.kind
   developerModeIndicator.hidden = !developerMode
 }
 
 function renderTutorial(): void {
   if (tutorial === null || tutorialCard === null) return
-  tutorialCard.render(tutorial.currentInstruction, tutorial.enabled)
+  tutorialCard.render(tutorial.currentInstruction, tutorial.enabled, developerMode)
   mirrorRuntimeState()
 }
 
@@ -192,7 +207,7 @@ function observeTutorial(event: TutorialEvent): void {
   if (activeTutorial === null || activeWriter === null || activeCard === null) return
   const commit = activeTutorial.observe(event)
   enqueueTutorialCommit(activeWriter, commit)
-  activeCard.render(commit.instruction, activeTutorial.enabled)
+  activeCard.render(commit.instruction, activeTutorial.enabled, developerMode)
   mirrorRuntimeState()
   refreshVisibleLedger()
 }
@@ -530,10 +545,12 @@ async function returnToMainMenu(): Promise<void> {
   input?.dispose()
   ledger?.dispose()
   orderEditor?.dispose()
+  tutorialEditor?.dispose()
   renderer?.dispose()
   input = null
   ledger = null
   orderEditor = null
+  tutorialEditor = null
   ledgerView = null
   renderer = null
   camera = null
@@ -547,7 +564,7 @@ async function returnToMainMenu(): Promise<void> {
   developerMode = false
   pauseMenu?.hide()
   settings?.hide()
-  tutorialCard?.render(null, false)
+  tutorialCard?.render(null, false, false)
   startLifecycle.returnToMenu()
   start.hidden = false
   hud.hidden = true
@@ -738,6 +755,7 @@ async function startWorld(world: GameWorld): Promise<void> {
   enqueueTutorialCommit(nextWriter, reconstructedTutorial)
   let nextLedger: LedgerController | null = null
   let nextEditor: OrderEditorController | null = null
+  let nextTutorialEditor: TutorialEditorController | null = null
   let nextInput: WorldInput | null = null
   let nextReleaseWriterStatus = (): void => {}
   let freeSecondaryPress: { readonly x: number; readonly y: number } | null = null
@@ -767,19 +785,19 @@ async function startWorld(world: GameWorld): Promise<void> {
       acceptOrder: acceptLedgerOrder,
       abandonOrder: abandonLedgerOrder,
       editOrder: (orderId) => {
-        if (!developerMode) return
+        if (!developerMode || editorState.kind !== 'closed') return
         const definition = openingOrderCatalog.definition(orderId)
         if (definition === undefined) {
           setError(`Order editing failed: unknown order '${orderId}'.`)
           return
         }
-        editorState = 'edit'
+        editorState = { kind: 'order', mode: 'edit' }
         orderEditor?.edit(definition)
         mirrorRuntimeState()
       },
       createOrder: () => {
-        if (!developerMode) return
-        editorState = 'create'
+        if (!developerMode || editorState.kind !== 'closed') return
+        editorState = { kind: 'order', mode: 'create' }
         orderEditor?.create()
         mirrorRuntimeState()
       },
@@ -789,6 +807,20 @@ async function startWorld(world: GameWorld): Promise<void> {
       isForeground: () => worldState?.isPaused === false,
       save: publishCatalog,
       delete: (orderId) => publishCatalog(deletionRevision(orderId)),
+    })
+    nextTutorialEditor = mountTutorialEditor(tutorialEditorRoot, {
+      currentRevision: () => openingTutorialContent.current,
+      isForeground: () => worldState?.isPaused === false && editorState.kind === 'tutorial',
+      save: async (candidate) => {
+        await publishTutorialContentRevision({
+          candidate,
+          contentClient: authoredContentClient,
+          content: openingTutorialContent,
+          isCurrent: () => generation === worldGeneration && tutorial === nextTutorial,
+        })
+        if (generation !== worldGeneration || tutorial !== nextTutorial) return
+        renderTutorial()
+      },
     })
     nextRenderer.setPots(acceptedPotsForRevision(
       nextOrders.progress,
@@ -883,6 +915,7 @@ async function startWorld(world: GameWorld): Promise<void> {
           || worldState?.isPaused === true
           || activeTools === null
           || ledger?.isOpen === true
+          || editorState.kind !== 'closed'
         ) return
         activeTools.cycle('1', performance.now())
         mirrorToolInventory(activeTools)
@@ -902,6 +935,7 @@ async function startWorld(world: GameWorld): Promise<void> {
           || activeTutorial === null
           || activeCamera === null
           || activeInput === null
+          || editorState.kind !== 'closed'
         ) return
         if (activeLedger.isOpen) {
           closeLedger(true)
@@ -928,10 +962,15 @@ async function startWorld(world: GameWorld): Promise<void> {
         if (
           worldState?.isPaused === true
           || !preferences.developerToolsEnabled
-          || orderEditor?.isOpen === true
+          || editorState.kind !== 'closed'
         ) return
         developerMode = !developerMode
-        if (!developerMode) orderEditor?.hide()
+        if (developerMode) worldState?.releasePointerForDeveloperMode()
+        else {
+          orderEditor?.hide()
+          tutorialEditor?.hide()
+        }
+        renderTutorial()
         refreshVisibleLedger()
         mirrorRuntimeState()
       },
@@ -951,7 +990,8 @@ async function startWorld(world: GameWorld): Promise<void> {
     releaseWriterStatus = nextReleaseWriterStatus
     ledger = nextLedger
     orderEditor = nextEditor
-    editorState = 'closed'
+    tutorialEditor = nextTutorialEditor
+    editorState = { kind: 'closed' }
     ledgerView = null
     const activePauseMenu = pauseMenu
     if (activePauseMenu === null) throw new Error('pause menu is unavailable')
@@ -960,6 +1000,7 @@ async function startWorld(world: GameWorld): Promise<void> {
       setCamera: (next) => { camera = next },
       tools: nextTools,
       ledger: nextLedger,
+      foreground: { get isOpen() { return editorState.kind !== 'closed' } },
       input: nextInput,
       pauseMenu: activePauseMenu,
       worldName: () => worldName.textContent ?? 'Orchard',
@@ -972,6 +1013,7 @@ async function startWorld(world: GameWorld): Promise<void> {
     })
     nextLedger.hide()
     nextEditor.hide()
+    nextTutorialEditor.hide()
     start.hidden = true
     hud.hidden = false
     worldName.textContent = world.slot.name
@@ -994,6 +1036,7 @@ async function startWorld(world: GameWorld): Promise<void> {
     worldState = null
     nextLedger?.dispose()
     nextEditor?.dispose()
+    nextTutorialEditor?.dispose()
     nextInput?.dispose()
     nextReleaseWriterStatus()
     await nextWriter.dispose().catch(() => {})
@@ -1033,7 +1076,23 @@ const startLifecycle = new StartLifecycle({ open: startWorld, fail: showStartFai
 startLifecycle.registerControl(nameInput)
 startLifecycle.registerControl(createTutorials)
 for (const button of createForm.querySelectorAll<HTMLButtonElement>('button')) startLifecycle.registerControl(button)
-tutorialCard = mountTutorialCard(tutorialCardRoot)
+tutorialCard = mountTutorialCard(tutorialCardRoot, {
+  edit(milestoneId) {
+    const activeTutorial = tutorial
+    const activeEditor = tutorialEditor
+    if (
+      !developerMode
+      || worldState?.isPaused !== false
+      || activeTutorial?.currentInstruction?.milestoneId !== milestoneId
+      || activeEditor === null
+      || editorState.kind !== 'closed'
+    ) return
+    input?.suspend()
+    editorState = { kind: 'tutorial' }
+    activeEditor.edit(openingTutorialContent.current.definition(milestoneId))
+    mirrorRuntimeState()
+  },
+})
 settings = mountSettings(settingsRoot, {
   setTutorialsEnabled(enabled) {
     const activeTutorial = tutorial
@@ -1053,7 +1112,10 @@ settings = mountSettings(settingsRoot, {
     if (!enabled) {
       developerMode = false
       orderEditor?.hide()
+      tutorialEditor?.hide()
+      editorState = { kind: 'closed' }
     }
+    renderTutorial()
     refreshVisibleLedger()
     mirrorRuntimeState()
   },
@@ -1114,6 +1176,8 @@ window.addEventListener('pagehide', () => {
   ledger = null
   orderEditor?.dispose()
   orderEditor = null
+  tutorialEditor?.dispose()
+  tutorialEditor = null
   ledgerView = null
   session = null
   orders = null
