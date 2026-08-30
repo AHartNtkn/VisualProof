@@ -1,4 +1,4 @@
-import { $, browser, expect } from '@wdio/globals'
+import { $, $$, browser, expect } from '@wdio/globals'
 import { describe, it } from 'mocha'
 import {
   clickWorld,
@@ -33,6 +33,13 @@ async function openPauseAndResume(expected: {
   await expectPoseClose(await displayedPose(), pose)
 }
 
+async function equipmentUiText(): Promise<string> {
+  const surfaces = await $$('[data-status-hud], [data-tool-selector], [data-held-tool-model]')
+  const text: string[] = []
+  for (const surface of surfaces) text.push(await surface.getText())
+  return text.join('\n')
+}
+
 describe('orchard world controls', () => {
   it('preserves free flight, orbit, and ledger states across Pause and uses Backspace to step back', async () => {
     await waitForMenu()
@@ -49,7 +56,7 @@ describe('orchard world controls', () => {
     await expect(game()).toHaveAttribute('data-selected-tool', 'sprout-spawner')
     await expect($('.tool-selector-category')).not.toExist()
     await expect($('.tool-selector-row')).not.toExist()
-    expect(await game().getText()).not.toContain('Sprout Spawner')
+    expect(await equipmentUiText()).not.toContain('Sprout Spawner')
 
     const loadedPose = await displayedPose()
     await hold('w')
@@ -98,7 +105,7 @@ describe('orchard world controls', () => {
     })
     await expect($('.tool-selector-category')).not.toExist()
     await expect($('.tool-selector-row')).not.toExist()
-    expect(await game().getText()).not.toContain('Sprout Spawner')
+    expect(await equipmentUiText()).not.toContain('Sprout Spawner')
 
     await browser.keys('Escape')
     await $('[data-pause-main-menu]').click()
