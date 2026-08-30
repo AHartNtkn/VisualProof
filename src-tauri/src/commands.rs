@@ -1,6 +1,7 @@
 use crate::save_store::{
-    CameraRecord, CreateSlotInput, LoadedSlot, OrderContentRecord, OrderContentStore,
-    PotPlacementRecord, SaveStore, SlotListEntry, TreeUpdate,
+    AuthoredContentStore, CameraRecord, CreateSlotInput, LoadedSlot, OrderContentRecord,
+    OrderContentStore, PotPlacementRecord, SaveStore, SlotListEntry, ToolContentRecord, TreeUpdate,
+    TutorialContentRecord,
 };
 use tauri::Manager;
 
@@ -141,5 +142,19 @@ pub fn save_order_catalog(
 ) -> Result<(), String> {
     OrderContentStore::production()
         .save_order_catalog(&store(&app)?, &slot_id, content)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn save_tutorial_content(content: Vec<TutorialContentRecord>) -> Result<(), String> {
+    AuthoredContentStore::production()
+        .save_tutorial_content(content)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn save_tool_content(content: Vec<ToolContentRecord>) -> Result<(), String> {
+    AuthoredContentStore::production()
+        .save_tool_content(content)
         .map_err(|error| error.to_string())
 }

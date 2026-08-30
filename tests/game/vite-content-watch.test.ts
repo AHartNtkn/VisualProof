@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { createServer as createTcpServer } from 'node:net'
+import { createServer as createHttpServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -20,6 +21,7 @@ let browser: Browser | undefined
 let viteProcess: ChildProcessWithoutNullStreams | undefined
 let viteOutput = ''
 let fixtureRoot: string | undefined
+let contentServer: Server | undefined
 
 async function reserveAvailablePort(): Promise<number> {
   return new Promise((resolvePort, rejectPort) => {
@@ -52,14 +54,50 @@ function writeEntry(revision: string): void {
   writeFileSync(
     join(fixtureRoot, 'game/main.ts'),
     `import ordersJson from './content/orders.json?raw'
+import tutorialJson from './content/tutorial.json?raw'
+import toolsJson from './content/tools.json?raw'
 
 const visits = Number(sessionStorage.getItem('vite-watch-visits') ?? '0') + 1
 sessionStorage.setItem('vite-watch-visits', String(visits))
 document.body.dataset.visits = String(visits)
 document.body.dataset.orders = ordersJson
+document.body.dataset.tutorial = tutorialJson
+document.body.dataset.tools = toolsJson
 document.body.dataset.revision = ${JSON.stringify(revision)}
 `,
   )
+}
+
+async function startContentServer(): Promise<string> {
+  if (fixtureRoot === undefined) throw new Error('Vite watch fixture is not initialized')
+  const root = fixtureRoot
+  const port = await reserveAvailablePort()
+  contentServer = createHttpServer((request, response) => {
+    const fileName = request.url === '/__orchard_playtest/content/tutorial'
+      ? 'tutorial.json'
+      : request.url === '/__orchard_playtest/content/tools'
+        ? 'tools.json'
+        : undefined
+    if (request.method !== 'POST' || fileName === undefined) {
+      response.writeHead(404).end()
+      return
+    }
+    const chunks: Buffer[] = []
+    request.on('data', (chunk: Buffer) => chunks.push(chunk))
+    request.on('end', () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString()) as { content: unknown }
+      writeFileSync(
+        join(root, 'game/content', fileName),
+        `${JSON.stringify(body.content, null, 2)}\n`,
+      )
+      response.writeHead(200, { 'content-type': 'application/json' }).end('null')
+    })
+  })
+  await new Promise<void>((resolveListen, rejectListen) => {
+    contentServer!.once('error', rejectListen)
+    contentServer!.listen(port, '127.0.0.1', resolveListen)
+  })
+  return `http://127.0.0.1:${port}`
 }
 
 async function waitForVite(url: string): Promise<void> {
@@ -111,6 +149,13 @@ afterEach(async () => {
   await stopVite()
   viteOutput = ''
 
+  if (contentServer !== undefined) {
+    await new Promise<void>((resolveClose, rejectClose) => {
+      contentServer!.close((error) => error === undefined ? resolveClose() : rejectClose(error))
+    })
+    contentServer = undefined
+  }
+
   if (fixtureRoot !== undefined) {
     rmSync(fixtureRoot, { recursive: true, force: true })
     fixtureRoot = undefined
@@ -119,7 +164,7 @@ afterEach(async () => {
 
 describe('Vite runtime content watch boundary', () => {
   it(
-    'keeps an active browser session when the imported order catalog is persisted',
+    'keeps an active browser session when imported authored content is persisted',
     async () => {
       fixtureRoot = mkdtempSync(join(tmpdir(), 'orchard-vite-watch-'))
       mkdirSync(join(fixtureRoot, 'game/content'), { recursive: true })
@@ -136,7 +181,16 @@ describe('Vite runtime content watch boundary', () => {
         join(fixtureRoot, 'game/content/orders.json'),
         '{"orders":[{"id":"initial-order"}]}\n',
       )
+      writeFileSync(
+        join(fixtureRoot, 'game/content/tutorial.json'),
+        '[{"milestoneId":"move","text":"initial tutorial"}]\n',
+      )
+      writeFileSync(
+        join(fixtureRoot, 'game/content/tools.json'),
+        '[{"id":"iteration","name":"initial tool","description":"initial description"}]\n',
+      )
       writeEntry('initial')
+      const contentUrl = await startContentServer()
 
       const gameConfig = join(repositoryRoot, 'game/vite.config.ts')
       if (existsSync(gameConfig)) {
@@ -180,6 +234,22 @@ describe('Vite runtime content watch boundary', () => {
       expect(await page.locator('body').getAttribute('data-orders')).toContain(
         'initial-order',
       )
+
+      for (const [document, content] of [
+        ['tutorial', [{ milestoneId: 'move', text: 'persisted tutorial' }]],
+        ['tools', [{ id: 'iteration', name: 'persisted tool', description: 'persisted description' }]],
+      ] as const) {
+        const response = await fetch(`${contentUrl}/__orchard_playtest/content/${document}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ content }),
+        })
+        expect(response.ok).toBe(true)
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 750))
+        expect(await page.locator('body').getAttribute('data-visits')).toBe('1')
+      }
+      expect(await page.locator('body').getAttribute('data-tutorial')).toContain('initial tutorial')
+      expect(await page.locator('body').getAttribute('data-tools')).toContain('initial tool')
 
       writeEntry('ordinary-source-change')
       await expect

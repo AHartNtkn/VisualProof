@@ -24,7 +24,9 @@ pub fn run() {
             commands::set_tutorials_enabled,
             commands::complete_tutorial_milestone,
             commands::acquire_tool,
-            commands::save_order_catalog
+            commands::save_order_catalog,
+            commands::save_tutorial_content,
+            commands::save_tool_content
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Orchard");

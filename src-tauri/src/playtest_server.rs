@@ -1,6 +1,7 @@
 use crate::save_store::{
-    CameraRecord, CreateSlotInput, OrderContentRecord, OrderContentStore, PotPlacementRecord,
-    SaveStore, SaveStoreError, TreeUpdate,
+    AuthoredContentStore, CameraRecord, CreateSlotInput, OrderContentRecord, OrderContentStore,
+    PotPlacementRecord, SaveStore, SaveStoreError, ToolContentRecord, TreeUpdate,
+    TutorialContentRecord,
 };
 use axum::{
     extract::{Request, State},
@@ -24,22 +25,30 @@ pub struct PlaytestServerConfig {
 #[derive(Clone)]
 struct AppState {
     store: SaveStore,
-    content_store: OrderContentStore,
+    order_content: OrderContentStore,
+    authored_content: AuthoredContentStore,
     config: PlaytestServerConfig,
 }
 
 pub fn router(store: SaveStore, config: PlaytestServerConfig) -> Router {
-    router_with_content_store(store, OrderContentStore::production(), config)
+    router_with_content_stores(
+        store,
+        OrderContentStore::production(),
+        AuthoredContentStore::production(),
+        config,
+    )
 }
 
-pub fn router_with_content_store(
+pub fn router_with_content_stores(
     store: SaveStore,
-    content_store: OrderContentStore,
+    order_content: OrderContentStore,
+    authored_content: AuthoredContentStore,
     config: PlaytestServerConfig,
 ) -> Router {
     let state = AppState {
         store,
-        content_store,
+        order_content,
+        authored_content,
         config,
     };
     let cors = CorsLayer::new()
@@ -83,6 +92,11 @@ pub fn router_with_content_store(
             "/__orchard_playtest/content/orders",
             post(save_order_catalog),
         )
+        .route(
+            "/__orchard_playtest/content/tutorial",
+            post(save_tutorial_content),
+        )
+        .route("/__orchard_playtest/content/tools", post(save_tool_content))
         .with_state(state.clone())
         .layer(cors)
         .layer(middleware::from_fn_with_state(state, authenticate))
@@ -313,8 +327,40 @@ async fn save_order_catalog(
     Json(input): Json<SaveOrderCatalogRequest>,
 ) -> Result<Json<()>, StoreError> {
     state
-        .content_store
+        .order_content
         .save_order_catalog(&state.store, &input.slot_id, input.content)
+        .map(Json)
+        .map_err(StoreError)
+}
+
+#[derive(Deserialize)]
+struct SaveTutorialContentRequest {
+    content: Vec<TutorialContentRecord>,
+}
+
+async fn save_tutorial_content(
+    State(state): State<AppState>,
+    Json(input): Json<SaveTutorialContentRequest>,
+) -> Result<Json<()>, StoreError> {
+    state
+        .authored_content
+        .save_tutorial_content(input.content)
+        .map(Json)
+        .map_err(StoreError)
+}
+
+#[derive(Deserialize)]
+struct SaveToolContentRequest {
+    content: Vec<ToolContentRecord>,
+}
+
+async fn save_tool_content(
+    State(state): State<AppState>,
+    Json(input): Json<SaveToolContentRequest>,
+) -> Result<Json<()>, StoreError> {
+    state
+        .authored_content
+        .save_tool_content(input.content)
         .map(Json)
         .map_err(StoreError)
 }
@@ -329,8 +375,10 @@ impl IntoResponse for StoreError {
 
 #[cfg(test)]
 mod tests {
-    use super::{router, router_with_content_store, PlaytestServerConfig};
-    use crate::save_store::{CameraRecord, OrderContentRecord, OrderContentStore, SaveStore};
+    use super::{router, router_with_content_stores, PlaytestServerConfig};
+    use crate::save_store::{
+        AuthoredContentStore, CameraRecord, OrderContentRecord, OrderContentStore, SaveStore,
+    };
     use axum::{
         body::{to_bytes, Body},
         http::{header, HeaderValue, Request, StatusCode},
@@ -626,9 +674,13 @@ mod tests {
         let saves = SaveStore::new(temporary.path().join("saves"));
         let content_path = temporary.path().join("orders.json");
         std::fs::write(&content_path, "[]\n").unwrap();
-        let app = router_with_content_store(
+        let app = router_with_content_stores(
             saves.clone(),
             OrderContentStore::new(content_path.clone()),
+            AuthoredContentStore::new(
+                temporary.path().join("tutorial.json"),
+                temporary.path().join("tools.json"),
+            ),
             config(),
         );
         let created = response_json(
@@ -703,6 +755,101 @@ mod tests {
             }]
         );
         assert_eq!(saves.load(slot_id).unwrap().orders[0].order_id, "new");
+    }
+
+    // This catches tutorial/tool route aliasing, save-shaped inputs, and authored writes leaking
+    // into the live save database.
+    #[tokio::test]
+    async fn authored_content_routes_replace_distinct_files_without_mutating_the_live_save() {
+        let temporary = tempfile::tempdir().unwrap();
+        let saves = SaveStore::new(temporary.path().join("saves"));
+        let order_path = temporary.path().join("orders.json");
+        let tutorial_path = temporary.path().join("tutorial.json");
+        let tool_path = temporary.path().join("tools.json");
+        std::fs::write(&order_path, "[]\n").unwrap();
+        std::fs::write(&tutorial_path, "[]\n").unwrap();
+        std::fs::write(&tool_path, "[]\n").unwrap();
+        let app = router_with_content_stores(
+            saves.clone(),
+            OrderContentStore::new(order_path),
+            AuthoredContentStore::new(tutorial_path.clone(), tool_path.clone()),
+            config(),
+        );
+        let created = response_json(
+            app.clone()
+                .oneshot(request(
+                    "/__orchard_playtest/save/create",
+                    json!({
+                        "displayName": "Authored Content Orchard",
+                        "camera": {"x": 0.0, "y": 1.7, "z": 8.0, "yaw": 0.0, "pitch": 0.0},
+                        "trees": [],
+                        "reputation": 0,
+                        "tutorialsEnabled": true,
+                        "completedTutorialMilestones": ["move"],
+                        "acquiredToolIds": ["sprout-spawner"],
+                        "orders": [{"orderId": "old", "state": "pending", "pot": null}]
+                    }),
+                ))
+                .await
+                .unwrap(),
+        )
+        .await;
+        let slot_id = created["slotId"].as_str().unwrap();
+        let previous_save = saves.load(slot_id).unwrap();
+        let tutorial = Value::Array(
+            [
+                "move", "look", "ascend", "descend", "sprint", "select-tree",
+                "move-orbit", "exit-orbit", "spawn-two-sprouts", "acquire-double-cut",
+                "apply-double-cut", "double-cut-explained", "acquire-iteration",
+                "duplicate-nonblank", "complete-blank-order",
+            ]
+            .into_iter()
+            .map(|milestone_id| {
+                json!({"milestoneId": milestone_id, "text": format!("Text for {milestone_id}")})
+            })
+            .collect(),
+        );
+        let tools = json!([
+            {"id": "sprout-spawner", "name": "Spawner", "description": "Plants sprouts"},
+            {"id": "double-cut", "name": "Double Cut", "description": "Cuts twice"},
+            {"id": "iteration", "name": "Iteration", "description": "Duplicates trees"}
+        ]);
+
+        assert_eq!(
+            response_json(
+                app.clone()
+                    .oneshot(request(
+                        "/__orchard_playtest/content/tutorial",
+                        json!({"content": tutorial}),
+                    ))
+                    .await
+                    .unwrap(),
+            )
+            .await,
+            Value::Null
+        );
+        assert_eq!(
+            response_json(
+                app.oneshot(request(
+                    "/__orchard_playtest/content/tools",
+                    json!({"content": tools}),
+                ))
+                .await
+                .unwrap(),
+            )
+            .await,
+            Value::Null
+        );
+
+        assert_eq!(
+            serde_json::from_slice::<Value>(&std::fs::read(tutorial_path).unwrap()).unwrap(),
+            tutorial
+        );
+        assert_eq!(
+            serde_json::from_slice::<Value>(&std::fs::read(tool_path).unwrap()).unwrap(),
+            tools
+        );
+        assert_eq!(saves.load(slot_id).unwrap(), previous_save);
     }
 
     // This catches accidentally dispatching an unauthorized request to SaveStore.
