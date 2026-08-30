@@ -9,6 +9,7 @@ import {
   type OrderProgress,
   type PotPlacement,
 } from './orders/catalog'
+import { initialOrderProgress } from './orders/session'
 
 export type { PotPlacement } from './orders/catalog'
 
@@ -232,6 +233,14 @@ export function orderRecordsFromProgress(
       case 'completed': return { orderId: id, state: 'completed', pot: null }
     }
   })
+}
+
+export function initialOrderCreateState(revision: OrderCatalogRevision): Pick<CreateSlotState, 'reputation' | 'orders'> {
+  const progress = initialOrderProgress(revision.definitions)
+  return {
+    reputation: progress.reputation,
+    orders: orderRecordsFromProgress(progress, revision),
+  }
 }
 
 function decodeNumber(value: unknown, what: string): number {

@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   createSaveClient,
   httpSaveTransport,
+  initialOrderCreateState,
   orderRecordsFromProgress,
   selectSaveTransport,
   type CameraRecord,
@@ -11,10 +13,19 @@ import {
   type SaveTransport,
   type TreeUpdate,
 } from '../../src/game/save-client'
-import { openingOrderCatalog, type OrderProgress } from '../../src/game/orders/catalog'
+import {
+  LiveOrderCatalog,
+  decodeOrderCatalog,
+  openingOrderCatalog,
+  type OrderProgress,
+} from '../../src/game/orders/catalog'
 import { initialOrderProgress } from '../../src/game/orders/session'
 
 const diagramJson = '{"root":"r0","regions":{"r0":{"kind":"sheet"}},"nodes":{},"wires":{}}'
+const openingOrderContent: unknown = JSON.parse(readFileSync(
+  new URL('../../game/content/orders.json', import.meta.url),
+  'utf8',
+))
 
 const camera: CameraRecord = { x: 1, y: 1.7, z: 8, yaw: 0.2, pitch: -0.18 }
 const tree: TreeUpdate = { treeId: 'tree-a', diagramJson, x: 3, z: 4, yaw: 0.6 }
@@ -178,6 +189,24 @@ describe('save client transports', () => {
       { orderId: 'single-double-cut', state: 'pending', pot: null },
       { orderId: 'irregular-double-cut-a', state: 'pending', pot: null },
       { orderId: 'irregular-double-cut-b', state: 'pending', pot: null },
+    ])
+  })
+
+  it('derives new-world records from the revision current at creation time', () => {
+    // Catches new-world progress being retained from a catalog revision that has since changed.
+    const live = new LiveOrderCatalog(decodeOrderCatalog(openingOrderContent))
+    const updatedContent = structuredClone(openingOrderContent) as Array<Record<string, unknown>>
+    updatedContent.push({ ...updatedContent[0]!, id: 'new-sprout', prerequisites: [] })
+    const updated = decodeOrderCatalog(updatedContent)
+
+    live.publish(updated)
+
+    expect(initialOrderCreateState(live.current).orders.map(({ orderId }) => orderId)).toEqual([
+      'blank-sprout',
+      'single-double-cut',
+      'irregular-double-cut-a',
+      'irregular-double-cut-b',
+      'new-sprout',
     ])
   })
 

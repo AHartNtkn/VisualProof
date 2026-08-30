@@ -15,11 +15,9 @@ import {
 import type { GameWorld } from '../src/game/model'
 import {
   openingOrderCatalog,
-  type OrderProgress,
 } from '../src/game/orders/catalog'
 import { potPlacementAhead } from '../src/game/orders/placement'
 import {
-  initialOrderProgress,
   orderSession,
   publishOrderMutation,
   type OrderMutation,
@@ -27,7 +25,7 @@ import {
 } from '../src/game/orders/session'
 import { SettledFrameTelemetry, frameTiming, percentile } from '../src/game/render/frame'
 import { mountGameWorld, type GameWorldRenderer } from '../src/game/render/world'
-import { orderRecordsFromProgress, saveClient, treeUpdateFromGameTree, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
+import { initialOrderCreateState, saveClient, treeUpdateFromGameTree, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
 import { SaveWriter } from '../src/game/save-writer'
 import { gameSession, publishTreeChange, ToolError, type GameSession, type TreeChange } from '../src/game/session'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
@@ -69,7 +67,6 @@ const blankDiagram = new DiagramBuilder().build()
 const blankDiagramJson = JSON.stringify(diagramToJson(blankDiagram))
 const initialCameraRecord: CameraRecord = { x: 0, y: 1.7, z: 8, yaw: 0, pitch: -0.18 }
 const initialTree: TreeUpdate = { treeId: 'tree-0000', diagramJson: blankDiagramJson, x: 0, z: 0, yaw: 0 }
-const initialProgress: OrderProgress = initialOrderProgress(openingOrderCatalog.current.definitions)
 const POT_SPAWN_DISTANCE = 6
 const NEUTRAL_MOTION: CameraMotion = {
   forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
@@ -762,12 +759,12 @@ createForm.addEventListener('submit', (event) => {
     return
   }
   clearError()
+  const initialOrders = initialOrderCreateState(openingOrderCatalog.current)
   startOpening(() => saveClient.create({
     displayName,
     camera: initialCameraRecord,
     trees: [initialTree],
-    reputation: initialProgress.reputation,
-    orders: orderRecordsFromProgress(initialProgress, openingOrderCatalog.current),
+    ...initialOrders,
   }).then((created) => saveClient.load(created.slotId)))
 })
 saveRetry.addEventListener('click', () => writer?.retry())
