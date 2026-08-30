@@ -83,4 +83,4 @@ The persistence regression performs a repeatable nonblank duplication while tuto
 - `npm run build:game` — PASS: 158 modules transformed.
 - `./scripts/check-game-desktop.sh e2e` — PASS: controls, all three order-loop phases, tutorial progression, developer orders, and exact content-byte restoration.
 
-This follow-up is supported by automated unit, persistence, build, and native scenario evidence; no direct production-window exercise is claimed for it.
+The exact ahead-action reload path was also exercised directly in the production desktop window. A fresh orchard started with tutorials disabled, planted two clear-ground sprouts before any earlier instruction, returned to Main Menu, and reloaded. Re-enabling tutorials resumed at the first genuinely unmet instruction (`Ascend while flying.` because movement and look had also occurred during planting). After ascent, descent, sprint, selection, orbit movement, and Backspace, the companion advanced directly to `Open the ledger and acquire Double Cut.` rather than repeating the already completed planting instruction.
