@@ -546,6 +546,9 @@ describe('production game world', () => {
       acceptOrder: async () => {},
       abandonOrder: async () => {},
       completeOrder: async () => 1,
+      setTutorialsEnabled: async () => {},
+      completeTutorialMilestone: async () => {},
+      acquireTool: async () => {},
     })
     await writer.dispose()
     expect(() => publishTreeChange(
@@ -575,6 +578,9 @@ describe('production game world', () => {
       acceptOrder: async () => {},
       abandonOrder: async () => {},
       completeOrder: async () => 1,
+      setTutorialsEnabled: async () => {},
+      completeTutorialMilestone: async () => {},
+      acquireTool: async () => {},
     })
     await writer.dispose()
 
@@ -979,6 +985,9 @@ describe('production game world', () => {
       acceptOrder: async () => {},
       abandonOrder: async () => {},
       completeOrder: async () => 1,
+      setTutorialsEnabled: async () => {},
+      completeTutorialMilestone: async () => {},
+      acquireTool: async () => {},
     })
     await writer.dispose()
 

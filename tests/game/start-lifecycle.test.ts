@@ -8,7 +8,12 @@ const world: GameWorld = {
   slot: { id: 'slot-a', name: 'Slot A', updatedAtMs: 1 },
   camera: { position: { x: 0, y: 1.7, z: 8 }, yaw: 0, pitch: -0.18 },
   trees: new Map(),
-  progress: initialOrderProgress(openingOrderCatalog.current.definitions),
+  progress: {
+    ...initialOrderProgress(openingOrderCatalog.current.definitions),
+    tutorialsEnabled: true,
+    completedTutorialMilestones: new Set(),
+    acquiredToolIds: new Set(),
+  },
 }
 
 function deferred<T>(): {
@@ -111,6 +116,9 @@ describe('game start lifecycle', () => {
       orders: openingOrderCatalog.current.definitions.map((definition) => ({
         orderId: definition.id, state: 'pending', pot: null,
       })),
+      tutorialsEnabled: true,
+      completedTutorialMilestones: [],
+      acquiredToolIds: [],
     }))
 
     expect(opened).toEqual([])

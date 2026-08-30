@@ -1,6 +1,18 @@
 import type { DiagramSnapshot } from './diagram-snapshot'
 import { snapshotFromJson } from './diagram-snapshot'
-import { MAX_REPUTATION, openingOrderCatalog, type OrderProgress, type OrderState } from './orders/catalog'
+import {
+  MAX_REPUTATION,
+  openingOrderCatalog,
+  type OrderCatalogRevision,
+  type OrderProgress,
+  type OrderState,
+} from './orders/catalog'
+
+export type GameProgress = OrderProgress & {
+  readonly tutorialsEnabled: boolean
+  readonly completedTutorialMilestones: ReadonlySet<string>
+  readonly acquiredToolIds: ReadonlySet<string>
+}
 
 export type CameraPose = {
   readonly position: { readonly x: number; readonly y: number; readonly z: number }
@@ -24,7 +36,7 @@ export type GameWorld = {
   readonly slot: { readonly id: string; readonly name: string; readonly updatedAtMs: number }
   readonly camera: CameraPose
   readonly trees: ReadonlyMap<string, GameTree>
-  readonly progress: OrderProgress
+  readonly progress: GameProgress
 }
 
 function record(value: unknown, what: string): Record<string, unknown> {
@@ -74,7 +86,11 @@ function nonnegativeSafeInteger(value: unknown, what: string): number {
   return value
 }
 
-function decodeOrderProgress(reputationValue: unknown, ordersValue: unknown): OrderProgress {
+function decodeOrderProgress(
+  reputationValue: unknown,
+  ordersValue: unknown,
+  catalog: OrderCatalogRevision,
+): OrderProgress {
   const reputation = nonnegativeSafeInteger(reputationValue, 'loaded slot.reputation')
   const orders = new Map<string, OrderState>()
   for (const value of array(ordersValue, 'loaded slot.orders')) {
@@ -106,7 +122,7 @@ function decodeOrderProgress(reputationValue: unknown, ordersValue: unknown): Or
       default: throw new Error(`order '${orderId}' has unknown state '${state}'`)
     }
   }
-  const catalogIds = openingOrderCatalog.current.definitions.map(({ id }) => id)
+  const catalogIds = catalog.definitions.map(({ id }) => id)
   if (orders.size !== catalogIds.length || catalogIds.some((id) => !orders.has(id))) {
     throw new Error('loaded slot.orders must match the authored order catalog')
   }
@@ -121,16 +137,55 @@ function decodeDiagramJson(diagramJson: string, what: string): DiagramSnapshot {
   }
 }
 
-export function decodeLoadedSlot(value: unknown): GameWorld {
+function decodeIdentifierSet(value: unknown, singular: string, plural: string): ReadonlySet<string> {
+  const result = new Set<string>()
+  for (const item of array(value, `loaded slot.${plural}`)) {
+    const id = string(item, `loaded slot.${singular}`)
+    if (id.trim().length === 0) throw new Error(`${singular} must be a non-blank string`)
+    if (result.has(id)) throw new Error(`duplicate ${singular} '${id}'`)
+    result.add(id)
+  }
+  return result
+}
+
+export function decodeLoadedSlot(
+  value: unknown,
+  catalog: OrderCatalogRevision = openingOrderCatalog.current,
+): GameWorld {
   const loaded = exactRecord(
     value,
-    ['slotId', 'displayName', 'updatedAtMs', 'camera', 'trees', 'diagrams', 'reputation', 'orders'],
+    [
+      'slotId',
+      'displayName',
+      'updatedAtMs',
+      'camera',
+      'trees',
+      'diagrams',
+      'reputation',
+      'orders',
+      'tutorialsEnabled',
+      'completedTutorialMilestones',
+      'acquiredToolIds',
+    ],
     'loaded slot',
   )
   const slotId = string(loaded.slotId, 'loaded slot.slotId')
   const displayName = string(loaded.displayName, 'loaded slot.displayName')
   const updatedAtMs = safeInteger(loaded.updatedAtMs, 'loaded slot.updatedAtMs')
-  const progress = decodeOrderProgress(loaded.reputation, loaded.orders)
+  const orderProgress = decodeOrderProgress(loaded.reputation, loaded.orders, catalog)
+  if (typeof loaded.tutorialsEnabled !== 'boolean') {
+    throw new Error('loaded slot.tutorialsEnabled must be a boolean')
+  }
+  const progress: GameProgress = {
+    ...orderProgress,
+    tutorialsEnabled: loaded.tutorialsEnabled,
+    completedTutorialMilestones: decodeIdentifierSet(
+      loaded.completedTutorialMilestones,
+      'completed tutorial milestone id',
+      'completedTutorialMilestones',
+    ),
+    acquiredToolIds: decodeIdentifierSet(loaded.acquiredToolIds, 'acquired tool id', 'acquiredToolIds'),
+  }
 
   const camera = exactRecord(
     loaded.camera,

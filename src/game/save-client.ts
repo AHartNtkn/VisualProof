@@ -58,6 +58,9 @@ export type CreateSlotState = {
   readonly trees: readonly TreeUpdate[]
   readonly reputation: number
   readonly orders: readonly OrderRecordWire[]
+  readonly tutorialsEnabled: boolean
+  readonly completedTutorialMilestones: readonly string[]
+  readonly acquiredToolIds: readonly string[]
 }
 
 export function treeUpdateFromGameTree(tree: GameTree): TreeUpdate {
@@ -87,6 +90,9 @@ export type SaveClient = {
   readonly acceptOrder: (slotId: string, orderId: string, pot: PotPlacement) => Promise<void>
   readonly abandonOrder: (slotId: string, orderId: string) => Promise<void>
   readonly completeOrder: (slotId: string, orderId: string, reward: number) => Promise<number>
+  readonly setTutorialsEnabled: (slotId: string, enabled: boolean) => Promise<void>
+  readonly completeTutorialMilestone: (slotId: string, milestoneId: string) => Promise<void>
+  readonly acquireTool: (slotId: string, toolId: string) => Promise<void>
 }
 
 export type SaveOperation =
@@ -99,6 +105,9 @@ export type SaveOperation =
   | 'accept-order'
   | 'abandon-order'
   | 'complete-order'
+  | 'set-tutorials-enabled'
+  | 'complete-tutorial-milestone'
+  | 'acquire-tool'
 
 export type SaveTransport = {
   request(operation: SaveOperation, input: Record<string, unknown>): Promise<unknown>
@@ -215,9 +224,30 @@ function validateCreateOrder(value: unknown): string {
   }
 }
 
+function validateCreateIdentifiers(value: unknown, singular: string, plural: string): void {
+  if (!Array.isArray(value)) throw new Error(`create state.${plural} must be an array`)
+  const ids = new Set<string>()
+  for (const entry of value) {
+    if (typeof entry !== 'string' || entry.trim().length === 0) {
+      throw new Error(`create state ${singular} must be a non-blank string`)
+    }
+    if (ids.has(entry)) throw new Error(`duplicate create state ${singular} '${entry}'`)
+    ids.add(entry)
+  }
+}
+
 function validateCreateState(state: CreateSlotState): void {
   nonnegativeSafeInteger(state.reputation, 'create state.reputation')
   assertCatalogOrderIds(state.orders.map(validateCreateOrder), openingOrderCatalog.current, 'create state orders')
+  if (typeof state.tutorialsEnabled !== 'boolean') {
+    throw new Error('create state.tutorialsEnabled must be a boolean')
+  }
+  validateCreateIdentifiers(
+    state.completedTutorialMilestones,
+    'completed tutorial milestone id',
+    'completedTutorialMilestones',
+  )
+  validateCreateIdentifiers(state.acquiredToolIds, 'acquired tool id', 'acquiredToolIds')
 }
 
 export function orderRecordsFromProgress(
@@ -235,11 +265,19 @@ export function orderRecordsFromProgress(
   })
 }
 
-export function initialOrderCreateState(revision: OrderCatalogRevision): Pick<CreateSlotState, 'reputation' | 'orders'> {
+export function initialOrderCreateState(
+  revision: OrderCatalogRevision,
+): Pick<
+  CreateSlotState,
+  'reputation' | 'orders' | 'tutorialsEnabled' | 'completedTutorialMilestones' | 'acquiredToolIds'
+> {
   const progress = initialOrderProgress(revision.definitions)
   return {
     reputation: progress.reputation,
     orders: orderRecordsFromProgress(progress, revision),
+    tutorialsEnabled: true,
+    completedTutorialMilestones: [],
+    acquiredToolIds: [],
   }
 }
 
@@ -274,6 +312,14 @@ export function createSaveClient(transport: SaveTransport): SaveClient {
       .then((value) => decodeVoid(value, 'abandoned order response')),
     completeOrder: (slotId, orderId, reward) => transport.request('complete-order', { slotId, orderId, reward })
       .then((value) => nonnegativeSafeInteger(value, 'completed order reputation')),
+    setTutorialsEnabled: (slotId, enabled) => transport.request('set-tutorials-enabled', { slotId, enabled })
+      .then((value) => decodeVoid(value, 'set tutorials enabled response')),
+    completeTutorialMilestone: (slotId, milestoneId) => transport.request(
+      'complete-tutorial-milestone',
+      { slotId, milestoneId },
+    ).then((value) => decodeVoid(value, 'completed tutorial milestone response')),
+    acquireTool: (slotId, toolId) => transport.request('acquire-tool', { slotId, toolId })
+      .then((value) => decodeVoid(value, 'acquired tool response')),
   }
 }
 
@@ -289,6 +335,9 @@ export const tauriSaveTransport: SaveTransport = {
       case 'accept-order': return invoke('accept_order', input)
       case 'abandon-order': return invoke('abandon_order', input)
       case 'complete-order': return invoke('complete_order', input)
+      case 'set-tutorials-enabled': return invoke('set_tutorials_enabled', input)
+      case 'complete-tutorial-milestone': return invoke('complete_tutorial_milestone', input)
+      case 'acquire-tool': return invoke('acquire_tool', input)
     }
   },
 }
@@ -303,6 +352,9 @@ const playtestPaths: Record<SaveOperation, string> = {
   'accept-order': '/__orchard_playtest/save/accept-order',
   'abandon-order': '/__orchard_playtest/save/abandon-order',
   'complete-order': '/__orchard_playtest/save/complete-order',
+  'set-tutorials-enabled': '/__orchard_playtest/save/set-tutorials-enabled',
+  'complete-tutorial-milestone': '/__orchard_playtest/save/complete-tutorial-milestone',
+  'acquire-tool': '/__orchard_playtest/save/acquire-tool',
 }
 
 export function httpSaveTransport(config: {

@@ -36,6 +36,9 @@ const initialOrders: readonly OrderRecordWire[] = orderRecordsFromProgress(
 )
 const createState: CreateSlotState = {
   displayName: 'Second orchard', camera, trees: [tree], reputation: 0, orders: initialOrders,
+  tutorialsEnabled: true,
+  completedTutorialMilestones: ['move'],
+  acquiredToolIds: ['sprout-spawner'],
 }
 
 const loadedSlot = {
@@ -47,6 +50,9 @@ const loadedSlot = {
   diagrams: [{ diagramKey: 7, diagramJson }],
   reputation: 0,
   orders: initialOrders,
+  tutorialsEnabled: true,
+  completedTutorialMilestones: ['move'],
+  acquiredToolIds: ['sprout-spawner'],
 }
 
 type RecordedRequest = {
@@ -76,6 +82,9 @@ describe('save client transports', () => {
           case 'accept-order': return null
           case 'abandon-order': return null
           case 'complete-order': return 1
+          case 'set-tutorials-enabled': return null
+          case 'complete-tutorial-milestone': return null
+          case 'acquire-tool': return null
         }
       },
     }
@@ -98,6 +107,9 @@ describe('save client transports', () => {
       .resolves.toBeUndefined()
     await expect(client.abandonOrder('slot-a', 'blank-sprout')).resolves.toBeUndefined()
     await expect(client.completeOrder('slot-a', 'blank-sprout', 1)).resolves.toBe(1)
+    await expect(client.setTutorialsEnabled('slot-a', false)).resolves.toBeUndefined()
+    await expect(client.completeTutorialMilestone('slot-a', 'open-orders')).resolves.toBeUndefined()
+    await expect(client.acquireTool('slot-a', 'double-cut')).resolves.toBeUndefined()
 
     expect(requests).toEqual([
       { operation: 'list', input: {} },
@@ -109,6 +121,9 @@ describe('save client transports', () => {
       { operation: 'accept-order', input: { slotId: 'slot-a', orderId: 'blank-sprout', pot: { x: 2, z: -4, yaw: 0.25 } } },
       { operation: 'abandon-order', input: { slotId: 'slot-a', orderId: 'blank-sprout' } },
       { operation: 'complete-order', input: { slotId: 'slot-a', orderId: 'blank-sprout', reward: 1 } },
+      { operation: 'set-tutorials-enabled', input: { slotId: 'slot-a', enabled: false } },
+      { operation: 'complete-tutorial-milestone', input: { slotId: 'slot-a', milestoneId: 'open-orders' } },
+      { operation: 'acquire-tool', input: { slotId: 'slot-a', toolId: 'double-cut' } },
     ])
   })
 
@@ -175,6 +190,35 @@ describe('save client transports', () => {
     expect(requestCount).toBe(0)
   })
 
+  it.each([
+    {
+      name: 'a non-Boolean tutorial setting',
+      state: { ...createState, tutorialsEnabled: 'yes' },
+      error: 'create state.tutorialsEnabled must be a boolean',
+    },
+    {
+      name: 'a duplicate tutorial milestone',
+      state: { ...createState, completedTutorialMilestones: ['move', 'move'] },
+      error: "duplicate create state completed tutorial milestone id 'move'",
+    },
+    {
+      name: 'a blank acquired tool ID',
+      state: { ...createState, acquiredToolIds: [''] },
+      error: 'create state acquired tool id must be a non-blank string',
+    },
+  ])('rejects $name before transport', async ({ state, error }) => {
+    let requestCount = 0
+    const client = createSaveClient({
+      async request() {
+        requestCount += 1
+        throw new Error('transport was called')
+      },
+    })
+
+    await expect(client.create(state as unknown as CreateSlotState)).rejects.toThrow(error)
+    expect(requestCount).toBe(0)
+  })
+
   it('emits order records in authored order with state-specific pots', () => {
     const progress: OrderProgress = {
       reputation: 3,
@@ -208,6 +252,11 @@ describe('save client transports', () => {
       'irregular-double-cut-b',
       'new-sprout',
     ])
+    expect(initialOrderCreateState(live.current)).toMatchObject({
+      tutorialsEnabled: true,
+      completedTutorialMilestones: [],
+      acquiredToolIds: [],
+    })
   })
 
   // This fails if a Rust operation response reaches game state without matching its wire type.
@@ -218,6 +267,7 @@ describe('save client transports', () => {
           case 'insert-tree': return 'not a revision'
           case 'accept-order': return { accepted: true }
           case 'complete-order': return Number.NaN
+          case 'set-tutorials-enabled': return { enabled: true }
           default: throw new Error(`unexpected operation ${operation}`)
         }
       },
@@ -229,6 +279,8 @@ describe('save client transports', () => {
       .rejects.toThrow('accepted order response must be null')
     await expect(client.completeOrder('slot-a', 'blank-sprout', 1))
       .rejects.toThrow('completed order reputation must be a nonnegative safe integer')
+    await expect(client.setTutorialsEnabled('slot-a', false))
+      .rejects.toThrow('set tutorials enabled response must be null')
   })
 
   // This fails if a negative reputation returned by completion reaches the game.
@@ -339,6 +391,9 @@ describe('save client transports', () => {
         '/__orchard_playtest/save/accept-order': null,
         '/__orchard_playtest/save/abandon-order': null,
         '/__orchard_playtest/save/complete-order': 1,
+        '/__orchard_playtest/save/set-tutorials-enabled': null,
+        '/__orchard_playtest/save/complete-tutorial-milestone': null,
+        '/__orchard_playtest/save/acquire-tool': null,
       }
       return new Response(JSON.stringify(responses[new URL(request.url).pathname]), {
         status: 200,
@@ -368,6 +423,9 @@ describe('save client transports', () => {
       .resolves.toBeUndefined()
     await expect(client.abandonOrder('slot-a', 'blank-sprout')).resolves.toBeUndefined()
     await expect(client.completeOrder('slot-a', 'blank-sprout', 1)).resolves.toBe(1)
+    await expect(client.setTutorialsEnabled('slot-a', false)).resolves.toBeUndefined()
+    await expect(client.completeTutorialMilestone('slot-a', 'open-orders')).resolves.toBeUndefined()
+    await expect(client.acquireTool('slot-a', 'double-cut')).resolves.toBeUndefined()
 
     expect(requests.map(({ url, init }) => ({
       url,
@@ -428,6 +486,24 @@ describe('save client transports', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
         body: '{"slotId":"slot-a","orderId":"blank-sprout","reward":1}',
+      },
+      {
+        url: 'http://127.0.0.1:1421/__orchard_playtest/save/set-tutorials-enabled',
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
+        body: '{"slotId":"slot-a","enabled":false}',
+      },
+      {
+        url: 'http://127.0.0.1:1421/__orchard_playtest/save/complete-tutorial-milestone',
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
+        body: '{"slotId":"slot-a","milestoneId":"open-orders"}',
+      },
+      {
+        url: 'http://127.0.0.1:1421/__orchard_playtest/save/acquire-tool',
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
+        body: '{"slotId":"slot-a","toolId":"double-cut"}',
       },
     ])
   })

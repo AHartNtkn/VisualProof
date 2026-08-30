@@ -22,6 +22,9 @@ type LifecycleSavePort = Pick<
   | 'acceptOrder'
   | 'abandonOrder'
   | 'completeOrder'
+  | 'setTutorialsEnabled'
+  | 'completeTutorialMilestone'
+  | 'acquireTool'
 >
 
 function withLifecycleMethods(port: SavePort): LifecycleSavePort {
@@ -31,6 +34,9 @@ function withLifecycleMethods(port: SavePort): LifecycleSavePort {
     acceptOrder: async () => {},
     abandonOrder: async () => {},
     completeOrder: async () => 1,
+    setTutorialsEnabled: async () => {},
+    completeTutorialMilestone: async () => {},
+    acquireTool: async () => {},
   }
 }
 
@@ -137,6 +143,9 @@ describe('ordered save writer', () => {
       acceptOrder: async () => {},
       abandonOrder: async () => {},
       completeOrder: async () => 1,
+      setTutorialsEnabled: async () => {},
+      completeTutorialMilestone: async () => {},
+      acquireTool: async () => {},
     }
     const writer = new SaveWriter('slot-a', port)
 
@@ -159,6 +168,9 @@ describe('ordered save writer', () => {
       acceptOrder: async (_slotId, orderId, value) => { calls.push({ kind: 'accept-order', orderId, value }) },
       abandonOrder: async (_slotId, orderId) => { calls.push({ kind: 'abandon-order', orderId }) },
       completeOrder: async (_slotId, orderId, reward) => { calls.push({ kind: 'complete-order', orderId, value: reward }); return reward },
+      setTutorialsEnabled: async () => {},
+      completeTutorialMilestone: async () => {},
+      acquireTool: async () => {},
     }
     const writer = new SaveWriter('slot-a', port)
 
@@ -182,6 +194,36 @@ describe('ordered save writer', () => {
     ])
   })
 
+  it('preserves progression order while coalescing a pending tutorial setting', async () => {
+    const calls: { kind: string; value?: string | boolean }[] = []
+    const port: LifecycleSavePort = {
+      updateTree: async () => 1,
+      insertTree: async () => 1,
+      updateCamera: async () => {},
+      acceptOrder: async () => { calls.push({ kind: 'accept-order' }) },
+      abandonOrder: async () => {},
+      completeOrder: async () => 1,
+      setTutorialsEnabled: async (_slotId, enabled) => { calls.push({ kind: 'set-tutorials-enabled', value: enabled }) },
+      completeTutorialMilestone: async (_slotId, milestoneId) => { calls.push({ kind: 'complete-tutorial-milestone', value: milestoneId }) },
+      acquireTool: async (_slotId, toolId) => { calls.push({ kind: 'acquire-tool', value: toolId }) },
+    }
+    const writer = new SaveWriter('slot-a', port)
+
+    writer.acceptOrder('starter-double-cut', pot(1, 2, 3))
+    writer.setTutorialsEnabled(true)
+    writer.completeTutorialMilestone('move')
+    writer.setTutorialsEnabled(false)
+    writer.acquireTool('double-cut')
+    await writer.flush()
+
+    expect(calls).toEqual([
+      { kind: 'accept-order' },
+      { kind: 'set-tutorials-enabled', value: false },
+      { kind: 'complete-tutorial-milestone', value: 'move' },
+      { kind: 'acquire-tool', value: 'double-cut' },
+    ])
+  })
+
   it('retries the exact failed lifecycle operation before later operations', async () => {
     const calls: { kind: string; pot?: PotPlacement }[] = []
     let failuresRemaining = 1
@@ -195,6 +237,9 @@ describe('ordered save writer', () => {
       },
       abandonOrder: async () => { calls.push({ kind: 'abandon-order' }) },
       completeOrder: async () => 1,
+      setTutorialsEnabled: async () => {},
+      completeTutorialMilestone: async () => {},
+      acquireTool: async () => {},
     }
     const writer = new SaveWriter('slot-a', port)
 
@@ -220,6 +265,9 @@ describe('ordered save writer', () => {
       acceptOrder: async () => {},
       abandonOrder: async () => {},
       completeOrder: async () => 1,
+      setTutorialsEnabled: async () => {},
+      completeTutorialMilestone: async () => {},
+      acquireTool: async () => {},
     }
     const writer = new SaveWriter('slot-a', port)
 

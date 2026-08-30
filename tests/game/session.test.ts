@@ -32,7 +32,13 @@ function worldWithTree(id: string, diagram: Diagram): GameWorld {
     slot: { id: 'slot-a', name: 'Slot A', updatedAtMs: 0 },
     camera: { position: { x: 0, y: 1.7, z: 0 }, yaw: 0, pitch: 0 },
     trees: new Map([[id, tree(id, diagram)]]),
-    progress: { reputation: 0, orders: new Map([['starter-double-cut', { kind: 'pending' }]]) },
+    progress: {
+      reputation: 0,
+      orders: new Map([['starter-double-cut', { kind: 'pending' }]]),
+      tutorialsEnabled: true,
+      completedTutorialMilestones: new Set(),
+      acquiredToolIds: new Set(),
+    },
   }
 }
 

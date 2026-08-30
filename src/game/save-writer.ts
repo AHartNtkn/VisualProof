@@ -19,6 +19,9 @@ type SaveWriterPort = Pick<
   | 'acceptOrder'
   | 'abandonOrder'
   | 'completeOrder'
+  | 'setTutorialsEnabled'
+  | 'completeTutorialMilestone'
+  | 'acquireTool'
 >
 
 type PendingWrite =
@@ -28,6 +31,9 @@ type PendingWrite =
   | { readonly kind: 'order-accept'; readonly orderId: string; readonly pot: PotPlacement }
   | { readonly kind: 'order-abandon'; readonly orderId: string }
   | { readonly kind: 'order-complete'; readonly orderId: string; readonly reward: number }
+  | { readonly kind: 'tutorials-enabled'; readonly enabled: boolean }
+  | { readonly kind: 'tutorial-milestone-complete'; readonly milestoneId: string }
+  | { readonly kind: 'tool-acquire'; readonly toolId: string }
 
 const CAMERA_DEBOUNCE_MS = 500
 
@@ -50,10 +56,13 @@ function replacementKey(write: PendingWrite): string | null {
   switch (write.kind) {
     case 'tree-update': return `tree-update:${write.update.treeId}`
     case 'camera': return 'camera'
+    case 'tutorials-enabled': return 'tutorials-enabled'
     case 'tree-insert':
     case 'order-accept':
     case 'order-abandon':
-    case 'order-complete': return null
+    case 'order-complete':
+    case 'tutorial-milestone-complete':
+    case 'tool-acquire': return null
   }
 }
 
@@ -112,6 +121,21 @@ export class SaveWriter {
   public completeOrder(orderId: string, reward: number): void {
     this.assertAccepting()
     this.enqueue({ kind: 'order-complete', orderId, reward })
+  }
+
+  public setTutorialsEnabled(enabled: boolean): void {
+    this.assertAccepting()
+    this.enqueue({ kind: 'tutorials-enabled', enabled })
+  }
+
+  public completeTutorialMilestone(milestoneId: string): void {
+    this.assertAccepting()
+    this.enqueue({ kind: 'tutorial-milestone-complete', milestoneId })
+  }
+
+  public acquireTool(toolId: string): void {
+    this.assertAccepting()
+    this.enqueue({ kind: 'tool-acquire', toolId })
   }
 
   public camera(camera: CameraPose): void {
@@ -229,6 +253,9 @@ export class SaveWriter {
           case 'order-accept': await this.port.acceptOrder(this.slotId, write.orderId, write.pot); break
           case 'order-abandon': await this.port.abandonOrder(this.slotId, write.orderId); break
           case 'order-complete': await this.port.completeOrder(this.slotId, write.orderId, write.reward); break
+          case 'tutorials-enabled': await this.port.setTutorialsEnabled(this.slotId, write.enabled); break
+          case 'tutorial-milestone-complete': await this.port.completeTutorialMilestone(this.slotId, write.milestoneId); break
+          case 'tool-acquire': await this.port.acquireTool(this.slotId, write.toolId); break
         }
       } catch (error) {
         this.pending.unshift(write)

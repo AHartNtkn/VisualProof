@@ -3,7 +3,7 @@ import { snapshotFromDiagram, snapshotFromJson } from '../../src/game/diagram-sn
 import type { DiagramSnapshot } from '../../src/game/diagram-snapshot'
 import { decodeLoadedSlot } from '../../src/game/model'
 import { decodeCreatedSlot, decodeSlotList } from '../../src/game/save-client'
-import { openingOrderCatalog } from '../../src/game/orders/catalog'
+import { openingOrderCatalog, type OrderCatalogRevision } from '../../src/game/orders/catalog'
 import { diagramToJson } from '../../src/kernel/diagram'
 
 const diagramJson = JSON.stringify({
@@ -37,6 +37,9 @@ function slotWire(overrides: Record<string, unknown> = {}) {
     diagrams: [{ diagramKey: 7, diagramJson }],
     reputation: 0,
     orders: openingOrders(),
+    tutorialsEnabled: true,
+    completedTutorialMilestones: ['move'],
+    acquiredToolIds: ['sprout-spawner'],
     ...overrides,
   }
 }
@@ -69,6 +72,9 @@ describe('loaded game slot decoding', () => {
       orders: new Map(openingOrderCatalog.current.definitions.map((definition) => [
         definition.id, { kind: 'pending' },
       ])),
+      tutorialsEnabled: true,
+      completedTutorialMilestones: new Set(['move']),
+      acquiredToolIds: new Set(['sprout-spawner']),
     })
   })
 
@@ -101,6 +107,34 @@ describe('loaded game slot decoding', () => {
       .toThrow('loaded slot.updatedAtMs must be a safe integer')
     expect(() => decodeLoadedSlot(slotWire({ trees: 'not an array' })))
       .toThrow('loaded slot.trees must be an array')
+    expect(() => decodeLoadedSlot(slotWire({ unexpected: true })))
+      .toThrow("loaded slot has unknown field 'unexpected'")
+  })
+
+  it('strictly decodes tutorial progression IDs and enabled state', () => {
+    expect(() => decodeLoadedSlot(slotWire({ tutorialsEnabled: 'true' })))
+      .toThrow('loaded slot.tutorialsEnabled must be a boolean')
+    expect(() => decodeLoadedSlot(slotWire({ completedTutorialMilestones: ['move', 'move'] })))
+      .toThrow("duplicate completed tutorial milestone id 'move'")
+    expect(() => decodeLoadedSlot(slotWire({ completedTutorialMilestones: [''] })))
+      .toThrow('completed tutorial milestone id must be a non-blank string')
+    expect(() => decodeLoadedSlot(slotWire({ acquiredToolIds: ['sprout-spawner', 'sprout-spawner'] })))
+      .toThrow("duplicate acquired tool id 'sprout-spawner'")
+    expect(() => decodeLoadedSlot(slotWire({ acquiredToolIds: ['  '] })))
+      .toThrow('acquired tool id must be a non-blank string')
+  })
+
+  it('validates loaded orders against the supplied live catalog revision', () => {
+    const definitions = openingOrderCatalog.current.definitions.slice(0, -1)
+    const catalog: OrderCatalogRevision = {
+      definitions,
+      byId: new Map(definitions.map((definition) => [definition.id, definition])),
+    }
+
+    expect(() => decodeLoadedSlot(slotWire({ orders: openingOrders().slice(0, -1) }), catalog))
+      .not.toThrow()
+    expect(() => decodeLoadedSlot(slotWire(), catalog))
+      .toThrow('loaded slot.orders must match the authored order catalog')
   })
 
   it('rejects any saved order set that differs from the authored catalog', () => {
