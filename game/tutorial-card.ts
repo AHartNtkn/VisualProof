@@ -25,6 +25,8 @@ export function mountTutorialCard(root: HTMLElement): TutorialCardController {
     render(instruction, enabled) {
       copy.textContent = instruction?.text ?? ''
       root.hidden = !enabled || instruction === null
+      if (!enabled || instruction === null) delete root.dataset['tutorialMilestone']
+      else root.dataset['tutorialMilestone'] = instruction.milestoneId
     },
   }
 }

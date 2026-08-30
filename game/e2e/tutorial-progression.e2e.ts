@@ -1,6 +1,7 @@
 import { $, $$, browser, expect } from '@wdio/globals'
 import { describe, it } from 'mocha'
 import { Key } from 'webdriverio'
+import type { TutorialMilestoneId } from '../../src/game/tutorial'
 import { diagramFromJson } from '../../src/kernel/diagram'
 import { scene3 } from '../../src/view3d/scene'
 import {
@@ -37,12 +38,23 @@ async function completedMilestones(): Promise<readonly string[]> {
   return JSON.parse(await attribute('completed-tutorial-milestones')) as readonly string[]
 }
 
-async function expectInstruction(text: string): Promise<void> {
-  await expect($('[data-tutorial-card]')).toBeDisplayed()
-  await expect($('[data-tutorial-instruction]')).toHaveText(text)
+async function expectInstruction(milestoneId: TutorialMilestoneId): Promise<void> {
+  const card = $('[data-tutorial-card]')
+  const instruction = $('[data-tutorial-instruction]')
+  await expect(card).toBeDisplayed()
+  await expect(card).toHaveAttribute('data-tutorial-milestone', milestoneId)
   await expect($$('[data-tutorial-instruction]')).toBeElementsArrayOfSize(1)
+  await expect(instruction).toBeDisplayed()
+  expect((await instruction.getText()).trim().length).toBeGreaterThan(0)
   await expect($('[data-tutorial-checklist]')).not.toExist()
   await expect($('[data-tutorial-progress]')).not.toExist()
+}
+
+async function expectInstructionAbsent(): Promise<void> {
+  const card = $('[data-tutorial-card]')
+  await expect(card).not.toBeDisplayed()
+  expect(await card.getAttribute('data-tutorial-milestone')).toBeNull()
+  await expect($('[data-tutorial-instruction]')).not.toBeDisplayed()
 }
 
 async function setTutorials(enabled: boolean): Promise<void> {
@@ -198,13 +210,13 @@ describe('opening tutorial progression', () => {
   it('drives every instruction and completes the final two orders in either sequence', async () => {
     const slotId = await createSlot('Tutorial Progression')
     await expect(game()).toHaveAttribute('data-tutorials-enabled', 'true')
-    await expectInstruction('Move through the orchard.')
+    await expectInstruction('move')
 
     await hold('w', 140)
-    await expectInstruction('Look around with the mouse.')
+    await expectInstruction('look')
 
     await setTutorials(false)
-    await expect($('[data-tutorial-card]')).not.toBeDisplayed()
+    await expectInstructionAbsent()
     const beforeLook = await displayedPose()
     for (const [x, y] of [[24, -12], [-16, 9], [31, 7], [-11, -15]] as const) {
       await moveDesktopPointer(x, y)
@@ -218,26 +230,26 @@ describe('opening tutorial progression', () => {
     expect(storedTutorialProgress(slotId).enabled).toBe(false)
 
     await setTutorials(true)
-    await expectInstruction('Ascend while flying.')
+    await expectInstruction('ascend')
     expect(storedTutorialProgress(slotId).completed).toContain('look')
 
     await hold(Key.Space, 120)
-    await expectInstruction('Descend while flying.')
+    await expectInstruction('descend')
     await hold(Key.Control, 120)
-    await expectInstruction('Sprint through the orchard.')
+    await expectInstruction('sprint')
     await browser.action('key')
       .down(Key.Shift).down('w').pause(140).up('w').up(Key.Shift).perform()
-    await expectInstruction('Select the tree.')
+    await expectInstruction('select-tree')
 
     await aimReticleAt({ x: 0, y: 0.25, z: 0 })
     await clickWorld()
     await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
-    await expectInstruction('Move while orbiting the selected tree.')
+    await expectInstruction('move-orbit')
     await hold('a', 120)
-    await expectInstruction('Press Backspace to return to free flight.')
+    await expectInstruction('exit-orbit')
     await browser.keys('Backspace')
     await expect(game()).toHaveAttribute('data-camera-mode', 'free')
-    await expectInstruction('Plant two more blank sprouts on clear ground.')
+    await expectInstruction('spawn-two-sprouts')
 
     await selectTool('sprout-spawner')
     const initialIds = storedTreeIds(slotId)
@@ -259,35 +271,35 @@ describe('opening tutorial progression', () => {
       .sort((a, b) => a.x - b.x)
     const leftSprout = planted[0]
     if (leftSprout === undefined) throw new Error('left planted sprout is missing')
-    await expectInstruction('Open the ledger and acquire Double Cut.')
+    await expectInstruction('acquire-double-cut')
 
     await openLedger('tools')
     await acquire('double-cut')
-    await expectInstruction('Apply Double Cut to a tree.')
+    await expectInstruction('apply-double-cut')
     await browser.keys('Tab')
     await doubleCutRegion(slotId, 'tree-0000', storedTreeDiagram(slotId, 'tree-0000').root)
-    await expectInstruction('Double Cut adds two nested layers at a leaf or from an intermediate branch.')
+    await expectInstruction('double-cut-explained')
 
     await setTutorials(false)
     await openLedger('tools')
     await browser.keys('Tab')
     await setTutorials(true)
-    await expectInstruction('Acquire Iteration from the ledger.')
+    await expectInstruction('acquire-iteration')
     await waitForSave()
     expect(storedTutorialProgress(slotId).completed).toContain('double-cut-explained')
 
     await openLedger('tools')
-    await expectInstruction('Acquire Iteration from the ledger.')
+    await expectInstruction('acquire-iteration')
     await acquire('iteration')
     await browser.keys('Tab')
-    await expectInstruction('Duplicate a tree that is not a blank sprout.')
+    await expectInstruction('duplicate-nonblank')
 
     const tutorialDuplicateId = await duplicateTree(slotId, 'tree-0000', { x: 0, z: -8 })
-    await expectInstruction('Accept and deliver the blank sprout order.')
+    await expectInstruction('complete-blank-order')
 
     await acceptOrder('blank-sprout', { x: -12, z: 12 })
     await deliver(slotId, 'blank-sprout', leftSprout.id)
-    await expect($('[data-tutorial-card]')).not.toBeDisplayed()
+    await expectInstructionAbsent()
     expect(storedOrder(slotId, 'blank-sprout')).toEqual({ state: 'completed', pot: null })
 
     await acceptOrder('single-double-cut', { x: 0, z: 14 })

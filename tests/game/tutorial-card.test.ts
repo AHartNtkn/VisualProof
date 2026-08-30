@@ -52,11 +52,12 @@ describe('tutorial card', () => {
   it('renders one instruction beside one provisional companion without progress UI', () => {
     // Catches the single-instruction surface growing a checklist or duplicate commentary.
     const card = harness()
-    card.controller.render({ milestoneId: 'move', text: 'Move through the orchard.' }, true)
+    card.controller.render({ milestoneId: 'move', text: 'Freshly edited guidance.' }, true)
 
     const instruction = card.root.querySelector<HTMLElement>('[data-tutorial-instruction]')
     expect(card.root.hidden).toBe(false)
-    expect(instruction?.textContent).toBe('Move through the orchard.')
+    expect(card.root.dataset['tutorialMilestone']).toBe('move')
+    expect(instruction?.textContent).toBe('Freshly edited guidance.')
     expect(card.root.querySelector('[data-tutorial-figure]')).not.toBeNull()
     expect(card.root.querySelector('[data-tutorial-checklist]')).toBeNull()
     expect(card.root.querySelector('[data-tutorial-progress]')).toBeNull()
@@ -66,10 +67,12 @@ describe('tutorial card', () => {
   it('hides when tutorials are disabled or the visible sequence is complete', () => {
     // Catches stale guidance surviving a setting change or the first-order explanation boundary.
     const card = harness()
-    card.controller.render({ milestoneId: 'move', text: 'Move through the orchard.' }, false)
+    card.controller.render({ milestoneId: 'move', text: 'Freshly edited guidance.' }, false)
     expect(card.root.hidden).toBe(true)
+    expect(card.root.dataset['tutorialMilestone']).toBeUndefined()
 
     card.controller.render(null, true)
     expect(card.root.hidden).toBe(true)
+    expect(card.root.dataset['tutorialMilestone']).toBeUndefined()
   })
 })
