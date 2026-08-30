@@ -13,23 +13,27 @@ import {
 } from '../src/game/camera'
 import type { GameProgress, GameWorld } from '../src/game/model'
 import {
+  decodeOrderCatalog,
   openingOrderCatalog,
 } from '../src/game/orders/catalog'
+import { orderContentClient, serializeOrderCatalog } from '../src/game/orders/content-client'
 import { potPlacementAhead } from '../src/game/orders/placement'
 import {
+  initialOrderProgress,
   orderSession,
   publishOrderMutation,
+  reconcileOrderProgress,
   type OrderMutation,
   type OrderSession,
 } from '../src/game/orders/session'
 import { SettledFrameTelemetry, frameTiming, percentile } from '../src/game/render/frame'
 import { mountGameWorld, type GameWorldRenderer } from '../src/game/render/world'
-import { initialOrderCreateState, saveClient, treeUpdateFromGameTree, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
+import { orderRecordsFromProgress, saveClient, treeUpdateFromGameTree, type CameraRecord, type SlotListEntry, type TreeUpdate } from '../src/game/save-client'
 import { SaveWriter } from '../src/game/save-writer'
 import { gameSession, publishTreeChange, ToolError, type GameSession, type TreeChange } from '../src/game/session'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
 import { completeBranchCutting, TOOL_CATALOG, ToolInventory, type ToolId } from '../src/game/tools'
-import { TutorialSession } from '../src/game/tutorial'
+import { TutorialSession, type TutorialEvent } from '../src/game/tutorial'
 import type { PlacementObstacle } from '../src/game/placement'
 import {
   mountLedger,
@@ -44,7 +48,11 @@ import {
   type WorldInput,
 } from './input'
 import { mountPauseMenu, type PauseMenuController } from './pause'
+import { mountOrderEditor, type OrderEditorController } from './order-editor'
+import { DeveloperPreferences } from './preferences'
 import { quitApplication } from './quit'
+import { mountSettings, type SettingsController } from './settings'
+import { mountTutorialCard, type TutorialCardController } from './tutorial-card'
 import { WorldStateController } from './world-state'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
@@ -66,6 +74,11 @@ const toolSelectorRoot = document.querySelector<HTMLElement>('[data-tool-selecto
 const heldToolRoot = document.querySelector<HTMLElement>('[data-held-tool-model]')!
 const ledgerRoot = document.querySelector<HTMLElement>('[data-ledger]')!
 const pauseRoot = document.querySelector<HTMLElement>('[data-pause]')!
+const settingsRoot = document.querySelector<HTMLElement>('[data-settings]')!
+const tutorialCardRoot = document.querySelector<HTMLElement>('[data-tutorial-card]')!
+const developerModeIndicator = document.querySelector<HTMLElement>('[data-developer-mode]')!
+const orderEditorRoot = document.querySelector<HTMLElement>('[data-order-editor]')!
+const createTutorials = document.querySelector<HTMLInputElement>('[data-create-tutorials]')!
 
 const blankDiagram = new DiagramBuilder().build()
 const blankDiagramJson = JSON.stringify(diagramToJson(blankDiagram))
@@ -89,13 +102,19 @@ let tutorial: TutorialSession | null = null
 let ledger: LedgerController | null = null
 let ledgerView: LedgerView | null = null
 let pauseMenu: PauseMenuController | null = null
+let settings: SettingsController | null = null
+let tutorialCard: TutorialCardController | null = null
+let orderEditor: OrderEditorController | null = null
 let worldState: WorldStateController | null = null
 let animationFrame = 0
 let previousFrame = performance.now()
 let disposed = false
 let freeActive = false
+let developerMode = false
+let editorState: 'closed' | 'create' | 'edit' = 'closed'
 let releaseWriterStatus = (): void => {}
 const toolSelector = mountToolSelector(toolSelectorRoot)
+const preferences = new DeveloperPreferences()
 
 function authoredGoalForOrder(orderId: string) {
   return openingOrderCatalog.definition(orderId)?.goal
@@ -138,6 +157,42 @@ function setFeedback(value: string): void {
   feedback.textContent = value
 }
 
+function mirrorRuntimeState(): void {
+  if (orderEditor?.isOpen !== true) editorState = 'closed'
+  root.dataset['tutorialsEnabled'] = String(tutorial?.enabled ?? false)
+  root.dataset['completedTutorialMilestones'] = JSON.stringify(
+    tutorial === null ? [] : [...tutorial.completed],
+  )
+  root.dataset['acquiredToolIds'] = JSON.stringify(tools?.snapshotForSave() ?? [])
+  root.dataset['selectedTool'] = tools?.selected('1') ?? ''
+  root.dataset['selectorVisible'] = String(toolSelectorRoot.childElementCount > 0)
+  root.dataset['ledgerOpen'] = String(ledger?.isOpen ?? false)
+  root.dataset['ledgerTab'] = ledger?.selectedPrimaryTab ?? 'tools'
+  root.dataset['developerMode'] = String(developerMode)
+  root.dataset['editorState'] = editorState
+  developerModeIndicator.hidden = !developerMode
+}
+
+function renderTutorial(): void {
+  if (tutorial === null || tutorialCard === null) return
+  tutorialCard.render(tutorial.currentInstruction, tutorial.enabled)
+  mirrorRuntimeState()
+}
+
+function observeTutorial(event: TutorialEvent): void {
+  const activeTutorial = tutorial
+  const activeWriter = writer
+  const activeCard = tutorialCard
+  if (activeTutorial === null || activeWriter === null || activeCard === null) return
+  const commit = activeTutorial.observe(event)
+  for (const milestoneId of commit.newlyCompleted) {
+    activeWriter.completeTutorialMilestone(milestoneId)
+  }
+  activeCard.render(commit.instruction, activeTutorial.enabled)
+  mirrorRuntimeState()
+  refreshVisibleLedger()
+}
+
 function mirrorToolInventory(activeTools: ToolInventory | null = tools): void {
   if (activeTools === null) return
   const cuttingHeld = activeTools.cutting !== null
@@ -147,6 +202,7 @@ function mirrorToolInventory(activeTools: ToolInventory | null = tools): void {
   toolSelector.render(activeTools, performance.now())
   root.dataset['equippedItem'] = selected
   root.dataset['cuttingHeld'] = String(cuttingHeld)
+  mirrorRuntimeState()
 }
 
 function mirrorOrderProgress(activeOrders: OrderSession | null = orders): void {
@@ -159,7 +215,7 @@ function mirrorOrderProgress(activeOrders: OrderSession | null = orders): void {
 }
 
 function mirrorLedger(): void {
-  root.dataset['ledgerOpen'] = String(ledger?.isOpen ?? false)
+  mirrorRuntimeState()
 }
 
 function currentLedgerProgress(
@@ -173,6 +229,38 @@ function currentLedgerProgress(
     completedTutorialMilestones: activeTutorial.completed,
     acquiredToolIds: new Set(activeTools.snapshotForSave()),
   }
+}
+
+function acceptedPots(
+  activeOrders: OrderSession,
+): Parameters<GameWorldRenderer['setPots']>[0] {
+  return [...activeOrders.progress.orders].flatMap(([orderId, state]) => {
+    if (state.kind !== 'accepted') return []
+    const goal = openingOrderCatalog.definition(orderId)?.goal
+    if (goal === undefined) throw new Error(`missing authored goal for '${orderId}'`)
+    return [{ orderId, placement: state.pot, goal }]
+  })
+}
+
+async function publishCatalogRevision(
+  slotId: string,
+  activeOrders: OrderSession,
+  activeRenderer: GameWorldRenderer,
+  candidate: Parameters<typeof openingOrderCatalog.publish>[0],
+): Promise<void> {
+  await orderContentClient.save(slotId, serializeOrderCatalog(candidate))
+  activeOrders.replaceProgress(reconcileOrderProgress(activeOrders.progress, candidate))
+  openingOrderCatalog.publish(candidate)
+  activeRenderer.setPots(acceptedPots(activeOrders))
+  mirrorOrderProgress(activeOrders)
+  refreshVisibleLedger()
+  mirrorRuntimeState()
+}
+
+function deletionRevision(orderId: string) {
+  return decodeOrderCatalog(
+    serializeOrderCatalog(openingOrderCatalog.current).filter((definition) => definition.id !== orderId),
+  )
 }
 
 function refreshVisibleLedger(): void {
@@ -194,7 +282,7 @@ function refreshVisibleLedger(): void {
     progress: currentLedgerProgress(activeOrders, activeTools, activeTutorial),
     tools: activeTools,
     tutorialCheck: (milestone) => activeTutorial.check(milestone),
-    developerMode: false,
+    developerMode,
     view,
   })
 }
@@ -212,7 +300,7 @@ function closeLedger(requestEngagement: boolean): void {
   ledgerView = null
   mirrorLedger()
   input?.resume()
-  if (!requestEngagement || input === null) return
+  if (!requestEngagement || input === null || camera?.mode !== 'free') return
   void input.engage().catch(() => {
     freeActive = false
     mirrorControls()
@@ -229,6 +317,7 @@ function acquireLedgerTool(toolId: ToolId): void {
     activeWriter.acquireTool(toolId)
     mirrorToolInventory(activeTools)
     refreshVisibleLedger()
+    observeTutorial({ kind: 'tool-acquired', toolId })
     setFeedback(`Acquired ${TOOL_CATALOG.find((tool) => tool.id === toolId)!.label}.`)
   } catch (error) {
     setError(`Tool acquisition failed: ${message(error)}`)
@@ -363,6 +452,23 @@ function animate(now: number): void {
     : sampledMotion
   const nextCamera = advanceCamera(currentCamera, motion, timing.movementSeconds, now)
   camera = nextCamera
+  if (currentCamera.mode === 'orbit') {
+    if (motion.forward !== 0 || motion.strafe !== 0 || motion.vertical !== 0) {
+      observeTutorial({ kind: 'orbit-moved' })
+    }
+  } else {
+    if (motion.forward !== 0 || motion.strafe !== 0) {
+      observeTutorial({ kind: 'camera-capability', capability: 'move' })
+    }
+    if (motion.lookX !== 0 || motion.lookY !== 0) {
+      observeTutorial({ kind: 'camera-capability', capability: 'look' })
+    }
+    if (motion.vertical > 0) observeTutorial({ kind: 'camera-capability', capability: 'ascend' })
+    if (motion.vertical < 0) observeTutorial({ kind: 'camera-capability', capability: 'descend' })
+    if (motion.sprint && (motion.forward !== 0 || motion.strafe !== 0 || motion.vertical !== 0)) {
+      observeTutorial({ kind: 'camera-capability', capability: 'sprint' })
+    }
+  }
   activeRenderer.setCamera(displayCameraPose(nextCamera, now))
   const rendered = activeRenderer.render(now)
   maxRepresentationOperations = Math.max(maxRepresentationOperations, rendered.representationOperations)
@@ -392,6 +498,7 @@ function animate(now: number): void {
   root.dataset['settledGeneration'] = String(settled.settledGeneration)
   if (rendered.error !== null) setError(`Renderer: ${rendered.error}`)
   mirrorControls()
+  mirrorRuntimeState()
   animationFrame = requestAnimationFrame(animate)
 }
 
@@ -435,9 +542,11 @@ async function returnToMainMenu(): Promise<void> {
   releaseWriterStatus = (): void => {}
   input?.dispose()
   ledger?.dispose()
+  orderEditor?.dispose()
   renderer?.dispose()
   input = null
   ledger = null
+  orderEditor = null
   ledgerView = null
   renderer = null
   camera = null
@@ -448,7 +557,10 @@ async function returnToMainMenu(): Promise<void> {
   writer = null
   worldState = null
   freeActive = false
+  developerMode = false
   pauseMenu?.hide()
+  settings?.hide()
+  tutorialCard?.render(null, false)
   startLifecycle.returnToMenu()
   start.hidden = false
   hud.hidden = true
@@ -462,6 +574,7 @@ async function returnToMainMenu(): Promise<void> {
   root.dataset['paused'] = 'false'
   reticle.hidden = true
   engage.hidden = true
+  mirrorRuntimeState()
   clearError()
   await refreshSlots()
 }
@@ -545,6 +658,9 @@ function applySecondaryAction(clientX: number, clientY: number): void {
           yaw: potPlacementAhead(displayCameraPose(activeCamera), 1).yaw,
         }, sproutPlacementObstacles(activeSession, activeOrders))
         publishPlannedTreeChange(activeSession, activeWriter, activeRenderer, change)
+        const blankTreeCount = [...activeSession.trees.values()]
+          .filter(({ snapshot }) => snapshot.json === blankDiagramJson).length
+        observeTutorial({ kind: 'sprout-spawned', blankTreeCount })
         setFeedback(`Planted sprout ${change.treeId}.`)
         return
       }
@@ -553,6 +669,7 @@ function applySecondaryAction(clientX: number, clientY: number): void {
         if (pointed === null) throw new ToolError('Double cut requires an ordinary branch within reach.')
         const change = activeSession.planDoubleCut(pointed)
         publishPlannedTreeChange(activeSession, activeWriter, activeRenderer, change)
+        observeTutorial({ kind: 'double-cut-applied' })
         setFeedback(`Double cut applied to ${change.treeId}.`)
         return
       }
@@ -587,6 +704,7 @@ function applySecondaryAction(clientX: number, clientY: number): void {
           mirrorToolInventory(activeTools)
           mirrorOrderProgress(activeOrders)
           refreshVisibleLedger()
+          observeTutorial({ kind: 'order-completed', orderId: target.orderId })
           setFeedback(`Completed ${target.orderId}. Reputation ${activeOrders.progress.reputation}.`)
           return
         }
@@ -600,6 +718,9 @@ function applySecondaryAction(clientX: number, clientY: number): void {
         publishPlannedTreeChange(activeSession, activeWriter, activeRenderer, change)
         activeTools.cancel()
         mirrorToolInventory(activeTools)
+        if (target.kind === 'ground' && change.after.snapshot.json !== blankDiagramJson) {
+          observeTutorial({ kind: 'nonblank-tree-duplicated' })
+        }
         setFeedback(target.kind === 'branch'
           ? `Iteration applied to ${change.treeId}.`
           : `Duplicated tree as ${change.treeId}.`)
@@ -626,6 +747,7 @@ async function startWorld(world: GameWorld): Promise<void> {
   )
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
   let nextLedger: LedgerController | null = null
+  let nextEditor: OrderEditorController | null = null
   let nextInput: WorldInput | null = null
   let nextReleaseWriterStatus = (): void => {}
   let freeSecondaryPress: { readonly x: number; readonly y: number } | null = null
@@ -634,15 +756,35 @@ async function startWorld(world: GameWorld): Promise<void> {
       acquireTool: acquireLedgerTool,
       acceptOrder: acceptLedgerOrder,
       abandonOrder: abandonLedgerOrder,
-      editOrder: (orderId) => setError(`Order editing is unavailable for '${orderId}'.`),
-      createOrder: () => setError('Order creation is unavailable.'),
+      editOrder: (orderId) => {
+        if (!developerMode) return
+        const definition = openingOrderCatalog.definition(orderId)
+        if (definition === undefined) {
+          setError(`Order editing failed: unknown order '${orderId}'.`)
+          return
+        }
+        editorState = 'edit'
+        orderEditor?.edit(definition)
+        mirrorRuntimeState()
+      },
+      createOrder: () => {
+        if (!developerMode) return
+        editorState = 'create'
+        orderEditor?.create()
+        mirrorRuntimeState()
+      },
     })
-    nextRenderer.setPots([...world.progress.orders].flatMap(([orderId, state]) => {
-      if (state.kind !== 'accepted') return []
-      const goal = authoredGoalForOrder(orderId)
-      if (goal === undefined) throw new Error(`missing authored goal for '${orderId}'`)
-      return [{ orderId, placement: state.pot, goal }]
-    }))
+    nextEditor = mountOrderEditor(orderEditorRoot, {
+      currentRevision: () => openingOrderCatalog.current,
+      save: (candidate) => publishCatalogRevision(world.slot.id, nextOrders, nextRenderer, candidate),
+      delete: (orderId) => publishCatalogRevision(
+        world.slot.id,
+        nextOrders,
+        nextRenderer,
+        deletionRevision(orderId),
+      ),
+    })
+    nextRenderer.setPots(acceptedPots(nextOrders))
     nextRenderer.resize(worldHost.clientWidth, worldHost.clientHeight)
     nextRenderer.setCamera(displayCameraPose(nextCamera))
     nextReleaseWriterStatus = nextWriter.subscribe((status) => {
@@ -682,6 +824,7 @@ async function startWorld(world: GameWorld): Promise<void> {
         freeActive = false
         activeInput.release()
         mirrorControls()
+        observeTutorial({ kind: 'tree-selected' })
       },
       pointerUp(button, clientX, clientY, relativeDistance) {
         const activeCamera = camera
@@ -718,7 +861,11 @@ async function startWorld(world: GameWorld): Promise<void> {
         freeSecondaryPress = null
         if (camera?.mode === 'orbit') camera.interaction.cancelPointer()
       },
-      stepBack: () => { worldState?.stepBack() },
+      stepBack: () => {
+        const result = worldState?.stepBack()
+        if (result === 'orbit-exited') observeTutorial({ kind: 'orbit-exited' })
+        mirrorRuntimeState()
+      },
       pause: openPause,
       category(code) {
         const activeTools = tools
@@ -728,7 +875,7 @@ async function startWorld(world: GameWorld): Promise<void> {
           || activeTools === null
           || ledger?.isOpen === true
         ) return
-        activeTools.cycle('1')
+        activeTools.cycle('1', performance.now())
         mirrorToolInventory(activeTools)
       },
       toggleLedger() {
@@ -759,13 +906,24 @@ async function startWorld(world: GameWorld): Promise<void> {
           progress: currentLedgerProgress(activeOrders, activeTools, activeTutorial),
           tools: activeTools,
           tutorialCheck: (milestone) => activeTutorial.check(milestone),
-          developerMode: false,
+          developerMode,
           view: ledgerView,
         })
         mirrorLedger()
         mirrorControls()
+        observeTutorial({ kind: 'ledger-opened' })
       },
-      toggleDeveloperMode() {},
+      toggleDeveloperMode() {
+        if (
+          worldState?.isPaused === true
+          || !preferences.developerToolsEnabled
+          || orderEditor?.isOpen === true
+        ) return
+        developerMode = !developerMode
+        if (!developerMode) orderEditor?.hide()
+        refreshVisibleLedger()
+        mirrorRuntimeState()
+      },
       engagementChanged(active) {
         freeActive = active
         mirrorControls()
@@ -781,6 +939,8 @@ async function startWorld(world: GameWorld): Promise<void> {
     writer = nextWriter
     releaseWriterStatus = nextReleaseWriterStatus
     ledger = nextLedger
+    orderEditor = nextEditor
+    editorState = 'closed'
     ledgerView = null
     const activePauseMenu = pauseMenu
     if (activePauseMenu === null) throw new Error('pause menu is unavailable')
@@ -800,6 +960,7 @@ async function startWorld(world: GameWorld): Promise<void> {
       stateChanged: mirrorControls,
     })
     nextLedger.hide()
+    nextEditor.hide()
     start.hidden = true
     hud.hidden = false
     worldName.textContent = world.slot.name
@@ -811,6 +972,8 @@ async function startWorld(world: GameWorld): Promise<void> {
     mirrorToolInventory(nextTools)
     mirrorOrderProgress(nextOrders)
     mirrorLedger()
+    renderTutorial()
+    mirrorRuntimeState()
     telemetry.beginTransition()
     mirrorControls()
     previousFrame = performance.now()
@@ -818,6 +981,7 @@ async function startWorld(world: GameWorld): Promise<void> {
   } catch (error) {
     worldState = null
     nextLedger?.dispose()
+    nextEditor?.dispose()
     nextInput?.dispose()
     nextReleaseWriterStatus()
     await nextWriter.dispose().catch(() => {})
@@ -839,15 +1003,57 @@ function showStartFailure(failure: StartFailure): void {
   root.dataset['errors'] = concrete
 }
 
+function showSettings(): void {
+  if (worldState?.isPaused !== true || tutorial === null || settings === null) return
+  pauseMenu?.hide()
+  settings.show({
+    tutorialsEnabled: tutorial.enabled,
+    developerToolsEnabled: preferences.developerToolsEnabled,
+  })
+}
+
+function returnToPauseFromSettings(): void {
+  if (worldState?.isPaused !== true) return
+  pauseMenu?.show(worldName.textContent ?? 'Orchard')
+}
+
 const startLifecycle = new StartLifecycle({ open: startWorld, fail: showStartFailure })
 startLifecycle.registerControl(nameInput)
+startLifecycle.registerControl(createTutorials)
 for (const button of createForm.querySelectorAll<HTMLButtonElement>('button')) startLifecycle.registerControl(button)
+tutorialCard = mountTutorialCard(tutorialCardRoot)
+settings = mountSettings(settingsRoot, {
+  setTutorialsEnabled(enabled) {
+    const activeTutorial = tutorial
+    const activeWriter = writer
+    if (activeTutorial === null || activeWriter === null) return
+    try {
+      activeTutorial.setEnabled(enabled)
+      activeWriter.setTutorialsEnabled(enabled)
+      renderTutorial()
+      refreshVisibleLedger()
+    } catch (error) {
+      setError(`Tutorial setting failed: ${message(error)}`)
+    }
+  },
+  setDeveloperToolsEnabled(enabled) {
+    preferences.setDeveloperToolsEnabled(enabled)
+    if (!enabled) {
+      developerMode = false
+      orderEditor?.hide()
+    }
+    refreshVisibleLedger()
+    mirrorRuntimeState()
+  },
+  back: returnToPauseFromSettings,
+})
 pauseMenu = mountPauseMenu(pauseRoot, {
   resume: resumePause,
-  settings: () => {},
+  settings: showSettings,
   mainMenu: returnToMainMenu,
   quit: quitFromPause,
 })
+mirrorRuntimeState()
 
 function startOpening(operation: () => Promise<GameWorld>): void {
   void requestWorldEngagement(worldHost).catch((error: unknown) => {
@@ -866,12 +1072,16 @@ createForm.addEventListener('submit', (event) => {
   }
   clearError()
   const revision = openingOrderCatalog.current
-  const initialOrders = initialOrderCreateState(revision)
+  const initialProgress = initialOrderProgress(revision.definitions)
   startOpening(() => saveClient.create({
     displayName,
     camera: initialCameraRecord,
     trees: [initialTree],
-    ...initialOrders,
+    tutorialsEnabled: createTutorials.checked,
+    completedTutorialMilestones: [],
+    acquiredToolIds: ['sprout-spawner'],
+    reputation: initialProgress.reputation,
+    orders: orderRecordsFromProgress(initialProgress, revision),
   }, revision).then((created) => saveClient.load(created.slotId)))
 })
 saveRetry.addEventListener('click', () => writer?.retry())
@@ -889,6 +1099,8 @@ window.addEventListener('pagehide', () => {
   input = null
   ledger?.dispose()
   ledger = null
+  orderEditor?.dispose()
+  orderEditor = null
   ledgerView = null
   session = null
   orders = null
@@ -897,6 +1109,8 @@ window.addEventListener('pagehide', () => {
   worldState = null
   pauseMenu?.dispose()
   pauseMenu = null
+  settings?.dispose()
+  settings = null
   releaseWriterStatus()
   releaseWriterStatus = (): void => {}
   void writer?.dispose().catch((error: unknown) => setError(`Save shutdown failed: ${message(error)}`))

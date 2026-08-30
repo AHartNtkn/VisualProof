@@ -296,8 +296,16 @@ export function mountGameWorld(
       orderIds.add(pot.orderId)
     }
     discardOutstandingPreparedOrders()
-    clearPots()
-    for (const pot of pots) addPot(pot)
+    const incoming = new Map(pots.map((pot) => [pot.orderId, pot]))
+    for (const [orderId, object] of potsByOrderId) {
+      const next = incoming.get(orderId) ?? null
+      if (samePot(object.render, next)) continue
+      object.dispose()
+      potsByOrderId.delete(orderId)
+    }
+    for (const pot of pots) {
+      if (!potsByOrderId.has(pot.orderId)) addPot(pot)
+    }
   }
 
   const matchesTree = (rendered: RenderTree, tree: GameTree): boolean => {

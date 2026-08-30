@@ -341,6 +341,13 @@ function expectResourcesDisposedOnce(resources: ReturnType<typeof potResourceSpi
   for (const resource of resources.materials) expect(resource).toHaveBeenCalledTimes(1)
 }
 
+function expectResourcesLive(resources: ReturnType<typeof potResourceSpies>): void {
+  expect(resources.geometries.length).toBeGreaterThan(2)
+  expect(resources.materials.length).toBeGreaterThan(2)
+  for (const resource of resources.geometries) expect(resource).not.toHaveBeenCalled()
+  for (const resource of resources.materials) expect(resource).not.toHaveBeenCalled()
+}
+
 describe('production game world', () => {
   it('rejects preparation against a stale tree without changing the live target', () => {
     const current = targetTree('tree', 10, -20, Math.PI / 2)
@@ -917,6 +924,33 @@ describe('production game world', () => {
     world.setPots([starterPot(4, -20)])
 
     expectResourcesDisposedOnce(resources)
+    world.dispose()
+  })
+
+  it('replaces only the accepted pot whose live catalog goal changed', () => {
+    // Catches a live catalog refresh leaving an accepted pot on its prior goal, or rebuilding unrelated pots.
+    const unchanged = { ...starterPot(5, -20), orderId: 'unchanged-order' }
+    const before = starterPot()
+    const builder = new DiagramBuilder()
+    const changedGoal = snapshotFromDiagram(applyDoubleCutIntro(builder.build(), {
+      region: builder.root,
+      regions: [],
+      nodes: [],
+      wires: [],
+    }))
+    const world = mountOrderWorld()
+    world.setPots([before, unchanged])
+    const beforeObject = host.potObjects[0] as PotObject
+    const unchangedObject = host.potObjects[1] as PotObject
+    const replacedResources = potResourceSpies(beforeObject)
+    const unchangedResources = potResourceSpies(unchangedObject)
+
+    world.setPots([{ ...before, goal: changedGoal }, unchanged])
+
+    expect(host.potObjects).toHaveLength(3)
+    expect(latestPot().render).toMatchObject({ orderId: STARTER_ORDER_ID, goal: changedGoal })
+    expectResourcesDisposedOnce(replacedResources)
+    expectResourcesLive(unchangedResources)
     world.dispose()
   })
 
