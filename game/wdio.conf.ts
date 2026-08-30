@@ -22,6 +22,7 @@ type NativeScenario = {
 const scenarios: Readonly<Record<string, NativeScenario>> = {
   controls: { name: 'controls', spec: './e2e/controls.e2e.ts', port: 4545, save: 'large-1.sqlite3', invalidSave: true },
   'order-loop': { name: 'order-loop', spec: './e2e/order-loop.e2e.ts', port: 4550 },
+  'sprout-spawn': { name: 'sprout-spawn', spec: './e2e/sprout-spawn.e2e.ts', port: 4551 },
   ...Object.fromEntries([10, 50, 100, 250, 500, 1000, 2000].map((count, index) => [
     `stress-${count}`,
     { name: `stress-${count}`, spec: './e2e/stress.e2e.ts', port: 4600 + index, save: `stress-${count}.sqlite3` },

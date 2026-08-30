@@ -4,6 +4,7 @@ import { applyDoubleCutIntro } from '../kernel/rules/doublecut'
 import { applyIteration } from '../kernel/rules/iteration'
 import { snapshotFromDiagram } from './diagram-snapshot'
 import type { GameTree } from './model'
+import { requireClearSproutPlacement, type PlacementObstacle } from './placement'
 import type { IterationCutting } from './tools'
 import type { Entity } from '../view3d/scene'
 
@@ -27,7 +28,7 @@ export type TreeChange =
   }
 
 type TreeUpdate = Extract<TreeChange, { readonly kind: 'update' }>
-type TreeInsert = Extract<TreeChange, { readonly kind: 'insert' }>
+export type TreeInsert = Extract<TreeChange, { readonly kind: 'insert' }>
 
 const preparedSessionCommit: unique symbol = Symbol('prepared session commit')
 
@@ -115,6 +116,24 @@ export class GameSession {
       placement: { ...placement },
     }
     return { kind: 'insert', treeId, after }
+  }
+
+  public planSpawnSprout(
+    placement: GameTree['placement'],
+    obstacles: readonly PlacementObstacle[],
+  ): TreeInsert {
+    requireClearSproutPlacement(placement, obstacles)
+    const treeId = this.newTreeId()
+    if (this.trees.has(treeId)) throw new ToolError(`tree '${treeId}' already exists`)
+    return {
+      kind: 'insert',
+      treeId,
+      after: {
+        id: treeId,
+        snapshot: snapshotFromDiagram(blankDiagram),
+        placement: { ...placement },
+      },
+    }
   }
 
   public propositionForDelivery(cutting: IterationCutting) {

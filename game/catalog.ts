@@ -32,6 +32,8 @@ export function renderEquippedItem(root: HTMLElement, item: ToolId, cuttingHeld:
   silhouette.dataset['item'] = item
   const definition = TOOL_CATALOG.find((candidate) => candidate.id === item)
   if (definition === undefined) throw new Error(`unknown tool '${item}'`)
+  silhouette.dataset['silhouette'] = definition.silhouette
+  silhouette.style.setProperty('--tool-color', definition.color)
   label.textContent = definition.label
   held.textContent = cuttingHeld ? 'Cutting held' : 'No cutting held'
 }

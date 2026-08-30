@@ -30,6 +30,7 @@ import { SaveWriter } from '../src/game/save-writer'
 import { gameSession, publishTreeChange, ToolError, type GameSession, type TreeChange } from '../src/game/session'
 import { StartLifecycle, type StartFailure } from '../src/game/start-lifecycle'
 import { completeBranchCutting, TOOL_CATALOG, ToolInventory } from '../src/game/tools'
+import type { PlacementObstacle } from '../src/game/placement'
 import {
   mountCatalog,
   renderEquippedItem,
@@ -448,6 +449,27 @@ function publishPlannedTreeChange(
   )
 }
 
+function sproutPlacementObstacles(
+  activeSession: GameSession,
+  activeOrders: OrderSession,
+): readonly PlacementObstacle[] {
+  return [
+    ...[...activeSession.trees.values()].map((tree) => ({
+      kind: 'tree' as const,
+      id: tree.id,
+      x: tree.placement.x,
+      z: tree.placement.z,
+    })),
+    ...[...activeOrders.progress.orders].flatMap(([id, state]) => state.kind === 'accepted'
+      ? [{ kind: 'pot' as const, id, x: state.pot.x, z: state.pot.z }]
+      : []),
+  ]
+}
+
+function unreachableTool(tool: never): never {
+  throw new Error(`unsupported tool '${tool}'`)
+}
+
 function applySecondaryAction(clientX: number, clientY: number): void {
   const activeCamera = camera
   const activeSession = session
@@ -470,61 +492,79 @@ function applySecondaryAction(clientX: number, clientY: number): void {
   const orbitTarget = activeCamera.mode === 'orbit' ? activeCamera.treeId : null
   try {
     const selected = activeTools.selected('1')
-    if (selected === 'double-cut') {
-      const pointed = activeRenderer.pointAtBranch(ndcX, ndcY, orbitTarget)
-      if (pointed === null) throw new ToolError('Double cut requires an ordinary branch within reach.')
-      const change = activeSession.planDoubleCut(pointed)
-      publishPlannedTreeChange(activeSession, activeWriter, activeRenderer, change)
-      setFeedback(`Double cut applied to ${change.treeId}.`)
-      return
-    }
-
-    const cutting = activeTools.cutting
-    if (cutting === null) {
-      const pointed = activeRenderer.pointAtBranch(ndcX, ndcY, orbitTarget)
-      if (pointed === null) throw new ToolError('Iteration requires a branch cutting within reach.')
-      if (pointed.entity.kind !== 'branch') throw new ToolError('Iteration requires a branch cutting within reach.')
-      const source = activeSession.trees.get(pointed.treeId)
-      if (source === undefined) throw new ToolError(`unknown tree '${pointed.treeId}'`)
-      activeTools.hold(completeBranchCutting(source, pointed.entity.region))
-      mirrorToolInventory(activeTools)
-      setFeedback(pointed.entity.region === source.snapshot.diagram.root
-        ? `Whole-tree cutting held from ${source.id}.`
-        : `Subtree cutting held from ${source.id}.`)
-      return
-    }
-
-    const target = activeRenderer.pointAtToolTarget(ndcX, ndcY, orbitTarget)
-    if (target === null) throw new ToolError('Iteration requires a branch, ground, or pot within reach.')
-    if (target.kind === 'pot') {
-      if (cutting.kind !== 'whole') throw new ToolError('delivery requires a whole tree cutting')
-      const mutation = activeOrders.planDelivery(target.orderId, activeSession.propositionForDelivery(cutting))
-      publishOrderMutation(
-        activeOrders,
-        mutation,
-        activeRenderer,
-        (accepted) => acceptOrderWrite(activeWriter, accepted),
-      )
-      activeTools.cancel()
-      mirrorToolInventory(activeTools)
-      mirrorOrderProgress(activeOrders)
-      refreshVisibleCatalog()
-      setFeedback(`Completed ${target.orderId}. Reputation ${activeOrders.progress.reputation}.`)
-      return
-    }
-
-    const change = target.kind === 'branch'
-      ? activeSession.planIteration(cutting, target.pointed)
-      : activeSession.planDuplicate(cutting, {
+    switch (selected) {
+      case 'sprout-spawner': {
+        const target = activeRenderer.pointAtToolTarget(ndcX, ndcY, orbitTarget)
+        if (target?.kind !== 'ground') {
+          throw new ToolError('Sprout Spawner requires clear ground within reach.')
+        }
+        const change = activeSession.planSpawnSprout({
           ...target.point,
           yaw: potPlacementAhead(displayCameraPose(activeCamera), 1).yaw,
-        })
-    publishPlannedTreeChange(activeSession, activeWriter, activeRenderer, change)
-    activeTools.cancel()
-    mirrorToolInventory(activeTools)
-    setFeedback(target.kind === 'branch'
-      ? `Iteration applied to ${change.treeId}.`
-      : `Duplicated tree as ${change.treeId}.`)
+        }, sproutPlacementObstacles(activeSession, activeOrders))
+        publishPlannedTreeChange(activeSession, activeWriter, activeRenderer, change)
+        setFeedback(`Planted sprout ${change.treeId}.`)
+        return
+      }
+      case 'double-cut': {
+        const pointed = activeRenderer.pointAtBranch(ndcX, ndcY, orbitTarget)
+        if (pointed === null) throw new ToolError('Double cut requires an ordinary branch within reach.')
+        const change = activeSession.planDoubleCut(pointed)
+        publishPlannedTreeChange(activeSession, activeWriter, activeRenderer, change)
+        setFeedback(`Double cut applied to ${change.treeId}.`)
+        return
+      }
+      case 'iteration': {
+        const cutting = activeTools.cutting
+        if (cutting === null) {
+          const pointed = activeRenderer.pointAtBranch(ndcX, ndcY, orbitTarget)
+          if (pointed === null) throw new ToolError('Iteration requires a branch cutting within reach.')
+          if (pointed.entity.kind !== 'branch') throw new ToolError('Iteration requires a branch cutting within reach.')
+          const source = activeSession.trees.get(pointed.treeId)
+          if (source === undefined) throw new ToolError(`unknown tree '${pointed.treeId}'`)
+          activeTools.hold(completeBranchCutting(source, pointed.entity.region))
+          mirrorToolInventory(activeTools)
+          setFeedback(pointed.entity.region === source.snapshot.diagram.root
+            ? `Whole-tree cutting held from ${source.id}.`
+            : `Subtree cutting held from ${source.id}.`)
+          return
+        }
+
+        const target = activeRenderer.pointAtToolTarget(ndcX, ndcY, orbitTarget)
+        if (target === null) throw new ToolError('Iteration requires a branch, ground, or pot within reach.')
+        if (target.kind === 'pot') {
+          if (cutting.kind !== 'whole') throw new ToolError('delivery requires a whole tree cutting')
+          const mutation = activeOrders.planDelivery(target.orderId, activeSession.propositionForDelivery(cutting))
+          publishOrderMutation(
+            activeOrders,
+            mutation,
+            activeRenderer,
+            (accepted) => acceptOrderWrite(activeWriter, accepted),
+          )
+          activeTools.cancel()
+          mirrorToolInventory(activeTools)
+          mirrorOrderProgress(activeOrders)
+          refreshVisibleCatalog()
+          setFeedback(`Completed ${target.orderId}. Reputation ${activeOrders.progress.reputation}.`)
+          return
+        }
+
+        const change = target.kind === 'branch'
+          ? activeSession.planIteration(cutting, target.pointed)
+          : activeSession.planDuplicate(cutting, {
+              ...target.point,
+              yaw: potPlacementAhead(displayCameraPose(activeCamera), 1).yaw,
+            })
+        publishPlannedTreeChange(activeSession, activeWriter, activeRenderer, change)
+        activeTools.cancel()
+        mirrorToolInventory(activeTools)
+        setFeedback(target.kind === 'branch'
+          ? `Iteration applied to ${change.treeId}.`
+          : `Duplicated tree as ${change.treeId}.`)
+        return
+      }
+      default: return unreachableTool(selected)
+    }
   } catch (error) {
     setError(message(error))
   }

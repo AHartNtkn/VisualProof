@@ -14,6 +14,11 @@ class TestElement extends EventTarget {
   public parent: EventTarget | null = null
   public readonly dataset: Record<string, string> = {}
   public readonly children: TestElement[] = []
+  public readonly style = {
+    values: new Map<string, string>(),
+    setProperty: (name: string, value: string): void => { this.style.values.set(name, value) },
+    getPropertyValue: (name: string): string => this.style.values.get(name) ?? '',
+  }
 
   public constructor(public readonly ownerDocument: TestDocument) {
     super()
@@ -221,7 +226,7 @@ describe('catalog controller', () => {
 })
 
 describe('equipped item display', () => {
-  it('projects both functional item labels and the held-cutting state', () => {
+  it('projects catalog metadata into each distinct held-tool model', () => {
     const documentTarget = new TestDocument()
     const root = documentTarget.createElement('div')
     const silhouette = element(documentTarget, '[data-equipped-silhouette]')
@@ -229,14 +234,22 @@ describe('equipped item display', () => {
     const held = element(documentTarget, '[data-held-cutting]')
     root.append(silhouette, label, held)
 
-    renderEquippedItem(root as unknown as HTMLElement, 'double-cut', false)
-    expect(label.textContent).toBe('Double Cut')
-    expect(silhouette.dataset.item).toBe('double-cut')
+    renderEquippedItem(root as unknown as HTMLElement, 'sprout-spawner', false)
+    expect(label.textContent).toBe('Sprout Spawner')
+    expect(silhouette.dataset).toMatchObject({
+      item: 'sprout-spawner', silhouette: 'sprout',
+    })
+    expect(silhouette.style.getPropertyValue('--tool-color')).toBe('#8cbf26')
     expect(held.textContent).toBe('No cutting held')
+
+    renderEquippedItem(root as unknown as HTMLElement, 'double-cut', false)
+    expect(silhouette.dataset).toMatchObject({ item: 'double-cut', silhouette: 'nested-cuts' })
+    expect(silhouette.style.getPropertyValue('--tool-color')).toBe('#d76f3f')
 
     renderEquippedItem(root as unknown as HTMLElement, 'iteration', true)
     expect(label.textContent).toBe('Iteration')
-    expect(silhouette.dataset.item).toBe('iteration')
+    expect(silhouette.dataset).toMatchObject({ item: 'iteration', silhouette: 'loop' })
+    expect(silhouette.style.getPropertyValue('--tool-color')).toBe('#7166c9')
     expect(held.textContent).toBe('Cutting held')
   })
 })

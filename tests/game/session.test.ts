@@ -419,6 +419,35 @@ describe('game tool session', () => {
     expect(sameDiagram(change.after.snapshot.diagram, source.snapshot.diagram)).toBe(true)
   })
 
+  it('plans a blank sprout at clear ground without publishing it', () => {
+    const source = tree('tree-a', largeDiagram)
+    const session = gameSession(new Map([[source.id, source]]), () => 'tree-sprout')
+
+    const change = session.planSpawnSprout(
+      { x: 8, z: -3, yaw: 0 },
+      [{ kind: 'tree', id: source.id, x: 0, z: 0 }],
+    )
+
+    expect(change).toMatchObject({
+      kind: 'insert', treeId: 'tree-sprout',
+      after: { id: 'tree-sprout', placement: { x: 8, z: -3, yaw: 0 } },
+    })
+    expect(change.after.snapshot.json).toBe(snapshotFromDiagram(blankDiagram).json)
+    expect(session.trees.get(source.id)).toBe(source)
+    expect(session.trees.has(change.treeId)).toBe(false)
+  })
+
+  it('rejects blocked sprout ground without changing session trees', () => {
+    const source = tree('tree-a', largeDiagram)
+    const session = gameSession(new Map([[source.id, source]]), () => 'tree-sprout')
+
+    expect(() => session.planSpawnSprout(
+      { x: 3.999, z: 0, yaw: 0 },
+      [{ kind: 'tree', id: source.id, x: 0, z: 0 }],
+    )).toThrow(/too close/)
+    expect([...session.trees.entries()]).toEqual([[source.id, source]])
+  })
+
   it('rejects subtree duplication, stale cuttings, and generated identity collisions', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
