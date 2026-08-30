@@ -15,8 +15,8 @@
 - A new orchard contains one blank tree and starts with Sprout Spawner acquired.
 - Tutorials are enabled by default per save; disabling them hides guidance and makes tutorial checks pass without completing milestones or mutating gameplay.
 - Tutorial progress is produced only by committed player actions.
-- `Escape` always opens Pause from every active world state and Resume restores the exact state.
-- `Backspace` clears a held Iteration cutting first; otherwise it exits orbit.
+- `Escape` always foregrounds Pause from every active world state, including an open order editor; the editor and its draft remain intact, and Resume restores the exact state.
+- `Backspace` clears a held Iteration cutting first, otherwise exits orbit, and closes a foreground order editor only outside editable text; Pause and Settings retain it instead of routing it to editor or world step-back behavior.
 - Existing movement controls remain `WASD`, mouse look, `Space` ascent, `Ctrl` descent, and `Shift` sprint.
 - Category `1` contains Sprout Spawner, Double Cut, and Iteration; only acquired tools appear or cycle.
 - The category selector is temporary, shows all acquired tools in category `1`, and highlights the equipped tool.

@@ -1,5 +1,6 @@
 import { $, $$, browser, expect } from '@wdio/globals'
 import { describe, it } from 'mocha'
+import { TOOL_CATALOG, type ToolId } from '../../src/game/tools'
 import {
   aimReticleAt,
   attribute,
@@ -41,6 +42,54 @@ async function acquire(toolId: 'double-cut' | 'iteration'): Promise<void> {
   await action.waitForDisplayed()
   await action.click()
   await expect(game()).toHaveAttribute('data-selected-tool', toolId)
+}
+
+async function assertVisibleToolCycle(selectedTool: ToolId): Promise<string> {
+  const presentation = await browser.execute(() => {
+    const rowElements = [...document.querySelectorAll<HTMLElement>('.tool-selector-row')]
+    const visibleHighlights = rowElements.filter((row) => {
+      const style = getComputedStyle(row)
+      return style.borderLeftStyle !== 'none'
+        && Number.parseFloat(style.borderLeftWidth) > 0
+        && style.borderLeftColor !== 'transparent'
+        && style.borderLeftColor !== 'rgba(0, 0, 0, 0)'
+    })
+    const held = document.querySelector<HTMLElement>('[data-held-tool-model]')!
+    const silhouette = held.querySelector<HTMLElement>('[data-held-tool-silhouette]')!
+    return {
+      labels: rowElements.map(({ innerText }) => innerText),
+      rowsVisible: rowElements.map((row) => {
+        const style = getComputedStyle(row)
+        const bounds = row.getBoundingClientRect()
+        return style.display !== 'none'
+          && style.visibility === 'visible'
+          && Number.parseFloat(style.opacity) > 0
+          && bounds.width > 0
+          && bounds.height > 0
+      }),
+      highlighted: visibleHighlights.map((row) => ({
+        id: row.dataset['toolId'],
+        background: getComputedStyle(row).backgroundColor,
+        border: getComputedStyle(row).borderLeftColor,
+      })),
+      heldId: silhouette.dataset['toolId'],
+      heldSilhouette: silhouette.dataset['silhouette'],
+      heldVisible: held.getBoundingClientRect().width > 0 && held.getBoundingClientRect().height > 0,
+    }
+  })
+  const expected = TOOL_CATALOG.find(({ id }) => id === selectedTool)!
+  expect(presentation.labels).toEqual(TOOL_CATALOG.map(({ label }) => label))
+  expect(presentation.rowsVisible).toEqual(TOOL_CATALOG.map(() => true))
+  expect(presentation.highlighted).toHaveLength(1)
+  expect(presentation.highlighted[0]).toMatchObject({ id: expected.id })
+  expect(presentation.highlighted[0]!.background).not.toBe('rgba(0, 0, 0, 0)')
+  expect(presentation.highlighted[0]!.border).not.toBe('rgba(0, 0, 0, 0)')
+  expect(presentation.heldId).toBe(expected.id)
+  expect(presentation.heldSilhouette).toBe(expected.silhouette)
+  expect(presentation.heldVisible).toBe(true)
+
+  const held = await $('[data-held-tool-model]')
+  return await browser.takeElementScreenshot(await held.elementId)
 }
 
 async function selectTool(toolId: 'sprout-spawner' | 'double-cut' | 'iteration'): Promise<void> {
@@ -93,13 +142,17 @@ describe('orchard order lifecycle', () => {
       await browser.keys('Tab')
       await expect(game()).toHaveAttribute('data-ledger-open', 'false')
 
-      await browser.keys('1')
-      await expect(game()).toHaveAttribute('data-selected-tool', 'sprout-spawner')
-      await browser.keys('1')
-      await expect(game()).toHaveAttribute('data-selected-tool', 'double-cut')
-      await browser.keys('1')
-      await expect(game()).toHaveAttribute('data-selected-tool', 'iteration')
-      await expect(game()).toHaveAttribute('data-selector-visible', 'true')
+      const heldPresentations: string[] = []
+      for (const tool of TOOL_CATALOG) {
+        await browser.keys('1')
+        heldPresentations.push(await assertVisibleToolCycle(tool.id))
+      }
+      expect(new Set(heldPresentations).size).toBe(TOOL_CATALOG.length)
+      await browser.waitUntil(async () => !(await $('.tool-selector-row').isExisting()), {
+        timeout: 3_000,
+        timeoutMsg: 'three-tool selector did not fade',
+      })
+      await expect($('.tool-selector-category')).not.toExist()
 
       await moveFreeCameraTo({ x: 0, y: 1.7, z: 12 })
       await accept('blank-sprout')

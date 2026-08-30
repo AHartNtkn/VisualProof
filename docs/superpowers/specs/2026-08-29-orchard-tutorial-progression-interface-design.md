@@ -58,13 +58,17 @@ both final orders are complete.
 
 ## Input behavior
 
-`Escape` always opens Pause from free flight, orbit, a held cutting, or the open
-ledger. Pausing preserves the exact camera mode, held cutting, equipped tool,
-ledger state, and orchard state. Resume returns to that state.
+`Escape` always foregrounds Pause from free flight, orbit, a held cutting, the
+open ledger, or an open order editor. Pausing preserves the exact camera mode,
+held cutting, equipped tool, ledger state, orchard state, and any editor draft;
+it does not close the editor. Resume returns to that preserved state.
 
 `Backspace` is the step-back control. If an Iteration cutting is held, the first
 press clears it. Otherwise, if the camera is orbiting a tree, the press restores
-free flight.
+free flight. When the order editor is foreground, `Backspace` closes it only
+while focus is outside editable text; an input, textarea, or contenteditable
+region retains ordinary text deletion. Foreground Pause and Settings own
+`Backspace`, so it does not reach either the editor or world step-back behavior.
 
 `Tab` toggles the ledger. The number keys select tool categories. Category `1`
 initially contains Sprout Spawner, Double Cut, and Iteration, and repeated
