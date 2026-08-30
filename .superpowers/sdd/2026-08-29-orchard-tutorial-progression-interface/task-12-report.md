@@ -34,13 +34,13 @@ The mandatory human-style direct exercise in the production desktop application 
 
 ## Development-server persistence follow-up
 
-The direct production-window exercise exposed a development-server lifecycle defect: persisting a developer-authored order changed `game/content/orders.json`, which is also the build-time `?raw` catalog input, so Vite reloaded the complete webview and returned the user to Main Menu. `vite.config.ts` now excludes that exact runtime-content path from the development watcher. The catalog remains a normal build dependency, and the runtime publication path remains responsible for making a successful persisted revision live in the active session.
+The direct production-window exercise exposed a development-server lifecycle defect: persisting a developer-authored order changed `game/content/orders.json`, which is also the build-time `?raw` catalog input, so Vite reloaded the complete webview and returned the user to Main Menu. `game/vite.config.ts`, the configuration discovered for the `vite game` command root, now excludes that exact runtime-content path from the development watcher. The catalog remains a normal build dependency, and the runtime publication path remains responsible for making a successful persisted revision live in the active session.
 
-The regression starts an actual Vite server from the repository config and opens its HMR client in Chromium. It proves that changing an imported temporary `game/content/orders.json` preserves the same page lifecycle and starting imported bytes, then changes an ordinary source module and proves that the watcher and full-reload control path remain active.
+The regression spawns the installed Vite CLI with the same `vite game --host ... --port ... --strictPort` root/config discovery path as `npm run game`, then opens its HMR client in Chromium. It proves that changing an imported temporary `game/content/orders.json` preserves the same page lifecycle and starting imported bytes, then changes an ordinary source module and proves that the watcher and full-reload control path remain active.
 
 ### Follow-up evidence
 
-- Focused RED (`npx vitest run --config vitest.config.ts tests/game/vite-content-watch.test.ts`) — expected failure before the watch rule: the lifecycle counter changed from `1` to `2` after the catalog write.
+- Focused RED (`npx vitest run --config vitest.config.ts tests/game/vite-content-watch.test.ts`) — expected failure through the real CLI discovery path before the game-root watch rule: the lifecycle counter changed from `1` to `2` after the catalog write.
 - Focused GREEN (same command) — PASS: 1 test; the catalog write preserved lifecycle `1`, and the ordinary source control change advanced it to `2`.
 - `npm run typecheck` — PASS.
 - `npm run build:game` — PASS: 158 modules transformed, including the current catalog starting bytes.

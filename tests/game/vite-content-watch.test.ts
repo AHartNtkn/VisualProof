@@ -1,15 +1,24 @@
 import { chromium, type Browser } from '@playwright/test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer as createTcpServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createServer, type ViteDevServer } from 'vite'
 
 const repositoryRoot = resolve(import.meta.dirname, '../..')
 
 let browser: Browser | undefined
-let server: ViteDevServer | undefined
+let viteProcess: ChildProcessWithoutNullStreams | undefined
+let viteOutput = ''
 let fixtureRoot: string | undefined
 
 async function reserveAvailablePort(): Promise<number> {
@@ -41,8 +50,8 @@ function writeEntry(revision: string): void {
   }
 
   writeFileSync(
-    join(fixtureRoot, 'main.ts'),
-    `import ordersJson from './game/content/orders.json?raw'
+    join(fixtureRoot, 'game/main.ts'),
+    `import ordersJson from './content/orders.json?raw'
 
 const visits = Number(sessionStorage.getItem('vite-watch-visits') ?? '0') + 1
 sessionStorage.setItem('vite-watch-visits', String(visits))
@@ -53,12 +62,54 @@ document.body.dataset.revision = ${JSON.stringify(revision)}
   )
 }
 
+async function waitForVite(url: string): Promise<void> {
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    if (viteProcess?.exitCode !== null) {
+      throw new Error(`Vite exited before becoming ready:\n${viteOutput}`)
+    }
+
+    try {
+      const response = await fetch(url)
+      if (response.ok) {
+        return
+      }
+    } catch {
+      // The CLI is still starting.
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 50))
+  }
+
+  throw new Error(`Vite did not become ready:\n${viteOutput}`)
+}
+
+async function stopVite(): Promise<void> {
+  const runningProcess = viteProcess
+  viteProcess = undefined
+  if (runningProcess === undefined || runningProcess.exitCode !== null) {
+    return
+  }
+
+  const exited = new Promise<void>((resolveExit) => {
+    runningProcess.once('exit', () => resolveExit())
+  })
+  runningProcess.kill('SIGTERM')
+  await Promise.race([
+    exited,
+    new Promise<void>((resolveTimeout) => setTimeout(resolveTimeout, 2_000)),
+  ])
+  if (runningProcess.exitCode === null) {
+    runningProcess.kill('SIGKILL')
+    await exited
+  }
+}
+
 afterEach(async () => {
   await browser?.close()
   browser = undefined
 
-  await server?.close()
-  server = undefined
+  await stopVite()
+  viteOutput = ''
 
   if (fixtureRoot !== undefined) {
     rmSync(fixtureRoot, { recursive: true, force: true })
@@ -72,8 +123,13 @@ describe('Vite runtime content watch boundary', () => {
     async () => {
       fixtureRoot = mkdtempSync(join(tmpdir(), 'orchard-vite-watch-'))
       mkdirSync(join(fixtureRoot, 'game/content'), { recursive: true })
+      symlinkSync(
+        join(repositoryRoot, 'node_modules'),
+        join(fixtureRoot, 'node_modules'),
+        'dir',
+      )
       writeFileSync(
-        join(fixtureRoot, 'index.html'),
+        join(fixtureRoot, 'game/index.html'),
         '<!doctype html><html><body><script type="module" src="/main.ts"></script></body></html>',
       )
       writeFileSync(
@@ -82,26 +138,32 @@ describe('Vite runtime content watch boundary', () => {
       )
       writeEntry('initial')
 
+      const gameConfig = join(repositoryRoot, 'game/vite.config.ts')
+      if (existsSync(gameConfig)) {
+        copyFileSync(gameConfig, join(fixtureRoot, 'game/vite.config.ts'))
+      }
+
       const port = await reserveAvailablePort()
-
-      server = await createServer({
-        configFile: join(repositoryRoot, 'vite.config.ts'),
-        root: fixtureRoot,
-        logLevel: 'silent',
-        server: {
-          host: '127.0.0.1',
-          port,
-          strictPort: true,
+      const url = `http://127.0.0.1:${port}`
+      viteProcess = spawn(
+        join(repositoryRoot, 'node_modules/.bin/vite'),
+        ['game', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
+        {
+          cwd: fixtureRoot,
+          env: { ...process.env, NO_COLOR: '1' },
         },
+      )
+      viteProcess.stdout.on('data', (chunk: Buffer) => {
+        viteOutput += chunk.toString()
       })
-      await server.listen()
-
-      const url = server.resolvedUrls?.local[0]
-      expect(url).toBeDefined()
+      viteProcess.stderr.on('data', (chunk: Buffer) => {
+        viteOutput += chunk.toString()
+      })
+      await waitForVite(url)
 
       browser = await chromium.launch({ headless: true })
       const page = await browser.newPage()
-      await page.goto(url!)
+      await page.goto(url)
       await expect
         .poll(() => page.locator('body').getAttribute('data-visits'))
         .toBe('1')
