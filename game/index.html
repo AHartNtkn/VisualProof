@@ -114,6 +114,55 @@
         <button type="button" data-settings-back>Back</button>
       </section>
 
+      <section
+        class="order-editor"
+        data-order-editor
+        hidden
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="order-editor-title"
+      >
+        <header class="order-editor-heading">
+          <div>
+            <p class="eyebrow">Developer tools</p>
+            <h2 id="order-editor-title" data-order-editor-title>Edit order</h2>
+          </div>
+          <p>Catalog diagram</p>
+        </header>
+        <form class="order-editor-form" data-order-editor-form>
+          <div class="order-editor-fields">
+            <label>
+              <span>Order ID</span>
+              <input type="text" autocomplete="off" required data-order-editor-id>
+            </label>
+            <label>
+              <span>Prerequisite IDs</span>
+              <textarea rows="3" data-order-editor-prerequisites></textarea>
+              <small>Separate IDs with commas or new lines.</small>
+            </label>
+            <label>
+              <span>Reward</span>
+              <input type="number" min="0" step="1" required data-order-editor-reward>
+            </label>
+            <label>
+              <span>Formula <em>optional</em></span>
+              <textarea rows="4" spellcheck="false" data-order-editor-formula></textarea>
+              <small>A nonblank formula redraws the catalog diagram when saved.</small>
+            </label>
+          </div>
+          <figure class="order-editor-preview">
+            <canvas width="320" height="200" data-order-editor-preview></canvas>
+            <figcaption>The diagram is the saved order goal.</figcaption>
+          </figure>
+          <p class="order-editor-error" data-order-editor-error role="alert"></p>
+          <div class="order-editor-actions">
+            <button class="order-editor-delete" type="button" data-order-editor-delete>Delete order</button>
+            <button type="button" data-order-editor-cancel>Cancel</button>
+            <button class="order-editor-save" type="submit" data-order-editor-save>Save changes</button>
+          </div>
+        </form>
+      </section>
+
     </main>
     <script type="module" src="/main.ts"></script>
   </body>
