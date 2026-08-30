@@ -227,9 +227,14 @@ describe('developer order content', () => {
       }
     })
     expect(foreground).toEqual({ tag: 'BUTTON', surface: 'pause' })
+    const activeTagAfterReactivation = await browser.execute(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+      return document.activeElement?.tagName ?? null
+    })
+    expect(activeTagAfterReactivation).toBe('BODY')
     await browser.keys('Backspace')
     await expect($('[data-pause]')).toBeDisplayed()
-    await expect(resume).toBeFocused()
+    expect(await browser.execute(() => document.activeElement?.tagName ?? null)).toBe('BODY')
     await resume.click()
     await expect($('[data-pause]')).not.toBeDisplayed()
     await expect($('[data-order-editor]')).toBeDisplayed()

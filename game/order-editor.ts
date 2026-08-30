@@ -11,6 +11,7 @@ import { renderDiagramPreview } from './diagram-preview'
 
 export type OrderEditorActions = {
   readonly currentRevision: () => OrderCatalogRevision
+  readonly isForeground: () => boolean
   readonly save: (candidateRevision: OrderCatalogRevision) => Promise<void>
   readonly delete: (orderId: string) => Promise<void>
 }
@@ -241,11 +242,11 @@ export function mountOrderEditor(
   listen(remove, 'click', () => { void deleteOrder() })
   listen(cancel, 'click', hideIfIdle)
   listen(root.ownerDocument, 'keydown', ((event: KeyboardEvent): void => {
-    if (root.hidden) return
+    if (root.hidden || event.code !== 'Backspace' || !actions.isForeground()) return
     const activeElement = root.ownerDocument.activeElement
     const editorOwnsFocus = activeElement === root.ownerDocument.body
       || (activeElement !== null && root.contains(activeElement))
-    if (event.code !== 'Backspace' || !editorOwnsFocus || isEditableTextControl(activeElement)) return
+    if (!editorOwnsFocus || isEditableTextControl(activeElement)) return
     event.preventDefault()
     event.stopPropagation()
     hideIfIdle()

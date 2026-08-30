@@ -786,6 +786,7 @@ async function startWorld(world: GameWorld): Promise<void> {
     })
     nextEditor = mountOrderEditor(orderEditorRoot, {
       currentRevision: () => openingOrderCatalog.current,
+      isForeground: () => worldState?.isPaused === false,
       save: publishCatalog,
       delete: (orderId) => publishCatalog(deletionRevision(orderId)),
     })

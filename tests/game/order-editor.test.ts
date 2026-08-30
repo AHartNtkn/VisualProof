@@ -174,9 +174,11 @@ function harness(initialRevision = revisionWithRememberedFormula()) {
   const deleted: string[] = []
   let saveResult: Promise<void> = Promise.resolve()
   let deleteResult: Promise<void> = Promise.resolve()
+  let foreground = true
   const shownPreviews: DiagramSnapshot[] = []
   const controller = mountOrderEditor(root as unknown as HTMLElement, {
     currentRevision: () => live.current,
+    isForeground: () => foreground,
     save: (candidate) => {
       saved.push(candidate)
       return saveResult
@@ -191,6 +193,7 @@ function harness(initialRevision = revisionWithRememberedFormula()) {
     saved, deleted, shownPreviews, controller, live,
     setSaveResult: (result: Promise<void>) => { saveResult = result },
     setDeleteResult: (result: Promise<void>) => { deleteResult = result },
+    setForeground: (value: boolean) => { foreground = value },
   }
 }
 
@@ -491,6 +494,22 @@ describe('order editor controller', () => {
 
     gate.resolve()
     await settle()
+  })
+
+  it('leaves body Backspace to the foreground Pause surface without losing the draft', () => {
+    const h = harness()
+    h.controller.create()
+    h.formula.value = 'draft behind Pause'
+    h.setForeground(false)
+    h.documentTarget.activeElement = h.documentTarget.body
+
+    const backspace = key('Backspace')
+    h.documentTarget.body.dispatchEvent(backspace)
+
+    expect(h.controller.isOpen).toBe(true)
+    expect(h.formula.value).toBe('draft behind Pause')
+    expect(backspace.defaultPrevented).toBe(false)
+    expect(backspace.cancelBubble).toBe(false)
   })
 
   it('uses Backspace as editor step-back only outside editable text', () => {
