@@ -79,6 +79,98 @@ describe('TutorialSession', () => {
     expect(session.currentInstruction?.milestoneId).toBe('apply-double-cut')
   })
 
+  it('reconstructs early acquired-tool evidence from durable progress without repeating acquisition', () => {
+    // Catches a load replacing legitimate early acquisition evidence with only completed milestone IDs.
+    const completedBeforeSpawn = [
+      'move',
+      'look',
+      'ascend',
+      'descend',
+      'sprint',
+      'select-tree',
+      'move-orbit',
+      'exit-orbit',
+    ] as const
+    const beforeSave = new TutorialSession(false, completedBeforeSpawn)
+    expect(observe(beforeSave, { kind: 'tool-acquired', toolId: 'double-cut' })).toEqual([])
+
+    const reconstructed = new TutorialSession(false, beforeSave.completed)
+    expect(reconstructed.reconcileDurableProgress({
+      acquiredToolIds: new Set(['sprout-spawner', 'double-cut']),
+      orders: new Map([
+        ['blank-sprout', { kind: 'pending' }],
+        ['single-double-cut', { kind: 'pending' }],
+        ['irregular-double-cut-a', { kind: 'pending' }],
+        ['irregular-double-cut-b', { kind: 'pending' }],
+      ]),
+    }).newlyCompleted).toEqual([])
+
+    reconstructed.setEnabled(true)
+    const commit = observe(reconstructed, { kind: 'sprout-spawned', blankTreeCount: 3 })
+
+    expect(commit).toEqual(['spawn-two-sprouts', 'acquire-double-cut'])
+    expect(reconstructed.completed.has('acquire-double-cut')).toBe(true)
+  })
+
+  it('reconstructs completed-order evidence without inferring repeatable action milestones', () => {
+    // Catches load-time reconstruction either losing order completion or manufacturing camera/tool actions.
+    const completedThroughIteration = [
+      'move',
+      'look',
+      'ascend',
+      'descend',
+      'sprint',
+      'select-tree',
+      'move-orbit',
+      'exit-orbit',
+      'spawn-two-sprouts',
+      'acquire-double-cut',
+      'apply-double-cut',
+      'double-cut-explained',
+      'acquire-iteration',
+    ] as const
+    const beforeSave = new TutorialSession(false, completedThroughIteration)
+    expect(observe(beforeSave, { kind: 'order-completed', orderId: 'blank-sprout' })).toEqual([])
+    expect(observe(beforeSave, { kind: 'order-completed', orderId: 'single-double-cut' })).toEqual([])
+
+    const reconstructed = new TutorialSession(false, beforeSave.completed)
+    expect(reconstructed.reconcileDurableProgress({
+      acquiredToolIds: new Set(['sprout-spawner', 'double-cut', 'iteration']),
+      orders: new Map([
+        ['blank-sprout', { kind: 'completed' }],
+        ['single-double-cut', { kind: 'completed' }],
+        ['irregular-double-cut-a', { kind: 'pending' }],
+        ['irregular-double-cut-b', { kind: 'pending' }],
+      ]),
+    }).newlyCompleted).toEqual([])
+    expect(reconstructed.completed.has('duplicate-nonblank')).toBe(false)
+
+    reconstructed.setEnabled(true)
+    const commit = observe(reconstructed, { kind: 'nonblank-tree-duplicated' })
+
+    expect(commit).toEqual([
+      'duplicate-nonblank',
+      'complete-blank-order',
+      'complete-single-double-cut-order',
+    ])
+  })
+
+  it('does not infer repeatable tutorial actions from durable tools and orders alone', () => {
+    // Catches reconstruction treating unrelated durable state as proof of camera or tree actions.
+    const session = new TutorialSession(false)
+
+    expect(session.reconcileDurableProgress({
+      acquiredToolIds: new Set(['sprout-spawner', 'double-cut', 'iteration']),
+      orders: new Map([
+        ['blank-sprout', { kind: 'completed' }],
+        ['single-double-cut', { kind: 'completed' }],
+        ['irregular-double-cut-a', { kind: 'completed' }],
+        ['irregular-double-cut-b', { kind: 'completed' }],
+      ]),
+    }).newlyCompleted).toEqual([])
+    expect([...session.completed]).toEqual([])
+  })
+
   it('hides the card after the blank order while completing silent orders in either final-order sequence', () => {
     for (const [first, second, firstMilestone, secondMilestone] of [
       [

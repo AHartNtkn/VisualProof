@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { publishOrderCatalogRevision } from '../../game/order-catalog-publication'
+import { commitWorldShutdown } from '../../game/world-lifecycle'
 import {
   LiveOrderCatalog,
   decodeOrderCatalog,
@@ -38,6 +39,7 @@ function revisions() {
 function savePort(overrides: Partial<{
   acceptOrder(): Promise<void>
   completeOrder(): Promise<number>
+  acquireTool(): Promise<void>
 }> = {}) {
   return {
     updateTree: async () => 1,
@@ -48,7 +50,7 @@ function savePort(overrides: Partial<{
     completeOrder: overrides.completeOrder ?? (async () => 1),
     setTutorialsEnabled: async () => {},
     completeTutorialMilestone: async () => {},
-    acquireTool: async () => {},
+    acquireTool: overrides.acquireTool ?? (async () => {}),
   }
 }
 
@@ -219,5 +221,45 @@ describe('live order catalog publication transaction', () => {
 
     await expect(publishing).rejects.toThrow(/no longer active/i)
     expect(contentCalls).toBe(0)
+  })
+
+  it('keeps the active world generation usable when Main Menu shutdown fails', async () => {
+    // Catches a failed save barrier invalidating a world that Pause still allows the player to resume.
+    const { before, after } = revisions()
+    const catalog = new LiveOrderCatalog(before)
+    const orders = orderSession(initialOrderProgress(before.definitions), catalog)
+    let saveFails = true
+    let current = true
+    const writer = new SaveWriter('slot-a', savePort({
+      acquireTool: async () => {
+        if (saveFails) throw new Error('disk full')
+      },
+    }))
+    writer.acquireTool('double-cut')
+
+    await expect(commitWorldShutdown(
+      () => writer.dispose(),
+      () => { current = false },
+    )).rejects.toThrow('disk full')
+    expect(current).toBe(true)
+
+    saveFails = false
+    writer.retry()
+    await writer.flushChecked()
+    let contentCalls = 0
+    await publishOrderCatalogRevision({
+      slotId: 'slot-a',
+      candidate: after,
+      writer,
+      contentClient: { save: async () => { contentCalls += 1 } },
+      catalog,
+      orders,
+      renderer: { setPots: () => {} },
+      isCurrent: () => current,
+    })
+
+    expect(contentCalls).toBe(1)
+    expect(catalog.current).toBe(after)
+    await writer.dispose()
   })
 })

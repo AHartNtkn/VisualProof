@@ -1,3 +1,5 @@
+import type { GameProgress } from './model'
+
 export type TutorialMilestoneId =
   | 'move'
   | 'look'
@@ -130,11 +132,31 @@ export class TutorialSession {
   }
 
   public observe(event: TutorialEvent): TutorialCommit {
+    this.record(event)
+    return this.drainEvidence()
+  }
+
+  public reconcileDurableProgress(
+    progress: Pick<GameProgress, 'acquiredToolIds' | 'orders'>,
+  ): TutorialCommit {
+    for (const toolId of progress.acquiredToolIds) {
+      this.record({ kind: 'tool-acquired', toolId })
+    }
+    for (const [orderId, state] of progress.orders) {
+      if (state.kind === 'completed') this.record({ kind: 'order-completed', orderId })
+    }
+    return this.drainEvidence()
+  }
+
+  private record(event: TutorialEvent): void {
     for (const milestone of milestones) {
       if (!this.#completed.has(milestone.milestoneId) && milestone.matches(event)) {
         this.#evidenced.add(milestone.milestoneId)
       }
     }
+  }
+
+  private drainEvidence(): TutorialCommit {
     const newlyCompleted: TutorialMilestoneId[] = []
     let advanced = true
     while (advanced) {

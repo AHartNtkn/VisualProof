@@ -52,7 +52,9 @@ import { DeveloperPreferences } from './preferences'
 import { quitApplication } from './quit'
 import { mountSettings, type SettingsController } from './settings'
 import { mountTutorialCard, type TutorialCardController } from './tutorial-card'
+import { enqueueTutorialCommit } from './tutorial-progression'
 import { WorldStateController } from './world-state'
+import { commitWorldShutdown } from './world-lifecycle'
 import {
   acceptedPotsForRevision,
   publishOrderCatalogRevision,
@@ -189,9 +191,7 @@ function observeTutorial(event: TutorialEvent): void {
   const activeCard = tutorialCard
   if (activeTutorial === null || activeWriter === null || activeCard === null) return
   const commit = activeTutorial.observe(event)
-  for (const milestoneId of commit.newlyCompleted) {
-    activeWriter.completeTutorialMilestone(milestoneId)
-  }
+  enqueueTutorialCommit(activeWriter, commit)
   activeCard.render(commit.instruction, activeTutorial.enabled)
   mirrorRuntimeState()
   refreshVisibleLedger()
@@ -519,8 +519,10 @@ async function refreshSlots(): Promise<void> {
 async function returnToMainMenu(): Promise<void> {
   const activeWriter = writer
   if (worldState?.isPaused !== true || activeWriter === null) return
-  worldGeneration += 1
-  await activeWriter.dispose()
+  await commitWorldShutdown(
+    () => activeWriter.dispose(),
+    () => { worldGeneration += 1 },
+  )
   cancelAnimationFrame(animationFrame)
   animationFrame = 0
   releaseWriterStatus()
@@ -732,6 +734,8 @@ async function startWorld(world: GameWorld): Promise<void> {
     world.progress.completedTutorialMilestones,
   )
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
+  const reconstructedTutorial = nextTutorial.reconcileDurableProgress(world.progress)
+  enqueueTutorialCommit(nextWriter, reconstructedTutorial)
   let nextLedger: LedgerController | null = null
   let nextEditor: OrderEditorController | null = null
   let nextInput: WorldInput | null = null
