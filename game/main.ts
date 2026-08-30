@@ -14,12 +14,12 @@ import {
 } from '../src/game/camera'
 import type { GameWorld } from '../src/game/model'
 import {
-  ORDER_CATALOG,
-  STARTER_ORDER_ID,
+  openingOrderCatalog,
   type OrderProgress,
 } from '../src/game/orders/catalog'
 import { potPlacementAhead } from '../src/game/orders/placement'
 import {
+  initialOrderProgress,
   orderSession,
   publishOrderMutation,
   type OrderMutation,
@@ -69,10 +69,7 @@ const blankDiagram = new DiagramBuilder().build()
 const blankDiagramJson = JSON.stringify(diagramToJson(blankDiagram))
 const initialCameraRecord: CameraRecord = { x: 0, y: 1.7, z: 8, yaw: 0, pitch: -0.18 }
 const initialTree: TreeUpdate = { treeId: 'tree-0000', diagramJson: blankDiagramJson, x: 0, z: 0, yaw: 0 }
-const initialProgress: OrderProgress = {
-  reputation: 0,
-  orders: new Map([[STARTER_ORDER_ID, { kind: 'pending' }]]),
-}
+const initialProgress: OrderProgress = initialOrderProgress(openingOrderCatalog.current.definitions)
 const POT_SPAWN_DISTANCE = 6
 const NEUTRAL_MOTION: CameraMotion = {
   forward: 0, strafe: 0, vertical: 0, sprint: false, lookX: 0, lookY: 0,
@@ -98,7 +95,7 @@ let paused = false
 let releaseWriterStatus = (): void => {}
 
 function authoredGoalForOrder(orderId: string) {
-  return ORDER_CATALOG.find((entry) => entry.id === orderId)?.goal
+  return openingOrderCatalog.definition(orderId)?.goal
 }
 
 if (import.meta.env.VITE_WDIO === 'true') {
@@ -149,7 +146,10 @@ function mirrorToolState(activeTools: ToolState | null = tools): void {
 function mirrorOrderProgress(activeOrders: OrderSession | null = orders): void {
   if (activeOrders === null) return
   root.dataset['reputation'] = String(activeOrders.progress.reputation)
-  root.dataset['orderState'] = activeOrders.progress.orders.get(STARTER_ORDER_ID)?.kind ?? ''
+  const openingOrderId = openingOrderCatalog.current.definitions[0]?.id
+  root.dataset['orderState'] = openingOrderId === undefined
+    ? ''
+    : activeOrders.progress.orders.get(openingOrderId)?.kind ?? ''
 }
 
 function mirrorCatalog(): void {
@@ -537,7 +537,7 @@ async function startWorld(world: GameWorld): Promise<void> {
   })
   const nextCamera = initialCameraState(world.camera)
   const nextSession = gameSession(world.trees)
-  const nextOrders = orderSession(world.progress)
+  const nextOrders = orderSession(world.progress, openingOrderCatalog)
   const nextTools = new ToolState()
   const nextWriter = new SaveWriter(world.slot.id, saveClient)
   let nextCatalog: CatalogController | null = null
@@ -545,7 +545,7 @@ async function startWorld(world: GameWorld): Promise<void> {
   let nextReleaseWriterStatus = (): void => {}
   let freeSecondaryPress: { readonly x: number; readonly y: number } | null = null
   try {
-    nextCatalog = mountCatalog(catalogRoot, ORDER_CATALOG, {
+    nextCatalog = mountCatalog(catalogRoot, openingOrderCatalog, {
       accept: acceptCatalogOrder,
       abandon: abandonCatalogOrder,
     })
@@ -767,7 +767,7 @@ createForm.addEventListener('submit', (event) => {
     camera: initialCameraRecord,
     trees: [initialTree],
     reputation: initialProgress.reputation,
-    orders: orderRecordsFromProgress(initialProgress),
+    orders: orderRecordsFromProgress(initialProgress, openingOrderCatalog.current),
   }).then((created) => saveClient.load(created.slotId)))
 })
 saveRetry.addEventListener('click', () => writer?.retry())

@@ -193,8 +193,8 @@ import type { TreeChange } from '../../../src/game/session'
 import { gameSession, publishTreeChange } from '../../../src/game/session'
 import { SaveWriter } from '../../../src/game/save-writer'
 import { treeUpdateFromGameTree } from '../../../src/game/save-client'
-import { ORDER_CATALOG, STARTER_ORDER_ID, type OrderProgress } from '../../../src/game/orders/catalog'
-import { orderSession, publishOrderMutation } from '../../../src/game/orders/session'
+import { openingOrderCatalog, type OrderProgress } from '../../../src/game/orders/catalog'
+import { orderSession as createOrderSession, publishOrderMutation } from '../../../src/game/orders/session'
 import type { PotObject, PotRender } from '../../../src/game/render/pots'
 
 beforeEach(() => {
@@ -227,6 +227,9 @@ beforeEach(() => {
     }),
   })
 })
+
+const STARTER_ORDER_ID = 'blank-sprout'
+const orderSession = (progress: OrderProgress) => createOrderSession(progress, openingOrderCatalog)
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -280,7 +283,7 @@ function pointCameraAtBranch(world: ReturnType<typeof mountGameWorld>, tree: Gam
 }
 
 function starterPot(x = 0, z = -20): PotRender {
-  const goal = ORDER_CATALOG.find(({ id }) => id === STARTER_ORDER_ID)?.goal
+  const goal = openingOrderCatalog.definition(STARTER_ORDER_ID)?.goal
   if (goal === undefined) throw new Error('missing starter order goal')
   return {
     orderId: STARTER_ORDER_ID,
@@ -294,7 +297,7 @@ function pendingStarterOrder(): OrderProgress {
 }
 
 function authoredGoal(orderId: string) {
-  return ORDER_CATALOG.find(({ id }) => id === orderId)?.goal
+  return openingOrderCatalog.definition(orderId)?.goal
 }
 
 function mountOrderWorld(
@@ -964,7 +967,7 @@ describe('production game world', () => {
     )))
     const completion = accepted.planDelivery(STARTER_ORDER_ID, {
       name: 'starter source',
-      diagram: ORDER_CATALOG[0]!.goal.diagram,
+      diagram: openingOrderCatalog.definition(STARTER_ORDER_ID)!.goal.diagram,
     })
     const world = mountOrderWorld()
     world.setPots([starterPot()])

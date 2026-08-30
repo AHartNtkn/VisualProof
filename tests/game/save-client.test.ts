@@ -11,15 +11,18 @@ import {
   type SaveTransport,
   type TreeUpdate,
 } from '../../src/game/save-client'
-import type { OrderProgress } from '../../src/game/orders/catalog'
+import { openingOrderCatalog, type OrderProgress } from '../../src/game/orders/catalog'
+import { initialOrderProgress } from '../../src/game/orders/session'
 
 const diagramJson = '{"root":"r0","regions":{"r0":{"kind":"sheet"}},"nodes":{},"wires":{}}'
 
 const camera: CameraRecord = { x: 1, y: 1.7, z: 8, yaw: 0.2, pitch: -0.18 }
 const tree: TreeUpdate = { treeId: 'tree-a', diagramJson, x: 3, z: 4, yaw: 0.6 }
-const initialOrders: readonly OrderRecordWire[] = [
-  { orderId: 'starter-double-cut', state: 'pending', pot: null },
-]
+const openingRevision = openingOrderCatalog.current
+const initialOrders: readonly OrderRecordWire[] = orderRecordsFromProgress(
+  initialOrderProgress(openingRevision.definitions),
+  openingRevision,
+)
 const createState: CreateSlotState = {
   displayName: 'Second orchard', camera, trees: [tree], reputation: 0, orders: initialOrders,
 }
@@ -80,10 +83,10 @@ describe('save client transports', () => {
     await expect(client.updateTree('slot-a', tree)).resolves.toBe(9)
     await expect(client.insertTree('slot-a', tree)).resolves.toBe(10)
     await expect(client.updateCamera('slot-a', camera)).resolves.toBeUndefined()
-    await expect(client.acceptOrder('slot-a', 'starter-double-cut', { x: 2, z: -4, yaw: 0.25 }))
+    await expect(client.acceptOrder('slot-a', 'blank-sprout', { x: 2, z: -4, yaw: 0.25 }))
       .resolves.toBeUndefined()
-    await expect(client.abandonOrder('slot-a', 'starter-double-cut')).resolves.toBeUndefined()
-    await expect(client.completeOrder('slot-a', 'starter-double-cut', 1)).resolves.toBe(1)
+    await expect(client.abandonOrder('slot-a', 'blank-sprout')).resolves.toBeUndefined()
+    await expect(client.completeOrder('slot-a', 'blank-sprout', 1)).resolves.toBe(1)
 
     expect(requests).toEqual([
       { operation: 'list', input: {} },
@@ -92,9 +95,9 @@ describe('save client transports', () => {
       { operation: 'update-tree', input: { slotId: 'slot-a', update: tree } },
       { operation: 'insert-tree', input: { slotId: 'slot-a', update: tree } },
       { operation: 'update-camera', input: { slotId: 'slot-a', camera } },
-      { operation: 'accept-order', input: { slotId: 'slot-a', orderId: 'starter-double-cut', pot: { x: 2, z: -4, yaw: 0.25 } } },
-      { operation: 'abandon-order', input: { slotId: 'slot-a', orderId: 'starter-double-cut' } },
-      { operation: 'complete-order', input: { slotId: 'slot-a', orderId: 'starter-double-cut', reward: 1 } },
+      { operation: 'accept-order', input: { slotId: 'slot-a', orderId: 'blank-sprout', pot: { x: 2, z: -4, yaw: 0.25 } } },
+      { operation: 'abandon-order', input: { slotId: 'slot-a', orderId: 'blank-sprout' } },
+      { operation: 'complete-order', input: { slotId: 'slot-a', orderId: 'blank-sprout', reward: 1 } },
     ])
   })
 
@@ -107,7 +110,7 @@ describe('save client transports', () => {
       orders: new Map([['unknown-order', { kind: 'pending' }]]),
     }
 
-    expect(() => orderRecordsFromProgress(progress)).toThrow('progress orders must match the authored order catalog')
+    expect(() => orderRecordsFromProgress(progress, openingRevision)).toThrow('progress orders must match the authored order catalog')
     await expect(client.create({ ...createState, orders: [{ orderId: 'unknown-order', state: 'pending', pot: null }] }))
       .rejects.toThrow('create state orders must match the authored order catalog')
   })
@@ -128,25 +131,25 @@ describe('save client transports', () => {
       name: 'an accepted order without a pot',
       state: {
         ...createState,
-        orders: [{ orderId: 'starter-double-cut', state: 'accepted', pot: null }],
+        orders: [{ orderId: 'blank-sprout', state: 'accepted', pot: null }],
       },
-      error: "create state order 'starter-double-cut' accepted state requires a pot",
+      error: "create state order 'blank-sprout' accepted state requires a pot",
     },
     {
       name: 'a pending order with a pot',
       state: {
         ...createState,
-        orders: [{ orderId: 'starter-double-cut', state: 'pending', pot: { x: 2, z: -4, yaw: 0.25 } }],
+        orders: [{ orderId: 'blank-sprout', state: 'pending', pot: { x: 2, z: -4, yaw: 0.25 } }],
       },
-      error: "create state order 'starter-double-cut' pending state requires a null pot",
+      error: "create state order 'blank-sprout' pending state requires a null pot",
     },
     {
       name: 'a non-finite accepted pot coordinate',
       state: {
         ...createState,
-        orders: [{ orderId: 'starter-double-cut', state: 'accepted', pot: { x: Number.NaN, z: -4, yaw: 0.25 } }],
+        orders: [{ orderId: 'blank-sprout', state: 'accepted', pot: { x: Number.NaN, z: -4, yaw: 0.25 } }],
       },
-      error: "create state order 'starter-double-cut'.pot.x must be a finite number",
+      error: "create state order 'blank-sprout'.pot.x must be a finite number",
     },
   ])('rejects $name before transport', async ({ state, error }) => {
     let requestCount = 0
@@ -164,11 +167,17 @@ describe('save client transports', () => {
   it('emits order records in authored order with state-specific pots', () => {
     const progress: OrderProgress = {
       reputation: 3,
-      orders: new Map([['starter-double-cut', { kind: 'completed' }]]),
+      orders: new Map(openingRevision.definitions.map((definition) => [
+        definition.id,
+        definition.id === 'blank-sprout' ? { kind: 'completed' as const } : { kind: 'pending' as const },
+      ])),
     }
 
-    expect(orderRecordsFromProgress(progress)).toEqual([
-      { orderId: 'starter-double-cut', state: 'completed', pot: null },
+    expect(orderRecordsFromProgress(progress, openingRevision)).toEqual([
+      { orderId: 'blank-sprout', state: 'completed', pot: null },
+      { orderId: 'single-double-cut', state: 'pending', pot: null },
+      { orderId: 'irregular-double-cut-a', state: 'pending', pot: null },
+      { orderId: 'irregular-double-cut-b', state: 'pending', pot: null },
     ])
   })
 
@@ -187,9 +196,9 @@ describe('save client transports', () => {
     const client = createSaveClient(transport)
 
     await expect(client.insertTree('slot-a', tree)).rejects.toThrow('inserted tree revision must be a safe integer')
-    await expect(client.acceptOrder('slot-a', 'starter-double-cut', { x: 2, z: -4, yaw: 0.25 }))
+    await expect(client.acceptOrder('slot-a', 'blank-sprout', { x: 2, z: -4, yaw: 0.25 }))
       .rejects.toThrow('accepted order response must be null')
-    await expect(client.completeOrder('slot-a', 'starter-double-cut', 1))
+    await expect(client.completeOrder('slot-a', 'blank-sprout', 1))
       .rejects.toThrow('completed order reputation must be a nonnegative safe integer')
   })
 
@@ -202,7 +211,7 @@ describe('save client transports', () => {
       },
     })
 
-    await expect(client.completeOrder('slot-a', 'starter-double-cut', 1))
+    await expect(client.completeOrder('slot-a', 'blank-sprout', 1))
       .rejects.toThrow('completed order reputation must be a nonnegative safe integer')
   })
 
@@ -326,10 +335,10 @@ describe('save client transports', () => {
     await expect(client.updateTree('slot-a', tree)).resolves.toBe(9)
     await expect(client.insertTree('slot-a', tree)).resolves.toBe(10)
     await expect(client.updateCamera('slot-a', camera)).resolves.toBeUndefined()
-    await expect(client.acceptOrder('slot-a', 'starter-double-cut', { x: 2, z: -4, yaw: 0.25 }))
+    await expect(client.acceptOrder('slot-a', 'blank-sprout', { x: 2, z: -4, yaw: 0.25 }))
       .resolves.toBeUndefined()
-    await expect(client.abandonOrder('slot-a', 'starter-double-cut')).resolves.toBeUndefined()
-    await expect(client.completeOrder('slot-a', 'starter-double-cut', 1)).resolves.toBe(1)
+    await expect(client.abandonOrder('slot-a', 'blank-sprout')).resolves.toBeUndefined()
+    await expect(client.completeOrder('slot-a', 'blank-sprout', 1)).resolves.toBe(1)
 
     expect(requests.map(({ url, init }) => ({
       url,
@@ -347,7 +356,7 @@ describe('save client transports', () => {
         url: 'http://127.0.0.1:1421/__orchard_playtest/save/create',
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
-        body: '{"displayName":"Second orchard","camera":{"x":1,"y":1.7,"z":8,"yaw":0.2,"pitch":-0.18},"trees":[{"treeId":"tree-a","diagramJson":"{\\"root\\":\\"r0\\",\\"regions\\":{\\"r0\\":{\\"kind\\":\\"sheet\\"}},\\"nodes\\":{},\\"wires\\":{}}","x":3,"z":4,"yaw":0.6}],"reputation":0,"orders":[{"orderId":"starter-double-cut","state":"pending","pot":null}]}',
+        body: JSON.stringify(createState),
       },
       {
         url: 'http://127.0.0.1:1421/__orchard_playtest/save/load',
@@ -377,19 +386,19 @@ describe('save client transports', () => {
         url: 'http://127.0.0.1:1421/__orchard_playtest/save/accept-order',
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
-        body: '{"slotId":"slot-a","orderId":"starter-double-cut","pot":{"x":2,"z":-4,"yaw":0.25}}',
+        body: '{"slotId":"slot-a","orderId":"blank-sprout","pot":{"x":2,"z":-4,"yaw":0.25}}',
       },
       {
         url: 'http://127.0.0.1:1421/__orchard_playtest/save/abandon-order',
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
-        body: '{"slotId":"slot-a","orderId":"starter-double-cut"}',
+        body: '{"slotId":"slot-a","orderId":"blank-sprout"}',
       },
       {
         url: 'http://127.0.0.1:1421/__orchard_playtest/save/complete-order',
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-orchard-playtest-token': 'test-token' },
-        body: '{"slotId":"slot-a","orderId":"starter-double-cut","reward":1}',
+        body: '{"slotId":"slot-a","orderId":"blank-sprout","reward":1}',
       },
     ])
   })

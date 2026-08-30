@@ -103,6 +103,13 @@ describe('order session lifecycle', () => {
     expect(() => session.planAccept(orderId, acceptedPot)).toThrow(/pending/i)
   })
 
+  it('rejects acceptance until every prerequisite is completed', () => {
+    // Catches direct session acceptance bypassing the catalog's prerequisite gate.
+    const session = freshSession()
+
+    expect(() => session.planAccept('single-double-cut', acceptedPot)).toThrow(/prerequisites/i)
+  })
+
   it('returns an accepted order to pending when it is abandoned', () => {
     // Catches abandonment removing the order or leaving it accepted.
     const session = acceptStarter()

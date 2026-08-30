@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { mountCatalog, renderEquippedItem } from '../../game/catalog'
-import { ORDER_CATALOG, type OrderDefinition, type OrderProgress } from '../../src/game/orders/catalog'
+import { openingOrderCatalog, type OrderProgress, type OrderState } from '../../src/game/orders/catalog'
 
-const starterOrder = ORDER_CATALOG[0]!
+const starterOrder = openingOrderCatalog.definition('blank-sprout')!
 
 class TestElement extends EventTarget {
   public textContent = ''
@@ -71,11 +71,16 @@ function element(documentTarget: TestDocument, selector: string): TestElement {
 }
 
 function progress(state: 'pending' | 'accepted' | 'completed', reputation = 0): OrderProgress {
+  const orders = new Map<string, OrderState>(openingOrderCatalog.current.definitions.map((definition) => [
+    definition.id,
+    { kind: 'pending' as const },
+  ]))
+  orders.set(starterOrder.id, state === 'accepted'
+    ? { kind: 'accepted' as const, pot: { x: 2, z: -4, yaw: 0.25 } }
+    : { kind: state })
   return {
     reputation,
-    orders: new Map([[starterOrder.id, state === 'accepted'
-      ? { kind: 'accepted' as const, pot: { x: 2, z: -4, yaw: 0.25 } }
-      : { kind: state }]]),
+    orders,
   }
 }
 
@@ -101,7 +106,7 @@ function catalogHarness(): {
   root.append(pending, completed, reputation, orders)
   const accepts: Array<{ readonly orderId: string; readonly view: object }> = []
   const abandoned: string[] = []
-  const controller = mountCatalog(root as unknown as HTMLElement, ORDER_CATALOG as readonly OrderDefinition[], {
+  const controller = mountCatalog(root as unknown as HTMLElement, openingOrderCatalog, {
     accept: (orderId, view) => accepts.push({ orderId, view }),
     abandon: (orderId) => abandoned.push(orderId),
   })

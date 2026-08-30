@@ -1,6 +1,6 @@
 import type { DiagramSnapshot } from './diagram-snapshot'
 import { snapshotFromJson } from './diagram-snapshot'
-import { MAX_REPUTATION, ORDER_CATALOG, type OrderProgress, type OrderState } from './orders/catalog'
+import { MAX_REPUTATION, openingOrderCatalog, type OrderProgress, type OrderState } from './orders/catalog'
 
 export type CameraPose = {
   readonly position: { readonly x: number; readonly y: number; readonly z: number }
@@ -106,7 +106,7 @@ function decodeOrderProgress(reputationValue: unknown, ordersValue: unknown): Or
       default: throw new Error(`order '${orderId}' has unknown state '${state}'`)
     }
   }
-  const catalogIds = ORDER_CATALOG.map(({ id }) => id)
+  const catalogIds = openingOrderCatalog.current.definitions.map(({ id }) => id)
   if (orders.size !== catalogIds.length || catalogIds.some((id) => !orders.has(id))) {
     throw new Error('loaded slot.orders must match the authored order catalog')
   }

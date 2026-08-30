@@ -3,6 +3,7 @@ import { snapshotFromDiagram, snapshotFromJson } from '../../src/game/diagram-sn
 import type { DiagramSnapshot } from '../../src/game/diagram-snapshot'
 import { decodeLoadedSlot } from '../../src/game/model'
 import { decodeCreatedSlot, decodeSlotList } from '../../src/game/save-client'
+import { openingOrderCatalog } from '../../src/game/orders/catalog'
 import { diagramToJson } from '../../src/kernel/diagram'
 
 const diagramJson = JSON.stringify({
@@ -16,6 +17,16 @@ function treeWire(treeId: string, diagramKey: number) {
   return { treeId, diagramKey, x: 0, z: 0, yaw: 0 }
 }
 
+function openingOrders(blank: Record<string, unknown> = {
+  orderId: 'blank-sprout', state: 'pending', pot: null,
+}): readonly unknown[] {
+  return openingOrderCatalog.current.definitions.map((definition) =>
+    definition.id === 'blank-sprout'
+      ? blank
+      : { orderId: definition.id, state: 'pending', pot: null },
+  )
+}
+
 function slotWire(overrides: Record<string, unknown> = {}) {
   return {
     slotId: 'large-1',
@@ -25,7 +36,7 @@ function slotWire(overrides: Record<string, unknown> = {}) {
     trees: [treeWire('a', 7)],
     diagrams: [{ diagramKey: 7, diagramJson }],
     reputation: 0,
-    orders: [{ orderId: 'starter-double-cut', state: 'pending', pot: null }],
+    orders: openingOrders(),
     ...overrides,
   }
 }
@@ -55,7 +66,9 @@ describe('loaded game slot decoding', () => {
     })
     expect(loaded.progress).toEqual({
       reputation: 0,
-      orders: new Map([['starter-double-cut', { kind: 'pending' }]]),
+      orders: new Map(openingOrderCatalog.current.definitions.map((definition) => [
+        definition.id, { kind: 'pending' },
+      ])),
     })
   })
 
@@ -104,34 +117,34 @@ describe('loaded game slot decoding', () => {
     expect(() => decodeLoadedSlot(slotWire({ reputation: Number.MAX_SAFE_INTEGER + 1 })))
       .toThrow('loaded slot.reputation must be a nonnegative safe integer')
     expect(() => decodeLoadedSlot(slotWire({
-      orders: [{ orderId: 'starter-double-cut', state: 'accepted', pot: null }],
-    }))).toThrow("order 'starter-double-cut'.pot must be an object")
+      orders: openingOrders({ orderId: 'blank-sprout', state: 'accepted', pot: null }),
+    }))).toThrow("order 'blank-sprout'.pot must be an object")
     expect(() => decodeLoadedSlot(slotWire({
-      orders: [{
-        orderId: 'starter-double-cut', state: 'accepted',
+      orders: openingOrders({
+        orderId: 'blank-sprout', state: 'accepted',
         pot: { x: Number.NaN, z: -4, yaw: 0.25 },
-      }],
-    }))).toThrow("order 'starter-double-cut'.pot.x must be a finite number")
+      }),
+    }))).toThrow("order 'blank-sprout'.pot.x must be a finite number")
     expect(() => decodeLoadedSlot(slotWire({
-      orders: [{ orderId: 'starter-double-cut', state: 'pending', pot: { x: 2, z: -4, yaw: 0.25 } }],
-    }))).toThrow("order 'starter-double-cut' pending state requires a null pot")
+      orders: openingOrders({ orderId: 'blank-sprout', state: 'pending', pot: { x: 2, z: -4, yaw: 0.25 } }),
+    }))).toThrow("order 'blank-sprout' pending state requires a null pot")
     expect(() => decodeLoadedSlot(slotWire({
-      orders: [{ orderId: 'starter-double-cut', state: 'completed', pot: { x: 2, z: -4, yaw: 0.25 } }],
-    }))).toThrow("order 'starter-double-cut' completed state requires a null pot")
+      orders: openingOrders({ orderId: 'blank-sprout', state: 'completed', pot: { x: 2, z: -4, yaw: 0.25 } }),
+    }))).toThrow("order 'blank-sprout' completed state requires a null pot")
     expect(() => decodeLoadedSlot(slotWire({
-      orders: [{ orderId: 'starter-double-cut', state: 'pending', pot: null, reward: 1 }],
+      orders: openingOrders({ orderId: 'blank-sprout', state: 'pending', pot: null, reward: 1 }),
     }))).toThrow("order has unknown field 'reward'")
   })
 
   it('decodes an accepted saved order with its finite pot placement', () => {
     const world = decodeLoadedSlot(slotWire({
-      orders: [{
-        orderId: 'starter-double-cut', state: 'accepted',
+      orders: openingOrders({
+        orderId: 'blank-sprout', state: 'accepted',
         pot: { x: 2, z: -4, yaw: 0.25 },
-      }],
+      }),
     }))
 
-    expect(world.progress.orders.get('starter-double-cut')).toEqual({
+    expect(world.progress.orders.get('blank-sprout')).toEqual({
       kind: 'accepted', pot: { x: 2, z: -4, yaw: 0.25 },
     })
   })

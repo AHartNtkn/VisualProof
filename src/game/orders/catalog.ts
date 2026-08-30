@@ -26,8 +26,6 @@ export type OrderDefinition = {
   readonly reward: number
   readonly goal: DiagramSnapshot
   readonly formula?: string
-  readonly title: string
-  readonly description: string
 }
 
 export type OrderCatalogRevision = {
@@ -37,6 +35,50 @@ export type OrderCatalogRevision = {
 
 export const MAX_REPUTATION = Number.MAX_SAFE_INTEGER
 const decodedRevisions = new WeakSet<OrderCatalogRevision>()
+
+class ImmutableOrderLookup implements ReadonlyMap<OrderId, OrderDefinition> {
+  readonly #entries: ReadonlyMap<OrderId, OrderDefinition>
+
+  public constructor(definitions: readonly OrderDefinition[]) {
+    this.#entries = new Map(definitions.map((definition) => [definition.id, definition]))
+    Object.freeze(this)
+  }
+
+  public get size(): number {
+    return this.#entries.size
+  }
+
+  public get(key: OrderId): OrderDefinition | undefined {
+    return this.#entries.get(key)
+  }
+
+  public has(key: OrderId): boolean {
+    return this.#entries.has(key)
+  }
+
+  public entries(): MapIterator<[OrderId, OrderDefinition]> {
+    return this.#entries.entries()
+  }
+
+  public keys(): MapIterator<OrderId> {
+    return this.#entries.keys()
+  }
+
+  public values(): MapIterator<OrderDefinition> {
+    return this.#entries.values()
+  }
+
+  public forEach(
+    callbackfn: (value: OrderDefinition, key: OrderId, map: ReadonlyMap<OrderId, OrderDefinition>) => void,
+    thisArg?: unknown,
+  ): void {
+    this.#entries.forEach((value, key) => callbackfn.call(thisArg, value, key, this))
+  }
+
+  public [Symbol.iterator](): MapIterator<[OrderId, OrderDefinition]> {
+    return this.entries()
+  }
+}
 
 function record(value: unknown, what: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -97,8 +139,6 @@ function decodeDefinition(value: unknown, index: number): OrderDefinition {
       prerequisites: prerequisites(raw['prerequisites'], `order ${index}.prerequisites`),
       reward: reward(raw['reward'], `order ${index}.reward`),
       goal,
-      title: orderId(raw['id'], `order ${index}.id`),
-      description: '',
     }
     : {
       id: orderId(raw['id'], `order ${index}.id`),
@@ -106,8 +146,6 @@ function decodeDefinition(value: unknown, index: number): OrderDefinition {
       reward: reward(raw['reward'], `order ${index}.reward`),
       goal,
       formula: raw['formula'],
-      title: orderId(raw['id'], `order ${index}.id`),
-      description: raw['formula'],
     }
   return Object.freeze(definition)
 }
@@ -149,11 +187,9 @@ export function decodeOrderCatalog(value: unknown): OrderCatalogRevision {
   if (!Array.isArray(value)) throw new Error('order catalog must be an array')
   const definitions = value.map(decodeDefinition)
   validateOrderCatalog(definitions)
-  const byId = new Map<OrderId, OrderDefinition>()
-  for (const definition of definitions) byId.set(definition.id, definition)
   const revision = Object.freeze({
     definitions: Object.freeze(definitions),
-    byId,
+    byId: new ImmutableOrderLookup(definitions),
   })
   decodedRevisions.add(revision)
   return revision
@@ -198,21 +234,12 @@ function decodeOpeningOrderCatalog(): OrderCatalogRevision {
 
 export const openingOrderCatalog = new LiveOrderCatalog(decodeOpeningOrderCatalog())
 
-export const STARTER_ORDER_ID = 'blank-sprout'
-
-export const ORDER_CATALOG: readonly OrderDefinition[] = Object.freeze(
-  openingOrderCatalog.current.definitions.map((definition) => Object.freeze({
-    ...definition,
-    title: definition.id,
-    description: definition.formula ?? '',
-  })),
-)
-
 export function availableOrderIds(
   progress: OrderProgress,
+  revision: OrderCatalogRevision,
   orderAllowed: (orderId: string) => boolean,
 ): readonly OrderId[] {
-  return openingOrderCatalog.current.definitions.flatMap((definition) => {
+  return revision.definitions.flatMap((definition) => {
     const state = progress.orders.get(definition.id)
     if (state?.kind !== 'pending' || !orderAllowed(definition.id)) return []
     const unlocked = definition.prerequisites.every((id) => progress.orders.get(id)?.kind === 'completed')

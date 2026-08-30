@@ -1,4 +1,4 @@
-import type { OrderDefinition, OrderProgress } from '../src/game/orders/catalog'
+import { availableOrderIds, type LiveOrderCatalog, type OrderProgress } from '../src/game/orders/catalog'
 import type { EquippedItem } from '../src/game/tools'
 
 export type CatalogView = {
@@ -36,7 +36,7 @@ export function renderEquippedItem(root: HTMLElement, item: EquippedItem, cuttin
 
 export function mountCatalog(
   root: HTMLElement,
-  definitions: readonly OrderDefinition[],
+  catalog: LiveOrderCatalog,
   actions: CatalogActions,
 ): CatalogController {
   const pending = required<HTMLButtonElement>(root, '[data-catalog-pending]')
@@ -68,16 +68,16 @@ export function mountCatalog(
     completed.ariaPressed = String(tab === 'completed')
     reputation.textContent = `Reputation: ${current.reputation}`
     const cards: HTMLElement[] = []
-    for (const definition of definitions) {
+    const available = new Set(availableOrderIds(current, catalog.current, () => true))
+    for (const definition of catalog.current.definitions) {
       const state = current.orders.get(definition.id)
       if (state === undefined) continue
       if ((tab === 'completed') !== (state.kind === 'completed')) continue
+      if (tab === 'pending' && state.kind === 'pending' && !available.has(definition.id)) continue
       const card = root.ownerDocument.createElement('article')
       const title = root.ownerDocument.createElement('strong')
-      const description = root.ownerDocument.createElement('p')
-      title.textContent = definition.title
-      description.textContent = definition.description
-      card.append(title, description)
+      title.textContent = definition.id
+      card.append(title)
       if (state.kind === 'pending') {
         const accept = root.ownerDocument.createElement('button')
         accept.type = 'button'

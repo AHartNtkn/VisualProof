@@ -131,8 +131,8 @@ describe('opening order catalog', () => {
   it('offers only allowed pending orders whose prerequisites are complete', () => {
     // Catches catalog availability exposing locked, accepted, or completed orders.
     const progress = initialOrderProgress(openingOrderCatalog.current.definitions)
-    expect(availableOrderIds(progress, () => true)).toEqual(['blank-sprout'])
-    expect(availableOrderIds(progress, (id) => id !== 'blank-sprout')).toEqual([])
+    expect(availableOrderIds(progress, openingOrderCatalog.current, () => true)).toEqual(['blank-sprout'])
+    expect(availableOrderIds(progress, openingOrderCatalog.current, (id) => id !== 'blank-sprout')).toEqual([])
 
     const accepted = {
       ...progress,
@@ -141,13 +141,21 @@ describe('opening order catalog', () => {
         pot: { x: 0, z: 0, yaw: 0 },
       }),
     }
-    expect(availableOrderIds(accepted, () => true)).toEqual([])
+    expect(availableOrderIds(accepted, openingOrderCatalog.current, () => true)).toEqual([])
 
     const completed = {
       ...progress,
       orders: new Map(progress.orders).set('blank-sprout', { kind: 'completed' as const }),
     }
-    expect(availableOrderIds(completed, () => true)).toEqual(['single-double-cut'])
+    expect(availableOrderIds(completed, openingOrderCatalog.current, () => true)).toEqual(['single-double-cut'])
+  })
+
+  it('does not expose a mutable map through a decoded revision', () => {
+    // Catches a ReadonlyMap that is only compile-time readonly and can be mutated by a cast.
+    const revision = decodeOrderCatalog(openingOrderContent)
+
+    expect(() => (revision.byId as unknown as Map<string, unknown>).set('forged', {})).toThrow()
+    expect(revision.byId.has('forged')).toBe(false)
   })
 
   it('notifies catalog subscribers only when a fully decoded revision is published', () => {

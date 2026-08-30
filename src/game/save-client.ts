@@ -2,7 +2,13 @@ import { invoke } from '@tauri-apps/api/core'
 import { decodeLoadedSlot } from './model'
 import type { GameWorld } from './model'
 import type { GameTree } from './model'
-import { MAX_REPUTATION, ORDER_CATALOG, type OrderProgress, type PotPlacement } from './orders/catalog'
+import {
+  MAX_REPUTATION,
+  openingOrderCatalog,
+  type OrderCatalogRevision,
+  type OrderProgress,
+  type PotPlacement,
+} from './orders/catalog'
 
 export type { PotPlacement } from './orders/catalog'
 
@@ -152,8 +158,12 @@ export function decodeCreatedSlot(value: unknown): SlotListEntry {
   return decodeSlotEntry(value, 'created slot')
 }
 
-function assertCatalogOrderIds(orderIds: Iterable<string>, what: string): void {
-  const expected = ORDER_CATALOG.map(({ id }) => id)
+function assertCatalogOrderIds(
+  orderIds: Iterable<string>,
+  revision: OrderCatalogRevision,
+  what: string,
+): void {
+  const expected = revision.definitions.map(({ id }) => id)
   const actual = new Set<string>()
   for (const id of orderIds) {
     if (actual.has(id)) throw new Error(`${what} must match the authored order catalog`)
@@ -206,12 +216,15 @@ function validateCreateOrder(value: unknown): string {
 
 function validateCreateState(state: CreateSlotState): void {
   nonnegativeSafeInteger(state.reputation, 'create state.reputation')
-  assertCatalogOrderIds(state.orders.map(validateCreateOrder), 'create state orders')
+  assertCatalogOrderIds(state.orders.map(validateCreateOrder), openingOrderCatalog.current, 'create state orders')
 }
 
-export function orderRecordsFromProgress(progress: OrderProgress): readonly OrderRecordWire[] {
-  assertCatalogOrderIds(progress.orders.keys(), 'progress orders')
-  return ORDER_CATALOG.map(({ id }) => {
+export function orderRecordsFromProgress(
+  progress: OrderProgress,
+  revision: OrderCatalogRevision,
+): readonly OrderRecordWire[] {
+  assertCatalogOrderIds(progress.orders.keys(), revision, 'progress orders')
+  return revision.definitions.map(({ id }) => {
     const order = progress.orders.get(id)!
     switch (order.kind) {
       case 'pending': return { orderId: id, state: 'pending', pot: null }

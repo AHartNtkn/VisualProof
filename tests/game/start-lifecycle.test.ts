@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { decodeLoadedSlot, type GameWorld } from '../../src/game/model'
+import { openingOrderCatalog } from '../../src/game/orders/catalog'
+import { initialOrderProgress } from '../../src/game/orders/session'
 import { StartLifecycle, type StartFailure } from '../../src/game/start-lifecycle'
 
 const world: GameWorld = {
   slot: { id: 'slot-a', name: 'Slot A', updatedAtMs: 1 },
   camera: { position: { x: 0, y: 1.7, z: 8 }, yaw: 0, pitch: -0.18 },
   trees: new Map(),
-  progress: { reputation: 0, orders: new Map([['starter-double-cut', { kind: 'pending' }]]) },
+  progress: initialOrderProgress(openingOrderCatalog.current.definitions),
 }
 
 function deferred<T>(): {
@@ -106,7 +108,9 @@ describe('game start lifecycle', () => {
       diagrams: [{ diagramKey: 1, diagramJson: '{}' }],
       trees: [{ treeId: 'tree-a', diagramKey: 1, x: 0, z: 0, yaw: 0 }],
       reputation: 0,
-      orders: [{ orderId: 'starter-double-cut', state: 'pending', pot: null }],
+      orders: openingOrderCatalog.current.definitions.map((definition) => ({
+        orderId: definition.id, state: 'pending', pot: null,
+      })),
     }))
 
     expect(opened).toEqual([])

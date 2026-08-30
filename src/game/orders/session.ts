@@ -3,7 +3,6 @@ import { citeLibraryProposition, type LibraryProposition } from '../../kernel/pr
 import { DiagramBuilder } from '../../kernel/diagram/builder'
 import {
   MAX_REPUTATION,
-  openingOrderCatalog,
   type LiveOrderCatalog,
   type OrderCatalogRevision,
   type OrderDefinition,
@@ -108,6 +107,7 @@ function isValidMutation(catalog: LiveOrderCatalog, mutation: OrderMutation): bo
   switch (mutation.kind) {
     case 'accept':
       return state.kind === 'pending'
+        && prerequisitesComplete(mutation.before, definition)
         && preservesOtherOrders(
           mutation.before,
           mutation.after,
@@ -135,6 +135,10 @@ function isValidMutation(catalog: LiveOrderCatalog, mutation: OrderMutation): bo
           mutation.before.reputation + definition.reward,
         )
   }
+}
+
+function prerequisitesComplete(progress: OrderProgress, definition: OrderDefinition): boolean {
+  return definition.prerequisites.every((id) => progress.orders.get(id)?.kind === 'completed')
 }
 
 export function initialOrderProgress(catalog: readonly OrderDefinition[]): OrderProgress {
@@ -176,9 +180,12 @@ export class OrderSession {
   }
 
   public planAccept(orderId: string, pot: PotPlacement): OrderMutation {
-    definitionFor(this.catalog, orderId)
+    const definition = definitionFor(this.catalog, orderId)
     const state = stateFor(this.progress, orderId)
     if (state.kind !== 'pending') throw new OrderError(`order '${orderId}' must be pending to accept`)
+    if (!prerequisitesComplete(this.progress, definition)) {
+      throw new OrderError(`order '${orderId}' prerequisites are incomplete`)
+    }
     if (![pot.x, pot.z, pot.yaw].every(Number.isFinite)) {
       throw new OrderError('order pot placement must use finite coordinates')
     }
@@ -254,7 +261,7 @@ export class OrderSession {
   }
 }
 
-export function orderSession(progress: OrderProgress, catalog: LiveOrderCatalog = openingOrderCatalog): OrderSession {
+export function orderSession(progress: OrderProgress, catalog: LiveOrderCatalog): OrderSession {
   return new OrderSession(progress, catalog)
 }
 
