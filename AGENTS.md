@@ -1,5 +1,9 @@
 # Repository Agent Instructions
 
+## Provisional implementation
+
+Treat new implementation work as a provisional spike until the requested behavior works and the changed dependency path has then been reviewed with the `simplify-code-tarpit` skill and any other standards genuinely implicated by the change. If that review finds poor architecture or unjustified accidental complexity, replace the spike using what it revealed; keep the implementation only after it passes this review. Passing tests alone does not make a spike permanent.
+
 ## Direct in-app validation
 
 A user-facing feature is not complete until the agent has directly exercised it in the running application through the same user interface and controls available to a person using the product.
