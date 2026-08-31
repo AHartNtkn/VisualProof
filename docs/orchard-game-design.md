@@ -144,10 +144,24 @@ opens a new-order editor. The editor changes prerequisites, reward, and optional
 formula input; the stored diagram remains runtime authority and is previewed
 before publication. Existing IDs are read-only, new orders begin with a blank
 goal, and Delete removes the order's lifecycle entry and active pot. A successful
-save writes `game/content/orders.json` before publishing the revision to the
-ledger, accepted-pot goals, and delivery validation. Invalid formulas, invalid
-prerequisite graphs, and persistence failures leave both the running catalog and
-checked-in content unchanged.
+save writes `game/content/orders.json` before publishing the catalog revision.
+Accepted order instances keep the goal they had when accepted; catalog edits
+affect later views and acceptances. Invalid formulas, invalid prerequisite graphs,
+and persistence failures leave both the running catalog and checked-in content
+unchanged.
+
+Developer mode also makes the visible tutorial card and tool tiles editable.
+The tutorial editor changes the current instruction text. The tool editor changes
+the selected tool's name and description, and both Tools views show those
+descriptions. Successful edits update the running interface and checked-in game
+content. `Backspace` closes a foreground editor when text does not own the key;
+`Escape` opens Pause and preserves the editor draft. Tutorial instructions and
+tool descriptions explain the controls needed to use them.
+
+The game must not crash during play. Developer tooling is a convenience for
+changing game content, not a production content-management system. It must not
+acquire content histories, save migrations, concurrent-edit coordination, upgrade
+merging, or automated recovery unless requested game behavior needs them.
 
 **Bootstrap corpus.** The `game/cursebreaker` branch (worktree `.worktrees/cursebreaker-domain`) holds 121 entirely propositional puzzles in the kernel's own diagram JSON (`content/puzzles/`), each with a machine-checked backward solution (`content/validation/`), a prerequisite DAG (`content/progression/core.json`), and a hint-intervention system (`content/guidance/`). The diagram-JSON loader files are byte-identical to main, so the puzzles load unchanged. Those puzzles are stated in backward orientation — the stored diagram is the goal, which is exactly what a pot hologram needs; the backward solutions flip to forward solvability certificates under the shared-implementation polarity-flip law. This corpus is interim content for implementation and will eventually be replaced by the propositional enumeration pipeline. Nine of the puzzles already exercise lemma citation.
 
@@ -163,7 +177,10 @@ checked-in content unchanged.
   visibility are transient. The save format always has one exact current shape:
   no format versions, migrations, legacy readers, or fallback parsing. Runtime
   worlds are constructed only by loading ordinary saves; developer and stress
-  fixtures use the same persistence authority.
+  fixtures use the same persistence authority. Developer content edits may make
+  existing saves invalid. Saves do not record a content version, and the engine
+  does not migrate or repair saves after content changes. Recovery is deleting
+  or manually editing the affected save.
 - **Scale:** the shared `src/view3d/transition.ts` track owns growth timing, interruption, and sampling. Each changing tree owns one track independently, so several trees may animate concurrently. The established stress workload has proven static rendering, LOD, and culling to 2000 trees; generated game saves preserve that workload against the production renderer. Every tree uses the same kernel-backed model and can take the temporary per-frame render role when it changes.
 - **Renderer authority:** `game/` is the sole 3D world frontend. Performance workloads are ordinary generated game saves, and stress tests exercise the same production renderer used by play.
 
