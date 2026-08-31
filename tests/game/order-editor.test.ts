@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { attachWorldInput } from '../../game/input'
-import { mountOrderEditor } from '../../game/order-editor'
+import { mountOrderEditor, type OrderEditorActions } from '../../game/order-editor'
 import {
   decodeOrderCatalog,
   LiveOrderCatalog,
@@ -22,9 +22,12 @@ class TestElement extends EventTarget {
   public width = 320
   public height = 200
   public focusCalls = 0
+  public selectionStart = 0
+  public selectionEnd = 0
   public parent: EventTarget | null = null
   public readonly dataset: Record<string, string> = {}
   public readonly children: TestElement[] = []
+  public readonly attributes = new Map<string, string>()
 
   public constructor(
     public readonly ownerDocument: TestDocument,
@@ -51,6 +54,13 @@ class TestElement extends EventTarget {
     this.children.push(...children)
   }
 
+  public remove(): void {
+    if (!(this.parent instanceof TestElement)) return
+    const index = this.parent.children.indexOf(this)
+    if (index >= 0) this.parent.children.splice(index, 1)
+    this.parent = null
+  }
+
   public contains(target: EventTarget | null): boolean {
     return target === this || this.children.some((child) => child.contains(target))
   }
@@ -58,6 +68,19 @@ class TestElement extends EventTarget {
   public focus(): void {
     this.focusCalls += 1
     this.ownerDocument.activeElement = this
+  }
+
+  public setSelectionRange(start: number, end: number): void {
+    this.selectionStart = start
+    this.selectionEnd = end
+  }
+
+  public setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value)
+  }
+
+  public getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null
   }
 
   public getContext(kind: string): CanvasRenderingContext2D | null {
@@ -160,12 +183,13 @@ function harness(initialRevision = revisionWithRememberedFormula()) {
   const prerequisites = element(documentTarget, 'orderEditorPrerequisites', 'textarea')
   const reward = element(documentTarget, 'orderEditorReward', 'input')
   const formula = element(documentTarget, 'orderEditorFormula', 'textarea')
+  const formulaSymbols = element(documentTarget, 'orderEditorFormulaSymbols')
   const preview = element(documentTarget, 'orderEditorPreview', 'canvas')
   const error = element(documentTarget, 'orderEditorError', 'p')
   const remove = element(documentTarget, 'orderEditorDelete', 'button')
   const cancel = element(documentTarget, 'orderEditorCancel', 'button')
   const save = element(documentTarget, 'orderEditorSave', 'button')
-  form.append(id, prerequisites, reward, formula, preview, error, remove, cancel, save)
+  form.append(id, prerequisites, reward, formula, formulaSymbols, preview, error, remove, cancel, save)
   root.append(title, form)
   documentTarget.body.append(root)
 
@@ -176,7 +200,7 @@ function harness(initialRevision = revisionWithRememberedFormula()) {
   let deleteResult: Promise<void> = Promise.resolve()
   let foreground = true
   const shownPreviews: DiagramSnapshot[] = []
-  const controller = mountOrderEditor(root as unknown as HTMLElement, {
+  const actions: OrderEditorActions = {
     currentRevision: () => live.current,
     isForeground: () => foreground,
     save: (candidate) => {
@@ -187,13 +211,16 @@ function harness(initialRevision = revisionWithRememberedFormula()) {
       deleted.push(orderId)
       return deleteResult
     },
-  }, { show: (snapshot) => { shownPreviews.push(snapshot) } })
+  }
+  const previewPort = { show: (snapshot: DiagramSnapshot) => { shownPreviews.push(snapshot) } }
+  const controller = mountOrderEditor(root as unknown as HTMLElement, actions, previewPort)
   return {
-    windowTarget, documentTarget, root, title, form, id, prerequisites, reward, formula, preview, error, remove, cancel, save,
+    windowTarget, documentTarget, root, title, form, id, prerequisites, reward, formula, formulaSymbols, preview, error, remove, cancel, save,
     saved, deleted, shownPreviews, controller, live,
     setSaveResult: (result: Promise<void>) => { saveResult = result },
     setDeleteResult: (result: Promise<void>) => { deleteResult = result },
     setForeground: (value: boolean) => { foreground = value },
+    remount: () => mountOrderEditor(root as unknown as HTMLElement, actions, previewPort),
   }
 }
 
@@ -237,6 +264,51 @@ async function settle(): Promise<void> {
 }
 
 describe('order editor controller', () => {
+  it('puts every formula symbol below the dev formula source and inserts at the selection', () => {
+    const h = harness()
+
+    expect(h.formulaSymbols.getAttribute('role')).toBe('group')
+    expect(h.formulaSymbols.getAttribute('aria-label')).toBe('Formula symbols')
+    expect(h.formulaSymbols.children.map((button) => button.textContent))
+      .toEqual(['∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔', 'λ', '⊤'])
+    expect(h.formulaSymbols.children.every((button) => button.type === 'button')).toBe(true)
+    expect(h.formulaSymbols.children.map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Universal quantifier',
+      'Existential quantifier',
+      'Negation',
+      'Conjunction',
+      'Disjunction',
+      'Implication',
+      'Alternative implication',
+      'Biconditional',
+      'Lambda abstraction',
+      'True (empty sheet)',
+    ])
+
+    h.controller.create()
+    h.formula.value = 'AB'
+    h.formula.setSelectionRange(1, 2)
+    click(h.formulaSymbols.children[9]!)
+
+    expect(h.formula.value).toBe('A⊤')
+    expect(h.formula.selectionStart).toBe(2)
+    expect(h.formula.selectionEnd).toBe(2)
+    expect(h.documentTarget.activeElement).toBe(h.formula)
+  })
+
+  it('replaces its owned formula buttons when the persistent editor root is remounted', () => {
+    const h = harness()
+    expect(h.formulaSymbols.children).toHaveLength(10)
+
+    h.controller.dispose()
+    const remounted = h.remount()
+
+    expect(h.formulaSymbols.children).toHaveLength(10)
+    expect(h.formulaSymbols.children.map((button) => button.textContent))
+      .toEqual(['∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔', 'λ', '⊤'])
+    remounted.dispose()
+  })
+
   it('shows an existing authoritative definition without making its ID editable', () => {
     // Catches edit mode inventing title authority, losing metadata, or deriving preview from formula text.
     const h = harness()

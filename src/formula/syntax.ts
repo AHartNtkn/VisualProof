@@ -18,6 +18,7 @@ export type FormulaUnicodeTokenKind =
   | 'implies'
   | 'iff'
   | 'lambda'
+  | 'true'
 
 export type FormulaUnicodeSymbol = {
   readonly symbol: string
@@ -35,6 +36,7 @@ export const FORMULA_UNICODE_SYMBOLS = Object.freeze([
   { symbol: '⇒', label: 'Alternative implication', token: 'implies' },
   { symbol: '↔', label: 'Biconditional', token: 'iff' },
   { symbol: 'λ', label: 'Lambda abstraction', token: 'lambda' },
+  { symbol: '⊤', label: 'True (empty sheet)', token: 'true' },
 ] as const satisfies readonly FormulaUnicodeSymbol[])
 
 export type FormulaOperand =
@@ -42,6 +44,7 @@ export type FormulaOperand =
   | { readonly kind: 'term'; readonly parsed: ParsedTerm; readonly span: SourceSpan }
 
 export type Formula =
+  | { readonly kind: 'true'; readonly span: SourceSpan }
   | { readonly kind: 'atom'; readonly name: string; readonly args: readonly FormulaOperand[]; readonly span: SourceSpan }
   | { readonly kind: 'equality'; readonly operands: readonly [FormulaOperand, FormulaOperand, ...FormulaOperand[]]; readonly span: SourceSpan }
   | { readonly kind: 'not'; readonly body: Formula; readonly span: SourceSpan }

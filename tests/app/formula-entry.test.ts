@@ -33,7 +33,7 @@ describe('mountFormulaEntry', () => {
     expect(symbols.getAttribute('role')).toBe('group')
     expect(symbols.getAttribute('aria-label')).toBe('Formula symbols')
     expect(symbols.children.map((button) => button.textContent))
-      .toEqual(['∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔', 'λ'])
+      .toEqual(['∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔', 'λ', '⊤'])
     expect(symbols.children.every((button) => button.type === 'button')).toBe(true)
     expect(symbols.children.map((button) => button.getAttribute('aria-label'))).toEqual([
       'Universal quantifier',
@@ -45,6 +45,7 @@ describe('mountFormulaEntry', () => {
       'Alternative implication',
       'Biconditional',
       'Lambda abstraction',
+      'True (empty sheet)',
     ])
     expect(form.children.indexOf(symbols)).toBe(form.children.indexOf(textarea) + 1)
   })

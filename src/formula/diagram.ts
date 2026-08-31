@@ -83,6 +83,8 @@ function drawFormula(
   region: RegionId,
 ): TranslationState {
   switch (formula.kind) {
+    case 'true':
+      return state
     case 'atom': {
       const relation = boundWire(state.bindings, formula.name)
       let operandState = state

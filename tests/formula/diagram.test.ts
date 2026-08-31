@@ -32,6 +32,13 @@ function manuallyBuiltUniversalImplication() {
 }
 
 describe('formulaToDiagram', () => {
+  it('draws truth as the empty sheet', () => {
+    expect(sameDiagram(
+      formulaToDiagram('⊤'),
+      finishDiagram(emptyGraph()),
+    )).toBe(true)
+  })
+
   it('draws the typed example with its scopes, heads, and argument signatures intact', () => {
     const diagram = formulaToDiagram(EXAMPLE_SOURCE)
 

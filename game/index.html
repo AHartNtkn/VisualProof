@@ -153,11 +153,12 @@
               <span>Reward</span>
               <input type="number" min="0" step="1" required data-order-editor-reward>
             </label>
-            <label>
-              <span>Formula <em>optional</em></span>
-              <textarea rows="4" spellcheck="false" data-order-editor-formula></textarea>
+            <div class="order-editor-field">
+              <label for="order-editor-formula"><span>Formula <em>optional</em></span></label>
+              <textarea id="order-editor-formula" rows="4" spellcheck="false" data-order-editor-formula></textarea>
+              <div class="order-editor-formula-symbols" data-order-editor-formula-symbols></div>
               <small>A nonblank formula redraws the catalog diagram when saved.</small>
-            </label>
+            </div>
           </div>
           <figure class="order-editor-preview">
             <canvas width="320" height="200" data-order-editor-preview></canvas>

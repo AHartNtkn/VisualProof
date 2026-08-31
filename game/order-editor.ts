@@ -7,6 +7,7 @@ import {
 import { formulaToDiagram } from '../src/formula'
 import { diagramToJson } from '../src/kernel/diagram'
 import { DiagramBuilder } from '../src/kernel/diagram/builder'
+import { mountFormulaSymbolButtons } from '../src/ui/formula-symbol-buttons'
 import { renderDiagramPreview } from './diagram-preview'
 
 export type OrderEditorActions = {
@@ -134,6 +135,8 @@ export function mountOrderEditor(
   const prerequisites = required<HTMLTextAreaElement>(root, '[data-order-editor-prerequisites]')
   const reward = required<HTMLInputElement>(root, '[data-order-editor-reward]')
   const formula = required<HTMLTextAreaElement>(root, '[data-order-editor-formula]')
+  const formulaSymbols = required<HTMLElement>(root, '[data-order-editor-formula-symbols]')
+  const symbolButtons = mountFormulaSymbolButtons(formulaSymbols, formula)
   const preview = required<HTMLCanvasElement>(root, '[data-order-editor-preview]')
   const previewPort: OrderEditorPreview = previewOverride ?? {
     show: (snapshot) => { renderDiagramPreview(preview, snapshot) },
@@ -142,7 +145,7 @@ export function mountOrderEditor(
   const remove = required<HTMLButtonElement>(root, '[data-order-editor-delete]')
   const cancel = required<HTMLButtonElement>(root, '[data-order-editor-cancel]')
   const save = required<HTMLButtonElement>(root, '[data-order-editor-save]')
-  const controls = [id, prerequisites, reward, formula, remove, cancel, save] as const
+  const controls = [id, prerequisites, reward, formula, ...symbolButtons.buttons, remove, cancel, save] as const
   const disposers: Array<() => void> = []
   let mode: EditorMode | null = null
   let operationPending = false
@@ -311,6 +314,7 @@ export function mountOrderEditor(
       disposed = true
       generation += 1
       while (disposers.length > 0) disposers.pop()!()
+      symbolButtons.dispose()
       mode = null
       root.hidden = true
       error.textContent = ''

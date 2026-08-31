@@ -890,7 +890,8 @@ textarea:disabled {
   gap: 13px;
 }
 
-.order-editor-fields label {
+.order-editor-fields label,
+.order-editor-field {
   display: grid;
   gap: 6px;
 }
@@ -915,6 +916,33 @@ textarea:disabled {
   color: #879a85;
   font-size: 10px;
   line-height: 1.4;
+}
+
+.order-editor-formula-symbols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.order-editor-formula-symbols button {
+  min-width: 34px;
+  border: 1px solid #526750;
+  border-radius: 7px;
+  padding: 3px 8px;
+  color: #e9eee5;
+  background: #253128;
+  font-size: 17px;
+  cursor: pointer;
+}
+
+.order-editor-formula-symbols button:hover {
+  border-color: #7e9a78;
+  background: #304036;
+}
+
+.order-editor-formula-symbols button:focus-visible {
+  outline: 2px solid #ebbe66;
+  outline-offset: 2px;
 }
 
 .order-editor [data-order-editor-id]:read-only {

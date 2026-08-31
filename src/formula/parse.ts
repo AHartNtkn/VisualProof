@@ -90,6 +90,10 @@ function frozenAtom(name: string, args: readonly FormulaOperand[], start: number
   return Object.freeze({ kind: 'atom', name, args: Object.freeze([...args]), span: frozenSpan(start, end) })
 }
 
+function frozenTrue(start: number, end: number): Formula {
+  return Object.freeze({ kind: 'true', span: frozenSpan(start, end) })
+}
+
 function frozenEquality(
   operands: readonly [FormulaOperand, FormulaOperand, ...FormulaOperand[]],
   start: number,
@@ -189,6 +193,10 @@ export function parseFormula(source: string): Formula {
   function parsePrimary(): Formula {
     const token = peek()
     if (token.kind === 'forall' || token.kind === 'exists') return parseQuantifier()
+    if (token.kind === 'true') {
+      take()
+      return frozenTrue(token.start, token.end)
+    }
     if (hasTopLevelEquality()) return parseEquality()
     if (token.kind === '(') {
       take()
@@ -339,6 +347,8 @@ export function parseFormula(source: string): Formula {
 
   function validate(formula: Formula, environment: ReadonlyMap<string, Sig>): void {
     switch (formula.kind) {
+      case 'true':
+        return
       case 'and':
       case 'or':
       case 'implies':

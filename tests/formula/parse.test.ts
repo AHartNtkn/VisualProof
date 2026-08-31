@@ -43,7 +43,14 @@ function expectEquality(formula: Formula, operands: readonly string[]): void {
 describe('parseFormula', () => {
   it('publishes every accepted Unicode formula symbol in reading order', () => {
     expect(FORMULA_UNICODE_SYMBOLS.map(({ symbol }) => symbol))
-      .toEqual(['∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔', 'λ'])
+      .toEqual(['∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔', 'λ', '⊤'])
+  })
+
+  it('parses down tack as truth', () => {
+    expect(parseFormula('  ⊤  ')).toEqual({
+      kind: 'true',
+      span: { start: 2, end: 3 },
+    })
   })
 
   it('parses the typed Unicode example with grouped individual binders', () => {
