@@ -4,6 +4,10 @@
 
 Treat new implementation work as a provisional spike until the requested behavior works and the changed dependency path has then been reviewed with the `simplify-code-tarpit` skill and any other standards genuinely implicated by the change. If that review finds poor architecture or unjustified accidental complexity, backtrack to the design decision that introduced it and redo all dependent work using what the spike revealed; preserve only work independent of that decision. Keep the implementation only after it passes this review. Passing tests alone does not make a spike permanent.
 
+## Live developer content
+
+Treat live developer content edits as direct changes to the current content authority and let existing runtime consumers observe them immediately. Add protective machinery only for a concrete gameplay failure, crash, logically invalid state, or destructive content loss required by the requested behavior. A previously observed value changing is not harm by itself and does not justify snapshots, versions, migrations, synchronization, transactional isolation, or compatibility behavior.
+
 ## Direct in-app validation
 
 A user-facing feature is not complete until the agent has directly exercised it in the running application through the same user interface and controls available to a person using the product.

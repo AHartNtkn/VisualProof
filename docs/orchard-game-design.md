@@ -145,10 +145,8 @@ formula input; the stored diagram remains runtime authority and is previewed
 before publication. Existing IDs are read-only, new orders begin with a blank
 goal, and Delete removes the order's lifecycle entry and active pot. A successful
 save writes `game/content/orders.json` before publishing the catalog revision.
-Accepted order instances keep the goal they had when accepted; catalog edits
-affect later views and acceptances. Invalid formulas, invalid prerequisite graphs,
-and persistence failures leave both the running catalog and checked-in content
-unchanged.
+Invalid formulas, invalid prerequisite graphs, and persistence failures leave
+both the running catalog and checked-in content unchanged.
 
 Developer mode also makes the visible tutorial card and tool tiles editable.
 The tutorial editor changes the current instruction text. The tool editor changes
