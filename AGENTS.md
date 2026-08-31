@@ -2,7 +2,11 @@
 
 ## Provisional implementation
 
-Treat new implementation work as a provisional spike until the requested behavior works and the changed dependency path has then been reviewed with the `simplify-code-tarpit` skill and any other standards genuinely implicated by the change. If that review finds poor architecture or unjustified accidental complexity, backtrack to the design decision that introduced it and redo all dependent work using what the spike revealed; preserve only work independent of that decision. Keep the implementation only after it passes this review. Passing tests alone does not make a spike permanent.
+Treat new implementation work as a provisional spike until the requested behavior works and the changed dependency path, including inherited architecture it relies on, has then been reviewed with the `simplify-code-tarpit` skill and any other standards genuinely implicated by the change. Follow demonstrated accidental complexity to its actual architectural root. If that review finds poor architecture, backtrack as deeply as the demonstrated root cause and redo its real dependents using what the spike revealed; preserve work independent of that cause. Code volume, test volume, broad architectural discomfort, and speculative requirements do not establish a defective root. Keep the implementation only after it passes this review. Passing tests alone does not make a spike permanent.
+
+## Approved plans
+
+A material departure from an approved plan, including expanded scope or a deeper architectural backtrack, requires an explanation and explicit approval in a final response before execution. Collapsible progress commentary is not an approval surface.
 
 ## Live developer content
 
