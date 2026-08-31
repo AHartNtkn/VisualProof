@@ -23,9 +23,16 @@ import {
 } from './native'
 
 const contentPath = new URL('../content/orders.json', import.meta.url)
+const tutorialContentPath = new URL('../content/tutorial.json', import.meta.url)
+const toolContentPath = new URL('../content/tools.json', import.meta.url)
 const startingContent = readFileSync(contentPath)
+const startingTutorialContent = readFileSync(tutorialContentPath)
+const startingToolContent = readFileSync(toolContentPath)
 const CREATED_ID = 'developer-blank'
 const REMEMBERED_FORMULA = '∀P:o. ¬¬P'
+const EDITED_TUTORIAL = 'Move with W, A, S, and D.'
+const EDITED_TOOL_NAME = 'Sprout Planter'
+const EDITED_TOOL_DESCRIPTION = 'Right-click open ground to plant a new sprout.'
 
 type PersistedOrderDefinition = {
   readonly id: string
@@ -87,8 +94,31 @@ function expectPersistedBlankOrder(orderId: string): void {
   expect(sameDiagram(definition.goal, new DiagramBuilder().build())).toBe(true)
 }
 
+function persistedTutorialText(milestoneId: string): string {
+  const content = JSON.parse(readFileSync(tutorialContentPath, 'utf8')) as Array<{
+    readonly milestoneId: string
+    readonly text: string
+  }>
+  const definition = content.find((candidate) => candidate.milestoneId === milestoneId)
+  if (definition === undefined) throw new Error(`persisted tutorial milestone '${milestoneId}' is missing`)
+  return definition.text
+}
+
+function persistedTool(toolId: string): { readonly name: string; readonly description: string } {
+  const content = JSON.parse(readFileSync(toolContentPath, 'utf8')) as Array<{
+    readonly id: string
+    readonly name: string
+    readonly description: string
+  }>
+  const definition = content.find((candidate) => candidate.id === toolId)
+  if (definition === undefined) throw new Error(`persisted tool '${toolId}' is missing`)
+  return { name: definition.name, description: definition.description }
+}
+
 after(() => {
   writeFileSync(contentPath, startingContent)
+  writeFileSync(tutorialContentPath, startingTutorialContent)
+  writeFileSync(toolContentPath, startingToolContent)
 })
 
 async function waitForSave(): Promise<void> {
@@ -117,6 +147,17 @@ async function setDeveloperTools(enabled: boolean): Promise<void> {
   const checkbox = $('[data-settings-developer-tools]')
   if (await checkbox.isSelected() !== enabled) await checkbox.click()
   await expect(checkbox).toBeSelected({ wait: 1000, reverse: !enabled })
+  await $('[data-settings-back]').click()
+  await $('[data-pause-resume]').click()
+}
+
+async function setTutorials(enabled: boolean): Promise<void> {
+  if (await attribute('ledger-open') === 'true') await browser.keys('Tab')
+  await browser.keys('Escape')
+  await $('[data-pause-settings]').click()
+  const checkbox = $('[data-settings-tutorials]')
+  if (await checkbox.isSelected() !== enabled) await checkbox.click()
+  await expect(game()).toHaveAttribute('data-tutorials-enabled', String(enabled))
   await $('[data-settings-back]').click()
   await $('[data-pause-resume]').click()
 }
@@ -163,9 +204,56 @@ async function settledScreenshot(capture: () => Promise<string>): Promise<string
   return previous
 }
 
-describe('developer order content', () => {
-  it('publishes formula edits atomically and creates, reloads, and deletes checked-in orders', async () => {
+describe('developer content', () => {
+  it('edits tutorial, tool, and order content through the running native application', async () => {
     const slotId = await createSlot('Developer Orders', false)
+
+    await setDeveloperTools(true)
+    await setTutorials(true)
+    await toggleDeveloperMode(true)
+
+    await $('[data-tutorial-card]').click()
+    await expect($('[data-tutorial-editor]')).toBeDisplayed()
+    await expect($('[data-tutorial-editor-id]')).toHaveValue('move')
+    await $('[data-tutorial-editor-text]').setValue('Draft movement text')
+    await browser.keys('Escape')
+    await expect($('[data-pause]')).toBeDisplayed()
+    await expect($('[data-tutorial-editor]')).toBeDisplayed()
+    await $('[data-pause-resume]').click()
+    await expect($('[data-tutorial-editor-text]')).toHaveValue('Draft movement text')
+    await $('[data-tutorial-editor-id]').click()
+    await browser.keys('Backspace')
+    await expect($('[data-tutorial-editor]')).not.toBeDisplayed()
+
+    await $('[data-tutorial-card]').click()
+    await $('[data-tutorial-editor-text]').setValue(EDITED_TUTORIAL)
+    await $('[data-tutorial-editor-save]').click()
+    await expect($('[data-tutorial-editor]')).not.toBeDisplayed()
+    await expect($('[data-tutorial-instruction]')).toHaveText(EDITED_TUTORIAL)
+    expect(persistedTutorialText('move')).toBe(EDITED_TUTORIAL)
+
+    await openLedger('tools')
+    const acquiredTab = $('[data-ledger-context="acquired"]')
+    await acquiredTab.click()
+    await expect(acquiredTab).toHaveAttribute('aria-pressed', 'true')
+    const sproutTile = $('[data-ledger] [data-tool-id="sprout-spawner"]')
+    await expect(sproutTile).toBeDisplayed()
+    await sproutTile.click()
+    await expect($('[data-tool-editor]')).toBeDisplayed()
+    await expect($('[data-tool-editor-id]')).toHaveValue('sprout-spawner')
+    await $('[data-tool-editor-name]').setValue(EDITED_TOOL_NAME)
+    await $('[data-tool-editor-description]').setValue(EDITED_TOOL_DESCRIPTION)
+    await $('[data-tool-editor-save]').click()
+    await expect($('[data-tool-editor]')).not.toBeDisplayed()
+    await expect(sproutTile).toHaveText(expect.stringContaining(EDITED_TOOL_NAME))
+    await expect(sproutTile).toHaveText(expect.stringContaining(EDITED_TOOL_DESCRIPTION))
+    expect(persistedTool('sprout-spawner')).toEqual({
+      name: EDITED_TOOL_NAME,
+      description: EDITED_TOOL_DESCRIPTION,
+    })
+
+    await setTutorials(false)
+    await toggleDeveloperMode(false)
 
     await aimReticleAt({ x: 8, y: -0.035, z: 0 })
     await rightClickWorld()
@@ -293,6 +381,9 @@ describe('developer order content', () => {
 
     await toggleDeveloperMode(true)
     await openLedger('orders')
+    await expect(game()).toHaveAttribute('data-editor-state', 'create')
+    await $('[data-order-editor-cancel]').click()
+    await expect($('[data-order-editor]')).not.toBeDisplayed()
     await $('[data-ledger-context="active"]').click()
     await $(`[data-order-id="${CREATED_ID}"]`).click()
     await expect(game()).toHaveAttribute('data-editor-state', 'edit')

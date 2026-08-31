@@ -24,6 +24,7 @@ pub fn run() {
             commands::set_tutorials_enabled,
             commands::complete_tutorial_milestone,
             commands::acquire_tool,
+            commands::replace_order_ids,
             commands::save_order_catalog,
             commands::save_tutorial_content,
             commands::save_tool_content

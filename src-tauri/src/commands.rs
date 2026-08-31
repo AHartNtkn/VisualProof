@@ -148,13 +148,20 @@ pub fn acquire_tool(app: tauri::AppHandle, slot_id: String, tool_id: String) -> 
 }
 
 #[tauri::command]
-pub fn save_order_catalog(
+pub fn replace_order_ids(
     app: tauri::AppHandle,
     slot_id: String,
-    content: Vec<OrderContentRecord>,
+    order_ids: Vec<String>,
 ) -> Result<(), String> {
+    store(&app)?
+        .replace_order_ids(&slot_id, &order_ids)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn save_order_catalog(content: Vec<OrderContentRecord>) -> Result<(), String> {
     OrderContentStore::production()
-        .save_order_catalog(&store(&app)?, &slot_id, content)
+        .save_order_catalog(content)
         .map_err(|error| error.to_string())
 }
 

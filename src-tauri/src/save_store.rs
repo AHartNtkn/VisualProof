@@ -1,10 +1,7 @@
 use rusqlite::{params, Connection, ErrorCode, OpenFlags, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::fs::{self, File, Permissions};
-use std::io::Write;
+use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use uuid::Uuid;
@@ -56,26 +53,6 @@ CREATE TABLE orders (
 ";
 
 const MAX_REPUTATION: i64 = 9_007_199_254_740_991;
-static CONTENT_WRITE_LOCK: Mutex<()> = Mutex::new(());
-
-const TUTORIAL_CONTENT_IDS: [&str; 15] = [
-    "move",
-    "look",
-    "ascend",
-    "descend",
-    "sprint",
-    "select-tree",
-    "move-orbit",
-    "exit-orbit",
-    "spawn-two-sprouts",
-    "acquire-double-cut",
-    "apply-double-cut",
-    "double-cut-explained",
-    "acquire-iteration",
-    "duplicate-nonblank",
-    "complete-blank-order",
-];
-const TOOL_CONTENT_IDS: [&str; 3] = ["sprout-spawner", "double-cut", "iteration"];
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -224,34 +201,6 @@ pub enum SaveStoreError {
     NonFinitePotPlacement,
     #[error("order reward must be nonnegative")]
     NegativeOrderReward,
-    #[error("order content reward must be a nonnegative JavaScript-safe integer")]
-    InvalidOrderContentReward,
-    #[error("duplicate order id '{0}'")]
-    DuplicateOrderId(String),
-    #[error("order '{order_id}' has duplicate prerequisite '{prerequisite}'")]
-    DuplicateOrderPrerequisite {
-        order_id: String,
-        prerequisite: String,
-    },
-    #[error("order '{order_id}' requires missing order '{prerequisite}'")]
-    MissingOrderPrerequisite {
-        order_id: String,
-        prerequisite: String,
-    },
-    #[error("order prerequisites contain a cycle at '{0}'")]
-    CyclicOrderPrerequisites(String),
-    #[error("authored content must contain every and only the expected IDs exactly once")]
-    InvalidAuthoredContentIds,
-    #[error("authored content fields must not be blank")]
-    BlankAuthoredContent,
-    #[error("content write lock is unavailable")]
-    ContentLockPoisoned,
-    #[error("{primary}; additionally failed to restore prior content: {restoration}")]
-    ContentRestoreFailed {
-        #[source]
-        primary: Box<SaveStoreError>,
-        restoration: Box<SaveStoreError>,
-    },
     #[error("identifier must not be blank")]
     BlankIdentifier,
     #[error("reputation cannot be increased")]
@@ -285,97 +234,39 @@ pub struct SaveStore {
 
 #[derive(Clone, Debug)]
 pub struct OrderContentStore {
-    file: AtomicContentFile,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-enum ContentFaultPoint {
-    PublishedDirectorySync,
-    BeforeRestoreRename,
-}
-
-#[derive(Clone, Debug, Default)]
-struct ContentFaults {
-    points: Arc<Mutex<HashSet<ContentFaultPoint>>>,
-}
-
-#[derive(Debug)]
-struct ContentBackup {
     path: PathBuf,
-}
-
-#[derive(Clone, Debug)]
-struct AtomicContentFile {
-    path: PathBuf,
-    faults: ContentFaults,
 }
 
 #[derive(Clone, Debug)]
 pub struct AuthoredContentStore {
-    tutorial: AtomicContentFile,
-    tools: AtomicContentFile,
+    tutorial_path: PathBuf,
+    tool_path: PathBuf,
 }
 
 impl OrderContentStore {
     pub fn new(path: PathBuf) -> Self {
-        Self {
-            file: AtomicContentFile::new(path),
-        }
+        Self { path }
     }
 
     pub fn production() -> Self {
         Self::new(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../game/content/orders.json"))
     }
 
-    #[cfg(test)]
-    fn with_faults(path: PathBuf, points: impl IntoIterator<Item = ContentFaultPoint>) -> Self {
-        Self {
-            file: AtomicContentFile::with_faults(path, points),
-        }
-    }
-
-    pub fn save_order_catalog_json(
-        &self,
-        saves: &SaveStore,
-        slot_id: &str,
-        content: &[u8],
-    ) -> Result<()> {
+    pub fn save_order_catalog_json(&self, content: &[u8]) -> Result<()> {
         let definitions = serde_json::from_slice(content)?;
-        self.save_order_catalog(saves, slot_id, definitions)
+        self.save_order_catalog(definitions)
     }
 
-    pub fn save_order_catalog(
-        &self,
-        saves: &SaveStore,
-        slot_id: &str,
-        definitions: Vec<OrderContentRecord>,
-    ) -> Result<()> {
-        let _write_guard = CONTENT_WRITE_LOCK
-            .lock()
-            .map_err(|_| SaveStoreError::ContentLockPoisoned)?;
-        validate_order_content(&definitions)?;
-
-        let mut replacement = serde_json::to_vec_pretty(&definitions)?;
-        replacement.push(b'\n');
-        let backup = self.file.replace_content_bytes(&replacement)?;
-
-        let order_ids = definitions
-            .iter()
-            .map(|definition| definition.id.clone())
-            .collect::<Vec<_>>();
-        if let Err(error) = saves.replace_order_ids(slot_id, &order_ids) {
-            return Err(self.file.restore_or_attach(error, &backup));
-        }
-        self.file.discard_backup(&backup);
-        Ok(())
+    pub fn save_order_catalog(&self, definitions: Vec<OrderContentRecord>) -> Result<()> {
+        write_json(&self.path, &definitions)
     }
 }
 
 impl AuthoredContentStore {
     pub fn new(tutorial_path: PathBuf, tool_path: PathBuf) -> Self {
         Self {
-            tutorial: AtomicContentFile::new(tutorial_path),
-            tools: AtomicContentFile::new(tool_path),
+            tutorial_path,
+            tool_path,
         }
     }
 
@@ -384,206 +275,20 @@ impl AuthoredContentStore {
         Self::new(content.join("tutorial.json"), content.join("tools.json"))
     }
 
-    #[cfg(test)]
-    fn with_tutorial_faults(
-        tutorial_path: PathBuf,
-        tool_path: PathBuf,
-        points: impl IntoIterator<Item = ContentFaultPoint>,
-    ) -> Self {
-        Self {
-            tutorial: AtomicContentFile::with_faults(tutorial_path, points),
-            tools: AtomicContentFile::new(tool_path),
-        }
-    }
-
     pub fn save_tutorial_content(&self, records: Vec<TutorialContentRecord>) -> Result<()> {
-        let _write_guard = CONTENT_WRITE_LOCK
-            .lock()
-            .map_err(|_| SaveStoreError::ContentLockPoisoned)?;
-        validate_tutorial_content(&records)?;
-        self.tutorial.publish(&records)
+        write_json(&self.tutorial_path, &records)
     }
 
     pub fn save_tool_content(&self, records: Vec<ToolContentRecord>) -> Result<()> {
-        let _write_guard = CONTENT_WRITE_LOCK
-            .lock()
-            .map_err(|_| SaveStoreError::ContentLockPoisoned)?;
-        validate_tool_content(&records)?;
-        self.tools.publish(&records)
+        write_json(&self.tool_path, &records)
     }
 }
 
-impl AtomicContentFile {
-    fn new(path: PathBuf) -> Self {
-        Self {
-            path,
-            faults: ContentFaults::default(),
-        }
-    }
-
-    #[cfg(test)]
-    fn with_faults(path: PathBuf, points: impl IntoIterator<Item = ContentFaultPoint>) -> Self {
-        Self {
-            path,
-            faults: ContentFaults {
-                points: Arc::new(Mutex::new(points.into_iter().collect())),
-            },
-        }
-    }
-
-    fn publish<T: Serialize>(&self, records: &T) -> Result<()> {
-        let mut replacement = serde_json::to_vec_pretty(records)?;
-        replacement.push(b'\n');
-        let backup = self.replace_content_bytes(&replacement)?;
-        self.discard_backup(&backup);
-        Ok(())
-    }
-
-    fn replace_content_bytes(&self, bytes: &[u8]) -> Result<ContentBackup> {
-        let permissions = fs::metadata(&self.path)?.permissions();
-        let parent = self.parent_directory()?;
-        let backup = ContentBackup {
-            path: self.sibling_path("backup")?,
-        };
-        let previous = fs::read(&self.path)?;
-        let replacement = self.write_temporary(bytes, permissions.clone(), "replacement")?;
-        let prepared_backup =
-            match self.write_temporary(&previous, permissions, "backup-preparation") {
-                Ok(path) => path,
-                Err(error) => {
-                    let _ = fs::remove_file(&replacement);
-                    return Err(error);
-                }
-            };
-
-        if let Err(error) = fs::rename(&prepared_backup, &backup.path) {
-            let _ = fs::remove_file(&replacement);
-            let _ = fs::remove_file(&prepared_backup);
-            return Err(error.into());
-        }
-        if let Err(error) = self.sync_parent(parent, None) {
-            let _ = fs::remove_file(&replacement);
-            self.discard_backup(&backup);
-            return Err(error);
-        }
-        if let Err(error) = fs::rename(&replacement, &self.path) {
-            let _ = fs::remove_file(&replacement);
-            return Err(self.restore_or_attach(error.into(), &backup));
-        }
-        if let Err(error) =
-            self.sync_parent(parent, Some(ContentFaultPoint::PublishedDirectorySync))
-        {
-            return Err(self.restore_or_attach(error, &backup));
-        }
-        Ok(backup)
-    }
-
-    fn restore_or_attach(&self, primary: SaveStoreError, backup: &ContentBackup) -> SaveStoreError {
-        match self.restore_backup(backup) {
-            Ok(()) => primary,
-            Err(restoration) => SaveStoreError::ContentRestoreFailed {
-                primary: Box::new(primary),
-                restoration: Box::new(restoration),
-            },
-        }
-    }
-
-    fn restore_backup(&self, backup: &ContentBackup) -> Result<()> {
-        let previous = fs::read(&backup.path)?;
-        let permissions = fs::metadata(&backup.path)?.permissions();
-        let restoration = self.write_temporary(&previous, permissions, "restoration")?;
-        if let Err(error) = self.inject_fault(ContentFaultPoint::BeforeRestoreRename) {
-            let _ = fs::remove_file(&restoration);
-            return Err(error);
-        }
-        if let Err(error) = fs::rename(&restoration, &self.path) {
-            let _ = fs::remove_file(&restoration);
-            return Err(error.into());
-        }
-        self.sync_parent(self.parent_directory()?, None)?;
-        self.discard_backup(backup);
-        Ok(())
-    }
-
-    fn discard_backup(&self, backup: &ContentBackup) {
-        if fs::remove_file(&backup.path).is_ok() {
-            if let Ok(parent) = self.parent_directory() {
-                let _ = self.sync_parent(parent, None);
-            }
-        }
-    }
-
-    fn write_temporary(
-        &self,
-        bytes: &[u8],
-        permissions: Permissions,
-        purpose: &str,
-    ) -> Result<PathBuf> {
-        let temporary = self.sibling_path(purpose)?;
-        let result = (|| -> Result<()> {
-            let mut file = File::create(&temporary)?;
-            file.write_all(bytes)?;
-            file.set_permissions(permissions)?;
-            file.sync_all()?;
-            Ok(())
-        })();
-        if result.is_err() {
-            let _ = fs::remove_file(&temporary);
-        }
-        result.map(|()| temporary)
-    }
-
-    fn sibling_path(&self, purpose: &str) -> Result<PathBuf> {
-        let parent = self.parent_directory()?;
-        let file_name = self
-            .path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "content path has no UTF-8 file name",
-                )
-            })?;
-        Ok(parent.join(format!(".{file_name}.{}.{}.tmp", Uuid::new_v4(), purpose)))
-    }
-
-    fn parent_directory(&self) -> Result<&Path> {
-        self.path.parent().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "content path has no parent directory",
-            )
-            .into()
-        })
-    }
-
-    fn sync_parent(&self, parent: &Path, fault: Option<ContentFaultPoint>) -> Result<()> {
-        if let Some(point) = fault {
-            self.inject_fault(point)?;
-        }
-        File::open(parent)?.sync_all()?;
-        Ok(())
-    }
-
-    fn inject_fault(&self, point: ContentFaultPoint) -> Result<()> {
-        let injected = self
-            .faults
-            .points
-            .lock()
-            .map_err(|_| SaveStoreError::ContentLockPoisoned)?
-            .remove(&point);
-        if !injected {
-            return Ok(());
-        }
-        let message = match point {
-            ContentFaultPoint::PublishedDirectorySync => {
-                "injected published directory sync failure"
-            }
-            ContentFaultPoint::BeforeRestoreRename => "injected restore rename failure",
-        };
-        Err(std::io::Error::other(message).into())
-    }
+fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+    let mut content = serde_json::to_vec_pretty(value)?;
+    content.push(b'\n');
+    fs::write(path, content)?;
+    Ok(())
 }
 
 impl SaveStore {
@@ -1298,107 +1003,6 @@ fn validate_identifiers(identifiers: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn validate_order_content(definitions: &[OrderContentRecord]) -> Result<()> {
-    let mut by_id = HashMap::new();
-    for definition in definitions {
-        validate_identifier(&definition.id)?;
-        if !(0..=MAX_REPUTATION).contains(&definition.reward) {
-            return Err(SaveStoreError::InvalidOrderContentReward);
-        }
-        if by_id.insert(definition.id.as_str(), definition).is_some() {
-            return Err(SaveStoreError::DuplicateOrderId(definition.id.clone()));
-        }
-    }
-
-    for definition in definitions {
-        let mut prerequisites = HashSet::new();
-        for prerequisite in &definition.prerequisites {
-            validate_identifier(prerequisite)?;
-            if !prerequisites.insert(prerequisite.as_str()) {
-                return Err(SaveStoreError::DuplicateOrderPrerequisite {
-                    order_id: definition.id.clone(),
-                    prerequisite: prerequisite.clone(),
-                });
-            }
-            if !by_id.contains_key(prerequisite.as_str()) {
-                return Err(SaveStoreError::MissingOrderPrerequisite {
-                    order_id: definition.id.clone(),
-                    prerequisite: prerequisite.clone(),
-                });
-            }
-        }
-    }
-
-    fn visit<'a>(
-        order_id: &'a str,
-        by_id: &HashMap<&'a str, &'a OrderContentRecord>,
-        visiting: &mut HashSet<&'a str>,
-        visited: &mut HashSet<&'a str>,
-    ) -> Result<()> {
-        if visited.contains(order_id) {
-            return Ok(());
-        }
-        if !visiting.insert(order_id) {
-            return Err(SaveStoreError::CyclicOrderPrerequisites(
-                order_id.to_owned(),
-            ));
-        }
-        for prerequisite in &by_id[order_id].prerequisites {
-            visit(prerequisite, by_id, visiting, visited)?;
-        }
-        visiting.remove(order_id);
-        visited.insert(order_id);
-        Ok(())
-    }
-
-    let mut visiting = HashSet::new();
-    let mut visited = HashSet::new();
-    for definition in definitions {
-        visit(&definition.id, &by_id, &mut visiting, &mut visited)?;
-    }
-    Ok(())
-}
-
-fn validate_exact_content_ids<'a>(
-    actual: impl Iterator<Item = &'a str>,
-    expected: &[&str],
-) -> Result<()> {
-    let actual = actual.collect::<HashSet<_>>();
-    if actual.len() != expected.len() || !expected.iter().all(|id| actual.contains(id)) {
-        return Err(SaveStoreError::InvalidAuthoredContentIds);
-    }
-    Ok(())
-}
-
-fn validate_tutorial_content(records: &[TutorialContentRecord]) -> Result<()> {
-    if records.iter().any(|record| record.text.trim().is_empty()) {
-        return Err(SaveStoreError::BlankAuthoredContent);
-    }
-    if records.len() != TUTORIAL_CONTENT_IDS.len() {
-        return Err(SaveStoreError::InvalidAuthoredContentIds);
-    }
-    validate_exact_content_ids(
-        records.iter().map(|record| record.milestone_id.as_str()),
-        &TUTORIAL_CONTENT_IDS,
-    )
-}
-
-fn validate_tool_content(records: &[ToolContentRecord]) -> Result<()> {
-    if records
-        .iter()
-        .any(|record| record.name.trim().is_empty() || record.description.trim().is_empty())
-    {
-        return Err(SaveStoreError::BlankAuthoredContent);
-    }
-    if records.len() != TOOL_CONTENT_IDS.len() {
-        return Err(SaveStoreError::InvalidAuthoredContentIds);
-    }
-    validate_exact_content_ids(
-        records.iter().map(|record| record.id.as_str()),
-        &TOOL_CONTENT_IDS,
-    )
-}
-
 fn validate_camera(camera: &CameraRecord) -> Result<()> {
     if [camera.x, camera.y, camera.z, camera.yaw, camera.pitch]
         .into_iter()
@@ -2004,41 +1608,26 @@ mod tests {
         }
     }
 
-    fn content_and_save_fixture() -> (
-        tempfile::TempDir,
-        OrderContentStore,
-        PathBuf,
-        SaveStore,
-        String,
-        Vec<u8>,
-        LoadedSlot,
-    ) {
+    fn content_and_save_fixture() -> (tempfile::TempDir, OrderContentStore, PathBuf, Vec<u8>) {
         let temporary = tempfile::tempdir().unwrap();
         let content_directory = temporary.path().join("content");
         fs::create_dir(&content_directory).unwrap();
         let content_path = content_directory.join("orders.json");
         let previous_content = b"[\n  {\"previous\": true}\n]\n".to_vec();
         fs::write(&content_path, &previous_content).unwrap();
-        let saves = SaveStore::new(temporary.path().join("saves"));
-        let slot_id = saves.create(basic_input()).unwrap().slot_id;
-        let previous_save = saves.load(&slot_id).unwrap();
         (
             temporary,
             OrderContentStore::new(content_path.clone()),
             content_path,
-            saves,
-            slot_id,
             previous_content,
-            previous_save,
         )
     }
 
     // This catches a successful content write changing an order's identity, goal, or optional
     // formula while the lifecycle save is reconciled to a different set of IDs.
     #[test]
-    fn order_catalog_replacement_persists_definitions_and_reconciles_the_save() {
-        let (_temporary, content, content_path, saves, slot_id, _previous_content, _previous_save) =
-            content_and_save_fixture();
+    fn order_catalog_replacement_persists_definitions() {
+        let (_temporary, content, content_path, _previous_content) = content_and_save_fixture();
         let definitions = vec![
             order_content("first", &[]),
             OrderContentRecord {
@@ -2056,185 +1645,13 @@ mod tests {
             },
         ];
 
-        content
-            .save_order_catalog(&saves, &slot_id, definitions.clone())
-            .unwrap();
+        content.save_order_catalog(definitions.clone()).unwrap();
 
         assert_eq!(
             serde_json::from_slice::<Vec<OrderContentRecord>>(&fs::read(content_path).unwrap())
                 .unwrap(),
             definitions
         );
-        assert_eq!(
-            saves
-                .load(&slot_id)
-                .unwrap()
-                .orders
-                .into_iter()
-                .map(|order| order.order_id)
-                .collect::<Vec<_>>(),
-            vec!["first", "second"]
-        );
-    }
-
-    // This catches parsing or graph validation after either durable authority has changed.
-    #[test]
-    fn invalid_order_catalogs_change_neither_content_nor_save() {
-        let (_temporary, content, content_path, saves, slot_id, previous_content, previous_save) =
-            content_and_save_fixture();
-
-        assert!(content
-            .save_order_catalog_json(&saves, &slot_id, b"{")
-            .is_err());
-        for definitions in [
-            vec![order_content("same", &[]), order_content("same", &[])],
-            vec![order_content("child", &["missing"])],
-            vec![order_content("a", &["b"]), order_content("b", &["a"])],
-            vec![OrderContentRecord {
-                reward: -1,
-                ..order_content("negative", &[])
-            }],
-            vec![OrderContentRecord {
-                reward: MAX_REPUTATION + 1,
-                ..order_content("unsafe", &[])
-            }],
-        ] {
-            assert!(content
-                .save_order_catalog(&saves, &slot_id, definitions)
-                .is_err());
-        }
-
-        assert_eq!(fs::read(content_path).unwrap(), previous_content);
-        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
-    }
-
-    // This catches save reconciliation running after the replacement file could not be published.
-    #[cfg(unix)]
-    #[test]
-    fn order_catalog_file_failure_changes_neither_content_nor_save() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let (_temporary, content, content_path, saves, slot_id, previous_content, previous_save) =
-            content_and_save_fixture();
-        let directory = content_path.parent().unwrap();
-        let original_mode = fs::metadata(directory).unwrap().permissions().mode();
-        fs::set_permissions(directory, fs::Permissions::from_mode(0o500)).unwrap();
-
-        let result =
-            content.save_order_catalog(&saves, &slot_id, vec![order_content("replacement", &[])]);
-
-        fs::set_permissions(directory, fs::Permissions::from_mode(original_mode)).unwrap();
-        assert!(result.is_err());
-        assert_eq!(fs::read(content_path).unwrap(), previous_content);
-        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
-    }
-
-    // This catches a directory-sync error after rename leaving new content with the old save.
-    #[test]
-    fn order_catalog_post_publish_sync_failure_restores_prior_content_before_returning() {
-        let (temporary, _content, content_path, saves, slot_id, previous_content, previous_save) =
-            content_and_save_fixture();
-        let content = OrderContentStore::with_faults(
-            content_path.clone(),
-            [ContentFaultPoint::PublishedDirectorySync],
-        );
-
-        let result =
-            content.save_order_catalog(&saves, &slot_id, vec![order_content("replacement", &[])]);
-
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("injected published directory sync failure"));
-        assert_eq!(fs::read(&content_path).unwrap(), previous_content);
-        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
-        assert_eq!(
-            fs::read_dir(temporary.path().join("content"))
-                .unwrap()
-                .count(),
-            1
-        );
-    }
-
-    // This catches returning a save error while leaving newly published content behind.
-    #[test]
-    fn order_catalog_save_failure_restores_exact_content_bytes() {
-        let (temporary, content, content_path, saves, slot_id, previous_content, _previous_save) =
-            content_and_save_fixture();
-        Connection::open(
-            temporary
-                .path()
-                .join("saves")
-                .join(format!("{slot_id}.sqlite3")),
-        )
-        .unwrap()
-        .execute(
-            "UPDATE metadata SET updated_at_ms = ?1 WHERE singleton = 1",
-            [i64::MAX],
-        )
-        .unwrap();
-        let previous_save = saves.load(&slot_id).unwrap();
-
-        let result =
-            content.save_order_catalog(&saves, &slot_id, vec![order_content("replacement", &[])]);
-
-        assert!(matches!(result, Err(SaveStoreError::TimestampOverflow)));
-        assert_eq!(fs::read(content_path).unwrap(), previous_content);
-        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
-    }
-
-    // This catches restoration failure masking the primary save error or losing prior bytes.
-    #[test]
-    fn order_catalog_rollback_failure_keeps_save_error_primary_and_prior_backup_durable() {
-        let (temporary, _content, content_path, saves, slot_id, previous_content, _previous_save) =
-            content_and_save_fixture();
-        Connection::open(
-            temporary
-                .path()
-                .join("saves")
-                .join(format!("{slot_id}.sqlite3")),
-        )
-        .unwrap()
-        .execute(
-            "UPDATE metadata SET updated_at_ms = ?1 WHERE singleton = 1",
-            [i64::MAX],
-        )
-        .unwrap();
-        let previous_save = saves.load(&slot_id).unwrap();
-        let content = OrderContentStore::with_faults(
-            content_path.clone(),
-            [ContentFaultPoint::BeforeRestoreRename],
-        );
-
-        let error = content
-            .save_order_catalog(&saves, &slot_id, vec![order_content("replacement", &[])])
-            .unwrap_err();
-        assert!(error
-            .to_string()
-            .starts_with("save timestamp cannot be advanced"));
-        assert!(error
-            .to_string()
-            .contains("additionally failed to restore prior content"));
-
-        match error {
-            SaveStoreError::ContentRestoreFailed {
-                primary,
-                restoration,
-            } => {
-                assert!(matches!(*primary, SaveStoreError::TimestampOverflow));
-                assert!(restoration
-                    .to_string()
-                    .contains("injected restore rename failure"));
-            }
-            other => panic!("expected save error with restoration context, got {other}"),
-        }
-        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
-        let retained_backup = fs::read_dir(temporary.path().join("content"))
-            .unwrap()
-            .map(|entry| entry.unwrap().path())
-            .find(|path| path != &content_path && fs::read(path).unwrap() == previous_content)
-            .expect("the exact prior bytes must remain in a durable sibling backup");
-        assert!(retained_backup.is_file());
     }
 
     // This catches structural validation that ignores unauthorised schema additions.
@@ -3254,39 +2671,24 @@ mod tests {
             .collect()
     }
 
-    fn authored_content_fixture() -> (
-        tempfile::TempDir,
-        AuthoredContentStore,
-        PathBuf,
-        PathBuf,
-        SaveStore,
-        String,
-        LoadedSlot,
-    ) {
+    fn authored_content_fixture() -> (tempfile::TempDir, AuthoredContentStore, PathBuf, PathBuf) {
         let temporary = tempfile::tempdir().unwrap();
         let tutorial_path = temporary.path().join("tutorial.json");
         let tool_path = temporary.path().join("tools.json");
         fs::write(&tutorial_path, b"[\n  {\"previousTutorial\": true}\n]\n").unwrap();
         fs::write(&tool_path, b"[\n  {\"previousTools\": true}\n]\n").unwrap();
-        let saves = SaveStore::new(temporary.path().join("saves"));
-        let slot_id = saves.create(basic_input()).unwrap().slot_id;
-        let previous_save = saves.load(&slot_id).unwrap();
         (
             temporary,
             AuthoredContentStore::new(tutorial_path.clone(), tool_path.clone()),
             tutorial_path,
             tool_path,
-            saves,
-            slot_id,
-            previous_save,
         )
     }
 
     // This catches authored copy sharing order/save reconciliation or publishing to the wrong file.
     #[test]
-    fn authored_content_replaces_distinct_documents_without_mutating_any_save() {
-        let (_temporary, content, tutorial_path, tool_path, saves, slot_id, previous_save) =
-            authored_content_fixture();
+    fn authored_content_replaces_distinct_documents() {
+        let (_temporary, content, tutorial_path, tool_path) = authored_content_fixture();
         let tutorial = tutorial_content_records();
         let tools = tool_content_records();
 
@@ -3303,97 +2705,5 @@ mod tests {
                 .unwrap(),
             tools
         );
-        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
-    }
-
-    // This catches missing/extra IDs and whitespace-only editable fields reaching disk.
-    #[test]
-    fn authored_content_requires_exact_ids_and_nonblank_copy_before_writing() {
-        let (_temporary, content, tutorial_path, tool_path, saves, slot_id, previous_save) =
-            authored_content_fixture();
-        let previous_tutorial = fs::read(&tutorial_path).unwrap();
-        let previous_tools = fs::read(&tool_path).unwrap();
-
-        let mut missing_tutorial = tutorial_content_records();
-        missing_tutorial.pop();
-        let mut extra_tutorial = tutorial_content_records();
-        extra_tutorial.push(TutorialContentRecord {
-            milestone_id: "silent-milestone".into(),
-            text: "Must not be editable".into(),
-        });
-        let mut blank_tutorial = tutorial_content_records();
-        blank_tutorial[0].text = " \n ".into();
-        let mut duplicate_tutorial = tutorial_content_records();
-        duplicate_tutorial[1].milestone_id = duplicate_tutorial[0].milestone_id.clone();
-        for candidate in [
-            missing_tutorial,
-            extra_tutorial,
-            blank_tutorial,
-            duplicate_tutorial,
-        ] {
-            assert!(content.save_tutorial_content(candidate).is_err());
-        }
-
-        let mut missing_tool = tool_content_records();
-        missing_tool.pop();
-        let mut extra_tool = tool_content_records();
-        extra_tool.push(ToolContentRecord {
-            id: "watering-can".into(),
-            name: "Watering Can".into(),
-            description: "Not a visible tool".into(),
-        });
-        let mut blank_tool = tool_content_records();
-        blank_tool[0].description = "\t".into();
-        let mut duplicate_tool = tool_content_records();
-        duplicate_tool[1].id = duplicate_tool[0].id.clone();
-        for candidate in [missing_tool, extra_tool, blank_tool, duplicate_tool] {
-            assert!(content.save_tool_content(candidate).is_err());
-        }
-
-        assert!(
-            serde_json::from_value::<TutorialContentRecord>(serde_json::json!({
-                "milestoneId": "move",
-                "text": "Move",
-                "slotId": "save-shaped"
-            }))
-            .is_err()
-        );
-        assert!(
-            serde_json::from_value::<ToolContentRecord>(serde_json::json!({
-                "id": "iteration",
-                "name": "Iteration",
-                "description": "Duplicate",
-                "reward": 10
-            }))
-            .is_err()
-        );
-
-        assert_eq!(fs::read(tutorial_path).unwrap(), previous_tutorial);
-        assert_eq!(fs::read(tool_path).unwrap(), previous_tools);
-        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
-    }
-
-    // This catches an error after rename leaving new authored bytes visible to the next build.
-    #[test]
-    fn authored_content_post_publish_failure_restores_exact_prior_bytes() {
-        let (temporary, _content, tutorial_path, tool_path, saves, slot_id, previous_save) =
-            authored_content_fixture();
-        let previous_tutorial = fs::read(&tutorial_path).unwrap();
-        let content = AuthoredContentStore::with_tutorial_faults(
-            tutorial_path.clone(),
-            tool_path,
-            [ContentFaultPoint::PublishedDirectorySync],
-        );
-
-        let error = content
-            .save_tutorial_content(tutorial_content_records())
-            .unwrap_err();
-
-        assert!(error
-            .to_string()
-            .contains("injected published directory sync failure"));
-        assert_eq!(fs::read(tutorial_path).unwrap(), previous_tutorial);
-        assert_eq!(saves.load(&slot_id).unwrap(), previous_save);
-        assert_eq!(fs::read_dir(temporary.path()).unwrap().count(), 3);
     }
 }

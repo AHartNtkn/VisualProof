@@ -70,7 +70,6 @@ import {
   acceptedPotsForRevision,
   publishOrderCatalogRevision,
 } from './order-catalog-publication'
-import { publishToolContentRevision, publishTutorialContentRevision } from './content-publication'
 
 const root = document.querySelector<HTMLElement>('[data-game]')!
 const worldHost = document.querySelector<HTMLElement>('[data-world]')!
@@ -786,10 +785,9 @@ async function startWorld(world: GameWorld): Promise<void> {
       candidate: Parameters<typeof openingOrderCatalog.publish>[0],
     ): Promise<void> => {
       await publishOrderCatalogRevision({
-        slotId: world.slot.id,
         candidate,
-        writer: nextWriter,
         contentClient: orderContentClient,
+        reconcileSave: (orderIds) => saveClient.replaceOrderIds(world.slot.id, orderIds),
         catalog: openingOrderCatalog,
         orders: nextOrders,
         renderer: nextRenderer,
@@ -840,12 +838,8 @@ async function startWorld(world: GameWorld): Promise<void> {
       currentRevision: () => openingTutorialContent.current,
       isForeground: () => worldState?.isPaused === false && editorState.kind === 'tutorial',
       save: async (candidate) => {
-        await publishTutorialContentRevision({
-          candidate,
-          contentClient: authoredContentClient,
-          content: openingTutorialContent,
-          isCurrent: () => generation === worldGeneration && tutorial === nextTutorial,
-        })
+        await authoredContentClient.saveTutorial(candidate.definitions)
+        openingTutorialContent.publish(candidate)
         if (generation !== worldGeneration || tutorial !== nextTutorial) return
         renderTutorial()
       },
@@ -854,12 +848,8 @@ async function startWorld(world: GameWorld): Promise<void> {
       currentRevision: () => openingToolContent.current,
       isForeground: () => worldState?.isPaused === false && editorState.kind === 'tool',
       save: async (candidate) => {
-        await publishToolContentRevision({
-          candidate,
-          contentClient: authoredContentClient,
-          content: openingToolContent,
-          isCurrent: () => generation === worldGeneration && tools === nextTools,
-        })
+        await authoredContentClient.saveTools(candidate.definitions)
+        openingToolContent.publish(candidate)
         if (generation !== worldGeneration || tools !== nextTools) return
         refreshVisibleLedger()
         mirrorToolInventory(nextTools)

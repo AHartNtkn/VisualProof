@@ -12,9 +12,7 @@ import {
   type OrderSession,
 } from '../src/game/orders/session'
 import type { GameWorldRenderer } from '../src/game/render/world'
-import type { SaveWriter } from '../src/game/save-writer'
 
-type CatalogPublicationWriter = Pick<SaveWriter, 'flushChecked'>
 type CatalogPublicationRenderer = Pick<GameWorldRenderer, 'setPots'>
 
 function assertCurrent(isCurrent: () => boolean): void {
@@ -34,22 +32,24 @@ export function acceptedPotsForRevision(
 }
 
 export async function publishOrderCatalogRevision(config: {
-  readonly slotId: string
   readonly candidate: OrderCatalogRevision
-  readonly writer: CatalogPublicationWriter
   readonly contentClient: OrderContentClient
+  readonly reconcileSave: (orderIds: readonly string[]) => Promise<void>
   readonly catalog: LiveOrderCatalog
   readonly orders: OrderSession
   readonly renderer: CatalogPublicationRenderer
   readonly isCurrent: () => boolean
 }): Promise<void> {
-  await config.writer.flushChecked()
   assertCurrent(config.isCurrent)
-  await config.contentClient.save(
-    config.slotId,
-    serializeOrderCatalog(config.candidate),
-  )
-  assertCurrent(config.isCurrent)
+  await config.contentClient.save(serializeOrderCatalog(config.candidate))
+  if (!config.isCurrent()) return
+
+  const currentIds = new Set(config.catalog.current.definitions.map(({ id }) => id))
+  const candidateIds = config.candidate.definitions.map(({ id }) => id)
+  if (currentIds.size !== candidateIds.length || candidateIds.some((id) => !currentIds.has(id))) {
+    await config.reconcileSave(candidateIds)
+    if (!config.isCurrent()) return
+  }
 
   const reconciled = reconcileOrderProgress(config.orders.progress, config.candidate)
   config.orders.replaceProgress(reconciled)

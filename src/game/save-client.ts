@@ -92,6 +92,7 @@ export type SaveClient = {
   readonly setTutorialsEnabled: (slotId: string, enabled: boolean) => Promise<void>
   readonly completeTutorialMilestone: (slotId: string, milestoneId: string) => Promise<void>
   readonly acquireTool: (slotId: string, toolId: string) => Promise<void>
+  readonly replaceOrderIds: (slotId: string, orderIds: readonly string[]) => Promise<void>
 }
 
 export type SaveOperation =
@@ -107,6 +108,7 @@ export type SaveOperation =
   | 'set-tutorials-enabled'
   | 'complete-tutorial-milestone'
   | 'acquire-tool'
+  | 'replace-order-ids'
 
 export type SaveTransport = {
   request(operation: SaveOperation, input: Record<string, unknown>): Promise<unknown>
@@ -319,6 +321,8 @@ export function createSaveClient(transport: SaveTransport): SaveClient {
     ).then((value) => decodeVoid(value, 'completed tutorial milestone response')),
     acquireTool: (slotId, toolId) => transport.request('acquire-tool', { slotId, toolId })
       .then((value) => decodeVoid(value, 'acquired tool response')),
+    replaceOrderIds: (slotId, orderIds) => transport.request('replace-order-ids', { slotId, orderIds })
+      .then((value) => decodeVoid(value, 'replaced order ids response')),
   }
 }
 
@@ -337,6 +341,7 @@ export const tauriSaveTransport: SaveTransport = {
       case 'set-tutorials-enabled': return invoke('set_tutorials_enabled', input)
       case 'complete-tutorial-milestone': return invoke('complete_tutorial_milestone', input)
       case 'acquire-tool': return invoke('acquire_tool', input)
+      case 'replace-order-ids': return invoke('replace_order_ids', input)
     }
   },
 }
@@ -354,6 +359,7 @@ const playtestPaths: Record<SaveOperation, string> = {
   'set-tutorials-enabled': '/__orchard_playtest/save/set-tutorials-enabled',
   'complete-tutorial-milestone': '/__orchard_playtest/save/complete-tutorial-milestone',
   'acquire-tool': '/__orchard_playtest/save/acquire-tool',
+  'replace-order-ids': '/__orchard_playtest/save/replace-order-ids',
 }
 
 export function httpSaveTransport(config: {

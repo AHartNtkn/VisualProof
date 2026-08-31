@@ -85,6 +85,7 @@ describe('save client transports', () => {
           case 'set-tutorials-enabled': return null
           case 'complete-tutorial-milestone': return null
           case 'acquire-tool': return null
+          case 'replace-order-ids': return null
         }
       },
     }
@@ -110,6 +111,7 @@ describe('save client transports', () => {
     await expect(client.setTutorialsEnabled('slot-a', false)).resolves.toBeUndefined()
     await expect(client.completeTutorialMilestone('slot-a', 'open-orders')).resolves.toBeUndefined()
     await expect(client.acquireTool('slot-a', 'double-cut')).resolves.toBeUndefined()
+    await expect(client.replaceOrderIds('slot-a', ['blank-sprout'])).resolves.toBeUndefined()
 
     expect(requests).toEqual([
       { operation: 'list', input: {} },
@@ -124,6 +126,7 @@ describe('save client transports', () => {
       { operation: 'set-tutorials-enabled', input: { slotId: 'slot-a', enabled: false } },
       { operation: 'complete-tutorial-milestone', input: { slotId: 'slot-a', milestoneId: 'open-orders' } },
       { operation: 'acquire-tool', input: { slotId: 'slot-a', toolId: 'double-cut' } },
+      { operation: 'replace-order-ids', input: { slotId: 'slot-a', orderIds: ['blank-sprout'] } },
     ])
   })
 
