@@ -121,9 +121,10 @@ parallel control path.
 - **Tutorials** are a per-save preference, enabled by default at orchard
   creation and editable in Settings. One upper-left instruction at a time leads
   through movement, look, ascent/descent, sprint, orbit and `Backspace`, two
-  sprouts, both tool acquisitions, Double Cut, Iteration duplication, and the
-  first delivery. The card then disappears while the remaining order milestones
-  continue silently. Disabling tutorials hides the card and opens tutorial-gated
+  sprouts, both tool acquisitions, Double Cut, whole-tree Iteration duplication,
+  same-tree Iteration, and the first delivery. The card then disappears while
+  the remaining order milestones continue silently. Disabling tutorials hides
+  the card and opens tutorial-gated
   ledger entries without marking milestones complete; ordinary actions still
   record their evidence, so re-enabling resumes at the first genuinely unmet
   instruction.

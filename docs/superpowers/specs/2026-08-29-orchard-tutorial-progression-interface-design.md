@@ -42,9 +42,12 @@ The opening sequence is:
    that branch.
 8. Reopen the ledger and acquire Iteration for zero capacity.
 9. Duplicate a tree that is not a blank sprout onto clear ground.
-10. Accept and deliver the blank-sprout order.
-11. Complete the single-Double-Cut order.
-12. Complete the two final Double-Cut-only orders in either order.
+10. Apply Iteration within one tree. The instruction demonstrates copying one
+    of the gray branches created by Double Cut onto that tree's root segment,
+    while any successful same-tree Iteration satisfies the step.
+11. Accept and deliver the blank-sprout order.
+12. Complete the single-Double-Cut order.
+13. Complete the two final Double-Cut-only orders in either order.
 
 Tutorial code observes committed gameplay events and records tutorial progress.
 It never grants tools, creates trees, accepts orders, or performs proof moves.

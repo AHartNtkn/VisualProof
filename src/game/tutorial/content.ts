@@ -33,6 +33,7 @@ const visibleMilestoneIds: readonly VisibleTutorialMilestoneId[] = [
   'double-cut-explained',
   'acquire-iteration',
   'duplicate-nonblank',
+  'iterate-within-tree',
   'complete-blank-order',
 ]
 const visibleMilestoneIdSet = new Set<string>(visibleMilestoneIds)

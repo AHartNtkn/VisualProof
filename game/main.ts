@@ -745,6 +745,9 @@ function applySecondaryAction(clientX: number, clientY: number): void {
         if (target.kind === 'ground' && change.after.snapshot.json !== blankDiagramJson) {
           observeTutorial({ kind: 'nonblank-tree-duplicated' })
         }
+        if (target.kind === 'branch' && target.pointed.treeId === cutting.sourceTree.id) {
+          observeTutorial({ kind: 'same-tree-iteration-applied' })
+        }
         setFeedback(target.kind === 'branch'
           ? `Iteration applied to ${change.treeId}.`
           : `Duplicated tree as ${change.treeId}.`)

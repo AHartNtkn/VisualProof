@@ -24,6 +24,7 @@ import {
   storedTreeDiagram,
   storedTreeIds,
   storedTutorialProgress,
+  waitForMenu,
   waitForVisibleTreeTween,
 } from './native'
 
@@ -172,6 +173,37 @@ async function doubleCutRegion(slotId: string, treeId: string, regionId: string)
   await expect(game()).toHaveAttribute('data-camera-mode', 'free')
 }
 
+async function iterateWithinTree(
+  slotId: string,
+  treeId: string,
+  sourceRegionId: string,
+  targetRegionId: string,
+): Promise<void> {
+  await selectTool('iteration')
+  const before = storedTree(slotId, treeId)
+  if (await attribute('camera-mode') !== 'orbit' || await attribute('orbit-target') !== treeId) {
+    await moveFreeCameraTo({ x: before.x + 6, y: 2, z: before.z + 6 })
+    await lookReticleAt(visibleBranchWorldPoint(before, before.diagram.root))
+    await clickWorld()
+  }
+  await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
+  await expect(game()).toHaveAttribute('data-orbit-target', treeId)
+
+  const pose = await displayedPose()
+  const source = await canvasOffsetForWorldPoint(pose, visibleBranchWorldPoint(before, sourceRegionId))
+  const target = await canvasOffsetForWorldPoint(pose, visibleBranchWorldPoint(before, targetRegionId))
+  const beforeFrame = await canvasScreenshot()
+  await rightClickWorld(source.x, source.y)
+  await expect($('[data-feedback]')).toHaveText(expect.stringContaining(`Subtree cutting held from ${treeId}.`))
+  await rightClickWorld(target.x, target.y)
+  await expect($('[data-feedback]')).toHaveText(`Iteration applied to ${treeId}.`)
+  await browser.waitUntil(() => Object.keys(storedTreeDiagram(slotId, treeId).regions).length
+    > Object.keys(before.diagram.regions).length)
+  await waitForVisibleTreeTween(beforeFrame)
+  await browser.keys('Backspace')
+  await expect(game()).toHaveAttribute('data-camera-mode', 'free')
+}
+
 function visibleBranchWorldPoint(
   tree: ReturnType<typeof storedTree>,
   regionId: string,
@@ -207,6 +239,57 @@ function visibleBranchWorldPoint(
 }
 
 describe('opening tutorial progression', () => {
+  it('requires whole-tree duplication and then a same-tree iteration before opening the first order', async () => {
+    const slotId = await createSlot('Two Iteration Lessons', false)
+    await openLedger('tools')
+    await acquire('double-cut')
+    await acquire('iteration')
+    await browser.keys('Tab')
+    await setTutorials(true)
+
+    await selectTool('double-cut')
+    await clickWorld()
+    await expect(game()).toHaveAttribute('data-camera-mode', 'orbit')
+    const beforeCut = storedTree(slotId, 'tree-0000')
+    const cutTarget = await canvasOffsetForWorldPoint(
+      await displayedPose(),
+      visibleBranchWorldPoint(beforeCut, beforeCut.diagram.root),
+    )
+    await rightClickWorld(cutTarget.x, cutTarget.y)
+    await expect($('[data-feedback]')).toHaveText('Double cut applied to tree-0000.')
+    await browser.waitUntil(() => Object.keys(storedTreeDiagram(slotId, 'tree-0000').regions).length === 3)
+
+    await selectTool('iteration')
+    const doubleCutTree = storedTree(slotId, 'tree-0000')
+    const wholeTree = await canvasOffsetForWorldPoint(
+      await displayedPose(),
+      visibleBranchWorldPoint(doubleCutTree, doubleCutTree.diagram.root),
+    )
+    await rightClickWorld(wholeTree.x, wholeTree.y)
+    await expect($('[data-feedback]')).toHaveText('Whole-tree cutting held from tree-0000.')
+    const ground = await canvasOffsetForWorldPoint(await displayedPose(), { x: 6, y: -0.035, z: 0 })
+    await rightClickWorld(ground.x, ground.y)
+    await expect($('[data-feedback]')).toHaveText(expect.stringContaining('Duplicated tree as tree-'))
+    await browser.waitUntil(() => storedTreeIds(slotId).length === 2)
+    expect(storedTutorialProgress(slotId).completed).toContain('duplicate-nonblank')
+
+    await openLedger('orders')
+    await expect($('[data-order-id="blank-sprout"]')).not.toExist()
+    await browser.keys('Tab')
+
+    const beforeIteration = storedTree(slotId, 'tree-0000')
+    const cuts = nestedCutRegions(beforeIteration.diagram)
+    await iterateWithinTree(slotId, 'tree-0000', cuts.outer, beforeIteration.diagram.root)
+    expect(storedTutorialProgress(slotId).completed).toContain('iterate-within-tree')
+
+    await openLedger('orders')
+    await expect($('[data-order-id="blank-sprout"]')).toBeDisplayed()
+    await browser.keys('Tab')
+    await browser.keys('Escape')
+    await $('[data-pause-main-menu]').click()
+    await waitForMenu()
+  })
+
   it('drives every instruction and completes the final two orders in either sequence', async () => {
     const slotId = await createSlot('Tutorial Progression')
     await expect(game()).toHaveAttribute('data-tutorials-enabled', 'true')
@@ -295,6 +378,14 @@ describe('opening tutorial progression', () => {
     await expectInstruction('duplicate-nonblank')
 
     const tutorialDuplicateId = await duplicateTree(slotId, 'tree-0000', { x: 0, z: -8 })
+    await expectInstruction('iterate-within-tree')
+    const doubleCut = nestedCutRegions(storedTreeDiagram(slotId, 'tree-0000'))
+    await iterateWithinTree(
+      slotId,
+      'tree-0000',
+      doubleCut.outer,
+      storedTreeDiagram(slotId, 'tree-0000').root,
+    )
     await expectInstruction('complete-blank-order')
 
     await acceptOrder('blank-sprout', { x: -12, z: 12 })
@@ -303,7 +394,7 @@ describe('opening tutorial progression', () => {
     expect(storedOrder(slotId, 'blank-sprout')).toEqual({ state: 'completed', pot: null })
 
     await acceptOrder('single-double-cut', { x: 0, z: 14 })
-    await deliver(slotId, 'single-double-cut', 'tree-0000')
+    await deliver(slotId, 'single-double-cut', tutorialDuplicateId)
     expect(storedOrder(slotId, 'single-double-cut')).toEqual({ state: 'completed', pot: null })
 
     const finalBId = await duplicateTree(slotId, 'tree-0000', { x: 8, z: -8 })
@@ -334,7 +425,7 @@ describe('opening tutorial progression', () => {
     expect(new Set(storedTutorialProgress(slotId).completed)).toEqual(new Set([
       'move', 'look', 'ascend', 'descend', 'sprint', 'select-tree', 'move-orbit', 'exit-orbit',
       'spawn-two-sprouts', 'acquire-double-cut', 'apply-double-cut', 'double-cut-explained',
-      'acquire-iteration', 'duplicate-nonblank', 'complete-blank-order',
+      'acquire-iteration', 'duplicate-nonblank', 'iterate-within-tree', 'complete-blank-order',
       'complete-single-double-cut-order', 'complete-irregular-double-cut-a-order',
       'complete-irregular-double-cut-b-order',
     ]))

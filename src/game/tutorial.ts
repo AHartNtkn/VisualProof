@@ -20,6 +20,7 @@ export type TutorialMilestoneId =
   | 'double-cut-explained'
   | 'acquire-iteration'
   | 'duplicate-nonblank'
+  | 'iterate-within-tree'
   | 'complete-blank-order'
   | 'complete-single-double-cut-order'
   | 'complete-irregular-double-cut-a-order'
@@ -35,6 +36,7 @@ export type TutorialEvent =
   | { readonly kind: 'double-cut-applied' }
   | { readonly kind: 'ledger-opened' }
   | { readonly kind: 'nonblank-tree-duplicated' }
+  | { readonly kind: 'same-tree-iteration-applied' }
   | { readonly kind: 'order-completed'; readonly orderId: string }
 
 export type TutorialInstruction = {
@@ -81,7 +83,13 @@ const milestones: readonly TutorialMilestone[] = [
     event.kind === 'tool-acquired' && event.toolId === 'iteration'
   )),
   milestone('duplicate-nonblank', ['acquire-iteration'], (event) => event.kind === 'nonblank-tree-duplicated'),
-  milestone('complete-blank-order', ['duplicate-nonblank'], (event) => (
+  milestone(
+    'iterate-within-tree',
+    ['duplicate-nonblank'],
+    (event) => event.kind === 'same-tree-iteration-applied',
+    ['duplicate-nonblank'],
+  ),
+  milestone('complete-blank-order', ['iterate-within-tree'], (event) => (
     event.kind === 'order-completed' && event.orderId === 'blank-sprout'
   )),
   silentMilestone('complete-single-double-cut-order', ['complete-blank-order'], (event) => (
@@ -106,7 +114,7 @@ export function toolTutorialGate(toolId: string): TutorialMilestoneId | null {
 }
 
 export function orderTutorialGate(orderId: string): TutorialMilestoneId | null {
-  return orderId === 'blank-sprout' ? 'duplicate-nonblank' : null
+  return orderId === 'blank-sprout' ? 'iterate-within-tree' : null
 }
 
 export class TutorialSession {

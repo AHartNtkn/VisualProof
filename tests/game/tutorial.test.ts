@@ -54,7 +54,40 @@ describe('TutorialSession', () => {
     expect(observe(session, { kind: 'ledger-opened' })).toEqual(['double-cut-explained'])
     expect(observe(session, { kind: 'tool-acquired', toolId: 'iteration' })).toEqual(['acquire-iteration'])
     expect(observe(session, { kind: 'nonblank-tree-duplicated' })).toEqual(['duplicate-nonblank'])
+    expect(session.currentInstruction?.milestoneId).toBe('iterate-within-tree')
+    expect(observe(session, { kind: 'same-tree-iteration-applied' })).toEqual(['iterate-within-tree'])
     expect(session.currentInstruction?.milestoneId).toBe('complete-blank-order')
+  })
+
+  it('requires whole-tree duplication before a same-tree iteration unlocks the first order', () => {
+    // Catches either use of Iteration satisfying both lessons or the first order opening too early.
+    const session = new TutorialSession(true, [
+      'move',
+      'look',
+      'ascend',
+      'descend',
+      'sprint',
+      'select-tree',
+      'move-orbit',
+      'exit-orbit',
+      'spawn-two-sprouts',
+      'acquire-double-cut',
+      'apply-double-cut',
+      'double-cut-explained',
+      'acquire-iteration',
+    ])
+    const sameTreeIteration = { kind: 'same-tree-iteration-applied' } as TutorialEvent
+
+    expect(observe(session, sameTreeIteration)).toEqual([])
+    expect(session.check(orderTutorialGate('blank-sprout')!)).toBe(false)
+
+    expect(observe(session, { kind: 'nonblank-tree-duplicated' })).toEqual(['duplicate-nonblank'])
+    expect(session.currentInstruction?.milestoneId).toBe('iterate-within-tree')
+    expect(session.check(orderTutorialGate('blank-sprout')!)).toBe(false)
+
+    expect(observe(session, sameTreeIteration)).toEqual(['iterate-within-tree'])
+    expect(session.currentInstruction?.milestoneId).toBe('complete-blank-order')
+    expect(session.check(orderTutorialGate('blank-sprout')!)).toBe(true)
   })
 
   it('treats disabled tutorials as passing gates without manufacturing completion', () => {
@@ -171,6 +204,10 @@ describe('TutorialSession', () => {
     const commit = observe(reconstructed, { kind: 'nonblank-tree-duplicated' })
 
     expect(commit).toEqual(['duplicate-nonblank'])
+    expect(reconstructed.currentInstruction?.milestoneId).toBe('iterate-within-tree')
+    expect(observe(reconstructed, { kind: 'same-tree-iteration-applied' })).toEqual([
+      'iterate-within-tree',
+    ])
     expect(reconstructed.currentInstruction).toBeNull()
   })
 
@@ -197,6 +234,7 @@ describe('TutorialSession', () => {
     expect(session.completed.has('apply-double-cut')).toBe(false)
     expect(session.completed.has('double-cut-explained')).toBe(false)
     expect(session.completed.has('duplicate-nonblank')).toBe(false)
+    expect(session.completed.has('iterate-within-tree')).toBe(false)
   })
 
   it('does not treat a ledger visit before Double Cut as its explanation', () => {
@@ -247,7 +285,7 @@ describe('TutorialSession', () => {
     expect(toolTutorialGate('iteration')).toBe('double-cut-explained')
     expect(toolTutorialGate('other')).toBeNull()
 
-    expect(orderTutorialGate('blank-sprout')).toBe('duplicate-nonblank')
+    expect(orderTutorialGate('blank-sprout')).toBe('iterate-within-tree')
     expect(orderTutorialGate('single-double-cut')).toBeNull()
     expect(orderTutorialGate('irregular-double-cut-a')).toBeNull()
     expect(orderTutorialGate('irregular-double-cut-b')).toBeNull()
@@ -274,4 +312,5 @@ function completeThroughDuplication(session: TutorialSession): void {
   observe(session, { kind: 'ledger-opened' })
   observe(session, { kind: 'tool-acquired', toolId: 'iteration' })
   observe(session, { kind: 'nonblank-tree-duplicated' })
+  observe(session, { kind: 'same-tree-iteration-applied' })
 }
